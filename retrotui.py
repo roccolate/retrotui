@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-RetroTUI v0.3 — Entorno de escritorio retro estilo Windows 3.1
+RetroTUI v0.3.1 — Entorno de escritorio retro estilo Windows 3.1
 Funciona en consola Linux sin X11. Soporte de mouse vía GPM o xterm protocol.
 """
 
@@ -1593,16 +1593,16 @@ class RetroTUI:
         welcome_content = [
             '',
             '   ╔══════════════════════════════════════╗',
-            '   ║      Welcome to RetroTUI v0.3        ║',
+            '   ║      Welcome to RetroTUI v0.3.1        ║',
             '   ║                                      ║',
             '   ║  A Windows 3.1 style desktop         ║',
             '   ║  environment for the Linux console.  ║',
             '   ║                                      ║',
-            '   ║  New in v0.3:                        ║',
+            '   ║  New in v0.3.1:                      ║',
+            '   ║  • Per-window menus (File, View)     ║',
             '   ║  • Text editor (Notepad)             ║',
             '   ║  • Window resize (drag borders)      ║',
             '   ║  • Maximize / Minimize               ║',
-            '   ║  • Word wrap (Ctrl+W in editor)      ║',
             '   ║                                      ║',
             '   ║  Use mouse or keyboard to navigate.  ║',
             '   ║  Press Ctrl+Q to exit.               ║',
@@ -1673,7 +1673,7 @@ class RetroTUI:
         attr = curses.color_pair(C_STATUS)
         visible = sum(1 for win in self.windows if win.visible)
         total = len(self.windows)
-        status = f' RetroTUI v0.3 │ Windows: {visible}/{total} │ Mouse: Enabled │ Ctrl+Q: Exit'
+        status = f' RetroTUI v0.3.1 │ Windows: {visible}/{total} │ Mouse: Enabled │ Ctrl+Q: Exit'
         safe_addstr(self.stdscr, h - 1, 0, status.ljust(w - 1), attr)
 
     def get_icon_at(self, mx, my):
@@ -1718,7 +1718,7 @@ class RetroTUI:
 
         elif action == 'about':
             sys_info = get_system_info()
-            msg = ('RetroTUI v0.3\n'
+            msg = ('RetroTUI v0.3.1\n'
                    'A retro desktop environment for Linux console.\n\n'
                    'System Information:\n' +
                    '\n'.join(sys_info) + '\n\n'

@@ -16,7 +16,7 @@
 ║░░ 💻 ░░░░║  📄 config.json           512B      ║░░░░░░░░░░║
 ║░Terminal░╚══════════════════════════════════════╝░░░░░░░░░░║
 ║░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░║
-║ RetroTUI v0.3 │ Windows: 1/1 │ Mouse: Enabled │ Ctrl+Q: Exit║
+║ RetroTUI v0.3.1│ Windows: 1/1 │ Mouse: Enabled │ Ctrl+Q: Exit║
 ╚══════════════════════════════════════════════════════════════╝
 ```
 
@@ -133,44 +133,19 @@ README.md      — Este archivo
 
 ## Changelog
 
-### v0.3 — Editor de Texto, Resize y Maximize/Minimize
-- **Editor de texto (Notepad)** con cursor, edición y word wrap (Ctrl+W)
-- Abrir archivos desde File Manager los abre en el editor (antes era read-only)
-- **Resize de ventanas** — drag bordes inferior/derecho/esquinas
-- **Maximize/Minimize** — botones `[─][□][×]` en title bar
-- **Taskbar** para ventanas minimizadas
-- Doble-click en título = toggle maximize
-- Refactorización de Window.draw() → draw_frame() + draw_body()
-- Notepad agregado al menú File
-- Status bar muestra ventanas visibles/total
+Ver [CHANGELOG.md](CHANGELOG.md) para el historial completo de versiones.
 
-### v0.2.2 — Bugfixes & Icons
-- Iconos rediseñados: ASCII art 3×4 con mejor contraste (negro sobre teal)
-- Scroll wheel mueve selección en File Manager (antes solo scrolleaba viewport)
-- Ventanas se reposicionan al redimensionar terminal
-- Fix crash en Dialog antes del primer draw
-- Fix scroll negativo en ventanas con poco contenido
-- Limpieza de dead code y corrección de docs
-
-### v0.2.1 — Hotfixes
-- Fix double-click en iconos (ya no dispara dos acciones)
-- Fix hover de menú dropdown (highlight sigue al mouse)
-- Fix Ctrl+Q (deshabilitado XON/XOFF flow control)
-- Fix drag de ventanas (release correcto con button-event tracking)
-
-### v0.2 — File Manager
-- **File Manager interactivo** con navegación de directorios
-- Click en carpetas para navegar, ".." para subir
-- **Visor de archivos** — abre archivos de texto en Notepad read-only
-- Selección con highlight (↑↓, Enter, Backspace)
-- Toggle de archivos ocultos (H)
-- Detección de archivos binarios
-- Delegación de eventos por ventana (extensible)
+### Últimos cambios (v0.3.1)
+- **Barras de menú por ventana** estilo Win 3.1 (File, View) para FileManager y Notepad
+- Indicador `≡` en title bar, F10 abre menú de ventana, hover tracking
+- Editor de texto, resize de ventanas, maximize/minimize (v0.3)
+- File Manager interactivo con navegación (v0.2)
 
 ## Roadmap
 
+- ~~**v0.1** — Escritorio, ventanas, menú, mouse, iconos~~ ✅
 - ~~**v0.2** — File Manager funcional con navegación~~ ✅
-- ~~**v0.3** — Editor de texto integrado~~ ✅
+- ~~**v0.3** — Editor de texto, resize, maximize/minimize~~ ✅
 - **v0.4** — Terminal embebida (vía pty)
 - **v0.5** — Temas (DOS/CGA, Win95, personalizado)
 - **v1.0** — Configuración persistente, plugins
