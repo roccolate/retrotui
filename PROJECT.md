@@ -142,8 +142,23 @@ código de la aplicación no necesita distinguirlos.
 - [x] Reloj en tiempo real
 - [x] Navegación completa por teclado (Tab, Enter, Escape, Alt+F4)
 
+## 4.1 Características de v0.2 — File Manager
+
+- [x] File Manager con navegación de directorios
+- [x] Clase FileManagerWindow con estado de directorio
+- [x] Navegación: click en carpeta para entrar, ".." para subir
+- [x] Selección con highlight (blanco sobre azul, estilo Win3.1)
+- [x] Teclado: ↑↓ selección, Enter abrir, Backspace padre, PgUp/PgDn, Home/End
+- [x] Toggle archivos ocultos (tecla H)
+- [x] Visor de archivos de texto (Notepad read-only)
+- [x] Detección de archivos binarios
+- [x] Auto-scroll para mantener selección visible
+- [x] Re-selección del directorio previo al navegar hacia arriba
+- [x] Sin límite artificial de entradas (dirs + archivos)
+- [x] Delegación de eventos mouse/teclado por ventana (handle_click/handle_key)
+
 ### Roadmap futuro:
-- [ ] File Manager con navegación de directorios
+- [x] File Manager con navegación de directorios
 - [ ] Editor de texto integrado
 - [ ] Terminal embebida
 - [ ] Temas configurables (CGA, EGA, VGA, Win3.1, Win95)
@@ -180,6 +195,18 @@ Diálogos:         Gris claro
 | Ctrl+Q        | Salir del entorno               |
 | Arrow keys    | Navegar menús                   |
 | F10           | Activar barra de menú           |
+
+### Controles del File Manager (v0.2):
+
+| Tecla         | Acción                          |
+|---------------|---------------------------------|
+| ↑ / ↓         | Mover selección                 |
+| Enter         | Abrir directorio / archivo      |
+| Backspace     | Ir al directorio padre          |
+| PgUp / PgDn   | Mover selección una página      |
+| Home / End    | Ir al inicio / final            |
+| H             | Toggle archivos ocultos         |
+| Click         | Seleccionar y abrir entrada     |
 
 ---
 

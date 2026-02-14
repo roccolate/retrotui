@@ -252,11 +252,38 @@
     outline: 1px dotted #000;
     outline-offset: -4px;
   }
-  /* File list */
-  .file-entry { padding: 1px 0; }
-  .file-entry:hover { background: #000080; color: #fff; cursor: pointer; }
-  .folder-icon { color: #c0a000; }
-  .file-icon { color: #808080; }
+  /* File Manager specific */
+  .fm-pathbar {
+    color: #000;
+    font-weight: bold;
+    border-bottom: 1px solid #808080;
+    padding: 2px 0 4px 0;
+    margin-bottom: 4px;
+  }
+  .fm-entry {
+    padding: 1px 4px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .fm-entry:hover {
+    background: #000080;
+    color: #fff;
+  }
+  .fm-entry.selected {
+    background: #000080;
+    color: #fff;
+  }
+  .fm-separator {
+    color: #808080;
+    user-select: none;
+  }
+  .fm-statusline {
+    border-top: 1px solid #808080;
+    padding-top: 4px;
+    margin-top: 4px;
+    font-size: 11px;
+    color: #666;
+  }
 
   @media (max-width: 850px) {
     .terminal { width: 100%; height: 100vh; border: none; }
@@ -317,7 +344,7 @@
 
   <!-- Status Bar -->
   <div class="statusbar" id="statusbar">
-    RetroTUI v0.1 │ Windows: <span id="win-count">0</span> │ Mouse: Enabled │ Double-click icons to open
+    RetroTUI v0.2 │ Windows: <span id="win-count">0</span> │ Mouse: Enabled │ Double-click icons to open
   </div>
 
   <!-- Dialog Overlay -->
@@ -339,7 +366,104 @@ let winIdCounter = 0;
 let activeDropdown = null;
 let dragState = null;
 
+// ═══════════════════════════════════════
+// Mock Filesystem for File Manager
+// ═══════════════════════════════════════
+const mockFS = {
+  '/home/user': {
+    dirs: ['Documents', 'Downloads', 'Pictures', 'Music', '.config'],
+    files: [
+      { name: 'readme.txt', size: '2.4K', content: 'Welcome to RetroTUI!\n\nThis is a sample text file.\nYou can browse files and open them\nin the built-in Notepad viewer.\n\nFeatures:\n  - Directory navigation\n  - File viewer\n  - Keyboard & mouse support' },
+      { name: 'config.json', size: '512B', content: '{\n  "theme": "win31",\n  "show_hidden": false,\n  "colors": 256,\n  "desktop_pattern": "░"\n}' },
+      { name: 'retrotui.py', size: '28.5K', content: '#!/usr/bin/env python3\n"""RetroTUI v0.2"""\nimport curses\nimport time\nimport os\n\n# ... (28.5K of Python code)\n# Full source at github.com/roccolate/RetroTUI' },
+      { name: 'setup.sh', size: '1.8K', content: '#!/bin/bash\n# RetroTUI Setup\necho "Installing..."\nsudo apt install gpm\necho "Done!"' },
+    ]
+  },
+  '/home/user/Documents': {
+    dirs: ['Projects', 'Notes'],
+    files: [
+      { name: 'todo.txt', size: '512B', content: 'TODO List:\n\n[x] File Manager navigation\n[x] File viewer (Notepad)\n[ ] Text editor\n[ ] Terminal emulator\n[ ] Theme engine' },
+      { name: 'report.pdf', size: '1.2M', content: null },
+      { name: 'ideas.txt', size: '256B', content: 'Ideas for RetroTUI:\n\n- Add Win95 theme\n- Minesweeper game\n- Calculator app\n- Paint clone' },
+    ]
+  },
+  '/home/user/Documents/Projects': {
+    dirs: ['retrotui', 'dotfiles'],
+    files: [
+      { name: 'README.md', size: '3.1K', content: '# Projects\n\nThis folder contains various projects.\n\n## RetroTUI\nA retro desktop environment for Linux console.\n\n## Dotfiles\nConfiguration files backup.' },
+    ]
+  },
+  '/home/user/Documents/Projects/retrotui': {
+    dirs: [],
+    files: [
+      { name: 'retrotui.py', size: '28.5K', content: '#!/usr/bin/env python3\n"""RetroTUI v0.2"""\n# Main application source' },
+      { name: 'preview.html', size: '12.4K', content: '<!DOCTYPE html>\n<!-- Interactive preview -->' },
+      { name: 'PROJECT.md', size: '5.2K', content: '# RetroTUI Project Documentation\n\n## Architecture\n...' },
+    ]
+  },
+  '/home/user/Documents/Projects/dotfiles': {
+    dirs: [],
+    files: [
+      { name: '.bashrc', size: '2.1K', content: '# .bashrc\nexport PS1="\\u@\\h:\\w$ "\nalias ll="ls -la"\nalias retro="python3 ~/retrotui.py"' },
+      { name: '.vimrc', size: '1.5K', content: '" .vimrc\nset number\nset tabstop=4\nsyntax on\ncolorscheme desert' },
+    ]
+  },
+  '/home/user/Documents/Notes': {
+    dirs: [],
+    files: [
+      { name: 'meeting.txt', size: '1.1K', content: 'Meeting Notes - 2024\n\n- Discuss RetroTUI roadmap\n- Review v0.2 features\n- Plan v0.3 text editor' },
+      { name: 'shortcuts.txt', size: '384B', content: 'RetroTUI Shortcuts:\n\nTab      - Cycle windows\nCtrl+Q   - Exit\nF10      - Menu\nArrows   - Navigate\nEnter    - Open\nBackspace- Go up\nH        - Toggle hidden' },
+    ]
+  },
+  '/home/user/Downloads': {
+    dirs: [],
+    files: [
+      { name: 'archive.tar.gz', size: '4.5M', content: null },
+      { name: 'image.png', size: '2.1M', content: null },
+      { name: 'notes.txt', size: '128B', content: 'Downloaded files go here.' },
+    ]
+  },
+  '/home/user/Pictures': {
+    dirs: ['Screenshots', 'Wallpapers'],
+    files: [
+      { name: 'photo.jpg', size: '3.2M', content: null },
+    ]
+  },
+  '/home/user/Pictures/Screenshots': {
+    dirs: [],
+    files: [
+      { name: 'retrotui_v01.png', size: '156K', content: null },
+      { name: 'retrotui_v02.png', size: '198K', content: null },
+    ]
+  },
+  '/home/user/Pictures/Wallpapers': {
+    dirs: [],
+    files: [
+      { name: 'teal_pattern.bmp', size: '768K', content: null },
+    ]
+  },
+  '/home/user/Music': {
+    dirs: [],
+    files: [
+      { name: 'startup.wav', size: '245K', content: null },
+    ]
+  },
+  '/home/user/.config': {
+    dirs: ['retrotui'],
+    files: []
+  },
+  '/home/user/.config/retrotui': {
+    dirs: [],
+    files: [
+      { name: 'config.json', size: '256B', content: '{\n  "theme": "win31",\n  "show_hidden": false\n}' },
+      { name: 'themes.json', size: '1.2K', content: '{\n  "win31": {"desktop": "teal", "title": "navy"},\n  "dos": {"desktop": "black", "title": "gray"},\n  "win95": {"desktop": "teal", "title": "navy"}\n}' },
+    ]
+  },
+};
+
+// ═══════════════════════════════════════
 // Desktop pattern
+// ═══════════════════════════════════════
 const desktop = document.getElementById('desktop');
 function fillDesktop() {
   const cols = Math.ceil(desktop.clientWidth / 8);
@@ -476,24 +600,168 @@ document.addEventListener('mousemove', (e) => {
 
 document.addEventListener('mouseup', () => { dragState = null; });
 
+// ═══════════════════════════════════════
+// File Manager
+// ═══════════════════════════════════════
+function createFileManager(startPath) {
+  const offset = windows.length * 20;
+  const id = winIdCounter++;
+  const win = document.createElement('div');
+  win.className = 'window';
+  win.style.left = (100 + offset) + 'px';
+  win.style.top = (50 + offset) + 'px';
+  win.style.width = '420px';
+  win.dataset.id = id;
+  win.dataset.fmPath = startPath || '/home/user';
+  win.dataset.fmSelected = '0';
+
+  const path = win.dataset.fmPath;
+  const basename = path.split('/').pop() || '/';
+  const fsData = mockFS[path];
+  const itemCount = fsData ? fsData.dirs.length + fsData.files.length : 0;
+
+  win.innerHTML = `
+    <div class="win-titlebar">
+      <span class="win-title">File Manager - ${basename} (${itemCount} items)</span>
+      <div class="win-close">×</div>
+    </div>
+    <div class="win-body" style="padding:4px 8px">
+      <div class="fm-content"></div>
+    </div>
+  `;
+
+  // Close button
+  win.querySelector('.win-close').addEventListener('click', () => {
+    win.remove();
+    windows = windows.filter(w => w !== win);
+    updateWinCount();
+    if (windows.length > 0) activateWindow(windows[windows.length - 1]);
+  });
+
+  // Dragging
+  const titlebar = win.querySelector('.win-titlebar');
+  titlebar.addEventListener('mousedown', (e) => {
+    if (e.target.classList.contains('win-close')) return;
+    dragState = {
+      win,
+      offsetX: e.clientX - win.offsetLeft,
+      offsetY: e.clientY - win.offsetTop
+    };
+    activateWindow(win);
+    e.preventDefault();
+  });
+
+  win.addEventListener('mousedown', () => activateWindow(win));
+
+  document.getElementById('terminal').appendChild(win);
+  windows.push(win);
+  activateWindow(win);
+  updateWinCount();
+
+  renderFileManager(win);
+  return win;
+}
+
+function renderFileManager(win) {
+  const path = win.dataset.fmPath;
+  const selectedIdx = parseInt(win.dataset.fmSelected) || 0;
+  const fsData = mockFS[path];
+  const container = win.querySelector('.fm-content');
+  const basename = path.split('/').pop() || '/';
+
+  if (!fsData) {
+    container.innerHTML = `
+      <div class="fm-pathbar">📂 ${path}</div>
+      <div class="fm-separator">${'─'.repeat(50)}</div>
+      <div style="padding:4px;color:#888">  ⛔ Path not found</div>
+    `;
+    return;
+  }
+
+  const entries = [];
+  let html = `<div class="fm-pathbar">📂 ${path}</div>`;
+  html += `<div class="fm-separator">${'─'.repeat(50)}</div>`;
+
+  // Parent directory
+  if (path !== '/home/user') {
+    const parentPath = path.substring(0, path.lastIndexOf('/')) || '/home/user';
+    entries.push({ name: '..', isDir: true, path: parentPath, content: null });
+    const sel = entries.length - 1 === selectedIdx ? ' selected' : '';
+    html += `<div class="fm-entry${sel}" data-idx="${entries.length - 1}" data-path="${parentPath}" data-type="dir">  📁 ..</div>`;
+  }
+
+  // Directories
+  for (const dir of fsData.dirs) {
+    const dirPath = path + '/' + dir;
+    entries.push({ name: dir, isDir: true, path: dirPath, content: null });
+    const sel = entries.length - 1 === selectedIdx ? ' selected' : '';
+    html += `<div class="fm-entry${sel}" data-idx="${entries.length - 1}" data-path="${dirPath}" data-type="dir">  📁 ${dir}/</div>`;
+  }
+
+  // Files
+  for (const file of fsData.files) {
+    entries.push({ name: file.name, isDir: false, path: path + '/' + file.name, content: file.content, size: file.size });
+    const sel = entries.length - 1 === selectedIdx ? ' selected' : '';
+    const nameFormatted = file.name.length > 30 ? file.name.substring(0, 27) + '...' : file.name;
+    html += `<div class="fm-entry${sel}" data-idx="${entries.length - 1}" data-path="${path + '/' + file.name}" data-type="file">  📄 ${nameFormatted.padEnd(32)} ${file.size.padStart(8)}</div>`;
+  }
+
+  if (entries.length === 0) {
+    html += `<div style="padding:4px;color:#888">  (empty directory)</div>`;
+  }
+
+  const itemCount = fsData.dirs.length + fsData.files.length;
+  html += `<div class="fm-statusline">${itemCount} item${itemCount !== 1 ? 's' : ''} │ H: toggle hidden │ Backspace: parent</div>`;
+
+  container.innerHTML = html;
+
+  // Update title
+  win.querySelector('.win-title').textContent = `File Manager - ${basename} (${itemCount} items)`;
+
+  // Store entries for keyboard navigation
+  win._fmEntries = entries;
+
+  // Click handlers for entries
+  container.querySelectorAll('.fm-entry').forEach(el => {
+    el.addEventListener('click', () => {
+      const idx = parseInt(el.dataset.idx);
+      const type = el.dataset.type;
+      const entryPath = el.dataset.path;
+
+      win.dataset.fmSelected = '0';
+
+      if (type === 'dir') {
+        win.dataset.fmPath = entryPath;
+        renderFileManager(win);
+      } else {
+        // Open file in Notepad viewer
+        const entry = entries[idx];
+        if (entry && entry.content !== null) {
+          openFileViewer(entry.name, entry.content);
+        } else if (entry) {
+          showDialog('Binary File', `${entry.name}\n\nThis appears to be a binary file\nand cannot be displayed as text.`, ['OK']);
+        }
+      }
+    });
+  });
+}
+
+function openFileViewer(filename, content) {
+  const offset = windows.length * 20;
+  createWindow(`Notepad - ${filename}`,
+    content,
+    150 + offset, 60 + offset, 380);
+}
+
+// ═══════════════════════════════════════
 // Actions
+// ═══════════════════════════════════════
 function doAction(action) {
   const offset = windows.length * 20;
 
   switch(action) {
     case 'filemanager':
-      createWindow('File Manager',
-        `📂 /home/user\n${'─'.repeat(45)}\n\n` +
-        `  <span class="folder-icon">📁</span> Documents/\n` +
-        `  <span class="folder-icon">📁</span> Downloads/\n` +
-        `  <span class="folder-icon">📁</span> Pictures/\n` +
-        `  <span class="folder-icon">📁</span> Music/\n` +
-        `  <span class="folder-icon">📁</span> .config/\n\n` +
-        `  <span class="file-icon">📄</span> readme.txt          2.4K\n` +
-        `  <span class="file-icon">📄</span> config.json         512B\n` +
-        `  <span class="file-icon">📄</span> retrotui.py        18.2K\n` +
-        `  <span class="file-icon">📄</span> setup.sh            1.8K`,
-        100 + offset, 50 + offset, 380);
+      createFileManager('/home/user');
       break;
 
     case 'notepad':
@@ -502,16 +770,16 @@ function doAction(action) {
         `This is a placeholder for a full\n` +
         `text editor implementation.\n\n` +
         `Future features:\n` +
-        `  • Text editing with cursor\n` +
-        `  • File open/save dialogs\n` +
-        `  • Search and replace\n` +
-        `  • Word wrap toggle`,
+        `  - Text editing with cursor\n` +
+        `  - File open/save dialogs\n` +
+        `  - Search and replace\n` +
+        `  - Word wrap toggle`,
         150 + offset, 60 + offset, 340);
       break;
 
     case 'terminal':
       createWindow('Terminal',
-        `user@retrotui:~$ <span style="animation:blink 1s infinite">_</span>\n\n` +
+        `user@retrotui:~$ _\n\n` +
         `(Terminal emulation placeholder)\n` +
         `Future: embedded terminal via PTY`,
         130 + offset, 70 + offset, 420);
@@ -534,24 +802,33 @@ function doAction(action) {
 
     case 'about':
       showDialog('About RetroTUI',
-        `<b>RetroTUI v0.1</b>\n\n` +
+        `<b>RetroTUI v0.2</b>\n\n` +
         `A retro desktop environment\n` +
         `for the Linux console.\n\n` +
-        `• No X11 required\n` +
-        `• Mouse via GPM/xterm\n` +
-        `• Python 3 + curses\n` +
-        `• Zero external dependencies`,
+        `<b>v0.2 - File Manager</b>\n` +
+        `- Directory navigation\n` +
+        `- File viewer (Notepad)\n` +
+        `- Click or keyboard browse\n\n` +
+        `- No X11 required\n` +
+        `- Mouse via GPM/xterm\n` +
+        `- Python 3 + curses\n` +
+        `- Zero external dependencies`,
         ['OK']);
       break;
 
     case 'help':
       showDialog('Keyboard & Mouse Help',
-        `<b>Keyboard:</b>\n` +
+        `<b>General:</b>\n` +
         `Tab         Cycle windows\n` +
         `Escape      Close menu/dialog\n` +
         `Ctrl+Q      Exit\n` +
-        `F10         Open menu\n` +
-        `Arrows      Navigate\n\n` +
+        `F10         Open menu\n\n` +
+        `<b>File Manager:</b>\n` +
+        `↑/↓         Move selection\n` +
+        `Enter       Open dir/file\n` +
+        `Backspace   Parent directory\n` +
+        `H           Toggle hidden files\n` +
+        `PgUp/PgDn   Page scroll\n\n` +
         `<b>Mouse:</b>\n` +
         `Click       Select/activate\n` +
         `Drag title  Move window\n` +
@@ -612,15 +889,16 @@ document.getElementById('dialog-overlay').addEventListener('click', (e) => {
 // Create initial welcome window
 createWindow('Welcome to RetroTUI',
   `╔══════════════════════════════════════╗\n` +
-  `║     Welcome to RetroTUI v0.1        ║\n` +
+  `║     Welcome to RetroTUI v0.2        ║\n` +
   `║                                     ║\n` +
   `║  A Windows 3.1 style desktop        ║\n` +
   `║  for the Linux console.             ║\n` +
   `║                                     ║\n` +
-  `║  • Mouse support (GPM/xterm)        ║\n` +
-  `║  • Draggable windows                ║\n` +
-  `║  • Dropdown menus                   ║\n` +
-  `║  • Desktop icons                    ║\n` +
+  `║  ✨ NEW in v0.2:                    ║\n` +
+  `║  • File Manager with navigation     ║\n` +
+  `║  • Click folders to browse          ║\n` +
+  `║  • Open text files in Notepad       ║\n` +
+  `║  • Keyboard: ↑↓ Enter Backspace     ║\n` +
   `║                                     ║\n` +
   `║  Double-click icons to open apps.   ║\n` +
   `║  Drag title bars to move windows.   ║\n` +
