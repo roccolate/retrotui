@@ -192,14 +192,19 @@ class Window:
         # Resize state
         self.resizing = False
         self.resize_edge = None
+        # Optional per-window menu bar (set by subclasses)
+        self.window_menu = None
 
     def close_button_pos(self):
         """Return (x, y) of the close button."""
         return (self.x + self.w - 4, self.y)
 
     def body_rect(self):
-        """Return inner content area (x, y, w, h)."""
-        return (self.x + 1, self.y + 1, self.w - 2, self.h - 2)
+        """Return inner content area (x, y, w, h).
+        Accounts for window menu bar if present."""
+        menu_offset = 1 if self.window_menu else 0
+        return (self.x + 1, self.y + 1 + menu_offset,
+                self.w - 2, self.h - 2 - menu_offset)
 
     def contains(self, mx, my):
         """Check if point is within window bounds."""
@@ -277,7 +282,8 @@ class Window:
 
     def apply_resize(self, mx, my, term_w, term_h):
         """Apply resize based on mouse position and active resize_edge."""
-        min_w, min_h = 20, 6
+        min_w = 20
+        min_h = 7 if self.window_menu else 6
         edge = self.resize_edge
         if edge in ('se', 's', 'e'):
             if 'e' in edge:
@@ -308,8 +314,9 @@ class Window:
         # Draw border
         draw_box(stdscr, self.y, self.x, self.h, self.w, border_attr)
 
-        # Title bar text
-        title_text = f' {self.title} '
+        # Title bar text (≡ prefix if window has menu)
+        prefix = '≡ ' if self.window_menu else ''
+        title_text = f' {prefix}{self.title} '
         max_title = self.w - 12  # Leave room for 3 buttons [─][□][×]
         if len(title_text) > max_title:
             title_text = title_text[:max_title - 3] + '...'
@@ -320,6 +327,10 @@ class Window:
         btn_attr = curses.color_pair(C_BUTTON) | curses.A_BOLD
         max_char = '▣' if self.maximized else '□'
         safe_addstr(stdscr, self.y, self.x + self.w - 10, f'[─][{max_char}][×]', btn_attr)
+
+        # Per-window menu bar (below title, above body)
+        if self.window_menu:
+            self.window_menu.draw_bar(stdscr, self.x, self.y, self.w, self.active)
 
         return body_attr
 
@@ -352,6 +363,8 @@ class Window:
             return
         body_attr = self.draw_frame(stdscr)
         self.draw_body(stdscr, body_attr)
+        if self.window_menu:
+            self.window_menu.draw_dropdown(stdscr, self.x, self.y, self.w)
 
     def scroll_up(self):
         if self.scroll_offset > 0:
@@ -530,6 +543,192 @@ class Menu:
 
 
 # ═══════════════════════════════════════════════════════════
+# Window Menu (per-window menu bar)
+# ═══════════════════════════════════════════════════════════
+
+class WindowMenu:
+    """Per-window dropdown menu bar, styled like Win 3.1 application menus."""
+
+    def __init__(self, items):
+        """items: dict {'MenuName': [('Label', 'action'), ...], ...}"""
+        self.items = items
+        self.menu_names = list(items.keys())
+        self.active = False
+        self.selected_menu = 0
+        self.selected_item = 0
+
+    def menu_bar_row(self, win_y):
+        """Absolute screen row of this menu bar."""
+        return win_y + 1
+
+    def get_menu_x_positions(self, win_x):
+        """Calculate absolute x positions of each menu name."""
+        positions = []
+        x = win_x + 2
+        for name in self.menu_names:
+            positions.append(x)
+            x += len(name) + 3
+        return positions
+
+    def draw_bar(self, stdscr, win_x, win_y, win_w, is_active):
+        """Draw the menu bar row inside the window."""
+        bar_y = self.menu_bar_row(win_y)
+        bar_attr = curses.color_pair(C_MENUBAR)
+        safe_addstr(stdscr, bar_y, win_x + 1, ' ' * (win_w - 2), bar_attr)
+
+        positions = self.get_menu_x_positions(win_x)
+        for i, name in enumerate(self.menu_names):
+            attr = bar_attr
+            if self.active and i == self.selected_menu:
+                attr = curses.color_pair(C_MENU_SEL)
+            safe_addstr(stdscr, bar_y, positions[i], f' {name} ', attr)
+
+    def draw_dropdown(self, stdscr, win_x, win_y, win_w):
+        """Draw the active dropdown menu over the window body."""
+        if not self.active:
+            return
+
+        menu_name = self.menu_names[self.selected_menu]
+        items = self.items[menu_name]
+        positions = self.get_menu_x_positions(win_x)
+        x = positions[self.selected_menu]
+        y = self.menu_bar_row(win_y) + 1
+
+        max_item_len = max(len(item[0]) for item in items)
+        dropdown_w = max_item_len + 4
+
+        # Clamp dropdown to not exceed window right edge
+        if x - 1 + dropdown_w + 2 > win_x + win_w:
+            x = max(win_x + 2, win_x + win_w - dropdown_w - 2)
+
+        item_attr = curses.color_pair(C_MENU_ITEM)
+        draw_box(stdscr, y, x - 1, len(items) + 2, dropdown_w + 2, item_attr, double=False)
+
+        for i, (label, action) in enumerate(items):
+            attr = curses.color_pair(C_MENU_SEL) if i == self.selected_item else item_attr
+            if action is None:
+                safe_addstr(stdscr, y + 1 + i, x, SB_H * dropdown_w, item_attr)
+            else:
+                safe_addstr(stdscr, y + 1 + i, x, f' {label.ljust(dropdown_w - 2)} ', attr)
+
+    def on_menu_bar(self, mx, my, win_x, win_y, win_w):
+        """Check if click is on the menu bar row within window bounds."""
+        return (my == self.menu_bar_row(win_y) and win_x + 1 <= mx < win_x + win_w - 1)
+
+    def handle_click(self, mx, my, win_x, win_y, win_w):
+        """Handle click on menu bar or dropdown. Returns action string or None."""
+        bar_y = self.menu_bar_row(win_y)
+
+        # Click on menu bar row
+        if my == bar_y:
+            positions = self.get_menu_x_positions(win_x)
+            for i, pos in enumerate(positions):
+                name = self.menu_names[i]
+                if pos <= mx < pos + len(name) + 2:
+                    if self.active and self.selected_menu == i:
+                        self.active = False
+                    else:
+                        self.active = True
+                        self.selected_menu = i
+                        self.selected_item = 0
+                    return None
+            self.active = False
+            return None
+
+        # Click on dropdown items
+        if self.active:
+            menu_name = self.menu_names[self.selected_menu]
+            items = self.items[menu_name]
+            positions = self.get_menu_x_positions(win_x)
+            x = positions[self.selected_menu]
+            max_item_len = max(len(item[0]) for item in items)
+            dropdown_w = max_item_len + 4
+
+            # Clamp same as draw
+            if x - 1 + dropdown_w + 2 > win_x + win_w:
+                x = max(win_x + 2, win_x + win_w - dropdown_w - 2)
+
+            if (x - 1 <= mx < x + dropdown_w + 1 and
+                    bar_y + 2 <= my < bar_y + 2 + len(items)):
+                idx = my - bar_y - 2
+                if idx < len(items) and items[idx][1] is not None:
+                    action = items[idx][1]
+                    self.active = False
+                    return action
+            else:
+                self.active = False
+        return None
+
+    def handle_hover(self, mx, my, win_x, win_y, win_w):
+        """Update hover highlight. Returns True if inside menu area."""
+        if not self.active:
+            return False
+        bar_y = self.menu_bar_row(win_y)
+
+        if my == bar_y:
+            positions = self.get_menu_x_positions(win_x)
+            for i, pos in enumerate(positions):
+                name = self.menu_names[i]
+                if pos <= mx < pos + len(name) + 2:
+                    if i != self.selected_menu:
+                        self.selected_menu = i
+                        self.selected_item = 0
+                    return True
+            return True
+
+        # Inside dropdown
+        menu_name = self.menu_names[self.selected_menu]
+        items = self.items[menu_name]
+        positions = self.get_menu_x_positions(win_x)
+        x = positions[self.selected_menu]
+        max_item_len = max(len(item[0]) for item in items)
+        dropdown_w = max_item_len + 4
+
+        if x - 1 + dropdown_w + 2 > win_x + win_w:
+            x = max(win_x + 2, win_x + win_w - dropdown_w - 2)
+
+        if (x - 1 <= mx < x + dropdown_w + 1 and
+                bar_y + 1 <= my < bar_y + 3 + len(items)):
+            idx = my - bar_y - 2
+            if 0 <= idx < len(items) and items[idx][1] is not None:
+                self.selected_item = idx
+            return True
+        return False
+
+    def handle_key(self, key):
+        """Handle keyboard navigation. Returns action, 'close_menu', or None."""
+        if not self.active:
+            return None
+        if key == curses.KEY_LEFT:
+            self.selected_menu = (self.selected_menu - 1) % len(self.menu_names)
+            self.selected_item = 0
+        elif key == curses.KEY_RIGHT:
+            self.selected_menu = (self.selected_menu + 1) % len(self.menu_names)
+            self.selected_item = 0
+        elif key == curses.KEY_UP:
+            items = self.items[self.menu_names[self.selected_menu]]
+            self.selected_item = (self.selected_item - 1) % len(items)
+            while items[self.selected_item][1] is None:
+                self.selected_item = (self.selected_item - 1) % len(items)
+        elif key == curses.KEY_DOWN:
+            items = self.items[self.menu_names[self.selected_menu]]
+            self.selected_item = (self.selected_item + 1) % len(items)
+            while items[self.selected_item][1] is None:
+                self.selected_item = (self.selected_item + 1) % len(items)
+        elif key in (curses.KEY_ENTER, 10, 13):
+            menu_name = self.menu_names[self.selected_menu]
+            items = self.items[menu_name]
+            action = items[self.selected_item][1]
+            if action:
+                self.active = False
+                return action
+        elif key == 27:  # Escape
+            self.active = False
+            return 'close_menu'
+        return None
+
+
+# ═══════════════════════════════════════════════════════════
 # Dialog
 # ═══════════════════════════════════════════════════════════
 
@@ -682,6 +881,19 @@ class FileManagerWindow(Window):
         self.selected_index = 0
         self.show_hidden = False
         self.error_message = None
+        self.window_menu = WindowMenu({
+            'File': [
+                ('Open       Enter', 'fm_open'),
+                ('Parent Dir  Bksp', 'fm_parent'),
+                ('─────────────',    None),
+                ('Close',            'fm_close'),
+            ],
+            'View': [
+                ('Hidden Files   H', 'fm_toggle_hidden'),
+                ('Refresh',          'fm_refresh'),
+            ],
+        })
+        self.h = max(self.h, 8)
         self._rebuild_content()
 
     def _header_lines(self):
@@ -838,8 +1050,30 @@ class FileManagerWindow(Window):
         self.show_hidden = not self.show_hidden
         self._rebuild_content()
 
+    def _execute_menu_action(self, action):
+        """Execute a window menu action. Returns signal or None."""
+        if action == 'fm_open':
+            return self.activate_selected()
+        elif action == 'fm_parent':
+            self.navigate_parent()
+        elif action == 'fm_toggle_hidden':
+            self.toggle_hidden()
+        elif action == 'fm_refresh':
+            self._rebuild_content()
+        elif action == 'fm_close':
+            return ('action', 'close')
+        return None
+
     def handle_click(self, mx, my):
         """Handle a click within the window body. Returns action result or None."""
+        # Window menu intercept
+        if self.window_menu:
+            if self.window_menu.on_menu_bar(mx, my, self.x, self.y, self.w) or self.window_menu.active:
+                action = self.window_menu.handle_click(mx, my, self.x, self.y, self.w)
+                if action:
+                    return self._execute_menu_action(action)
+                return None
+
         bx, by, bw, bh = self.body_rect()
         if not (bx <= mx < bx + bw and by <= my < by + bh):
             return None
@@ -853,6 +1087,15 @@ class FileManagerWindow(Window):
     def handle_key(self, key):
         """Handle keyboard input for the file manager.
         Returns ('file', path) if a file is opened, else None."""
+        # Window menu keyboard handling
+        if self.window_menu and self.window_menu.active:
+            action = self.window_menu.handle_key(key)
+            if action == 'close_menu':
+                return None
+            if action:
+                return self._execute_menu_action(action)
+            return None
+
         if key == curses.KEY_UP:
             self.select_up()
         elif key == curses.KEY_DOWN:
@@ -902,6 +1145,17 @@ class NotepadWindow(Window):
         self._wrap_cache = []       # list[(buf_line, start_col, text)]
         self._wrap_cache_w = -1     # Width used to build cache
         self._wrap_stale = True
+        self.window_menu = WindowMenu({
+            'File': [
+                ('New',       'np_new'),
+                ('─────────', None),
+                ('Close',     'np_close'),
+            ],
+            'View': [
+                ('Word Wrap  Ctrl+W', 'np_toggle_wrap'),
+            ],
+        })
+        self.h = max(self.h, 8)
 
         if filepath:
             self._load_file(filepath)
@@ -1063,8 +1317,34 @@ class NotepadWindow(Window):
         status = f' Ln {self.cursor_line + 1}, Col {self.cursor_col + 1}{wrap_flag}{mod_flag}'
         safe_addstr(stdscr, status_y, bx, status.ljust(bw)[:bw], curses.color_pair(C_STATUS))
 
+        # Window menu dropdown (on top of body content)
+        if self.window_menu:
+            self.window_menu.draw_dropdown(stdscr, self.x, self.y, self.w)
+
+    def _execute_menu_action(self, action):
+        """Execute a window menu action. Returns signal or None."""
+        if action == 'np_toggle_wrap':
+            self.wrap_mode = not self.wrap_mode
+            self.view_left = 0
+            self._invalidate_wrap()
+            self._ensure_cursor_visible()
+        elif action == 'np_new':
+            return ('action', 'notepad')
+        elif action == 'np_close':
+            return ('action', 'close')
+        return None
+
     def handle_key(self, key):
         """Handle keyboard input for the editor. Returns None always."""
+        # Window menu keyboard handling
+        if self.window_menu and self.window_menu.active:
+            action = self.window_menu.handle_key(key)
+            if action == 'close_menu':
+                return None
+            if action:
+                return self._execute_menu_action(action)
+            return None
+
         # Navigation
         if key == curses.KEY_UP:
             if self.cursor_line > 0:
@@ -1174,7 +1454,15 @@ class NotepadWindow(Window):
         return None
 
     def handle_click(self, mx, my):
-        """Handle click in the body — place cursor at clicked position."""
+        """Handle click in the body — place cursor or interact with menu."""
+        # Window menu intercept
+        if self.window_menu:
+            if self.window_menu.on_menu_bar(mx, my, self.x, self.y, self.w) or self.window_menu.active:
+                action = self.window_menu.handle_click(mx, my, self.x, self.y, self.w)
+                if action:
+                    return self._execute_menu_action(action)
+                return None
+
         bx, by, bw, bh = self.body_rect()
         body_h = bh - 1  # -1 for status bar
 
@@ -1709,14 +1997,34 @@ class RetroTUI:
                     self.set_active_window(win)
                     return
 
+            # Window menu hover tracking
+            if (bstate & curses.REPORT_MOUSE_POSITION) and win.window_menu and win.window_menu.active:
+                if win.window_menu.handle_hover(mx, my, win.x, win.y, win.w):
+                    return
+
+            # Click outside window with active menu — close menu
+            if win.window_menu and win.window_menu.active and not win.contains(mx, my):
+                if bstate & click_flags:
+                    win.window_menu.active = False
+                    # Don't return — let click propagate to other windows
+
             if win.contains(mx, my):
                 if bstate & click_flags:
                     self.set_active_window(win)
+                    # Close other windows' menus when clicking on a different window
+                    for other_win in self.windows:
+                        if other_win is not win and other_win.window_menu and other_win.window_menu.active:
+                            other_win.window_menu.active = False
                     # Delegate click to window if it has a handler
                     if hasattr(win, 'handle_click'):
                         result = win.handle_click(mx, my)
                         if result and result[0] == 'file':
                             self.open_file_viewer(result[1])
+                        elif result and result[0] == 'action':
+                            if result[1] == 'close':
+                                self.close_window(win)
+                            else:
+                                self.execute_action(result[1])
                     return
                 # Scroll wheel
                 if bstate & curses.BUTTON4_PRESSED:  # Scroll up
@@ -1768,13 +2076,31 @@ class RetroTUI:
             self.execute_action('exit')
             return
 
-        if key == curses.KEY_F10 or key == 27:  # F10 or Escape
+        # F10: window menu (if active window has one) or global menu
+        if key == curses.KEY_F10:
+            active_win = next((w for w in self.windows if w.active), None)
+            if active_win and active_win.window_menu:
+                wm = active_win.window_menu
+                wm.active = not wm.active
+                if wm.active:
+                    wm.selected_menu = 0
+                    wm.selected_item = 0
+                return
             if self.menu.active:
                 self.menu.active = False
-            elif key == curses.KEY_F10:
+            else:
                 self.menu.active = True
                 self.menu.selected_menu = 0
                 self.menu.selected_item = 0
+            return
+
+        # Escape: close window menu, then global menu
+        if key == 27:
+            active_win = next((w for w in self.windows if w.active), None)
+            if active_win and active_win.window_menu and active_win.window_menu.active:
+                active_win.window_menu.active = False
+            elif self.menu.active:
+                self.menu.active = False
             return
 
         # Menu navigation
@@ -1822,6 +2148,11 @@ class RetroTUI:
                 result = active_win.handle_key(key)
                 if result and result[0] == 'file':
                     self.open_file_viewer(result[1])
+                elif result and result[0] == 'action':
+                    if result[1] == 'close':
+                        self.close_window(active_win)
+                    else:
+                        self.execute_action(result[1])
             else:
                 # Default scroll behavior for regular windows
                 if key == curses.KEY_UP or key == curses.KEY_PPAGE:
