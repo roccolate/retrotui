@@ -985,10 +985,17 @@ class RetroTUI:
                    'F10       - Open menu\n'
                    'Arrow keys - Navigate\n'
                    'PgUp/PgDn - Scroll content\n\n'
+                   'File Manager:\n\n'
+                   'Up/Down   - Move selection\n'
+                   'Enter     - Open dir/file\n'
+                   'Backspace - Parent directory\n'
+                   'H         - Toggle hidden files\n'
+                   'Home/End  - First/last entry\n\n'
                    'Mouse Controls:\n\n'
                    'Click     - Select/activate\n'
                    'Drag      - Move windows\n'
-                   'Scroll    - Scroll content')
+                   'Dbl-click - Open icon\n'
+                   'Scroll    - Scroll/select')
             self.dialog = Dialog('Keyboard & Mouse Help', msg, ['OK'], width=46)
 
         elif action == 'filemanager':
