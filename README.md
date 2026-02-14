@@ -16,7 +16,7 @@
 ║░░ 💻 ░░░░║  📄 config.json             512B          ║░░░░░║
 ║░Terminal░╚════════════════════════════════════════════╝░░░░░║
 ║░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░║
-║ RetroTUI v0.1 │ Windows: 1 │ Mouse: Enabled │ Ctrl+Q: Exit║
+║ RetroTUI v0.2 │ Windows: 1 │ Mouse: Enabled │ Ctrl+Q: Exit║
 ╚══════════════════════════════════════════════════════════════╝
 ```
 
@@ -73,6 +73,16 @@ Windows Terminal (SSH), iTerm2, tmux, screen.
 | `↑ ↓ ← →`   | Navegar menús / scroll     |
 | `PgUp/PgDn`| Scroll contenido           |
 
+### File Manager
+| Tecla         | Acción                     |
+|---------------|----------------------------|
+| `↑ / ↓`      | Mover selección            |
+| `Enter`       | Abrir directorio/archivo   |
+| `Backspace`   | Directorio padre           |
+| `PgUp/PgDn`  | Selección por página       |
+| `Home/End`    | Inicio / final de lista    |
+| `H`           | Toggle archivos ocultos    |
+
 ### Mouse
 | Acción        | Resultado                |
 |---------------|--------------------------|
@@ -95,13 +105,25 @@ docs/
 ### Componentes internos:
 - **RetroTUI** — Clase principal, event loop
 - **Window** — Ventanas arrastrables con z-order
+- **FileManagerWindow** — File Manager interactivo con navegación (v0.2)
+- **FileEntry** — Entrada de archivo/directorio con metadata
 - **Menu** — Sistema de menú desplegable
 - **Dialog** — Diálogos modales
 - **ThemeEngine** — Colores Win3.1 (256-color cuando disponible)
 
+## Novedades en v0.2
+
+- **File Manager interactivo** con navegación de directorios
+- Click en carpetas para navegar, ".." para subir
+- **Visor de archivos** — abre archivos de texto en Notepad read-only
+- Selección con highlight (↑↓, Enter, Backspace)
+- Toggle de archivos ocultos (H)
+- Detección de archivos binarios
+- Delegación de eventos por ventana (extensible)
+
 ## Roadmap
 
-- **v0.2** — File Manager funcional con navegación
+- ~~**v0.2** — File Manager funcional con navegación~~ ✅
 - **v0.3** — Editor de texto integrado
 - **v0.4** — Terminal embebida (vía pty)
 - **v0.5** — Temas (DOS/CGA, Win95, personalizado)

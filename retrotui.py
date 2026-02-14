@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-RetroTUI v0.1 — Entorno de escritorio retro estilo Windows 3.1
+RetroTUI v0.2 — Entorno de escritorio retro estilo Windows 3.1
 Funciona en consola Linux sin X11. Soporte de mouse vía GPM o xterm protocol.
 """
 
@@ -76,6 +76,8 @@ C_ICON          = 13
 C_ICON_SEL      = 14
 C_SCROLLBAR     = 15
 C_WIN_INACTIVE  = 16
+C_FM_SELECTED   = 17
+C_FM_DIR        = 18
 
 
 def init_colors():
@@ -110,6 +112,8 @@ def init_colors():
     curses.init_pair(C_ICON,          curses.COLOR_WHITE, curses.COLOR_CYAN)
     curses.init_pair(C_ICON_SEL,      curses.COLOR_YELLOW, curses.COLOR_BLUE)
     curses.init_pair(C_SCROLLBAR,     curses.COLOR_BLACK, curses.COLOR_WHITE)
+    curses.init_pair(C_FM_SELECTED,   curses.COLOR_WHITE, curses.COLOR_BLUE)
+    curses.init_pair(C_FM_DIR,        curses.COLOR_BLUE, curses.COLOR_WHITE)
 
 
 # ═══════════════════════════════════════════════════════════
@@ -488,35 +492,245 @@ class Dialog:
 
 
 # ═══════════════════════════════════════════════════════════
+# File Entry
+# ═══════════════════════════════════════════════════════════
+
+class FileEntry:
+    """Represents a file or directory entry in the file manager."""
+    __slots__ = ('name', 'is_dir', 'full_path', 'size', 'display_text')
+
+    def __init__(self, name, is_dir, full_path, size=0):
+        self.name = name
+        self.is_dir = is_dir
+        self.full_path = full_path
+        self.size = size
+        if name == '..':
+            self.display_text = '  📁 ..'
+        elif is_dir:
+            self.display_text = f'  📁 {name}/'
+        else:
+            self.display_text = f'  📄 {name:<30} {self._format_size():>8}'
+
+    def _format_size(self):
+        if self.size > 1048576:
+            return f'{self.size / 1048576:.1f}M'
+        elif self.size > 1024:
+            return f'{self.size / 1024:.1f}K'
+        else:
+            return f'{self.size}B'
+
+
+# ═══════════════════════════════════════════════════════════
 # File Manager Window
 # ═══════════════════════════════════════════════════════════
 
-def create_filemanager_content(path=None):
-    """Create file listing for the file manager."""
-    if path is None:
-        path = os.path.expanduser('~')
-    lines = [f' 📂 {path}', ' ' + '─' * 40, '']
-    try:
-        entries = sorted(os.listdir(path))
-        dirs = [e for e in entries if os.path.isdir(os.path.join(path, e)) and not e.startswith('.')]
-        files = [e for e in entries if os.path.isfile(os.path.join(path, e)) and not e.startswith('.')]
+class FileManagerWindow(Window):
+    """Interactive file manager window with directory navigation."""
 
-        for d in dirs[:20]:
-            lines.append(f'  📁 {d}/')
-        for f in files[:30]:
-            size = os.path.getsize(os.path.join(path, f))
-            if size > 1048576:
-                size_str = f'{size / 1048576:.1f}M'
-            elif size > 1024:
-                size_str = f'{size / 1024:.1f}K'
-            else:
-                size_str = f'{size}B'
-            lines.append(f'  📄 {f:<30} {size_str:>8}')
-        if not dirs and not files:
-            lines.append('  (empty directory)')
-    except PermissionError:
-        lines.append('  ⛔ Permission denied')
-    return lines
+    def __init__(self, x, y, w, h, start_path=None):
+        super().__init__('File Manager', x, y, w, h, content=[])
+        self.current_path = os.path.realpath(start_path or os.path.expanduser('~'))
+        self.entries = []           # List[FileEntry]
+        self.selected_index = 0
+        self.show_hidden = False
+        self.error_message = None
+        self._rebuild_content()
+
+    def _header_lines(self):
+        """Number of non-entry header lines at top of content."""
+        return 2  # path line + separator line
+
+    def _entry_to_content_index(self, entry_idx):
+        """Convert entry index to content list index."""
+        return self._header_lines() + entry_idx
+
+    def _content_to_entry_index(self, content_idx):
+        """Convert content list index to entry index, or -1 if on header."""
+        idx = content_idx - self._header_lines()
+        if 0 <= idx < len(self.entries):
+            return idx
+        return -1
+
+    def _rebuild_content(self):
+        """Scan current directory and rebuild content + entries lists."""
+        self.entries = []
+        self.content = []
+        self.error_message = None
+
+        # Header: path bar + separator
+        self.content.append(f' 📂 {self.current_path}')
+        self.content.append(' ' + '─' * (self.w - 4))
+
+        # Parent directory entry (unless at filesystem root)
+        if self.current_path != '/' and os.path.dirname(self.current_path) != self.current_path:
+            entry = FileEntry('..', True, os.path.dirname(self.current_path))
+            self.entries.append(entry)
+            self.content.append(entry.display_text)
+
+        try:
+            raw_entries = sorted(os.listdir(self.current_path), key=str.lower)
+        except PermissionError:
+            self.error_message = 'Permission denied'
+            self.content.append('  ⛔ Permission denied')
+            self._update_title()
+            return
+        except OSError as e:
+            self.error_message = str(e)
+            self.content.append(f'  ⛔ {e}')
+            self._update_title()
+            return
+
+        dirs = []
+        files = []
+        for name in raw_entries:
+            if not self.show_hidden and name.startswith('.'):
+                continue
+            full_path = os.path.join(self.current_path, name)
+            try:
+                if os.path.isdir(full_path):
+                    dirs.append(FileEntry(name, True, full_path))
+                elif os.path.isfile(full_path):
+                    size = os.path.getsize(full_path)
+                    files.append(FileEntry(name, False, full_path, size))
+            except OSError:
+                continue
+
+        for entry in dirs:
+            self.entries.append(entry)
+            self.content.append(entry.display_text)
+        for entry in files:
+            self.entries.append(entry)
+            self.content.append(entry.display_text)
+
+        if not self.entries:
+            self.content.append('  (empty directory)')
+
+        self._update_title()
+        self.selected_index = 0
+        self.scroll_offset = 0
+
+    def _update_title(self):
+        """Update window title to show path basename and entry count."""
+        basename = os.path.basename(self.current_path) or '/'
+        count = len([e for e in self.entries if e.name != '..'])
+        self.title = f'File Manager - {basename} ({count} items)'
+
+    def draw(self, stdscr):
+        """Draw file manager with selection highlight."""
+        super().draw(stdscr)
+        if not self.visible or not self.entries:
+            return
+
+        bx, by, bw, bh = self.body_rect()
+        sel_content_idx = self._entry_to_content_index(self.selected_index)
+        visible_start = self.scroll_offset
+        visible_end = self.scroll_offset + bh
+
+        if visible_start <= sel_content_idx < visible_end:
+            screen_row = by + (sel_content_idx - self.scroll_offset)
+            sel_attr = curses.color_pair(C_FM_SELECTED) | curses.A_BOLD
+            display = self.content[sel_content_idx][:bw] if sel_content_idx < len(self.content) else ''
+            safe_addstr(stdscr, screen_row, bx, display.ljust(bw), sel_attr)
+
+    def navigate_to(self, path):
+        """Navigate to a new directory path."""
+        real_path = os.path.realpath(path)
+        if os.path.isdir(real_path):
+            self.current_path = real_path
+            self._rebuild_content()
+
+    def navigate_parent(self):
+        """Go to parent directory, re-selecting the dir we came from."""
+        parent = os.path.dirname(self.current_path)
+        if parent != self.current_path:
+            old_name = os.path.basename(self.current_path)
+            self.navigate_to(parent)
+            for i, entry in enumerate(self.entries):
+                if entry.name == old_name:
+                    self.selected_index = i
+                    self._ensure_visible()
+                    break
+
+    def activate_selected(self):
+        """Activate currently selected entry. Returns ('dir', path) or ('file', path)."""
+        if not self.entries:
+            return None
+        if self.selected_index >= len(self.entries):
+            return None
+        entry = self.entries[self.selected_index]
+        if entry.is_dir:
+            self.navigate_to(entry.full_path)
+            return ('dir', entry.full_path)
+        else:
+            return ('file', entry.full_path)
+
+    def select_up(self):
+        """Move selection up by one entry."""
+        if self.selected_index > 0:
+            self.selected_index -= 1
+            self._ensure_visible()
+
+    def select_down(self):
+        """Move selection down by one entry."""
+        if self.selected_index < len(self.entries) - 1:
+            self.selected_index += 1
+            self._ensure_visible()
+
+    def _ensure_visible(self):
+        """Auto-scroll to keep the selected entry visible."""
+        _, _, _, bh = self.body_rect()
+        sel_content = self._entry_to_content_index(self.selected_index)
+        if sel_content < self.scroll_offset:
+            self.scroll_offset = sel_content
+        elif sel_content >= self.scroll_offset + bh:
+            self.scroll_offset = sel_content - bh + 1
+
+    def toggle_hidden(self):
+        """Toggle show/hide hidden files."""
+        self.show_hidden = not self.show_hidden
+        self._rebuild_content()
+
+    def handle_click(self, mx, my):
+        """Handle a click within the window body. Returns action result or None."""
+        bx, by, bw, bh = self.body_rect()
+        if not (bx <= mx < bx + bw and by <= my < by + bh):
+            return None
+        content_idx = self.scroll_offset + (my - by)
+        entry_idx = self._content_to_entry_index(content_idx)
+        if entry_idx >= 0:
+            self.selected_index = entry_idx
+            return self.activate_selected()
+        return None
+
+    def handle_key(self, key):
+        """Handle keyboard input for the file manager.
+        Returns ('file', path) if a file is opened, else None."""
+        if key == curses.KEY_UP:
+            self.select_up()
+        elif key == curses.KEY_DOWN:
+            self.select_down()
+        elif key in (curses.KEY_ENTER, 10, 13):
+            return self.activate_selected()
+        elif key in (curses.KEY_BACKSPACE, 127, 8):
+            self.navigate_parent()
+        elif key == curses.KEY_PPAGE:
+            _, _, _, bh = self.body_rect()
+            for _ in range(max(1, bh - 2)):
+                self.select_up()
+        elif key == curses.KEY_NPAGE:
+            _, _, _, bh = self.body_rect()
+            for _ in range(max(1, bh - 2)):
+                self.select_down()
+        elif key == curses.KEY_HOME:
+            self.selected_index = 0
+            self._ensure_visible()
+        elif key == curses.KEY_END:
+            if self.entries:
+                self.selected_index = len(self.entries) - 1
+                self._ensure_visible()
+        elif key == ord('h') or key == ord('H'):
+            self.toggle_hidden()
+        return None
 
 
 # ═══════════════════════════════════════════════════════════
@@ -591,7 +805,7 @@ class RetroTUI:
         welcome_content = [
             '',
             '   ╔══════════════════════════════════════╗',
-            '   ║     Welcome to RetroTUI v0.1         ║',
+            '   ║     Welcome to RetroTUI v0.2         ║',
             '   ║                                      ║',
             '   ║  A Windows 3.1 style desktop         ║',
             '   ║  environment for the Linux console.  ║',
@@ -647,7 +861,7 @@ class RetroTUI:
         """Draw the bottom status bar."""
         h, w = self.stdscr.getmaxyx()
         attr = curses.color_pair(C_STATUS)
-        status = f' RetroTUI v0.1 │ Windows: {len(self.windows)} │ Mouse: Enabled │ Ctrl+Q: Exit '
+        status = f' RetroTUI v0.2 │ Windows: {len(self.windows)} │ Mouse: Enabled │ Ctrl+Q: Exit '
         safe_addstr(self.stdscr, h - 1, 0, status.ljust(w - 1), attr)
 
     def get_icon_at(self, mx, my):
@@ -691,7 +905,7 @@ class RetroTUI:
 
         elif action == 'about':
             sys_info = get_system_info()
-            msg = ('RetroTUI v0.1\n'
+            msg = ('RetroTUI v0.2\n'
                    'A retro desktop environment for Linux console.\n\n'
                    'System Information:\n' +
                    '\n'.join(sys_info) + '\n\n'
@@ -715,10 +929,9 @@ class RetroTUI:
             self.dialog = Dialog('Keyboard & Mouse Help', msg, ['OK'], width=46)
 
         elif action == 'filemanager':
-            content = create_filemanager_content()
             offset_x = 15 + len(self.windows) * 2
             offset_y = 3 + len(self.windows) * 1
-            win = Window('File Manager', offset_x, offset_y, 55, 20, content=content)
+            win = FileManagerWindow(offset_x, offset_y, 58, 22)
             self.windows.append(win)
             self.set_active_window(win)
 
@@ -786,6 +999,56 @@ class RetroTUI:
             self.windows.append(win)
             self.set_active_window(win)
 
+    def open_file_viewer(self, filepath):
+        """Open a text file in a read-only Notepad window."""
+        h, w = self.stdscr.getmaxyx()
+        filename = os.path.basename(filepath)
+
+        # Check if file seems to be binary
+        try:
+            with open(filepath, 'rb') as f:
+                chunk = f.read(1024)
+                if b'\x00' in chunk:
+                    self.dialog = Dialog('Binary File',
+                        f'{filename}\n\nThis appears to be a binary file\nand cannot be displayed as text.',
+                        ['OK'], width=48)
+                    return
+        except OSError:
+            pass
+
+        try:
+            with open(filepath, 'r', errors='replace') as f:
+                raw_lines = f.readlines()
+        except PermissionError:
+            self.dialog = Dialog('Error', f'Permission denied:\n{filepath}', ['OK'], width=50)
+            return
+        except IsADirectoryError:
+            return
+        except OSError as e:
+            self.dialog = Dialog('Error', f'Cannot open file:\n{e}', ['OK'], width=50)
+            return
+
+        # Prepare content
+        content = []
+        max_line_w = 200
+        for line in raw_lines[:5000]:
+            line = line.rstrip('\n\r').expandtabs(4)
+            if len(line) > max_line_w:
+                line = line[:max_line_w] + '...'
+            content.append(' ' + line)
+
+        if not content:
+            content = [' (empty file)']
+
+        # Create window
+        offset_x = 18 + len(self.windows) * 2
+        offset_y = 3 + len(self.windows)
+        win_w = min(max(45, max(len(l) for l in content[:100]) + 4), w - 4)
+        win_h = min(len(content) + 2, h - 4, 25)
+        win = Window(f'Notepad - {filename}', offset_x, offset_y, win_w, win_h, content=content)
+        self.windows.append(win)
+        self.set_active_window(win)
+
     def handle_mouse(self, event):
         """Handle mouse events."""
         try:
@@ -841,6 +1104,11 @@ class RetroTUI:
             if win.contains(mx, my):
                 if bstate & curses.BUTTON1_CLICKED or bstate & curses.BUTTON1_PRESSED:
                     self.set_active_window(win)
+                    # Delegate click to window if it has a handler
+                    if hasattr(win, 'handle_click'):
+                        result = win.handle_click(mx, my)
+                        if result and result[0] == 'file':
+                            self.open_file_viewer(result[1])
                     return
                 # Scroll wheel
                 if bstate & curses.BUTTON4_PRESSED:  # Scroll up
@@ -946,13 +1214,19 @@ class RetroTUI:
                 self.windows[next_idx].active = True
             return
 
-        # Active window scrolling
+        # Delegate to active window
         active_win = next((w for w in self.windows if w.active), None)
         if active_win:
-            if key == curses.KEY_UP or key == curses.KEY_PPAGE:
-                active_win.scroll_up()
-            elif key == curses.KEY_DOWN or key == curses.KEY_NPAGE:
-                active_win.scroll_down()
+            if hasattr(active_win, 'handle_key'):
+                result = active_win.handle_key(key)
+                if result and result[0] == 'file':
+                    self.open_file_viewer(result[1])
+            else:
+                # Default scroll behavior for regular windows
+                if key == curses.KEY_UP or key == curses.KEY_PPAGE:
+                    active_win.scroll_up()
+                elif key == curses.KEY_DOWN or key == curses.KEY_NPAGE:
+                    active_win.scroll_down()
 
     def run(self):
         """Main event loop."""
