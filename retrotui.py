@@ -997,6 +997,10 @@ class FileManagerWindow(Window):
             display = self.content[sel_content_idx][:bw] if sel_content_idx < len(self.content) else ''
             safe_addstr(stdscr, screen_row, bx, display.ljust(bw), sel_attr)
 
+        # Redraw dropdown ON TOP of selection highlight
+        if self.window_menu:
+            self.window_menu.draw_dropdown(stdscr, self.x, self.y, self.w)
+
     def navigate_to(self, path):
         """Navigate to a new directory path."""
         real_path = os.path.realpath(path)
@@ -1152,9 +1156,10 @@ class NotepadWindow(Window):
         self._wrap_stale = True
         self.window_menu = WindowMenu({
             'File': [
-                ('New',       'np_new'),
-                ('─────────', None),
-                ('Close',     'np_close'),
+                ('New',           'np_new'),
+                ('Save   Ctrl+S', 'np_save'),
+                ('─────────────', None),
+                ('Close',         'np_close'),
             ],
             'View': [
                 ('Word Wrap  Ctrl+W', 'np_toggle_wrap'),
@@ -1184,6 +1189,18 @@ class NotepadWindow(Window):
         self.view_left = 0
         self.modified = False
         self._wrap_stale = True
+
+    def _save_file(self):
+        """Save buffer to file. Returns True on success, error string on failure."""
+        if not self.filepath:
+            return 'No hay ruta de archivo'
+        try:
+            with open(self.filepath, 'w') as f:
+                f.write('\n'.join(self.buffer))
+            self.modified = False
+            return True
+        except (PermissionError, OSError) as e:
+            return str(e)
 
     def _invalidate_wrap(self):
         """Mark wrap cache as needing rebuild."""
@@ -1267,6 +1284,16 @@ class NotepadWindow(Window):
         if not self.visible:
             return
 
+        # Update title with modified indicator
+        if self.filepath:
+            filename = os.path.basename(self.filepath)
+            prefix = '* ' if self.modified else ''
+            self.title = f'Notepad - {prefix}{filename}'
+        elif self.modified:
+            self.title = 'Notepad *'
+        else:
+            self.title = 'Notepad'
+
         body_attr = self.draw_frame(stdscr)
         bx, by, bw, bh = self.body_rect()
         body_h = bh - 1  # Last row is status bar
@@ -1333,6 +1360,10 @@ class NotepadWindow(Window):
             self.view_left = 0
             self._invalidate_wrap()
             self._ensure_cursor_visible()
+        elif action == 'np_save':
+            result = self._save_file()
+            if result is not True:
+                return ('save_error', result)
         elif action == 'np_new':
             return ('action', 'notepad')
         elif action == 'np_close':
@@ -1438,6 +1469,12 @@ class NotepadWindow(Window):
                 self.buffer.pop(self.cursor_line + 1)
                 self.modified = True
                 self._invalidate_wrap()
+
+        # Save: Ctrl+S (key 19)
+        elif key == 19:
+            result = self._save_file()
+            if result is not True:
+                return ('save_error', result)
 
         # Toggle: Ctrl+W (key 23)
         elif key == 23:
@@ -1971,28 +2008,7 @@ class RetroTUI:
                 self.execute_action(action)
             return
 
-        # Menu dropdown handling (when menu is active)
-        if self.menu.active:
-            # Mouse movement — update hover highlight, don't close
-            if bstate & curses.REPORT_MOUSE_POSITION:
-                self.menu.handle_hover(mx, my)
-                return
-            # Actual click — select item or close menu
-            if bstate & (curses.BUTTON1_CLICKED | curses.BUTTON1_PRESSED | curses.BUTTON1_DOUBLE_CLICKED):
-                action = self.menu.handle_click(mx, my)
-                if action:
-                    self.execute_action(action)
-                return
-            # For any other mouse event while menu is active, check if inside menu area
-            if self.menu.hit_test_dropdown(mx, my) or my == 0:
-                return  # Stay active, absorb event
-
-        # Taskbar click — restore minimized windows
-        if bstate & (curses.BUTTON1_CLICKED | curses.BUTTON1_PRESSED | curses.BUTTON1_DOUBLE_CLICKED):
-            if self.handle_taskbar_click(mx, my):
-                return
-
-        # Window dragging — check FIRST, before window clicks
+        # Window dragging — check FIRST, before menu/window clicks
         any_dragging = any(w.dragging for w in self.windows)
         if any_dragging:
             stop_flags = (curses.BUTTON1_CLICKED | curses.BUTTON1_RELEASED |
@@ -2027,6 +2043,27 @@ class RetroTUI:
                     win.apply_resize(mx, my, w, h)
                     return
             return
+
+        # Menu dropdown handling (when menu is active)
+        if self.menu.active:
+            # Mouse movement — update hover highlight, don't close
+            if bstate & curses.REPORT_MOUSE_POSITION:
+                self.menu.handle_hover(mx, my)
+                return
+            # Actual click — select item or close menu
+            if bstate & (curses.BUTTON1_CLICKED | curses.BUTTON1_PRESSED | curses.BUTTON1_DOUBLE_CLICKED):
+                action = self.menu.handle_click(mx, my)
+                if action:
+                    self.execute_action(action)
+                return
+            # For any other mouse event while menu is active, check if inside menu area
+            if self.menu.hit_test_dropdown(mx, my) or my == 0:
+                return  # Stay active, absorb event
+
+        # Taskbar click — restore minimized windows
+        if bstate & (curses.BUTTON1_CLICKED | curses.BUTTON1_PRESSED | curses.BUTTON1_DOUBLE_CLICKED):
+            if self.handle_taskbar_click(mx, my):
+                return
 
         # Check windows (reverse z-order for top window first)
         for win in reversed(self.windows):
@@ -2112,6 +2149,8 @@ class RetroTUI:
                                 self.close_window(win)
                             else:
                                 self.execute_action(result[1])
+                        elif result and result[0] == 'save_error':
+                            self.dialog = Dialog('Save Error', result[1], ['OK'], width=50)
                     return
                 # Scroll wheel
                 if bstate & curses.BUTTON4_PRESSED:  # Scroll up
@@ -2240,6 +2279,8 @@ class RetroTUI:
                         self.close_window(active_win)
                     else:
                         self.execute_action(result[1])
+                elif result and result[0] == 'save_error':
+                    self.dialog = Dialog('Save Error', result[1], ['OK'], width=50)
             else:
                 # Default scroll behavior for regular windows
                 if key == curses.KEY_UP or key == curses.KEY_PPAGE:
