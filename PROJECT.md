@@ -125,7 +125,7 @@ código de la aplicación no necesita distinguirlos.
 - **NO** X11 / Xorg
 - **NO** Wayland
 - **NO** framebuffer gráfico
-- Solo Python stdlib (`curses`, `os`, `subprocess`, `json`)
+- Solo Python stdlib (`curses`, `os`, `sys`, `subprocess`, `time`, `locale`, `termios`)
 
 ---
 
@@ -191,7 +191,6 @@ Diálogos:         Gris claro
 | Tab           | Ciclar foco entre ventanas      |
 | Escape        | Cerrar menú / diálogo           |
 | Enter         | Activar botón / opción          |
-| Alt+F4        | Cerrar ventana activa           |
 | Ctrl+Q        | Salir del entorno               |
 | Arrow keys    | Navegar menús                   |
 | F10           | Activar barra de menú           |
@@ -219,5 +218,5 @@ sudo systemctl start gpm
 
 # Ejecutar
 cd retro-tui
-python3 src/retrotui.py
+python3 retrotui.py
 ```

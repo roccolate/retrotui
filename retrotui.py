@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-RetroTUI v0.2.1 — Entorno de escritorio retro estilo Windows 3.1
+RetroTUI v0.2.2 — Entorno de escritorio retro estilo Windows 3.1
 Funciona en consola Linux sin X11. Soporte de mouse vía GPM o xterm protocol.
 """
 
@@ -36,25 +36,24 @@ SB_H  = '─'
 SB_V  = '│'
 
 # Desktop pattern (Win 3.1 style)
-DESKTOP_PATTERNS = ['░', '▒', '·']
 DESKTOP_PATTERN = '░'
 
 # Icons (text representation)
 ICONS = [
-    {'symbol': '📁', 'label': 'Files',     'action': 'filemanager'},
-    {'symbol': '📝', 'label': 'Notepad',   'action': 'notepad'},
-    {'symbol': '💻', 'label': 'Terminal',   'action': 'terminal'},
-    {'symbol': '⚙️',  'label': 'Settings',  'action': 'settings'},
-    {'symbol': 'ℹ️',  'label': 'About',     'action': 'about'},
+    {'label': 'Files',    'action': 'filemanager', 'art': ['┌──┐', '│▒▒│', '└──┘']},
+    {'label': 'Notepad',  'action': 'notepad',     'art': ['╔══╗', '║≡≡║', '╚══╝']},
+    {'label': 'Terminal', 'action': 'terminal',     'art': ['┌──┐', '│>_│', '└──┘']},
+    {'label': 'Settings', 'action': 'settings',    'art': ['╭──╮', '│⚙ │', '╰──╯']},
+    {'label': 'About',   'action': 'about',        'art': ['╭──╮', '│ ?│', '╰──╯']},
 ]
 
 # Fallback ASCII icons for non-Unicode terminals
 ICONS_ASCII = [
-    {'symbol': '[D]', 'label': 'Files',     'action': 'filemanager'},
-    {'symbol': '[N]', 'label': 'Notepad',   'action': 'notepad'},
-    {'symbol': '[>]', 'label': 'Terminal',   'action': 'terminal'},
-    {'symbol': '[S]', 'label': 'Settings',  'action': 'settings'},
-    {'symbol': '[?]', 'label': 'About',     'action': 'about'},
+    {'label': 'Files',    'action': 'filemanager', 'art': ['+--+', '|##|', '+--+']},
+    {'label': 'Notepad',  'action': 'notepad',     'art': ['+--+', '|==|', '+--+']},
+    {'label': 'Terminal', 'action': 'terminal',     'art': ['+--+', '|>_|', '+--+']},
+    {'label': 'Settings', 'action': 'settings',    'art': ['+--+', '|**|', '+--+']},
+    {'label': 'About',   'action': 'about',        'art': ['+--+', '| ?|', '+--+']},
 ]
 
 
@@ -96,10 +95,12 @@ def init_colors():
         curses.init_pair(C_DESKTOP,       curses.COLOR_CYAN, 20)
         curses.init_pair(C_WIN_TITLE,     curses.COLOR_WHITE, 21)
         curses.init_pair(C_WIN_INACTIVE,  curses.COLOR_WHITE, 23)
+        curses.init_pair(C_ICON,          curses.COLOR_BLACK, 20)  # Black on teal
     else:
         curses.init_pair(C_DESKTOP,       curses.COLOR_CYAN, curses.COLOR_CYAN)
         curses.init_pair(C_WIN_TITLE,     curses.COLOR_WHITE, curses.COLOR_BLUE)
         curses.init_pair(C_WIN_INACTIVE,  curses.COLOR_BLACK, curses.COLOR_WHITE)
+        curses.init_pair(C_ICON,          curses.COLOR_BLACK, curses.COLOR_CYAN)
 
     curses.init_pair(C_MENUBAR,       curses.COLOR_BLACK, curses.COLOR_WHITE)
     curses.init_pair(C_MENU_ITEM,     curses.COLOR_BLACK, curses.COLOR_WHITE)
@@ -111,7 +112,6 @@ def init_colors():
     curses.init_pair(C_BUTTON_SEL,    curses.COLOR_WHITE, curses.COLOR_BLACK)
     curses.init_pair(C_DIALOG,        curses.COLOR_BLACK, curses.COLOR_WHITE)
     curses.init_pair(C_STATUS,        curses.COLOR_BLACK, curses.COLOR_CYAN)
-    curses.init_pair(C_ICON,          curses.COLOR_WHITE, curses.COLOR_CYAN)
     curses.init_pair(C_ICON_SEL,      curses.COLOR_YELLOW, curses.COLOR_BLUE)
     curses.init_pair(C_SCROLLBAR,     curses.COLOR_BLACK, curses.COLOR_WHITE)
     curses.init_pair(C_FM_SELECTED,   curses.COLOR_WHITE, curses.COLOR_BLUE)
@@ -150,12 +150,6 @@ def draw_box(win, y, x, h, w, attr=0, double=True):
     safe_addstr(win, y + h - 1, x, bl + hz * (w - 2) + br, attr)
 
 
-def center_text(text, width):
-    """Center text within a given width."""
-    pad = (width - len(text)) // 2
-    return ' ' * max(0, pad) + text
-
-
 def check_unicode_support():
     """Check if terminal supports Unicode."""
     try:
@@ -190,10 +184,6 @@ class Window:
         self.dragging = False
         self.drag_offset_x = 0
         self.drag_offset_y = 0
-
-    def title_bar_rect(self):
-        """Return (x, y, w, h) of the title bar area."""
-        return (self.x + 1, self.y, self.w - 2, 1)
 
     def close_button_pos(self):
         """Return (x, y) of the close button."""
@@ -267,7 +257,8 @@ class Window:
 
     def scroll_down(self):
         _, _, _, bh = self.body_rect()
-        if self.scroll_offset < len(self.content) - bh:
+        max_scroll = max(0, len(self.content) - bh)
+        if self.scroll_offset < max_scroll:
             self.scroll_offset += 1
 
 
@@ -464,6 +455,12 @@ class Dialog:
             self.lines.append(line)
 
         self.height = len(self.lines) + 7
+
+        # Pre-initialize click target positions (updated by draw())
+        self._btn_y = 0
+        self._btn_x_start = 0
+        self._dialog_x = 0
+        self._dialog_y = 0
 
     def draw(self, stdscr):
         max_h, max_w = stdscr.getmaxyx()
@@ -808,7 +805,7 @@ def get_system_info():
 
     info.append(f'Terminal: {os.environ.get("TERM", "unknown")}')
     info.append(f'Shell: {os.path.basename(os.environ.get("SHELL", "unknown"))}')
-    info.append(f'Python: {os.sys.version.split()[0]}')
+    info.append(f'Python: {sys.version.split()[0]}')
     return info
 
 
@@ -865,7 +862,7 @@ class RetroTUI:
         welcome_content = [
             '',
             '   ╔══════════════════════════════════════╗',
-            '   ║     Welcome to RetroTUI v0.2.1       ║',
+            '   ║     Welcome to RetroTUI v0.2.2       ║',
             '   ║                                      ║',
             '   ║  A Windows 3.1 style desktop         ║',
             '   ║  environment for the Linux console.  ║',
@@ -903,36 +900,42 @@ class RetroTUI:
             safe_addstr(self.stdscr, row, 0, line, attr)
 
     def draw_icons(self):
-        """Draw desktop icons."""
+        """Draw desktop icons (3x4 art + label)."""
         h, w = self.stdscr.getmaxyx()
         start_x = 3
         start_y = 3
-        spacing_y = 3
+        spacing_y = 5  # 3 lines art + 1 label + 1 gap
 
         for i, icon in enumerate(self.icons):
             y = start_y + i * spacing_y
-            if y >= h - 3:
+            if y + 3 >= h - 1:
                 break
-            attr = curses.color_pair(C_ICON_SEL if i == self.selected_icon else C_ICON)
-            safe_addstr(self.stdscr, y, start_x, f' {icon["symbol"]} ', attr | curses.A_BOLD)
-            safe_addstr(self.stdscr, y + 1, start_x - 1, center_text(icon['label'], 10), attr)
+            is_sel = (i == self.selected_icon)
+            attr = curses.color_pair(C_ICON_SEL if is_sel else C_ICON) | curses.A_BOLD
+            # Draw 3-line art
+            for row, line in enumerate(icon['art']):
+                safe_addstr(self.stdscr, y + row, start_x, line, attr)
+            # Draw label centered below art
+            label = icon['label'].center(len(icon['art'][0]))
+            safe_addstr(self.stdscr, y + 3, start_x, label, attr)
 
     def draw_statusbar(self):
         """Draw the bottom status bar."""
         h, w = self.stdscr.getmaxyx()
         attr = curses.color_pair(C_STATUS)
-        status = f' RetroTUI v0.2.1 │ Windows: {len(self.windows)} │ Mouse: Enabled │ Ctrl+Q: Exit '
+        status = f' RetroTUI v0.2.2 │ Windows: {len(self.windows)} │ Mouse: Enabled │ Ctrl+Q: Exit'
         safe_addstr(self.stdscr, h - 1, 0, status.ljust(w - 1), attr)
 
     def get_icon_at(self, mx, my):
         """Return icon index at mouse position, or -1."""
-        start_x = 2
+        start_x = 3
         start_y = 3
-        spacing_y = 3
+        spacing_y = 5  # Must match draw_icons
 
         for i in range(len(self.icons)):
             iy = start_y + i * spacing_y
-            if iy <= my <= iy + 1 and start_x <= mx <= start_x + 8:
+            icon_w = len(self.icons[i]['art'][0])
+            if iy <= my <= iy + 3 and start_x <= mx <= start_x + icon_w - 1:
                 return i
         return -1
 
@@ -965,7 +968,7 @@ class RetroTUI:
 
         elif action == 'about':
             sys_info = get_system_info()
-            msg = ('RetroTUI v0.2.1\n'
+            msg = ('RetroTUI v0.2.2\n'
                    'A retro desktop environment for Linux console.\n\n'
                    'System Information:\n' +
                    '\n'.join(sys_info) + '\n\n'
@@ -1202,10 +1205,18 @@ class RetroTUI:
                     return
                 # Scroll wheel
                 if bstate & curses.BUTTON4_PRESSED:  # Scroll up
-                    win.scroll_up()
+                    if hasattr(win, 'select_up'):
+                        for _ in range(3):
+                            win.select_up()
+                    else:
+                        win.scroll_up()
                     return
                 if bstate & 0x200000:  # Scroll down (BUTTON5)
-                    win.scroll_down()
+                    if hasattr(win, 'select_down'):
+                        for _ in range(3):
+                            win.select_down()
+                    else:
+                        win.scroll_down()
                     return
 
         # Desktop icons — check double-click FIRST (bstate includes CLICKED on double-click)
@@ -1346,6 +1357,11 @@ class RetroTUI:
                         pass
                 elif key == curses.KEY_RESIZE:
                     curses.update_lines_cols()
+                    # Reclamp windows to new terminal size
+                    new_h, new_w = self.stdscr.getmaxyx()
+                    for win in self.windows:
+                        win.x = max(0, min(win.x, new_w - min(win.w, new_w)))
+                        win.y = max(1, min(win.y, new_h - min(win.h, new_h) - 1))
                 else:
                     self.handle_key(key)
         finally:
