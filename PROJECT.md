@@ -171,9 +171,21 @@ código de la aplicación no necesita distinguirlos.
 - [x] Status bar muestra ventanas visibles/total
 - [x] Notepad en menú File
 
+## 4.3 Características de v0.3.1 — Barras de Menú por Ventana
+
+- [x] Clase WindowMenu: dropdown menu system per-window
+- [x] FileManager: menú File (Open, Parent Dir, Close) + View (Hidden Files, Refresh)
+- [x] Notepad: menú File (New, Close) + View (Word Wrap)
+- [x] Indicador ≡ en title bar de ventanas con menú
+- [x] F10 abre menú de ventana activa (prioridad sobre global)
+- [x] Escape cierra menú de ventana primero, luego global
+- [x] Hover tracking y click-outside-close para dropdowns
+- [x] body_rect() auto-ajuste con window_menu
+
 ### Roadmap futuro:
 - [x] File Manager con navegación de directorios
 - [x] Editor de texto integrado
+- [x] Barras de menú por ventana
 - [ ] Terminal embebida
 - [ ] Temas configurables (CGA, EGA, VGA, Win3.1, Win95)
 - [ ] Task switcher (Alt+Tab)
