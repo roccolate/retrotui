@@ -182,10 +182,19 @@ código de la aplicación no necesita distinguirlos.
 - [x] Hover tracking y click-outside-close para dropdowns
 - [x] body_rect() auto-ajuste con window_menu
 
+## 4.4 Características de v0.3.2 — ASCII Video Player
+
+- [x] Reproductor ASCII de video usando mplayer + aalib (-vo aa)
+- [x] Icono "ASCII Vid" en escritorio y opción "ASCII Video" en menú File
+- [x] Detección automática de videos desde File Manager (.mp4, .mkv, .webm, etc.)
+- [x] Manejo de errores: mplayer no instalado, error de ejecución
+- [x] Restauración correcta de curses después de reproducción
+
 ### Roadmap futuro:
 - [x] File Manager con navegación de directorios
 - [x] Editor de texto integrado
 - [x] Barras de menú por ventana
+- [x] ASCII Video Player
 - [ ] Terminal embebida
 - [ ] Temas configurables (CGA, EGA, VGA, Win3.1, Win95)
 - [ ] Task switcher (Alt+Tab)

@@ -16,7 +16,7 @@
 ║░░ 💻 ░░░░║  📄 config.json           512B      ║░░░░░░░░░░║
 ║░Terminal░╚══════════════════════════════════════╝░░░░░░░░░░║
 ║░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░║
-║ RetroTUI v0.3.1│ Windows: 1/1 │ Mouse: Enabled │ Ctrl+Q: Exit║
+║ RetroTUI v0.3.2│ Windows: 1/1 │ Mouse: Enabled │ Ctrl+Q: Exit║
 ╚══════════════════════════════════════════════════════════════╝
 ```
 
@@ -94,6 +94,15 @@ Windows Terminal (SSH), iTerm2, tmux, screen.
 | `Enter`       | Nueva línea                |
 | `Ctrl+W`      | Toggle word wrap           |
 
+### ASCII Video Player (mplayer + aalib)
+| Tecla         | Acción                              |
+|---------------|-------------------------------------|
+| `q`           | Salir del video y volver a RetroTUI |
+| `Space`       | Pausa / reanudar (mplayer)          |
+| `← / →`       | Seek atrás / adelante (mplayer)     |
+
+> Nota: la reproducción ASCII se ejecuta con `mplayer -vo aa` (aalib).
+
 ### Ventanas
 | Acción             | Resultado                    |
 |--------------------|------------------------------|
@@ -135,9 +144,9 @@ README.md      — Este archivo
 
 Ver [CHANGELOG.md](CHANGELOG.md) para el historial completo de versiones.
 
-### Últimos cambios (v0.3.1)
+### Últimos cambios (v0.3.2)
+- **ASCII Video Player** — reproduce videos en ASCII vía mplayer + aalib
 - **Barras de menú por ventana** estilo Win 3.1 (File, View) para FileManager y Notepad
-- Indicador `≡` en title bar, F10 abre menú de ventana, hover tracking
 - Editor de texto, resize de ventanas, maximize/minimize (v0.3)
 - File Manager interactivo con navegación (v0.2)
 
