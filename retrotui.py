@@ -1,14 +1,16 @@
 #!/usr/bin/env python3
 """
-RetroTUI v0.2 — Entorno de escritorio retro estilo Windows 3.1
+RetroTUI v0.2.1 — Entorno de escritorio retro estilo Windows 3.1
 Funciona en consola Linux sin X11. Soporte de mouse vía GPM o xterm protocol.
 """
 
 import curses
+import sys
 import time
 import os
 import subprocess
 import locale
+import termios
 
 # Ensure UTF-8
 locale.setlocale(locale.LC_ALL, '')
@@ -350,6 +352,52 @@ class Menu:
                 safe_addstr(stdscr, y + 1 + i, x, SB_H * dropdown_w, item_attr)
             else:
                 safe_addstr(stdscr, y + 1 + i, x, f' {label.ljust(dropdown_w - 2)} ', attr)
+
+    def get_dropdown_rect(self):
+        """Return (x, y, w, h) of the active dropdown area, or None."""
+        if not self.active:
+            return None
+        menu_name = self.menu_names[self.selected_menu]
+        items = self.items[menu_name]
+        positions = self.get_menu_x_positions()
+        x = positions[self.selected_menu]
+        max_item_len = max(len(item[0]) for item in items)
+        dropdown_w = max_item_len + 4
+        # Full area: border row (y=1) through all items + bottom border
+        return (x - 1, 1, dropdown_w + 2, len(items) + 2)
+
+    def hit_test_dropdown(self, mx, my):
+        """Check if position is within the dropdown area (including border)."""
+        rect = self.get_dropdown_rect()
+        if rect is None:
+            return False
+        rx, ry, rw, rh = rect
+        return rx <= mx < rx + rw and ry <= my < ry + rh
+
+    def handle_hover(self, mx, my):
+        """Handle mouse hover over dropdown — update highlight. Returns True if inside menu area."""
+        if not self.active:
+            return False
+        # On menu bar row — stay active
+        if my == 0:
+            positions = self.get_menu_x_positions()
+            for i, pos in enumerate(positions):
+                name = self.menu_names[i]
+                if pos <= mx < pos + len(name) + 2:
+                    if i != self.selected_menu:
+                        self.selected_menu = i
+                        self.selected_item = 0
+                    return True
+            return True  # Still on row 0, don't close
+        # Inside dropdown — highlight item
+        if self.hit_test_dropdown(mx, my):
+            menu_name = self.menu_names[self.selected_menu]
+            items = self.items[menu_name]
+            idx = my - 2
+            if 0 <= idx < len(items) and items[idx][1] is not None:
+                self.selected_item = idx
+            return True
+        return False
 
     def handle_click(self, mx, my):
         """Handle click on menu bar. Returns action or None."""
@@ -789,13 +837,25 @@ class RetroTUI:
         stdscr.nodelay(False)
         stdscr.timeout(500)  # 500ms for clock updates
 
+        # Disable XON/XOFF flow control so Ctrl+Q/Ctrl+S reach the app
+        try:
+            fd = sys.stdin.fileno()
+            attrs = termios.tcgetattr(fd)
+            attrs[0] &= ~termios.IXON   # Disable XON/XOFF output control
+            attrs[0] &= ~termios.IXOFF   # Disable XON/XOFF input control
+            termios.tcsetattr(fd, termios.TCSANOW, attrs)
+        except (termios.error, ValueError, OSError):
+            pass  # Not a real terminal or unsupported
+
         # Enable mouse
         curses.mousemask(
             curses.ALL_MOUSE_EVENTS |
             curses.REPORT_MOUSE_POSITION
         )
         # Enable SGR extended mouse mode for better coordinate support
-        print('\033[?1003h', end='', flush=True)  # Any-event tracking
+        # Use 1002 (button-event tracking) — reports motion only while button held
+        # This gives us implicit release detection: motion events stop when released
+        print('\033[?1002h', end='', flush=True)  # Button-event tracking (drag)
         print('\033[?1006h', end='', flush=True)  # SGR extended mode
 
         init_colors()
@@ -805,7 +865,7 @@ class RetroTUI:
         welcome_content = [
             '',
             '   ╔══════════════════════════════════════╗',
-            '   ║     Welcome to RetroTUI v0.2         ║',
+            '   ║     Welcome to RetroTUI v0.2.1       ║',
             '   ║                                      ║',
             '   ║  A Windows 3.1 style desktop         ║',
             '   ║  environment for the Linux console.  ║',
@@ -829,7 +889,7 @@ class RetroTUI:
 
     def cleanup(self):
         """Restore terminal state."""
-        print('\033[?1003l', end='', flush=True)
+        print('\033[?1002l', end='', flush=True)
         print('\033[?1006l', end='', flush=True)
 
     def draw_desktop(self):
@@ -861,7 +921,7 @@ class RetroTUI:
         """Draw the bottom status bar."""
         h, w = self.stdscr.getmaxyx()
         attr = curses.color_pair(C_STATUS)
-        status = f' RetroTUI v0.2 │ Windows: {len(self.windows)} │ Mouse: Enabled │ Ctrl+Q: Exit '
+        status = f' RetroTUI v0.2.1 │ Windows: {len(self.windows)} │ Mouse: Enabled │ Ctrl+Q: Exit '
         safe_addstr(self.stdscr, h - 1, 0, status.ljust(w - 1), attr)
 
     def get_icon_at(self, mx, my):
@@ -905,7 +965,7 @@ class RetroTUI:
 
         elif action == 'about':
             sys_info = get_system_info()
-            msg = ('RetroTUI v0.2\n'
+            msg = ('RetroTUI v0.2.1\n'
                    'A retro desktop environment for Linux console.\n\n'
                    'System Information:\n' +
                    '\n'.join(sys_info) + '\n\n'
@@ -1058,7 +1118,7 @@ class RetroTUI:
 
         # Dialog takes priority
         if self.dialog:
-            if bstate & curses.BUTTON1_CLICKED or bstate & curses.BUTTON1_PRESSED:
+            if bstate & (curses.BUTTON1_CLICKED | curses.BUTTON1_PRESSED | curses.BUTTON1_DOUBLE_CLICKED):
                 result = self.dialog.handle_click(mx, my)
                 if result >= 0:
                     btn_text = self.dialog.buttons[result]
@@ -1067,18 +1127,48 @@ class RetroTUI:
                     self.dialog = None
             return
 
-        # Menu bar
-        if my == 0:
+        # Menu bar click
+        if my == 0 and (bstate & (curses.BUTTON1_CLICKED | curses.BUTTON1_PRESSED | curses.BUTTON1_DOUBLE_CLICKED)):
             action = self.menu.handle_click(mx, my)
             if action:
                 self.execute_action(action)
             return
 
-        # Menu dropdown
+        # Menu dropdown handling (when menu is active)
         if self.menu.active:
-            action = self.menu.handle_click(mx, my)
-            if action:
-                self.execute_action(action)
+            # Mouse movement — update hover highlight, don't close
+            if bstate & curses.REPORT_MOUSE_POSITION:
+                self.menu.handle_hover(mx, my)
+                return
+            # Actual click — select item or close menu
+            if bstate & (curses.BUTTON1_CLICKED | curses.BUTTON1_PRESSED | curses.BUTTON1_DOUBLE_CLICKED):
+                action = self.menu.handle_click(mx, my)
+                if action:
+                    self.execute_action(action)
+                return
+            # For any other mouse event while menu is active, check if inside menu area
+            if self.menu.hit_test_dropdown(mx, my) or my == 0:
+                return  # Stay active, absorb event
+
+        # Window dragging — check FIRST, before window clicks
+        any_dragging = any(w.dragging for w in self.windows)
+        if any_dragging:
+            # Click or release = stop dragging
+            stop_flags = (curses.BUTTON1_CLICKED | curses.BUTTON1_RELEASED |
+                          curses.BUTTON1_DOUBLE_CLICKED)
+            if bstate & stop_flags:
+                for win in self.windows:
+                    win.dragging = False
+                return
+            # Everything else (motion, pressed) = update position
+            for win in self.windows:
+                if win.dragging:
+                    h, w = self.stdscr.getmaxyx()
+                    new_x = mx - win.drag_offset_x
+                    new_y = my - win.drag_offset_y
+                    win.x = max(0, min(new_x, w - win.w))
+                    win.y = max(1, min(new_y, h - win.h - 1))
+                    return
             return
 
         # Check windows (reverse z-order for top window first)
@@ -1086,7 +1176,7 @@ class RetroTUI:
             if not win.visible:
                 continue
 
-            if win.on_close_button(mx, my) and (bstate & curses.BUTTON1_CLICKED or bstate & curses.BUTTON1_PRESSED):
+            if win.on_close_button(mx, my) and (bstate & (curses.BUTTON1_CLICKED | curses.BUTTON1_PRESSED | curses.BUTTON1_DOUBLE_CLICKED)):
                 self.close_window(win)
                 return
 
@@ -1097,12 +1187,12 @@ class RetroTUI:
                     win.drag_offset_y = my - win.y
                     self.set_active_window(win)
                     return
-                elif bstate & curses.BUTTON1_CLICKED:
+                elif bstate & (curses.BUTTON1_CLICKED | curses.BUTTON1_DOUBLE_CLICKED):
                     self.set_active_window(win)
                     return
 
             if win.contains(mx, my):
-                if bstate & curses.BUTTON1_CLICKED or bstate & curses.BUTTON1_PRESSED:
+                if bstate & (curses.BUTTON1_CLICKED | curses.BUTTON1_PRESSED | curses.BUTTON1_DOUBLE_CLICKED):
                     self.set_active_window(win)
                     # Delegate click to window if it has a handler
                     if hasattr(win, 'handle_click'):
@@ -1118,33 +1208,17 @@ class RetroTUI:
                     win.scroll_down()
                     return
 
-        # Window dragging
-        if bstate & curses.REPORT_MOUSE_POSITION:
-            for win in self.windows:
-                if win.dragging:
-                    h, w = self.stdscr.getmaxyx()
-                    new_x = mx - win.drag_offset_x
-                    new_y = my - win.drag_offset_y
-                    win.x = max(0, min(new_x, w - win.w))
-                    win.y = max(1, min(new_y, h - win.h - 1))
-                    return
-
-        if bstate & curses.BUTTON1_RELEASED:
-            for win in self.windows:
-                win.dragging = False
-
-        # Desktop icons
-        if bstate & curses.BUTTON1_CLICKED or bstate & curses.BUTTON1_PRESSED:
-            icon_idx = self.get_icon_at(mx, my)
-            if icon_idx >= 0:
-                self.selected_icon = icon_idx
-                return
-
-        # Double click on icon
+        # Desktop icons — check double-click FIRST (bstate includes CLICKED on double-click)
         if bstate & curses.BUTTON1_DOUBLE_CLICKED:
             icon_idx = self.get_icon_at(mx, my)
             if icon_idx >= 0:
                 self.execute_action(self.icons[icon_idx]['action'])
+                return
+
+        if bstate & curses.BUTTON1_CLICKED or bstate & curses.BUTTON1_PRESSED:
+            icon_idx = self.get_icon_at(mx, my)
+            if icon_idx >= 0:
+                self.selected_icon = icon_idx
                 return
 
         # Click on desktop - deselect
