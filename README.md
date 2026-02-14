@@ -16,7 +16,7 @@
 ║░░ 💻 ░░░░║  📄 config.json             512B          ║░░░░░║
 ║░Terminal░╚════════════════════════════════════════════╝░░░░░║
 ║░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░║
-║ RetroTUI v0.2.1 │ Windows: 1 │ Mouse: Enabled │ Ctrl+Q: Exit║
+║ RetroTUI v0.2.2 │ Windows: 1 │ Mouse: Enabled │ Ctrl+Q: Exit║
 ╚══════════════════════════════════════════════════════════════╝
 ```
 
@@ -37,7 +37,7 @@ sudo apt install gpm
 sudo systemctl enable --now gpm
 
 # Ejecutar:
-python3 src/retrotui.py
+python3 retrotui.py
 ```
 
 ## Soporte de Mouse sin X11
@@ -95,11 +95,10 @@ Windows Terminal (SSH), iTerm2, tmux, screen.
 ## Arquitectura
 
 ```
-src/
-  retrotui.py    — Aplicación principal (monolítico v0.1)
-
-docs/
-  PROJECT.md     — Documentación técnica del proyecto
+retrotui.py    — Aplicación principal (archivo único)
+preview.html   — Preview interactiva en browser
+PROJECT.md     — Documentación técnica del proyecto
+README.md      — Este archivo
 ```
 
 ### Componentes internos:
