@@ -110,8 +110,23 @@ README.md      — Este archivo
 - **Dialog** — Diálogos modales
 - **ThemeEngine** — Colores Win3.1 (256-color cuando disponible)
 
-## Novedades en v0.2
+## Changelog
 
+### v0.2.2 — Bugfixes & Icons
+- Iconos rediseñados: ASCII art 3×4 con mejor contraste (negro sobre teal)
+- Scroll wheel mueve selección en File Manager (antes solo scrolleaba viewport)
+- Ventanas se reposicionan al redimensionar terminal
+- Fix crash en Dialog antes del primer draw
+- Fix scroll negativo en ventanas con poco contenido
+- Limpieza de dead code y corrección de docs
+
+### v0.2.1 — Hotfixes
+- Fix double-click en iconos (ya no dispara dos acciones)
+- Fix hover de menú dropdown (highlight sigue al mouse)
+- Fix Ctrl+Q (deshabilitado XON/XOFF flow control)
+- Fix drag de ventanas (release correcto con button-event tracking)
+
+### v0.2 — File Manager
 - **File Manager interactivo** con navegación de directorios
 - Click en carpetas para navegar, ".." para subir
 - **Visor de archivos** — abre archivos de texto en Notepad read-only
