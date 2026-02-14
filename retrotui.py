@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-RetroTUI v0.2.2 — Entorno de escritorio retro estilo Windows 3.1
+RetroTUI v0.3 — Entorno de escritorio retro estilo Windows 3.1
 Funciona en consola Linux sin X11. Soporte de mouse vía GPM o xterm protocol.
 """
 
@@ -8,7 +8,6 @@ import curses
 import sys
 import time
 import os
-import subprocess
 import locale
 import termios
 
@@ -79,6 +78,7 @@ C_SCROLLBAR     = 15
 C_WIN_INACTIVE  = 16
 C_FM_SELECTED   = 17
 C_FM_DIR        = 18
+C_TASKBAR       = 19
 
 
 def init_colors():
@@ -116,6 +116,7 @@ def init_colors():
     curses.init_pair(C_SCROLLBAR,     curses.COLOR_BLACK, curses.COLOR_WHITE)
     curses.init_pair(C_FM_SELECTED,   curses.COLOR_WHITE, curses.COLOR_BLUE)
     curses.init_pair(C_FM_DIR,        curses.COLOR_BLUE, curses.COLOR_WHITE)
+    curses.init_pair(C_TASKBAR,       curses.COLOR_BLACK, curses.COLOR_WHITE)
 
 
 # ═══════════════════════════════════════════════════════════
@@ -184,6 +185,13 @@ class Window:
         self.dragging = False
         self.drag_offset_x = 0
         self.drag_offset_y = 0
+        # Maximize / Minimize state
+        self.maximized = False
+        self.minimized = False
+        self.prev_rect = None  # (x, y, w, h) saved before maximize
+        # Resize state
+        self.resizing = False
+        self.resize_edge = None
 
     def close_button_pos(self):
         """Return (x, y) of the close button."""
@@ -199,20 +207,100 @@ class Window:
                 self.y <= my < self.y + self.h)
 
     def on_title_bar(self, mx, my):
-        """Check if point is on the title bar."""
-        return (self.x + 1 <= mx < self.x + self.w - 4 and my == self.y)
+        """Check if point is on the title bar (draggable zone, excludes buttons)."""
+        return (self.x + 1 <= mx < self.x + self.w - 10 and my == self.y)
 
     def on_close_button(self, mx, my):
-        """Check if point is on the close button."""
-        cx, cy = self.close_button_pos()
-        return (cx <= mx <= cx + 2 and my == cy)
+        """Check if point is on the close button [×]."""
+        cx = self.x + self.w - 4
+        return (cx <= mx <= cx + 2 and my == self.y)
 
-    def draw(self, stdscr):
-        """Draw the window."""
-        if not self.visible:
-            return
+    def on_minimize_button(self, mx, my):
+        """Check if point is on the minimize button [─]."""
+        bx = self.x + self.w - 10
+        return (bx <= mx <= bx + 2 and my == self.y)
 
-        max_h, max_w = stdscr.getmaxyx()
+    def on_maximize_button(self, mx, my):
+        """Check if point is on the maximize button [□]."""
+        bx = self.x + self.w - 7
+        return (bx <= mx <= bx + 2 and my == self.y)
+
+    def toggle_maximize(self, term_w, term_h):
+        """Toggle between maximized and normal state."""
+        if self.maximized:
+            # Restore previous rect
+            if self.prev_rect:
+                self.x, self.y, self.w, self.h = self.prev_rect
+                self.prev_rect = None
+            self.maximized = False
+        else:
+            # Save current rect and expand to full screen
+            self.prev_rect = (self.x, self.y, self.w, self.h)
+            self.x = 0
+            self.y = 1  # Below menu bar
+            self.w = term_w
+            self.h = term_h - 2  # Above taskbar + status bar
+            self.maximized = True
+
+    def toggle_minimize(self):
+        """Toggle between minimized and visible state."""
+        if self.minimized:
+            self.minimized = False
+            self.visible = True
+        else:
+            self.minimized = True
+            self.visible = False
+            self.dragging = False
+            self.resizing = False
+
+    def on_border(self, mx, my):
+        """Detect resize zone on window borders. Returns edge string or None.
+        Only bottom, right, and bottom corners are resizable."""
+        if self.maximized or not self.resizable:
+            return None
+        # Bottom-right corner (2×1 area)
+        if (self.x + self.w - 2 <= mx <= self.x + self.w - 1 and my == self.y + self.h - 1):
+            return 'se'
+        # Bottom-left corner (2×1 area)
+        if (self.x <= mx <= self.x + 1 and my == self.y + self.h - 1):
+            return 'sw'
+        # Bottom border
+        if (self.x + 2 <= mx <= self.x + self.w - 3 and my == self.y + self.h - 1):
+            return 's'
+        # Right border
+        if (mx == self.x + self.w - 1 and self.y + 1 <= my <= self.y + self.h - 2):
+            return 'e'
+        # Left border
+        if (mx == self.x and self.y + 1 <= my <= self.y + self.h - 2):
+            return 'w'
+        return None
+
+    def apply_resize(self, mx, my, term_w, term_h):
+        """Apply resize based on mouse position and active resize_edge."""
+        min_w, min_h = 20, 6
+        edge = self.resize_edge
+        if edge in ('se', 's', 'e'):
+            if 'e' in edge:
+                new_w = mx - self.x + 1
+                self.w = max(min_w, min(new_w, term_w - self.x))
+            if 's' in edge:
+                new_h = my - self.y + 1
+                self.h = max(min_h, min(new_h, term_h - self.y - 1))
+        elif edge == 'sw':
+            new_w = (self.x + self.w) - mx
+            if new_w >= min_w and mx >= 0:
+                self.x = mx
+                self.w = new_w
+            new_h = my - self.y + 1
+            self.h = max(min_h, min(new_h, term_h - self.y - 1))
+        elif edge == 'w':
+            new_w = (self.x + self.w) - mx
+            if new_w >= min_w and mx >= 0:
+                self.x = mx
+                self.w = new_w
+
+    def draw_frame(self, stdscr):
+        """Draw window frame: border, title bar, and buttons. Returns body_attr."""
         border_attr = curses.color_pair(C_WIN_BORDER) if self.active else curses.color_pair(C_WIN_INACTIVE)
         title_attr = curses.color_pair(C_WIN_TITLE) if self.active else curses.color_pair(C_WIN_INACTIVE)
         body_attr = curses.color_pair(C_WIN_BODY)
@@ -220,19 +308,26 @@ class Window:
         # Draw border
         draw_box(stdscr, self.y, self.x, self.h, self.w, border_attr)
 
-        # Title bar
+        # Title bar text
         title_text = f' {self.title} '
-        if len(title_text) > self.w - 6:
-            title_text = title_text[:self.w - 9] + '...'
-        title_bar = title_text.ljust(self.w - 5)
+        max_title = self.w - 12  # Leave room for 3 buttons [─][□][×]
+        if len(title_text) > max_title:
+            title_text = title_text[:max_title - 3] + '...'
+        title_bar = title_text.ljust(self.w - 11)
         safe_addstr(stdscr, self.y, self.x + 1, title_bar, title_attr | curses.A_BOLD)
 
-        # Close button
-        close_attr = curses.color_pair(C_BUTTON) | curses.A_BOLD
-        safe_addstr(stdscr, self.y, self.x + self.w - 4, '[×]', close_attr)
+        # Window buttons: [─][□][×]
+        btn_attr = curses.color_pair(C_BUTTON) | curses.A_BOLD
+        max_char = '▣' if self.maximized else '□'
+        safe_addstr(stdscr, self.y, self.x + self.w - 10, f'[─][{max_char}][×]', btn_attr)
+
+        return body_attr
+
+    def draw_body(self, stdscr, body_attr):
+        """Draw window body: background, content lines, scrollbar."""
+        bx, by, bw, bh = self.body_rect()
 
         # Body background
-        bx, by, bw, bh = self.body_rect()
         for row in range(bh):
             safe_addstr(stdscr, by + row, bx, ' ' * bw, body_attr)
 
@@ -250,6 +345,13 @@ class Window:
             for i in range(bh):
                 ch = '█' if i == thumb_pos else '░'
                 safe_addstr(stdscr, by + i, sb_x, ch, curses.color_pair(C_SCROLLBAR))
+
+    def draw(self, stdscr):
+        """Draw the window."""
+        if not self.visible:
+            return
+        body_attr = self.draw_frame(stdscr)
+        self.draw_body(stdscr, body_attr)
 
     def scroll_up(self):
         if self.scroll_offset > 0:
@@ -273,6 +375,7 @@ class Menu:
         self.items = {
             'File': [
                 ('New Window',    'new_window'),
+                ('Notepad',       'notepad'),
                 ('File Manager',  'filemanager'),
                 ('Terminal',      'terminal'),
                 ('─────────────', None),
@@ -779,6 +882,346 @@ class FileManagerWindow(Window):
 
 
 # ═══════════════════════════════════════════════════════════
+# Notepad Window (Text Editor)
+# ═══════════════════════════════════════════════════════════
+
+class NotepadWindow(Window):
+    """Editable text editor window with word wrap support."""
+
+    def __init__(self, x, y, w, h, filepath=None):
+        title = 'Notepad'
+        super().__init__(title, x, y, w, h, content=[])
+        self.buffer = ['']  # list[str] — one string per logical line
+        self.filepath = filepath
+        self.modified = False
+        self.cursor_line = 0
+        self.cursor_col = 0
+        self.view_top = 0    # First visible line in buffer
+        self.view_left = 0   # Horizontal scroll offset
+        self.wrap_mode = False
+        self._wrap_cache = []       # list[(buf_line, start_col, text)]
+        self._wrap_cache_w = -1     # Width used to build cache
+        self._wrap_stale = True
+
+        if filepath:
+            self._load_file(filepath)
+
+    def _load_file(self, filepath):
+        """Load file content into buffer."""
+        self.filepath = filepath
+        filename = os.path.basename(filepath)
+        self.title = f'Notepad - {filename}'
+        try:
+            with open(filepath, 'r', errors='replace') as f:
+                raw = f.read()
+            self.buffer = raw.split('\n')
+            if self.buffer and self.buffer[-1] == '':
+                pass  # Keep trailing empty line
+        except (PermissionError, OSError):
+            self.buffer = ['(Error reading file)']
+        self.cursor_line = 0
+        self.cursor_col = 0
+        self.view_top = 0
+        self.view_left = 0
+        self.modified = False
+        self._wrap_stale = True
+
+    def _invalidate_wrap(self):
+        """Mark wrap cache as needing rebuild."""
+        self._wrap_stale = True
+
+    def _compute_wrap(self, body_w):
+        """Build wrap cache: list of (buf_line_idx, start_col, text) tuples."""
+        if not self._wrap_stale and self._wrap_cache_w == body_w:
+            return
+        self._wrap_cache = []
+        self._wrap_cache_w = body_w
+        wrap_w = max(1, body_w - 1)  # -1 for scrollbar column
+        for i, line in enumerate(self.buffer):
+            if not line:
+                self._wrap_cache.append((i, 0, ''))
+            elif not self.wrap_mode or len(line) <= wrap_w:
+                self._wrap_cache.append((i, 0, line))
+            else:
+                # Word wrap
+                pos = 0
+                while pos < len(line):
+                    chunk = line[pos:pos + wrap_w]
+                    self._wrap_cache.append((i, pos, chunk))
+                    pos += wrap_w
+        self._wrap_stale = False
+
+    def _cursor_to_wrap_row(self, body_w):
+        """Find the wrap row that contains the cursor. Returns index into _wrap_cache."""
+        self._compute_wrap(body_w)
+        wrap_w = max(1, body_w - 1)
+        for idx, (buf_line, start_col, text) in enumerate(self._wrap_cache):
+            if buf_line == self.cursor_line:
+                if self.wrap_mode:
+                    if start_col <= self.cursor_col < start_col + wrap_w:
+                        return idx
+                    if start_col + wrap_w > len(self.buffer[self.cursor_line]):
+                        return idx  # Last segment of this line
+                else:
+                    return idx
+        return 0
+
+    def _ensure_cursor_visible(self):
+        """Auto-scroll viewport to keep cursor visible."""
+        bx, by, bw, bh = self.body_rect()
+        body_h = bh - 1  # -1 for status bar row
+
+        if self.wrap_mode:
+            self._compute_wrap(bw)
+            wrap_row = self._cursor_to_wrap_row(bw)
+            if wrap_row < self.view_top:
+                self.view_top = wrap_row
+            elif wrap_row >= self.view_top + body_h:
+                self.view_top = wrap_row - body_h + 1
+        else:
+            # Vertical
+            if self.cursor_line < self.view_top:
+                self.view_top = self.cursor_line
+            elif self.cursor_line >= self.view_top + body_h:
+                self.view_top = self.cursor_line - body_h + 1
+            # Horizontal
+            col_w = bw - 1  # -1 for scrollbar
+            if self.cursor_col < self.view_left:
+                self.view_left = self.cursor_col
+            elif self.cursor_col >= self.view_left + col_w:
+                self.view_left = self.cursor_col - col_w + 1
+
+    def _clamp_cursor(self):
+        """Ensure cursor is within valid buffer bounds."""
+        if self.cursor_line < 0:
+            self.cursor_line = 0
+        if self.cursor_line >= len(self.buffer):
+            self.cursor_line = len(self.buffer) - 1
+        line = self.buffer[self.cursor_line]
+        if self.cursor_col > len(line):
+            self.cursor_col = len(line)
+        if self.cursor_col < 0:
+            self.cursor_col = 0
+
+    def draw(self, stdscr):
+        """Draw notepad with buffer, cursor, and status bar."""
+        if not self.visible:
+            return
+
+        body_attr = self.draw_frame(stdscr)
+        bx, by, bw, bh = self.body_rect()
+        body_h = bh - 1  # Last row is status bar
+
+        # Body background
+        for row in range(bh):
+            safe_addstr(stdscr, by + row, bx, ' ' * bw, body_attr)
+
+        if self.wrap_mode:
+            self._compute_wrap(bw)
+            visible = self._wrap_cache[self.view_top:self.view_top + body_h]
+            cursor_wrap_row = self._cursor_to_wrap_row(bw)
+
+            for i, (buf_line, start_col, text) in enumerate(visible):
+                display = text[:bw - 1]
+                safe_addstr(stdscr, by + i, bx, display, body_attr)
+                # Draw cursor
+                global_row = self.view_top + i
+                if global_row == cursor_wrap_row:
+                    cx = self.cursor_col - start_col
+                    if 0 <= cx < bw - 1:
+                        ch = text[cx] if cx < len(text) else ' '
+                        safe_addstr(stdscr, by + i, bx + cx, ch, body_attr | curses.A_REVERSE)
+        else:
+            col_w = bw - 1  # -1 for scrollbar column
+            for i in range(body_h):
+                buf_idx = self.view_top + i
+                if buf_idx >= len(self.buffer):
+                    break
+                line = self.buffer[buf_idx]
+                display = line[self.view_left:self.view_left + col_w]
+                safe_addstr(stdscr, by + i, bx, display, body_attr)
+                # Draw cursor
+                if buf_idx == self.cursor_line:
+                    cx = self.cursor_col - self.view_left
+                    if 0 <= cx < col_w:
+                        ch = line[self.cursor_col] if self.cursor_col < len(line) else ' '
+                        safe_addstr(stdscr, by + i, bx + cx, ch, body_attr | curses.A_REVERSE)
+
+        # Scrollbar
+        total_lines = len(self._wrap_cache) if self.wrap_mode else len(self.buffer)
+        if total_lines > body_h and body_h > 1:
+            sb_x = bx + bw - 1
+            thumb_pos = int(self.view_top / max(1, total_lines - body_h) * (body_h - 1))
+            for i in range(body_h):
+                ch = '█' if i == thumb_pos else '░'
+                safe_addstr(stdscr, by + i, sb_x, ch, curses.color_pair(C_SCROLLBAR))
+
+        # Status bar (inside window, last body row)
+        status_y = by + bh - 1
+        mod_flag = ' [Modified]' if self.modified else ''
+        wrap_flag = ' WRAP' if self.wrap_mode else ''
+        status = f' Ln {self.cursor_line + 1}, Col {self.cursor_col + 1}{wrap_flag}{mod_flag}'
+        safe_addstr(stdscr, status_y, bx, status.ljust(bw)[:bw], curses.color_pair(C_STATUS))
+
+    def handle_key(self, key):
+        """Handle keyboard input for the editor. Returns None always."""
+        # Navigation
+        if key == curses.KEY_UP:
+            if self.cursor_line > 0:
+                self.cursor_line -= 1
+                self._clamp_cursor()
+                self._ensure_cursor_visible()
+        elif key == curses.KEY_DOWN:
+            if self.cursor_line < len(self.buffer) - 1:
+                self.cursor_line += 1
+                self._clamp_cursor()
+                self._ensure_cursor_visible()
+        elif key == curses.KEY_LEFT:
+            if self.cursor_col > 0:
+                self.cursor_col -= 1
+            elif self.cursor_line > 0:
+                self.cursor_line -= 1
+                self.cursor_col = len(self.buffer[self.cursor_line])
+            self._ensure_cursor_visible()
+        elif key == curses.KEY_RIGHT:
+            line = self.buffer[self.cursor_line]
+            if self.cursor_col < len(line):
+                self.cursor_col += 1
+            elif self.cursor_line < len(self.buffer) - 1:
+                self.cursor_line += 1
+                self.cursor_col = 0
+            self._ensure_cursor_visible()
+        elif key == curses.KEY_HOME:
+            self.cursor_col = 0
+            self._ensure_cursor_visible()
+        elif key == curses.KEY_END:
+            self.cursor_col = len(self.buffer[self.cursor_line])
+            self._ensure_cursor_visible()
+        elif key == curses.KEY_PPAGE:
+            _, _, _, bh = self.body_rect()
+            self.cursor_line = max(0, self.cursor_line - (bh - 2))
+            self._clamp_cursor()
+            self._ensure_cursor_visible()
+        elif key == curses.KEY_NPAGE:
+            _, _, _, bh = self.body_rect()
+            self.cursor_line = min(len(self.buffer) - 1, self.cursor_line + (bh - 2))
+            self._clamp_cursor()
+            self._ensure_cursor_visible()
+
+        # Editing: Enter
+        elif key in (curses.KEY_ENTER, 10, 13):
+            line = self.buffer[self.cursor_line]
+            before = line[:self.cursor_col]
+            after = line[self.cursor_col:]
+            self.buffer[self.cursor_line] = before
+            self.buffer.insert(self.cursor_line + 1, after)
+            self.cursor_line += 1
+            self.cursor_col = 0
+            self.modified = True
+            self._invalidate_wrap()
+            self._ensure_cursor_visible()
+
+        # Editing: Backspace
+        elif key in (curses.KEY_BACKSPACE, 127, 8):
+            if self.cursor_col > 0:
+                line = self.buffer[self.cursor_line]
+                self.buffer[self.cursor_line] = line[:self.cursor_col - 1] + line[self.cursor_col:]
+                self.cursor_col -= 1
+                self.modified = True
+                self._invalidate_wrap()
+            elif self.cursor_line > 0:
+                # Merge with previous line
+                prev_line = self.buffer[self.cursor_line - 1]
+                self.cursor_col = len(prev_line)
+                self.buffer[self.cursor_line - 1] = prev_line + self.buffer[self.cursor_line]
+                self.buffer.pop(self.cursor_line)
+                self.cursor_line -= 1
+                self.modified = True
+                self._invalidate_wrap()
+            self._ensure_cursor_visible()
+
+        # Editing: Delete
+        elif key == curses.KEY_DC:
+            line = self.buffer[self.cursor_line]
+            if self.cursor_col < len(line):
+                self.buffer[self.cursor_line] = line[:self.cursor_col] + line[self.cursor_col + 1:]
+                self.modified = True
+                self._invalidate_wrap()
+            elif self.cursor_line < len(self.buffer) - 1:
+                # Merge with next line
+                self.buffer[self.cursor_line] = line + self.buffer[self.cursor_line + 1]
+                self.buffer.pop(self.cursor_line + 1)
+                self.modified = True
+                self._invalidate_wrap()
+
+        # Toggle: Ctrl+W (key 23)
+        elif key == 23:
+            self.wrap_mode = not self.wrap_mode
+            self.view_left = 0
+            self._invalidate_wrap()
+            self._ensure_cursor_visible()
+
+        # Printable characters
+        elif 32 <= key <= 126:
+            ch = chr(key)
+            line = self.buffer[self.cursor_line]
+            self.buffer[self.cursor_line] = line[:self.cursor_col] + ch + line[self.cursor_col:]
+            self.cursor_col += 1
+            self.modified = True
+            self._invalidate_wrap()
+            self._ensure_cursor_visible()
+
+        return None
+
+    def handle_click(self, mx, my):
+        """Handle click in the body — place cursor at clicked position."""
+        bx, by, bw, bh = self.body_rect()
+        body_h = bh - 1  # -1 for status bar
+
+        if not (bx <= mx < bx + bw and by <= my < by + body_h):
+            return None
+
+        row_in_view = my - by
+        col_in_view = mx - bx
+
+        if self.wrap_mode:
+            self._compute_wrap(bw)
+            wrap_idx = self.view_top + row_in_view
+            if wrap_idx < len(self._wrap_cache):
+                buf_line, start_col, text = self._wrap_cache[wrap_idx]
+                self.cursor_line = buf_line
+                self.cursor_col = min(start_col + col_in_view, len(self.buffer[buf_line]))
+            else:
+                self.cursor_line = len(self.buffer) - 1
+                self.cursor_col = len(self.buffer[self.cursor_line])
+        else:
+            target_line = self.view_top + row_in_view
+            if target_line < len(self.buffer):
+                self.cursor_line = target_line
+                self.cursor_col = min(self.view_left + col_in_view, len(self.buffer[target_line]))
+            else:
+                self.cursor_line = len(self.buffer) - 1
+                self.cursor_col = len(self.buffer[self.cursor_line])
+
+        self._clamp_cursor()
+        return None
+
+    def scroll_up(self):
+        """Scroll viewport up (for scroll wheel)."""
+        if self.view_top > 0:
+            self.view_top -= 1
+
+    def scroll_down(self):
+        """Scroll viewport down (for scroll wheel)."""
+        _, _, bw, bh = self.body_rect()
+        body_h = bh - 1
+        total = len(self._wrap_cache) if self.wrap_mode else len(self.buffer)
+        max_top = max(0, total - body_h)
+        if self.view_top < max_top:
+            self.view_top += 1
+
+
+# ═══════════════════════════════════════════════════════════
 # System Info
 # ═══════════════════════════════════════════════════════════
 
@@ -862,17 +1305,16 @@ class RetroTUI:
         welcome_content = [
             '',
             '   ╔══════════════════════════════════════╗',
-            '   ║     Welcome to RetroTUI v0.2.2       ║',
+            '   ║      Welcome to RetroTUI v0.3        ║',
             '   ║                                      ║',
             '   ║  A Windows 3.1 style desktop         ║',
             '   ║  environment for the Linux console.  ║',
             '   ║                                      ║',
-            '   ║  Features:                           ║',
-            '   ║  • Mouse support (GPM/xterm)         ║',
-            '   ║  • Draggable windows                 ║',
-            '   ║  • Dropdown menus                    ║',
-            '   ║  • Desktop icons                     ║',
-            '   ║  • Keyboard navigation               ║',
+            '   ║  New in v0.3:                        ║',
+            '   ║  • Text editor (Notepad)             ║',
+            '   ║  • Window resize (drag borders)      ║',
+            '   ║  • Maximize / Minimize               ║',
+            '   ║  • Word wrap (Ctrl+W in editor)      ║',
             '   ║                                      ║',
             '   ║  Use mouse or keyboard to navigate.  ║',
             '   ║  Press Ctrl+Q to exit.               ║',
@@ -919,11 +1361,31 @@ class RetroTUI:
             label = icon['label'].center(len(icon['art'][0]))
             safe_addstr(self.stdscr, y + 3, start_x, label, attr)
 
+    def draw_taskbar(self):
+        """Draw taskbar row with minimized window buttons."""
+        h, w = self.stdscr.getmaxyx()
+        taskbar_y = h - 2
+        minimized = [win for win in self.windows if win.minimized]
+        if not minimized:
+            return
+        attr = curses.color_pair(C_TASKBAR)
+        safe_addstr(self.stdscr, taskbar_y, 0, ' ' * (w - 1), attr)
+        x = 1
+        for win in minimized:
+            label = win.title[:15]
+            btn = f'[{label}]'
+            if x + len(btn) >= w - 1:
+                break
+            safe_addstr(self.stdscr, taskbar_y, x, btn, attr | curses.A_BOLD)
+            x += len(btn) + 1
+
     def draw_statusbar(self):
         """Draw the bottom status bar."""
         h, w = self.stdscr.getmaxyx()
         attr = curses.color_pair(C_STATUS)
-        status = f' RetroTUI v0.2.2 │ Windows: {len(self.windows)} │ Mouse: Enabled │ Ctrl+Q: Exit'
+        visible = sum(1 for win in self.windows if win.visible)
+        total = len(self.windows)
+        status = f' RetroTUI v0.3 │ Windows: {visible}/{total} │ Mouse: Enabled │ Ctrl+Q: Exit'
         safe_addstr(self.stdscr, h - 1, 0, status.ljust(w - 1), attr)
 
     def get_icon_at(self, mx, my):
@@ -968,7 +1430,7 @@ class RetroTUI:
 
         elif action == 'about':
             sys_info = get_system_info()
-            msg = ('RetroTUI v0.2.2\n'
+            msg = ('RetroTUI v0.3\n'
                    'A retro desktop environment for Linux console.\n\n'
                    'System Information:\n' +
                    '\n'.join(sys_info) + '\n\n'
@@ -991,10 +1453,20 @@ class RetroTUI:
                    'Backspace - Parent directory\n'
                    'H         - Toggle hidden files\n'
                    'Home/End  - First/last entry\n\n'
+                   'Notepad Editor:\n\n'
+                   'Arrows    - Move cursor\n'
+                   'Home/End  - Start/end of line\n'
+                   'PgUp/PgDn - Page up/down\n'
+                   'Backspace - Delete backward\n'
+                   'Delete    - Delete forward\n'
+                   'Ctrl+W    - Toggle word wrap\n\n'
                    'Mouse Controls:\n\n'
                    'Click     - Select/activate\n'
-                   'Drag      - Move windows\n'
-                   'Dbl-click - Open icon\n'
+                   'Drag title - Move window\n'
+                   'Drag border - Resize window\n'
+                   'Dbl-click title - Maximize\n'
+                   '[─]       - Minimize\n'
+                   '[□]       - Maximize/restore\n'
                    'Scroll    - Scroll/select')
             self.dialog = Dialog('Keyboard & Mouse Help', msg, ['OK'], width=46)
 
@@ -1006,25 +1478,9 @@ class RetroTUI:
             self.set_active_window(win)
 
         elif action == 'notepad':
-            content = [
-                ' ┌─ Untitled - Notepad ──────────────────────┐',
-                ' │                                           │',
-                ' │  Welcome to RetroTUI Notepad              │',
-                ' │                                           │',
-                ' │  This is a placeholder for a full         │',
-                ' │  text editor implementation.              │',
-                ' │                                           │',
-                ' │  Future features:                         │',
-                ' │  - Text editing with cursor               │',
-                ' │  - File open/save                         │',
-                ' │  - Search and replace                     │',
-                ' │  - Syntax highlighting                    │',
-                ' │                                           │',
-                ' └───────────────────────────────────────────┘',
-            ]
             offset_x = 20 + len(self.windows) * 2
             offset_y = 4 + len(self.windows) * 1
-            win = Window('Notepad', offset_x, offset_y, 50, 18, content=content)
+            win = NotepadWindow(offset_x, offset_y, 60, 20)
             self.windows.append(win)
             self.set_active_window(win)
 
@@ -1070,7 +1526,7 @@ class RetroTUI:
             self.set_active_window(win)
 
     def open_file_viewer(self, filepath):
-        """Open a text file in a read-only Notepad window."""
+        """Open a text file in a NotepadWindow editor."""
         h, w = self.stdscr.getmaxyx()
         filename = os.path.basename(filepath)
 
@@ -1086,38 +1542,34 @@ class RetroTUI:
         except OSError:
             pass
 
-        try:
-            with open(filepath, 'r', errors='replace') as f:
-                raw_lines = f.readlines()
-        except PermissionError:
-            self.dialog = Dialog('Error', f'Permission denied:\n{filepath}', ['OK'], width=50)
-            return
-        except IsADirectoryError:
-            return
-        except OSError as e:
-            self.dialog = Dialog('Error', f'Cannot open file:\n{e}', ['OK'], width=50)
-            return
-
-        # Prepare content
-        content = []
-        max_line_w = 200
-        for line in raw_lines[:5000]:
-            line = line.rstrip('\n\r').expandtabs(4)
-            if len(line) > max_line_w:
-                line = line[:max_line_w] + '...'
-            content.append(' ' + line)
-
-        if not content:
-            content = [' (empty file)']
-
-        # Create window
+        # Create NotepadWindow with file
         offset_x = 18 + len(self.windows) * 2
         offset_y = 3 + len(self.windows)
-        win_w = min(max(45, max(len(l) for l in content[:100]) + 4), w - 4)
-        win_h = min(len(content) + 2, h - 4, 25)
-        win = Window(f'Notepad - {filename}', offset_x, offset_y, win_w, win_h, content=content)
+        win_w = min(70, w - 4)
+        win_h = min(25, h - 4)
+        win = NotepadWindow(offset_x, offset_y, win_w, win_h, filepath=filepath)
         self.windows.append(win)
         self.set_active_window(win)
+
+    def handle_taskbar_click(self, mx, my):
+        """Handle click on taskbar row. Returns True if handled."""
+        h, w = self.stdscr.getmaxyx()
+        taskbar_y = h - 2
+        if my != taskbar_y:
+            return False
+        minimized = [win for win in self.windows if win.minimized]
+        if not minimized:
+            return False
+        x = 1
+        for win in minimized:
+            label = win.title[:15]
+            btn_w = len(label) + 2  # [label]
+            if x <= mx < x + btn_w:
+                win.toggle_minimize()
+                self.set_active_window(win)
+                return True
+            x += btn_w + 1
+        return False
 
     def handle_mouse(self, event):
         """Handle mouse events."""
@@ -1160,17 +1612,20 @@ class RetroTUI:
             if self.menu.hit_test_dropdown(mx, my) or my == 0:
                 return  # Stay active, absorb event
 
+        # Taskbar click — restore minimized windows
+        if bstate & (curses.BUTTON1_CLICKED | curses.BUTTON1_PRESSED | curses.BUTTON1_DOUBLE_CLICKED):
+            if self.handle_taskbar_click(mx, my):
+                return
+
         # Window dragging — check FIRST, before window clicks
         any_dragging = any(w.dragging for w in self.windows)
         if any_dragging:
-            # Click or release = stop dragging
             stop_flags = (curses.BUTTON1_CLICKED | curses.BUTTON1_RELEASED |
                           curses.BUTTON1_DOUBLE_CLICKED)
             if bstate & stop_flags:
                 for win in self.windows:
                     win.dragging = False
                 return
-            # Everything else (motion, pressed) = update position
             for win in self.windows:
                 if win.dragging:
                     h, w = self.stdscr.getmaxyx()
@@ -1181,28 +1636,81 @@ class RetroTUI:
                     return
             return
 
+        # Window resizing — parallel to dragging
+        any_resizing = any(w.resizing for w in self.windows)
+        if any_resizing:
+            stop_flags = (curses.BUTTON1_CLICKED | curses.BUTTON1_RELEASED |
+                          curses.BUTTON1_DOUBLE_CLICKED)
+            if bstate & stop_flags:
+                for win in self.windows:
+                    win.resizing = False
+                    win.resize_edge = None
+                return
+            for win in self.windows:
+                if win.resizing:
+                    h, w = self.stdscr.getmaxyx()
+                    win.apply_resize(mx, my, w, h)
+                    return
+            return
+
         # Check windows (reverse z-order for top window first)
         for win in reversed(self.windows):
             if not win.visible:
                 continue
 
-            if win.on_close_button(mx, my) and (bstate & (curses.BUTTON1_CLICKED | curses.BUTTON1_PRESSED | curses.BUTTON1_DOUBLE_CLICKED)):
+            click_flags = curses.BUTTON1_CLICKED | curses.BUTTON1_PRESSED | curses.BUTTON1_DOUBLE_CLICKED
+
+            # Close button [×]
+            if win.on_close_button(mx, my) and (bstate & click_flags):
                 self.close_window(win)
                 return
 
-            if win.on_title_bar(mx, my):
-                if bstate & curses.BUTTON1_PRESSED:
-                    win.dragging = True
-                    win.drag_offset_x = mx - win.x
-                    win.drag_offset_y = my - win.y
+            # Minimize button [─]
+            if win.on_minimize_button(mx, my) and (bstate & click_flags):
+                self.set_active_window(win)
+                win.toggle_minimize()
+                # Activate next visible window
+                visible = [w for w in self.windows if w.visible]
+                if visible:
+                    self.set_active_window(visible[-1])
+                return
+
+            # Maximize button [□]
+            if win.on_maximize_button(mx, my) and (bstate & click_flags):
+                self.set_active_window(win)
+                h, w = self.stdscr.getmaxyx()
+                win.toggle_maximize(w, h)
+                return
+
+            # Border resize (check before title bar to capture corners)
+            if bstate & curses.BUTTON1_PRESSED:
+                edge = win.on_border(mx, my)
+                if edge:
+                    win.resizing = True
+                    win.resize_edge = edge
                     self.set_active_window(win)
                     return
-                elif bstate & (curses.BUTTON1_CLICKED | curses.BUTTON1_DOUBLE_CLICKED):
+
+            # Title bar — drag or double-click maximize
+            if win.on_title_bar(mx, my):
+                if bstate & curses.BUTTON1_DOUBLE_CLICKED:
+                    self.set_active_window(win)
+                    h, w = self.stdscr.getmaxyx()
+                    win.toggle_maximize(w, h)
+                    return
+                elif bstate & curses.BUTTON1_PRESSED:
+                    if not win.maximized:
+                        win.dragging = True
+                        win.drag_offset_x = mx - win.x
+                        win.drag_offset_y = my - win.y
+                    self.set_active_window(win)
+                    return
+                elif bstate & curses.BUTTON1_CLICKED:
                     self.set_active_window(win)
                     return
 
             if win.contains(mx, my):
-                if bstate & (curses.BUTTON1_CLICKED | curses.BUTTON1_PRESSED | curses.BUTTON1_DOUBLE_CLICKED):
+                if bstate & click_flags:
                     self.set_active_window(win)
                     # Delegate click to window if it has a handler
                     if hasattr(win, 'handle_click'):
@@ -1296,14 +1804,15 @@ class RetroTUI:
                     self.execute_action(action)
             return
 
-        # Window focus cycling
+        # Window focus cycling (skip minimized windows)
         if key == 9:  # Tab
-            if self.windows:
-                current = next((i for i, w in enumerate(self.windows) if w.active), -1)
-                next_idx = (current + 1) % len(self.windows)
+            visible_windows = [w for w in self.windows if w.visible]
+            if visible_windows:
+                current = next((i for i, w in enumerate(visible_windows) if w.active), -1)
+                next_idx = (current + 1) % len(visible_windows)
                 for w in self.windows:
                     w.active = False
-                self.windows[next_idx].active = True
+                visible_windows[next_idx].active = True
             return
 
         # Delegate to active window
@@ -1337,6 +1846,9 @@ class RetroTUI:
                 h, w = self.stdscr.getmaxyx()
                 self.menu.draw_bar(self.stdscr, w)
                 self.menu.draw_dropdown(self.stdscr)
+
+                # Taskbar (minimized windows)
+                self.draw_taskbar()
 
                 # Status bar
                 self.draw_statusbar()

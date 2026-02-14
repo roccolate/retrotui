@@ -125,7 +125,7 @@ código de la aplicación no necesita distinguirlos.
 - **NO** X11 / Xorg
 - **NO** Wayland
 - **NO** framebuffer gráfico
-- Solo Python stdlib (`curses`, `os`, `sys`, `subprocess`, `time`, `locale`, `termios`)
+- Solo Python stdlib (`curses`, `os`, `sys`, `time`, `locale`, `termios`)
 
 ---
 
@@ -157,9 +157,23 @@ código de la aplicación no necesita distinguirlos.
 - [x] Sin límite artificial de entradas (dirs + archivos)
 - [x] Delegación de eventos mouse/teclado por ventana (handle_click/handle_key)
 
+## 4.2 Características de v0.3 — Editor de Texto, Resize, Maximize/Minimize
+
+- [x] Editor de texto (NotepadWindow) con cursor y edición
+- [x] Word wrap toggle (Ctrl+W) con cache de líneas envueltas
+- [x] Abrir archivos desde File Manager en el editor (reemplaza visor read-only)
+- [x] Resize de ventanas: drag bordes inferior/derecho/esquinas
+- [x] Maximize/Minimize: botones [─][□][×] en title bar
+- [x] Taskbar para ventanas minimizadas (fila h-2)
+- [x] Doble-click en título = toggle maximize
+- [x] Refactorización: Window.draw() → draw_frame() + draw_body()
+- [x] Tab cycling salta ventanas minimizadas
+- [x] Status bar muestra ventanas visibles/total
+- [x] Notepad en menú File
+
 ### Roadmap futuro:
 - [x] File Manager con navegación de directorios
-- [ ] Editor de texto integrado
+- [x] Editor de texto integrado
 - [ ] Terminal embebida
 - [ ] Temas configurables (CGA, EGA, VGA, Win3.1, Win95)
 - [ ] Task switcher (Alt+Tab)

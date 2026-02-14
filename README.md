@@ -7,16 +7,16 @@
 ║ ≡ File   Edit   Help                            12:30:45   ║
 ╠══════════════════════════════════════════════════════════════╣
 ║░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░║
-║░░ 📁 ░░░░╔═══ File Manager ══════════════════════════╗░░░░░║
-║░ Files ░░║ 📂 /home/user                             ║░░░░░║
-║░░░░░░░░░░║ ────────────────────────────────           ║░░░░░║
-║░░ 📝 ░░░░║  📁 Documents/                            ║░░░░░║
-║░Notepad░░║  📁 Downloads/                            ║░░░░░║
-║░░░░░░░░░░║  📄 readme.txt              2.4K          ║░░░░░║
-║░░ 💻 ░░░░║  📄 config.json             512B          ║░░░░░║
-║░Terminal░╚════════════════════════════════════════════╝░░░░░║
+║░░ 📁 ░░░░╔═══ File Manager ═══════════[─][□][×]╗░░░░░░░░░░║
+║░ Files ░░║ 📂 /home/user                       ║░░░░░░░░░░║
+║░░░░░░░░░░║ ──────────────────────────           ║░░░░░░░░░░║
+║░░ 📝 ░░░░║  📁 Documents/                      ║░░░░░░░░░░║
+║░Notepad░░║  📁 Downloads/                      ║░░░░░░░░░░║
+║░░░░░░░░░░║  📄 readme.txt            2.4K      ║░░░░░░░░░░║
+║░░ 💻 ░░░░║  📄 config.json           512B      ║░░░░░░░░░░║
+║░Terminal░╚══════════════════════════════════════╝░░░░░░░░░░║
 ║░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░║
-║ RetroTUI v0.2.2 │ Windows: 1 │ Mouse: Enabled │ Ctrl+Q: Exit║
+║ RetroTUI v0.3 │ Windows: 1/1 │ Mouse: Enabled │ Ctrl+Q: Exit║
 ╚══════════════════════════════════════════════════════════════╝
 ```
 
@@ -83,12 +83,32 @@ Windows Terminal (SSH), iTerm2, tmux, screen.
 | `Home/End`    | Inicio / final de lista    |
 | `H`           | Toggle archivos ocultos    |
 
+### Notepad (Editor de Texto)
+| Tecla         | Acción                     |
+|---------------|----------------------------|
+| `↑ ↓ ← →`    | Mover cursor               |
+| `Home/End`    | Inicio / fin de línea      |
+| `PgUp/PgDn`  | Página arriba / abajo      |
+| `Backspace`   | Borrar atrás               |
+| `Delete`      | Borrar adelante            |
+| `Enter`       | Nueva línea                |
+| `Ctrl+W`      | Toggle word wrap           |
+
+### Ventanas
+| Acción             | Resultado                    |
+|--------------------|------------------------------|
+| Drag título        | Mover ventana                |
+| Drag borde/esquina | Redimensionar ventana        |
+| Click `[─]`       | Minimizar a taskbar          |
+| Click `[□]`       | Maximizar / restaurar        |
+| Click `[×]`       | Cerrar ventana               |
+| Doble-click título | Toggle maximizar             |
+| Click en taskbar   | Restaurar ventana minimizada |
+
 ### Mouse
 | Acción        | Resultado                |
 |---------------|--------------------------|
 | Click         | Seleccionar / activar    |
-| Drag título   | Mover ventana            |
-| Click `[×]`   | Cerrar ventana           |
 | Doble-click icono | Abrir aplicación     |
 | Scroll wheel  | Scroll contenido         |
 
@@ -103,7 +123,8 @@ README.md      — Este archivo
 
 ### Componentes internos:
 - **RetroTUI** — Clase principal, event loop
-- **Window** — Ventanas arrastrables con z-order
+- **Window** — Ventanas con resize, maximize, minimize, z-order
+- **NotepadWindow** — Editor de texto con word wrap (v0.3)
 - **FileManagerWindow** — File Manager interactivo con navegación (v0.2)
 - **FileEntry** — Entrada de archivo/directorio con metadata
 - **Menu** — Sistema de menú desplegable
@@ -111,6 +132,17 @@ README.md      — Este archivo
 - **ThemeEngine** — Colores Win3.1 (256-color cuando disponible)
 
 ## Changelog
+
+### v0.3 — Editor de Texto, Resize y Maximize/Minimize
+- **Editor de texto (Notepad)** con cursor, edición y word wrap (Ctrl+W)
+- Abrir archivos desde File Manager los abre en el editor (antes era read-only)
+- **Resize de ventanas** — drag bordes inferior/derecho/esquinas
+- **Maximize/Minimize** — botones `[─][□][×]` en title bar
+- **Taskbar** para ventanas minimizadas
+- Doble-click en título = toggle maximize
+- Refactorización de Window.draw() → draw_frame() + draw_body()
+- Notepad agregado al menú File
+- Status bar muestra ventanas visibles/total
 
 ### v0.2.2 — Bugfixes & Icons
 - Iconos rediseñados: ASCII art 3×4 con mejor contraste (negro sobre teal)
@@ -138,7 +170,7 @@ README.md      — Este archivo
 ## Roadmap
 
 - ~~**v0.2** — File Manager funcional con navegación~~ ✅
-- **v0.3** — Editor de texto integrado
+- ~~**v0.3** — Editor de texto integrado~~ ✅
 - **v0.4** — Terminal embebida (vía pty)
 - **v0.5** — Temas (DOS/CGA, Win95, personalizado)
 - **v1.0** — Configuración persistente, plugins
