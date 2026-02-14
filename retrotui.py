@@ -1879,11 +1879,13 @@ class RetroTUI:
             curses.def_prog_mode()
             curses.endwin()
             for cmd, name in commands:
+                start = time.time()
                 result = subprocess.run(cmd)
+                elapsed = time.time() - start
                 exit_code = result.returncode
                 backend_used = name
-                if exit_code == 0:
-                    break
+                if exit_code == 0 or elapsed > 2:
+                    break  # Video played (even if audio failed)
         except OSError as e:
             self.dialog = Dialog('ASCII Video Error', f'No se pudo ejecutar:\n{e}', ['OK'], width=58)
             return
