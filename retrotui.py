@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-RetroTUI v0.3.1 — Entorno de escritorio retro estilo Windows 3.1
+RetroTUI v0.3.2 — Entorno de escritorio retro estilo Windows 3.1
 Funciona en consola Linux sin X11. Soporte de mouse vía GPM o xterm protocol.
 """
 
@@ -10,6 +10,8 @@ import time
 import os
 import locale
 import termios
+import shutil
+import subprocess
 
 # Ensure UTF-8
 locale.setlocale(locale.LC_ALL, '')
@@ -41,6 +43,7 @@ DESKTOP_PATTERN = '░'
 ICONS = [
     {'label': 'Files',    'action': 'filemanager', 'art': ['┌──┐', '│▒▒│', '└──┘']},
     {'label': 'Notepad',  'action': 'notepad',     'art': ['╔══╗', '║≡≡║', '╚══╝']},
+    {'label': 'ASCII Vid', 'action': 'asciivideo', 'art': ['┌──┐', '│▶█│', '└──┘']},
     {'label': 'Terminal', 'action': 'terminal',     'art': ['┌──┐', '│>_│', '└──┘']},
     {'label': 'Settings', 'action': 'settings',    'art': ['╭──╮', '│⚙ │', '╰──╯']},
     {'label': 'About',   'action': 'about',        'art': ['╭──╮', '│ ?│', '╰──╯']},
@@ -50,6 +53,7 @@ ICONS = [
 ICONS_ASCII = [
     {'label': 'Files',    'action': 'filemanager', 'art': ['+--+', '|##|', '+--+']},
     {'label': 'Notepad',  'action': 'notepad',     'art': ['+--+', '|==|', '+--+']},
+    {'label': 'ASCII Vid', 'action': 'asciivideo', 'art': ['+--+', '|>|#', '+--+']},
     {'label': 'Terminal', 'action': 'terminal',     'art': ['+--+', '|>_|', '+--+']},
     {'label': 'Settings', 'action': 'settings',    'art': ['+--+', '|**|', '+--+']},
     {'label': 'About',   'action': 'about',        'art': ['+--+', '| ?|', '+--+']},
@@ -390,6 +394,7 @@ class Menu:
                 ('New Window',    'new_window'),
                 ('Notepad',       'notepad'),
                 ('File Manager',  'filemanager'),
+                ('ASCII Video',   'asciivideo'),
                 ('Terminal',      'terminal'),
                 ('─────────────', None),
                 ('Exit  Ctrl+Q',  'exit'),
@@ -1510,6 +1515,21 @@ class NotepadWindow(Window):
 
 
 # ═══════════════════════════════════════════════════════════
+# ASCII Video Helpers
+# ═══════════════════════════════════════════════════════════
+
+VIDEO_EXTENSIONS = {
+    '.mp4', '.mkv', '.webm', '.avi', '.mov', '.m4v', '.mpg', '.mpeg', '.wmv'
+}
+
+
+def is_video_file(filepath):
+    """Return True if filepath extension looks like video."""
+    _, ext = os.path.splitext(filepath.lower())
+    return ext in VIDEO_EXTENSIONS
+
+
+# ═══════════════════════════════════════════════════════════
 # System Info
 # ═══════════════════════════════════════════════════════════
 
@@ -1593,16 +1613,16 @@ class RetroTUI:
         welcome_content = [
             '',
             '   ╔══════════════════════════════════════╗',
-            '   ║      Welcome to RetroTUI v0.3.1        ║',
+            '   ║      Welcome to RetroTUI v0.3.2        ║',
             '   ║                                      ║',
             '   ║  A Windows 3.1 style desktop         ║',
             '   ║  environment for the Linux console.  ║',
             '   ║                                      ║',
-            '   ║  New in v0.3.1:                      ║',
+            '   ║  New in v0.3.2:                      ║',
+            '   ║  • ASCII Video Player (mplayer+aa)   ║',
             '   ║  • Per-window menus (File, View)     ║',
             '   ║  • Text editor (Notepad)             ║',
             '   ║  • Window resize (drag borders)      ║',
-            '   ║  • Maximize / Minimize               ║',
             '   ║                                      ║',
             '   ║  Use mouse or keyboard to navigate.  ║',
             '   ║  Press Ctrl+Q to exit.               ║',
@@ -1673,7 +1693,7 @@ class RetroTUI:
         attr = curses.color_pair(C_STATUS)
         visible = sum(1 for win in self.windows if win.visible)
         total = len(self.windows)
-        status = f' RetroTUI v0.3.1 │ Windows: {visible}/{total} │ Mouse: Enabled │ Ctrl+Q: Exit'
+        status = f' RetroTUI v0.3.2 │ Windows: {visible}/{total} │ Mouse: Enabled │ Ctrl+Q: Exit'
         safe_addstr(self.stdscr, h - 1, 0, status.ljust(w - 1), attr)
 
     def get_icon_at(self, mx, my):
@@ -1718,7 +1738,7 @@ class RetroTUI:
 
         elif action == 'about':
             sys_info = get_system_info()
-            msg = ('RetroTUI v0.3.1\n'
+            msg = ('RetroTUI v0.3.2\n'
                    'A retro desktop environment for Linux console.\n\n'
                    'System Information:\n' +
                    '\n'.join(sys_info) + '\n\n'
@@ -1772,6 +1792,16 @@ class RetroTUI:
             self.windows.append(win)
             self.set_active_window(win)
 
+        elif action == 'asciivideo':
+            self.dialog = Dialog(
+                'ASCII Video',
+                'Este modo usa mplayer + aalib.\n\n'
+                'Abre un archivo de video desde File Manager\n'
+                'para reproducirlo en ASCII en pantalla completa.',
+                ['OK'],
+                width=58,
+            )
+
         elif action == 'terminal':
             content = [
                 f' user@{os.uname().nodename}:~$ _',
@@ -1813,10 +1843,57 @@ class RetroTUI:
             self.windows.append(win)
             self.set_active_window(win)
 
+    def play_ascii_video(self, filepath):
+        """Play video in ASCII using external mplayer + aalib (vo=aa)."""
+        mplayer = shutil.which('mplayer')
+        if not mplayer:
+            self.dialog = Dialog(
+                'ASCII Video Error',
+                'mplayer no está instalado.\n\n'
+                'Instala mplayer con soporte aalib (vo=aa)\n'
+                'para usar el reproductor ASCII.',
+                ['OK'],
+                width=56,
+            )
+            return
+
+        cmd = [mplayer, '-vo', 'aa', filepath]
+        exit_code = 0
+        try:
+            curses.def_prog_mode()
+            curses.endwin()
+            print('\nRetroTUI ASCII Video (mplayer + aalib)')
+            print('Pulsa q para cerrar el video y volver a RetroTUI.\n')
+            result = subprocess.run(cmd)
+            exit_code = result.returncode
+        except OSError as e:
+            self.dialog = Dialog('ASCII Video Error', f'No se pudo ejecutar mplayer:\n{e}', ['OK'], width=58)
+            return
+        finally:
+            try:
+                curses.reset_prog_mode()
+                self.stdscr.refresh()
+            except curses.error:
+                pass
+
+        if exit_code != 0:
+            self.dialog = Dialog(
+                'ASCII Video',
+                'mplayer terminó con error.\n'
+                'Verifica que tu mplayer tenga soporte\n'
+                'de salida aalib (-vo aa).',
+                ['OK'],
+                width=50,
+            )
+
     def open_file_viewer(self, filepath):
-        """Open a text file in a NotepadWindow editor."""
+        """Open file in best viewer: ASCII video or Notepad."""
         h, w = self.stdscr.getmaxyx()
         filename = os.path.basename(filepath)
+
+        if is_video_file(filepath):
+            self.play_ascii_video(filepath)
+            return
 
         # Check if file seems to be binary
         try:
