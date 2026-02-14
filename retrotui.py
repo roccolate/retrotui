@@ -1619,7 +1619,7 @@ class RetroTUI:
             '   ║  environment for the Linux console.  ║',
             '   ║                                      ║',
             '   ║  New in v0.3.2:                      ║',
-            '   ║  • ASCII Video Player (mplayer+aa)   ║',
+            '   ║  • ASCII Video Player (mpv/mplayer)   ║',
             '   ║  • Per-window menus (File, View)     ║',
             '   ║  • Text editor (Notepad)             ║',
             '   ║  • Window resize (drag borders)      ║',
@@ -1795,11 +1795,11 @@ class RetroTUI:
         elif action == 'asciivideo':
             self.dialog = Dialog(
                 'ASCII Video',
-                'Este modo usa mplayer + aalib.\n\n'
-                'Abre un archivo de video desde File Manager\n'
-                'para reproducirlo en ASCII en pantalla completa.',
+                'Reproduce video en la terminal.\n\n'
+                'Usa mpv (color) o mplayer (fallback).\n'
+                'Abre un video desde File Manager.',
                 ['OK'],
-                width=58,
+                width=50,
             )
 
         elif action == 'terminal':
@@ -1844,30 +1844,48 @@ class RetroTUI:
             self.set_active_window(win)
 
     def play_ascii_video(self, filepath):
-        """Play video in ASCII using external mplayer + aalib (vo=aa)."""
+        """Play video in terminal using mpv (preferred) or mplayer (fallback)."""
+        mpv = shutil.which('mpv')
         mplayer = shutil.which('mplayer')
-        if not mplayer:
+
+        if not mpv and not mplayer:
             self.dialog = Dialog(
                 'ASCII Video Error',
-                'mplayer no está instalado.\n\n'
-                'Instala mplayer con soporte aalib (vo=aa)\n'
-                'para usar el reproductor ASCII.',
+                'No se encontró mpv ni mplayer.\n\n'
+                'Instala uno de los siguientes:\n'
+                '  sudo apt install mpv\n'
+                '  sudo apt install mplayer',
                 ['OK'],
-                width=56,
+                width=50,
             )
             return
 
-        cmd = [mplayer, '-vo', 'aa', filepath]
-        exit_code = 0
+        # Build command list: try best option first
+        if mpv:
+            commands = [
+                ([mpv, '--vo=tct', '--really-quiet', filepath], 'mpv (tct)'),
+                ([mpv, '--vo=tct', '--really-quiet', '--ao=null', filepath], 'mpv (tct, no audio)'),
+            ]
+        else:
+            commands = [
+                ([mplayer, '-vo', 'caca', '-really-quiet', filepath], 'mplayer (caca)'),
+                ([mplayer, '-vo', 'caca', '-really-quiet', '-ao', 'null', filepath], 'mplayer (caca, no audio)'),
+                ([mplayer, '-vo', 'aa', '-really-quiet', '-ao', 'null', filepath], 'mplayer (aa, no audio)'),
+            ]
+
+        exit_code = 1
+        backend_used = ''
         try:
             curses.def_prog_mode()
             curses.endwin()
-            print('\nRetroTUI ASCII Video (mplayer + aalib)')
-            print('Pulsa q para cerrar el video y volver a RetroTUI.\n')
-            result = subprocess.run(cmd)
-            exit_code = result.returncode
+            for cmd, name in commands:
+                result = subprocess.run(cmd)
+                exit_code = result.returncode
+                backend_used = name
+                if exit_code == 0:
+                    break
         except OSError as e:
-            self.dialog = Dialog('ASCII Video Error', f'No se pudo ejecutar mplayer:\n{e}', ['OK'], width=58)
+            self.dialog = Dialog('ASCII Video Error', f'No se pudo ejecutar:\n{e}', ['OK'], width=58)
             return
         finally:
             try:
@@ -1875,16 +1893,6 @@ class RetroTUI:
                 self.stdscr.refresh()
             except curses.error:
                 pass
-
-        if exit_code != 0:
-            self.dialog = Dialog(
-                'ASCII Video',
-                'mplayer terminó con error.\n'
-                'Verifica que tu mplayer tenga soporte\n'
-                'de salida aalib (-vo aa).',
-                ['OK'],
-                width=50,
-            )
 
     def open_file_viewer(self, filepath):
         """Open file in best viewer: ASCII video or Notepad."""

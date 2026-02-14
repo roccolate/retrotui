@@ -94,14 +94,14 @@ Windows Terminal (SSH), iTerm2, tmux, screen.
 | `Enter`       | Nueva línea                |
 | `Ctrl+W`      | Toggle word wrap           |
 
-### ASCII Video Player (mplayer + aalib)
+### ASCII Video Player (mpv / mplayer)
 | Tecla         | Acción                              |
 |---------------|-------------------------------------|
 | `q`           | Salir del video y volver a RetroTUI |
-| `Space`       | Pausa / reanudar (mplayer)          |
-| `← / →`       | Seek atrás / adelante (mplayer)     |
+| `Space`       | Pausa / reanudar                    |
+| `← / →`       | Seek atrás / adelante               |
 
-> Nota: la reproducción ASCII se ejecuta con `mplayer -vo aa` (aalib).
+> Usa `mpv --vo=tct` (color, preferido) o `mplayer -vo caca/aa` (fallback).
 
 ### Ventanas
 | Acción             | Resultado                    |
@@ -145,7 +145,7 @@ README.md      — Este archivo
 Ver [CHANGELOG.md](CHANGELOG.md) para el historial completo de versiones.
 
 ### Últimos cambios (v0.3.2)
-- **ASCII Video Player** — reproduce videos en ASCII vía mplayer + aalib
+- **ASCII Video Player** — reproduce videos en terminal vía mpv (color) o mplayer (fallback)
 - **Barras de menú por ventana** estilo Win 3.1 (File, View) para FileManager y Notepad
 - Editor de texto, resize de ventanas, maximize/minimize (v0.3)
 - File Manager interactivo con navegación (v0.2)

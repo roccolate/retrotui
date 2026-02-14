@@ -7,7 +7,7 @@ Todas las versiones notables de RetroTUI están documentadas aquí.
 ## [v0.3.2] — 2026-02-14
 
 ### Added
-- **ASCII Video Player** — reproduce videos en ASCII vía mplayer + aalib
+- **ASCII Video Player** — reproduce videos en terminal vía mpv (color) o mplayer (fallback)
 - Icono "ASCII Vid" en escritorio y opción "ASCII Video" en menú File
 - Detección automática de archivos de video desde File Manager (`.mp4`, `.mkv`, `.webm`, etc.)
 - Método `play_ascii_video()` con manejo de errores y restauración de curses
