@@ -111,3 +111,83 @@ class Dialog:
         elif key == 27:  # Escape
             return len(self.buttons) - 1  # Last button (usually Cancel)
         return -1
+
+class InputDialog(Dialog):
+    """Modal dialog with a text input field."""
+
+    def __init__(self, title, message, initial_value='', width=50):
+        super().__init__(title, message, ['OK', 'Cancel'], width)
+        self.value = initial_value
+        # Add space for input box
+        self.height += 3
+        
+        # Cursor pos
+        self.cursor_pos = len(initial_value)
+
+    def draw(self, stdscr):
+        super().draw(stdscr)
+        
+        # Input box area
+        max_h, max_w = stdscr.getmaxyx()
+        x = (max_w - self.width) // 2
+        y = (max_h - self.height) // 2
+        
+        # Input box is below message, above buttons
+        # Dialog.draw puts buttons at y + height - 3
+        # We need to shift buttons down effectively implies we need to draw input box
+        # at y + height - 5 (since we added 3 to height)
+        
+        input_y = y + self.height - 5
+        input_x = x + 4
+        input_w = self.width - 8
+        
+        # Draw input box background
+        attr = curses.color_pair(C_WIN_BODY)
+        safe_addstr(stdscr, input_y, input_x, ' ' * input_w, attr)
+        
+        # Draw value
+        display_val = self.value[-(input_w - 1):] if len(self.value) >= input_w else self.value
+        safe_addstr(stdscr, input_y, input_x, display_val, attr)
+        
+        # Cursor
+        cursor_screen_x = input_x + len(display_val)
+        if len(self.value) < input_w:
+             cursor_screen_x = input_x + self.cursor_pos
+        else:
+             cursor_screen_x = input_x + input_w - 1 # End of box
+             
+        safe_addstr(stdscr, input_y, cursor_screen_x, ' ', attr | curses.A_REVERSE)
+
+    def handle_click(self, mx, my):
+        # Delegate to super for buttons
+        return super().handle_click(mx, my)
+
+    def handle_key(self, key):
+        # Check buttons navigation first? 
+        # Actually standard input handling usually consumes arrows for cursor
+        # So we might override navigation
+        
+        if key in (curses.KEY_ENTER, 10, 13):
+            # If standard enter, return OK (0)
+            return 0
+        elif key == 27: # Esc
+            return 1 # Cancel
+        
+        elif key == curses.KEY_BACKSPACE or key == 127 or key == 8:
+            if self.cursor_pos > 0:
+                self.value = self.value[:self.cursor_pos-1] + self.value[self.cursor_pos:]
+                self.cursor_pos -= 1
+        elif key == curses.KEY_DC:
+            if self.cursor_pos < len(self.value):
+                self.value = self.value[:self.cursor_pos] + self.value[self.cursor_pos+1:]
+        elif key == curses.KEY_LEFT:
+            if self.cursor_pos > 0:
+                self.cursor_pos -= 1
+        elif key == curses.KEY_RIGHT:
+            if self.cursor_pos < len(self.value):
+                self.cursor_pos += 1
+        elif 32 <= key <= 126:
+            self.value = self.value[:self.cursor_pos] + chr(key) + self.value[self.cursor_pos:]
+            self.cursor_pos += 1
+            
+        return -1

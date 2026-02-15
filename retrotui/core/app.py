@@ -16,7 +16,7 @@ from ..utils import (
     is_video_file, play_ascii_video
 )
 from ..ui.menu import Menu
-from ..ui.dialog import Dialog
+from ..ui.dialog import Dialog, InputDialog
 from ..ui.window import Window
 from ..apps.filemanager import FileManagerWindow
 from ..apps.notepad import NotepadWindow
@@ -329,8 +329,15 @@ class RetroTUI:
         win_w = min(70, w - 4)
         win_h = min(25, h - 4)
         win = NotepadWindow(offset_x, offset_y, win_w, win_h, filepath=filepath)
+        win = NotepadWindow(offset_x, offset_y, win_w, win_h, filepath=filepath)
         self.windows.append(win)
         self.set_active_window(win)
+
+    def show_save_as_dialog(self, win):
+        """Show dialog to get filename for saving."""
+        self.dialog = InputDialog('Save As', 'Enter filename:', width=40)
+        self.dialog.callback = lambda filename: win.save_as(filename)
+
 
     def handle_taskbar_click(self, mx, my):
         """Handle click on taskbar row. Returns True if handled."""
@@ -367,6 +374,11 @@ class RetroTUI:
                     btn_text = self.dialog.buttons[result]
                     if self.dialog.title == 'Exit RetroTUI' and btn_text == 'Yes':
                         self.running = False
+                    elif hasattr(self.dialog, 'callback') and result == 0:
+                         # For InputDialog, result 0 is OK
+                         if hasattr(self.dialog, 'value'):
+                             self.dialog.callback(self.dialog.value)
+                    
                     self.dialog = None
             return
 
@@ -518,8 +530,9 @@ class RetroTUI:
                                 self.close_window(win)
                             else:
                                 self.execute_action(result[1])
-                        elif result and result[0] == 'save_error':
-                            self.dialog = Dialog('Save Error', result[1], ['OK'], width=50)
+                        elif result:
+                             # Forward other signals like save_as_request or error strings
+                             return result
                     return
                 # Scroll wheel
                 if bstate & curses.BUTTON4_PRESSED:  # Scroll up
@@ -560,9 +573,13 @@ class RetroTUI:
         if self.dialog:
             result = self.dialog.handle_key(key)
             if result >= 0:
+                # Standard button press
                 btn_text = self.dialog.buttons[result]
                 if self.dialog.title == 'Exit RetroTUI' and btn_text == 'Yes':
                     self.running = False
+                elif hasattr(self.dialog, 'callback') and result == 0:
+                     if hasattr(self.dialog, 'value'):
+                         self.dialog.callback(self.dialog.value)
                 self.dialog = None
             return
 
@@ -648,6 +665,8 @@ class RetroTUI:
                         self.close_window(active_win)
                     else:
                         self.execute_action(result[1])
+                elif result and result[0] == 'save_as_request':
+                    self.show_save_as_dialog(active_win)
                 elif result and result[0] == 'save_error':
                     self.dialog = Dialog('Save Error', result[1], ['OK'], width=50)
             else:
