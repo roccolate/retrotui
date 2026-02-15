@@ -29,6 +29,7 @@ class NotepadWindow(Window):
             'File': [
                 ('New',           'np_new'),
                 ('Save   Ctrl+S', 'np_save'),
+                ('Save As...',    'np_save_as'),
                 ('─────────────', None),
                 ('Close',         'np_close'),
             ],
@@ -62,9 +63,9 @@ class NotepadWindow(Window):
         self._wrap_stale = True
 
     def _save_file(self):
-        """Save buffer to file. Returns True on success, error string on failure."""
+        """Save buffer to file. Returns True on success, error string on failure, or tuple for request."""
         if not self.filepath:
-            return 'No hay ruta de archivo'
+            return ('save_as_request',)
         try:
             with open(self.filepath, 'w') as f:
                 f.write('\n'.join(self.buffer))
@@ -72,6 +73,13 @@ class NotepadWindow(Window):
             return True
         except (PermissionError, OSError) as e:
             return str(e)
+
+    def save_as(self, filepath):
+        """Set filepath and save."""
+        self.filepath = filepath
+        self.title = f'Notepad - {os.path.basename(filepath)}'
+        return self._save_file()
+
 
     def _invalidate_wrap(self):
         """Mark wrap cache as needing rebuild."""
@@ -234,7 +242,9 @@ class NotepadWindow(Window):
         elif action == 'np_save':
             result = self._save_file()
             if result is not True:
-                return ('save_error', result)
+                return result  # Signal or error string
+        elif action == 'np_save_as':
+            return ('save_as_request',)
         elif action == 'np_new':
             return ('action', 'notepad')
         elif action == 'np_close':
@@ -345,7 +355,7 @@ class NotepadWindow(Window):
         elif key == 19:
             result = self._save_file()
             if result is not True:
-                return ('save_error', result)
+                return result
 
         # Toggle: Ctrl+W (key 23)
         elif key == 23:
