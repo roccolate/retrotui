@@ -2,6 +2,7 @@
 Embedded terminal window implementation.
 """
 import curses
+import shlex
 
 from ..constants import C_SCROLLBAR, C_STATUS
 from ..core.actions import ActionResult, ActionType, AppAction
@@ -418,6 +419,16 @@ class TerminalWindow(Window):
             self._session.write(payload)
         except OSError as exc:
             self._session_error = str(exc)
+
+    def accept_dropped_path(self, path):
+        """Accept file drop payload by inserting a shell-safe path token."""
+        if path is None:
+            return None
+        token = shlex.quote(str(path))
+        if not token:
+            return None
+        self._forward_payload(token + ' ')
+        return None
 
     def handle_key(self, key):
         """Handle keyboard input and forward supported keys to the PTY."""

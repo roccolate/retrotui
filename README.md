@@ -58,7 +58,7 @@ git config core.hooksPath .githooks
 
 - CI corre en GitHub Actions para Linux y Windows (Python 3.9 y 3.12).
 - CI aplica `--module-coverage-fail-under 100.0` de forma gradual (solo `ubuntu-latest` + Python `3.12`).
-- Baseline QA actual: `377 tests` en verde y cobertura total por módulo `100.0%` (trace + AST).
+- Baseline QA actual: `458 tests` en verde y cobertura total por módulo `100.0%` (trace + AST).
 - Politica de formato de texto definida con `.editorconfig` y `.gitattributes`.
 - Politica de release/tagging en `RELEASE.md`.
 - Release CI disponible en `.github/workflows/release.yml` (tag `vX.Y.Z` o dispatch manual).
@@ -98,15 +98,21 @@ Windows Terminal (SSH), iTerm2, tmux, screen.
 | `PgUp/PgDn`| Scroll contenido           |
 
 ### File Manager
-| Tecla         | Acción                     |
-|---------------|----------------------------|
-| `↑ / ↓`      | Mover selección            |
-| `Enter`       | Abrir directorio/archivo   |
-| `Backspace`   | Directorio padre           |
-| `PgUp/PgDn`  | Selección por página       |
-| `Home/End`    | Inicio / final de lista    |
-| `H`           | Toggle archivos ocultos    |
-| `F6` / `Ins`  | Copiar ruta seleccionada   |
+| Tecla         | Accion                      |
+|---------------|-----------------------------|
+| `Up / Down`   | Mover seleccion             |
+| `Enter`       | Abrir directorio/archivo    |
+| `Backspace`   | Directorio padre            |
+| `PgUp/PgDn`   | Seleccion por pagina        |
+| `Home/End`    | Inicio / final de lista     |
+| `F5`          | Copiar item seleccionado    |
+| `F4`          | Mover item seleccionado     |
+| `F2`          | Renombrar item seleccionado |
+| `Delete`      | Eliminar item seleccionado  |
+| `F7`          | Crear carpeta               |
+| `F8`          | Crear archivo               |
+| `H`           | Toggle archivos ocultos     |
+| `F6 / Ins`    | Copiar ruta seleccionada    |
 
 ### Notepad (Editor de Texto)
 | Tecla         | Acción                     |
@@ -126,6 +132,17 @@ Windows Terminal (SSH), iTerm2, tmux, screen.
 |---------------|-------------------------------|
 | `Ctrl+V`      | Pegar texto del clipboard     |
 | `PgUp/PgDn`  | Scroll de scrollback          |
+
+### Calculadora
+| Tecla         | Acción                            |
+|---------------|-----------------------------------|
+| `Enter`       | Evaluar expresión                 |
+| `Up / Down`   | Navegar historial                 |
+| `Ctrl+V`      | Pegar expresión desde clipboard   |
+| `F6` / `Ins`  | Copiar último resultado           |
+| `F9`          | Toggle always-on-top              |
+| `Ctrl+L`      | Limpiar historial                 |
+| `Ctrl+Q`      | Cerrar calculadora                |
 
 ### ASCII Video Player (mpv / mplayer)
 | Tecla         | Acción                              |
@@ -169,6 +186,7 @@ README.md      — Este archivo
 - **NotepadWindow** — Editor de texto con word wrap (v0.3)
 - **FileManagerWindow** — File Manager interactivo con navegación (v0.2)
 - **TerminalWindow / TerminalSession** — Terminal embebida PTY con parser ANSI básico, forwarding de input y scrollback
+- **CalculatorWindow** — Calculadora segura con evaluador `ast`, historial y modo always-on-top
 - **FileEntry** — Entrada de archivo/directorio con metadata
 - **MenuBar** — Menús globales y por ventana (unificados)
 - **Dialog** — Diálogos modales
@@ -188,8 +206,9 @@ Ver [CHANGELOG.md](CHANGELOG.md) para el historial completo de versiones.
 ### Últimos cambios (v0.6.0)
 - **Release v0.6.0** — versión sincronizada en runtime, package y setup.
 - **Clipboard base inter-app** — copy con `F6`/`Ins` en Notepad y File Manager; paste con `Ctrl+V`.
-- **Calidad** — baseline actual: `374 tests` y cobertura por módulo `100.0%`.
-- **Roadmap** — v0.4 completada, v0.5 y v0.6 en progreso.
+- **Calculadora v0.7 (base)** — app nueva con evaluator seguro, historial y always-on-top.
+- **Calidad** — baseline actual: `458 tests` y cobertura por módulo `100.0%`.
+- **Encoding/UI** — normalización de `retrotui/constants.py` para eliminar mojibake en bordes/iconos.
 
 ## Roadmap
 
@@ -198,9 +217,9 @@ Ver [CHANGELOG.md](CHANGELOG.md) para el historial completo de versiones.
 - ~~**v0.3** - Editor de texto, resize, maximize/minimize~~
 - ~~**v0.4** - Terminal embebida (via pty)~~
 - **v0.5** - Temas y configuracion (en progreso: motor de temas y settings listos)
-- **v0.6** - Clipboard y comunicacion inter-app (en progreso: clipboard base listo, falta drag and drop)
-- **v0.7** - Apps utilitarias (log viewer, process manager, calculadora)
-- **v0.8** - File Manager avanzado (operaciones, dual-pane, previews)
+- **v0.6** - Clipboard y comunicacion inter-app (clipboard + drag and drop base listos)
+- **v0.7** - Apps utilitarias (en progreso: calculadora base lista; faltan log viewer y process manager)
+- **v0.8** - File Manager avanzado (en progreso: dual-pane, previews (texto/imagen), info, bookmarks, undo y progreso de operaciones largas listos)
 - **v0.9** - Media y hex editor
 - **v1.0** - Empaquetado, plugins y documentacion
 

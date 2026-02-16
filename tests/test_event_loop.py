@@ -52,6 +52,8 @@ class EventLoopTests(unittest.TestCase):
             dialog=None,
             handle_mouse=mock.Mock(),
             handle_key=mock.Mock(),
+            has_background_operation=mock.Mock(return_value=False),
+            poll_background_operation=mock.Mock(),
             cleanup=mock.Mock(),
             running=True,
         )
@@ -80,6 +82,15 @@ class EventLoopTests(unittest.TestCase):
         self.event_loop.draw_frame(app)
 
         app.dialog.draw.assert_called_once_with(app.stdscr)
+
+    def test_draw_frame_skips_window_render_when_background_operation_active(self):
+        app = self._make_app()
+        app.has_background_operation.return_value = True
+
+        self.event_loop.draw_frame(app)
+
+        app.windows[0].draw.assert_not_called()
+        app.menu.draw_bar.assert_called_once_with(app.stdscr, 80)
 
     def test_read_input_key_returns_none_on_curses_error(self):
         stdscr = types.SimpleNamespace(get_wch=mock.Mock(side_effect=self.fake_curses.error()))
@@ -143,6 +154,7 @@ class EventLoopTests(unittest.TestCase):
 
         draw_mock.assert_called_once_with(app)
         app.handle_key.assert_called_once_with("a")
+        self.assertGreaterEqual(app.poll_background_operation.call_count, 2)
         app.cleanup.assert_called_once_with()
 
 

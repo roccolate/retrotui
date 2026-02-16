@@ -3,6 +3,8 @@ Main RetroTUI Application Class.
 """
 import os
 import logging
+import threading
+import time
 
 from ..constants import (
     ICONS, ICONS_ASCII
@@ -13,7 +15,7 @@ from ..utils import (
 )
 from ..theme import get_theme
 from ..ui.menu import Menu
-from ..ui.dialog import Dialog, InputDialog
+from ..ui.dialog import Dialog, InputDialog, ProgressDialog
 from ..ui.window import Window
 from ..apps.notepad import NotepadWindow
 from .config import AppConfig, load_config, save_config
@@ -57,6 +59,7 @@ class RetroTUI:
     """Main application class."""
     MIN_TERM_WIDTH = 80
     MIN_TERM_HEIGHT = 24
+    LONG_FILE_OPERATION_BYTES = 8 * 1024 * 1024
 
     def __init__(self, stdscr):
         self.stdscr = stdscr
@@ -73,6 +76,10 @@ class RetroTUI:
         self.theme = get_theme(self.theme_name)
         self.default_show_hidden = bool(self.config.show_hidden)
         self.default_word_wrap = bool(self.config.word_wrap_default)
+        self.drag_payload = None
+        self.drag_source_window = None
+        self.drag_target_window = None
+        self._background_operation = None
 
         # Setup terminal
         configure_terminal(stdscr, timeout_ms=500)
@@ -141,6 +148,11 @@ class RetroTUI:
 
     def cleanup(self):
         """Restore terminal state."""
+        op_state = getattr(self, '_background_operation', None)
+        if op_state:
+            thread = op_state.get('thread')
+            if thread and thread.is_alive():
+                thread.join(timeout=0.2)
         for win in list(self.windows):
             closer = getattr(win, 'close', None)
             if callable(closer):
@@ -184,9 +196,25 @@ class RetroTUI:
         for w in self.windows:
             w.active = False
         win.active = True
-        # Move to end of list (top of z-order)
+        # Move to top of its layer.
         self.windows.remove(win)
-        self.windows.append(win)
+        self.normalize_window_layers()
+        if getattr(win, 'always_on_top', False):
+            self.windows.append(win)
+            return
+
+        insert_at = len(self.windows)
+        for i, candidate in enumerate(self.windows):
+            if getattr(candidate, 'always_on_top', False):
+                insert_at = i
+                break
+        self.windows.insert(insert_at, win)
+
+    def normalize_window_layers(self):
+        """Keep always-on-top windows above regular windows preserving order."""
+        normal = [w for w in self.windows if not getattr(w, 'always_on_top', False)]
+        pinned = [w for w in self.windows if getattr(w, 'always_on_top', False)]
+        self.windows = normal + pinned
 
     def close_window(self, win):
         """Close a window."""
@@ -272,6 +300,211 @@ class RetroTUI:
         dialog.callback = lambda filename, target=win: target.save_as(filename)
         self.dialog = dialog
 
+    def show_open_dialog(self, win):
+        """Show dialog to get filename/path for opening in current window."""
+        dialog = InputDialog('Open File', 'Enter filename/path:', width=52)
+        dialog.callback = lambda filepath, target=win: target.open_path(filepath)
+        self.dialog = dialog
+
+    def show_rename_dialog(self, win):
+        """Show dialog to rename selected File Manager entry."""
+        entry = getattr(win, '_selected_entry', lambda: None)()
+        if entry is None:
+            self.dialog = Dialog('Rename Error', 'No item selected.', ['OK'], width=44)
+            return
+        if entry.name == '..':
+            self.dialog = Dialog('Rename Error', 'Cannot rename parent entry.', ['OK'], width=44)
+            return
+
+        prompt = f"Rename:\n{entry.name}"
+        dialog = InputDialog('Rename', prompt, initial_value=entry.name, width=56)
+        dialog.callback = lambda new_name, target=win: target.rename_selected(new_name)
+        self.dialog = dialog
+
+    def show_delete_confirm_dialog(self, win):
+        """Show confirmation dialog before deleting selected File Manager entry."""
+        entry = self._window_selected_entry(win)
+        if entry is None:
+            self.dialog = Dialog('Delete Error', 'No item selected.', ['OK'], width=44)
+            return
+        if entry.name == '..':
+            self.dialog = Dialog('Delete Error', 'Cannot delete parent entry.', ['OK'], width=44)
+            return
+
+        kind = 'directory' if entry.is_dir else 'file'
+        message = (
+            f"Delete {kind}:\n{entry.name}\n\n"
+            "Item will be moved to Trash.\n"
+            "Use Undo Delete (U) to restore."
+        )
+        dialog = Dialog('Confirm Delete', message, ['Delete', 'Cancel'], width=58)
+        dialog.callback = lambda target=win: self._run_file_operation_with_progress(
+            target,
+            operation='delete',
+        )
+        self.dialog = dialog
+
+    def show_copy_dialog(self, win):
+        """Show destination input for copy operation in File Manager."""
+        entry = self._window_selected_entry(win)
+        if entry is None or entry.name == '..':
+            self.dialog = Dialog('Copy Error', 'Select a valid item to copy.', ['OK'], width=48)
+            return
+
+        prompt = f"Copy:\n{entry.name}\n\nDestination path:"
+        dialog = InputDialog('Copy To', prompt, initial_value=win.current_path, width=62)
+        dialog.callback = lambda dest, target=win: self._run_file_operation_with_progress(
+            target,
+            operation='copy',
+            destination=dest,
+        )
+        self.dialog = dialog
+
+    def show_move_dialog(self, win):
+        """Show destination input for move operation in File Manager."""
+        entry = self._window_selected_entry(win)
+        if entry is None or entry.name == '..':
+            self.dialog = Dialog('Move Error', 'Select a valid item to move.', ['OK'], width=48)
+            return
+
+        prompt = f"Move:\n{entry.name}\n\nDestination path:"
+        dialog = InputDialog('Move To', prompt, initial_value=win.current_path, width=62)
+        dialog.callback = lambda dest, target=win: self._run_file_operation_with_progress(
+            target,
+            operation='move',
+            destination=dest,
+        )
+        self.dialog = dialog
+
+    def show_new_dir_dialog(self, win):
+        """Show input dialog to create a new directory in current path."""
+        dialog = InputDialog('New Folder', 'Enter folder name:', width=52)
+        dialog.callback = lambda name, target=win: target.create_directory(name)
+        self.dialog = dialog
+
+    def show_new_file_dialog(self, win):
+        """Show input dialog to create a new file in current path."""
+        dialog = InputDialog('New File', 'Enter file name:', width=52)
+        dialog.callback = lambda name, target=win: target.create_file(name)
+        self.dialog = dialog
+
+    @staticmethod
+    def _window_selected_entry(win):
+        """Resolve selected entry accessor from supported window APIs."""
+        selector = getattr(win, 'selected_entry_for_operation', None)
+        if callable(selector):
+            return selector()
+        selector = getattr(win, '_selected_entry', None)
+        if callable(selector):
+            return selector()
+        return None
+
+    def _is_long_file_operation(self, entry):
+        """Return True when operation should show a modal progress dialog."""
+        if entry is None or getattr(entry, 'name', None) == '..':
+            return False
+        if getattr(entry, 'is_dir', False):
+            return True
+
+        size = getattr(entry, 'size', None)
+        if size is None:
+            full_path = getattr(entry, 'full_path', None)
+            if not full_path:
+                return False
+            try:
+                size = os.path.getsize(full_path)
+            except OSError:
+                return False
+        return int(size) >= self.LONG_FILE_OPERATION_BYTES
+
+    def _start_background_operation(self, *, title, message, worker, source_win):
+        """Run blocking filesystem operation in a worker thread and show progress."""
+        state = getattr(self, '_background_operation', None)
+        if state:
+            return ActionResult(ActionType.ERROR, 'Another operation is already running.')
+
+        progress_dialog = ProgressDialog(title, message, width=62)
+        op_state = {
+            'dialog': progress_dialog,
+            'source_win': source_win,
+            'worker_result': None,
+            'done': False,
+            'started_at': time.monotonic(),
+            'thread': None,
+        }
+
+        def _runner():
+            try:
+                op_state['worker_result'] = worker()
+            except Exception as exc:  # pragma: no cover - defensive worker path
+                op_state['worker_result'] = ActionResult(ActionType.ERROR, str(exc))
+            finally:
+                op_state['done'] = True
+
+        thread = threading.Thread(target=_runner, daemon=True, name='retrotui-file-op')
+        op_state['thread'] = thread
+        self._background_operation = op_state
+        self.dialog = progress_dialog
+        thread.start()
+        return None
+
+    def has_background_operation(self):
+        """Return whether a background file operation is currently running."""
+        return bool(getattr(self, '_background_operation', None))
+
+    def poll_background_operation(self):
+        """Advance progress state and dispatch completion when worker finishes."""
+        state = getattr(self, '_background_operation', None)
+        if not state:
+            return
+
+        elapsed = max(0.0, time.monotonic() - state['started_at'])
+        dialog = state.get('dialog')
+        if dialog and hasattr(dialog, 'set_elapsed'):
+            dialog.set_elapsed(elapsed)
+
+        if not state.get('done'):
+            return
+
+        if self.dialog is dialog:
+            self.dialog = None
+
+        self._background_operation = None
+        result = state.get('worker_result')
+        if result is not None:
+            self._dispatch_window_result(result, state.get('source_win'))
+
+    def _run_file_operation_with_progress(self, win, *, operation, destination=None):
+        """Run file operation directly or via background worker with progress dialog."""
+        entry = self._window_selected_entry(win)
+        operation = str(operation).lower()
+
+        if operation == 'copy':
+            worker = lambda target=win, dest=destination: target.copy_selected(dest)
+            title = 'Copying'
+            details = f"Copying:\n{getattr(entry, 'name', 'item')}"
+        elif operation == 'move':
+            worker = lambda target=win, dest=destination: target.move_selected(dest)
+            title = 'Moving'
+            details = f"Moving:\n{getattr(entry, 'name', 'item')}"
+        elif operation == 'delete':
+            worker = lambda target=win: target.delete_selected()
+            title = 'Deleting'
+            details = f"Deleting:\n{getattr(entry, 'name', 'item')}"
+        else:
+            return ActionResult(ActionType.ERROR, f'Unsupported file operation: {operation}')
+
+        if not self._is_long_file_operation(entry):
+            return worker()
+
+        message = f'{details}\n\nPlease wait...'
+        return self._start_background_operation(
+            title=title,
+            message=message,
+            worker=worker,
+            source_win=win,
+        )
+
     def get_active_window(self):
         """Return the active window, if any."""
         return next((w for w in self.windows if w.active), None)
@@ -303,9 +536,42 @@ class RetroTUI:
             self.show_save_as_dialog(source_win)
             return
 
+        if result.type == ActionType.REQUEST_OPEN_PATH and source_win:
+            self.show_open_dialog(source_win)
+            return
+
+        if result.type == ActionType.REQUEST_RENAME_ENTRY and source_win:
+            self.show_rename_dialog(source_win)
+            return
+
+        if result.type == ActionType.REQUEST_DELETE_CONFIRM and source_win:
+            self.show_delete_confirm_dialog(source_win)
+            return
+
+        if result.type == ActionType.REQUEST_COPY_ENTRY and source_win:
+            self.show_copy_dialog(source_win)
+            return
+
+        if result.type == ActionType.REQUEST_MOVE_ENTRY and source_win:
+            self.show_move_dialog(source_win)
+            return
+
+        if result.type == ActionType.REQUEST_NEW_DIR and source_win:
+            self.show_new_dir_dialog(source_win)
+            return
+
+        if result.type == ActionType.REQUEST_NEW_FILE and source_win:
+            self.show_new_file_dialog(source_win)
+            return
+
         if result.type == ActionType.SAVE_ERROR:
             message = result.payload or 'Unknown save error.'
             self.dialog = Dialog('Save Error', str(message), ['OK'], width=50)
+            return
+
+        if result.type == ActionType.ERROR:
+            message = result.payload or 'Unknown error.'
+            self.dialog = Dialog('Error', str(message), ['OK'], width=50)
             return
 
         LOGGER.debug('Unhandled ActionResult type: %s', result.type)
@@ -323,10 +589,14 @@ class RetroTUI:
             self.running = False
         elif result_idx == 0:
             callback = getattr(dialog, 'callback', None)
-            if callable(callback) and isinstance(dialog, InputDialog):
-                callback_result = callback(dialog.value)
+            if callable(callback):
+                if isinstance(dialog, InputDialog):
+                    callback_result = callback(dialog.value)
+                else:
+                    callback_result = callback()
 
-        self.dialog = None
+        if self.dialog is dialog:
+            self.dialog = None
         if callback_result is not None:
             self._dispatch_window_result(callback_result, self.get_active_window())
 

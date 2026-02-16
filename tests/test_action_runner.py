@@ -94,6 +94,15 @@ class _DummySettingsWindow:
         self.app = app
 
 
+class _DummyCalculatorWindow:
+    def __init__(self, x, y, w, h):
+        self.kind = "calc"
+        self.x = x
+        self.y = y
+        self.w = w
+        self.h = h
+
+
 class ActionRunnerTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -110,6 +119,7 @@ class ActionRunnerTests(unittest.TestCase):
             "retrotui.apps.filemanager",
             "retrotui.apps.settings",
             "retrotui.apps.terminal",
+            "retrotui.apps.calculator",
             "retrotui.core.actions",
             "retrotui.core.content",
             "retrotui.core.action_runner",
@@ -131,6 +141,7 @@ class ActionRunnerTests(unittest.TestCase):
             "retrotui.apps.filemanager",
             "retrotui.apps.settings",
             "retrotui.apps.terminal",
+            "retrotui.apps.calculator",
             "retrotui.core.actions",
             "retrotui.core.content",
             "retrotui.core.action_runner",
@@ -290,6 +301,23 @@ class ActionRunnerTests(unittest.TestCase):
         spawned = app._spawn_window.call_args.args[0]
         self.assertEqual(spawned.kind, "settings")
         self.assertIs(spawned.app, app)
+
+    def test_execute_calculator_spawns_calculator_window(self):
+        app = self._make_app()
+        logger = mock.Mock()
+
+        with mock.patch.object(self.action_runner, "CalculatorWindow", _DummyCalculatorWindow):
+            self.action_runner.execute_app_action(
+                app,
+                self.actions_mod.AppAction.CALCULATOR,
+                logger,
+                version="0.3.4",
+            )
+
+        app._next_window_offset.assert_called_once_with(24, 5)
+        spawned = app._spawn_window.call_args.args[0]
+        self.assertEqual(spawned.kind, "calc")
+        self.assertEqual((spawned.x, spawned.y, spawned.w, spawned.h), (12, 7, 44, 14))
 
     def test_execute_new_window_uses_incremental_title(self):
         app = self._make_app()

@@ -215,6 +215,17 @@ class KeyRouterTests(unittest.TestCase):
         app._cycle_focus.assert_called_once_with()
         app._handle_active_window_key.assert_not_called()
 
+    def test_handle_key_event_tab_uses_active_window_local_handler_first(self):
+        app = self._make_app()
+        active = types.SimpleNamespace(handle_tab_key=mock.Mock(return_value=True))
+        app.get_active_window.return_value = active
+
+        self.key_router.handle_key_event(app, 9)
+
+        active.handle_tab_key.assert_called_once_with()
+        app._cycle_focus.assert_not_called()
+        app._handle_active_window_key.assert_not_called()
+
     def test_handle_key_event_menu_hotkeys_short_circuit(self):
         app = self._make_app()
         app._handle_menu_hotkeys.return_value = True

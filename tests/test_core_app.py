@@ -1,5 +1,6 @@
 import importlib
 import sys
+import time
 import types
 import unittest
 from unittest import mock
@@ -126,6 +127,7 @@ class CoreAppTests(unittest.TestCase):
         app = self.app_mod.RetroTUI.__new__(self.app_mod.RetroTUI)
         app.running = True
         app.dialog = None
+        app._background_operation = None
         app.windows = []
         app.stdscr = types.SimpleNamespace(getmaxyx=lambda: (30, 120))
         app.menu = types.SimpleNamespace(
@@ -182,6 +184,9 @@ class CoreAppTests(unittest.TestCase):
         self.assertEqual(app.click_flags, 11)
         self.assertEqual(app.stop_drag_flags, 22)
         self.assertEqual(app.scroll_down_mask, 33)
+        self.assertIsNone(app.drag_payload)
+        self.assertIsNone(app.drag_source_window)
+        self.assertIsNone(app.drag_target_window)
         self.assertEqual(app.menu, fake_menu)
         self.assertEqual(app.windows, [fake_window])
         self.assertTrue(fake_window.active)
@@ -343,6 +348,66 @@ class CoreAppTests(unittest.TestCase):
 
         app.show_save_as_dialog.assert_called_once_with(source)
 
+    def test_dispatch_request_open_path_calls_dialog_builder(self):
+        app = self._make_app()
+        source = object()
+        app.show_open_dialog = mock.Mock()
+        result = self.actions_mod.ActionResult(self.actions_mod.ActionType.REQUEST_OPEN_PATH)
+
+        app._dispatch_window_result(result, source)
+
+        app.show_open_dialog.assert_called_once_with(source)
+
+    def test_dispatch_request_rename_entry_calls_dialog_builder(self):
+        app = self._make_app()
+        source = object()
+        app.show_rename_dialog = mock.Mock()
+        result = self.actions_mod.ActionResult(self.actions_mod.ActionType.REQUEST_RENAME_ENTRY)
+
+        app._dispatch_window_result(result, source)
+
+        app.show_rename_dialog.assert_called_once_with(source)
+
+    def test_dispatch_request_delete_confirm_calls_dialog_builder(self):
+        app = self._make_app()
+        source = object()
+        app.show_delete_confirm_dialog = mock.Mock()
+        result = self.actions_mod.ActionResult(self.actions_mod.ActionType.REQUEST_DELETE_CONFIRM)
+
+        app._dispatch_window_result(result, source)
+
+        app.show_delete_confirm_dialog.assert_called_once_with(source)
+
+    def test_dispatch_request_copy_move_new_entry_dialogs(self):
+        app = self._make_app()
+        source = object()
+        app.show_copy_dialog = mock.Mock()
+        app.show_move_dialog = mock.Mock()
+        app.show_new_dir_dialog = mock.Mock()
+        app.show_new_file_dialog = mock.Mock()
+
+        app._dispatch_window_result(
+            self.actions_mod.ActionResult(self.actions_mod.ActionType.REQUEST_COPY_ENTRY),
+            source,
+        )
+        app._dispatch_window_result(
+            self.actions_mod.ActionResult(self.actions_mod.ActionType.REQUEST_MOVE_ENTRY),
+            source,
+        )
+        app._dispatch_window_result(
+            self.actions_mod.ActionResult(self.actions_mod.ActionType.REQUEST_NEW_DIR),
+            source,
+        )
+        app._dispatch_window_result(
+            self.actions_mod.ActionResult(self.actions_mod.ActionType.REQUEST_NEW_FILE),
+            source,
+        )
+
+        app.show_copy_dialog.assert_called_once_with(source)
+        app.show_move_dialog.assert_called_once_with(source)
+        app.show_new_dir_dialog.assert_called_once_with(source)
+        app.show_new_file_dialog.assert_called_once_with(source)
+
     def test_dispatch_execute_non_close_routes_to_execute_action(self):
         app = self._make_app()
         app.execute_action = mock.Mock()
@@ -366,6 +431,18 @@ class CoreAppTests(unittest.TestCase):
         self.assertIsNotNone(app.dialog)
         self.assertEqual(app.dialog.title, "Save Error")
         self.assertIn("disk full", app.dialog.message)
+
+    def test_dispatch_generic_error_creates_error_dialog(self):
+        app = self._make_app()
+        result = self.actions_mod.ActionResult(
+            self.actions_mod.ActionType.ERROR, "boom"
+        )
+
+        app._dispatch_window_result(result, source_win=None)
+
+        self.assertIsNotNone(app.dialog)
+        self.assertEqual(app.dialog.title, "Error")
+        self.assertIn("boom", app.dialog.message)
 
     def test_handle_global_menu_key_executes_selected_action(self):
         app = self._make_app()
@@ -428,6 +505,24 @@ class CoreAppTests(unittest.TestCase):
         app._resolve_dialog_result(0)
 
         dialog.callback.assert_called_once_with("note.txt")
+        app._dispatch_window_result.assert_called_once_with(
+            callback_result, "active-window"
+        )
+
+    def test_resolve_dialog_result_dispatches_dialog_callback_result(self):
+        app = self._make_app()
+        dialog = self.app_mod.Dialog("Confirm", "Delete?", ["Delete", "Cancel"])
+        callback_result = self.actions_mod.ActionResult(
+            self.actions_mod.ActionType.ERROR, "x"
+        )
+        dialog.callback = mock.Mock(return_value=callback_result)
+        app.dialog = dialog
+        app._dispatch_window_result = mock.Mock()
+        app.get_active_window = mock.Mock(return_value="active-window")
+
+        app._resolve_dialog_result(0)
+
+        dialog.callback.assert_called_once_with()
         app._dispatch_window_result.assert_called_once_with(
             callback_result, "active-window"
         )
@@ -508,9 +603,9 @@ class CoreAppTests(unittest.TestCase):
 
     def test_set_active_window_reorders_z_order(self):
         app = self._make_app()
-        a = types.SimpleNamespace(active=True)
-        b = types.SimpleNamespace(active=False)
-        c = types.SimpleNamespace(active=False)
+        a = types.SimpleNamespace(active=True, always_on_top=False)
+        b = types.SimpleNamespace(active=False, always_on_top=False)
+        c = types.SimpleNamespace(active=False, always_on_top=False)
         app.windows = [a, b, c]
 
         app.set_active_window(b)
@@ -519,6 +614,30 @@ class CoreAppTests(unittest.TestCase):
         self.assertFalse(c.active)
         self.assertTrue(b.active)
         self.assertEqual(app.windows[-1], b)
+
+    def test_set_active_window_keeps_regular_below_topmost(self):
+        app = self._make_app()
+        regular_a = types.SimpleNamespace(active=False, always_on_top=False)
+        topmost = types.SimpleNamespace(active=False, always_on_top=True)
+        regular_b = types.SimpleNamespace(active=False, always_on_top=False)
+        app.windows = [regular_a, topmost, regular_b]
+
+        app.set_active_window(regular_a)
+
+        self.assertTrue(regular_a.active)
+        self.assertEqual(app.windows, [regular_b, regular_a, topmost])
+
+    def test_normalize_window_layers_moves_topmost_to_end(self):
+        app = self._make_app()
+        regular_a = types.SimpleNamespace(active=False, always_on_top=False)
+        topmost_a = types.SimpleNamespace(active=False, always_on_top=True)
+        regular_b = types.SimpleNamespace(active=False, always_on_top=False)
+        topmost_b = types.SimpleNamespace(active=False, always_on_top=True)
+        app.windows = [topmost_a, regular_a, topmost_b, regular_b]
+
+        app.normalize_window_layers()
+
+        self.assertEqual(app.windows, [regular_a, regular_b, topmost_a, topmost_b])
 
     def test_close_window_activates_last_remaining_window(self):
         app = self._make_app()
@@ -707,6 +826,257 @@ class CoreAppTests(unittest.TestCase):
         result = app.dialog.callback("demo.txt")
         target.save_as.assert_called_once_with("demo.txt")
         self.assertTrue(result)
+
+    def test_show_open_dialog_sets_callback(self):
+        app = self._make_app()
+        target = types.SimpleNamespace(open_path=mock.Mock(return_value=None))
+
+        app.show_open_dialog(target)
+
+        self.assertIsInstance(app.dialog, self.app_mod.InputDialog)
+        result = app.dialog.callback("demo.txt")
+        target.open_path.assert_called_once_with("demo.txt")
+        self.assertIsNone(result)
+
+    def test_show_rename_dialog_sets_callback(self):
+        app = self._make_app()
+        entry = types.SimpleNamespace(name="a.txt")
+        target = types.SimpleNamespace(
+            _selected_entry=mock.Mock(return_value=entry),
+            rename_selected=mock.Mock(return_value=None),
+        )
+
+        app.show_rename_dialog(target)
+
+        self.assertIsInstance(app.dialog, self.app_mod.InputDialog)
+        result = app.dialog.callback("b.txt")
+        target.rename_selected.assert_called_once_with("b.txt")
+        self.assertIsNone(result)
+
+    def test_show_delete_confirm_dialog_sets_callback(self):
+        app = self._make_app()
+        entry = types.SimpleNamespace(name="a.txt", is_dir=False)
+        target = types.SimpleNamespace(
+            _selected_entry=mock.Mock(return_value=entry),
+            delete_selected=mock.Mock(return_value=None),
+        )
+
+        app.show_delete_confirm_dialog(target)
+
+        self.assertIsInstance(app.dialog, self.app_mod.Dialog)
+        result = app.dialog.callback()
+        target.delete_selected.assert_called_once_with()
+        self.assertIsNone(result)
+
+    def test_show_copy_and_move_dialogs_set_callbacks(self):
+        app = self._make_app()
+        entry = types.SimpleNamespace(name="a.txt", is_dir=False)
+        target = types.SimpleNamespace(
+            current_path="/tmp",
+            _selected_entry=mock.Mock(return_value=entry),
+            copy_selected=mock.Mock(return_value=None),
+            move_selected=mock.Mock(return_value=None),
+        )
+
+        app.show_copy_dialog(target)
+        self.assertIsInstance(app.dialog, self.app_mod.InputDialog)
+        result_copy = app.dialog.callback("/tmp/dst")
+        target.copy_selected.assert_called_once_with("/tmp/dst")
+        self.assertIsNone(result_copy)
+
+        app.show_move_dialog(target)
+        self.assertIsInstance(app.dialog, self.app_mod.InputDialog)
+        result_move = app.dialog.callback("/tmp/dst2")
+        target.move_selected.assert_called_once_with("/tmp/dst2")
+        self.assertIsNone(result_move)
+
+    def test_run_file_operation_with_progress_runs_sync_for_small_file(self):
+        app = self._make_app()
+        entry = types.SimpleNamespace(name="tiny.txt", is_dir=False, size=128, full_path="/tmp/tiny.txt")
+        target = types.SimpleNamespace(
+            selected_entry_for_operation=mock.Mock(return_value=entry),
+            copy_selected=mock.Mock(return_value=None),
+        )
+
+        result = app._run_file_operation_with_progress(target, operation="copy", destination="/tmp/out")
+
+        self.assertIsNone(result)
+        target.copy_selected.assert_called_once_with("/tmp/out")
+
+    def test_run_file_operation_with_progress_starts_background_for_large_file(self):
+        app = self._make_app()
+        entry = types.SimpleNamespace(name="big.iso", is_dir=False, size=16 * 1024 * 1024, full_path="/tmp/big.iso")
+        target = types.SimpleNamespace(
+            selected_entry_for_operation=mock.Mock(return_value=entry),
+            move_selected=mock.Mock(return_value=None),
+        )
+
+        with mock.patch.object(app, "_start_background_operation", return_value=None) as start_bg:
+            result = app._run_file_operation_with_progress(
+                target,
+                operation="move",
+                destination="/tmp/out",
+            )
+
+        self.assertIsNone(result)
+        start_bg.assert_called_once()
+        self.assertEqual(start_bg.call_args.kwargs["title"], "Moving")
+        self.assertIs(start_bg.call_args.kwargs["source_win"], target)
+        target.move_selected.assert_not_called()
+
+        worker = start_bg.call_args.kwargs["worker"]
+        worker()
+        target.move_selected.assert_called_once_with("/tmp/out")
+
+    def test_run_file_operation_with_progress_rejects_unsupported_operation(self):
+        app = self._make_app()
+        target = types.SimpleNamespace(selected_entry_for_operation=mock.Mock(return_value=None))
+
+        result = app._run_file_operation_with_progress(target, operation="compress")
+
+        self.assertEqual(result.type, self.actions_mod.ActionType.ERROR)
+
+    def test_start_background_operation_rejects_when_active(self):
+        app = self._make_app()
+        app._background_operation = {"done": False}
+
+        result = app._start_background_operation(
+            title="Copying",
+            message="x",
+            worker=lambda: None,
+            source_win=None,
+        )
+
+        self.assertEqual(result.type, self.actions_mod.ActionType.ERROR)
+
+    def test_start_background_operation_starts_worker_and_sets_progress_dialog(self):
+        app = self._make_app()
+        worker = mock.Mock(return_value=None)
+
+        result = app._start_background_operation(
+            title="Copying",
+            message="copying...",
+            worker=worker,
+            source_win=None,
+        )
+
+        self.assertIsNone(result)
+        self.assertTrue(app.has_background_operation())
+        self.assertIsInstance(app.dialog, self.app_mod.ProgressDialog)
+
+        for _ in range(50):
+            state = app._background_operation
+            if state and state.get("done"):
+                break
+            time.sleep(0.01)
+
+        app._dispatch_window_result = mock.Mock()
+        app.poll_background_operation()
+        worker.assert_called_once_with()
+        self.assertIsNone(app._background_operation)
+
+    def test_poll_background_operation_keeps_state_while_worker_running(self):
+        app = self._make_app()
+        progress_dialog = types.SimpleNamespace(set_elapsed=mock.Mock())
+        app._dispatch_window_result = mock.Mock()
+        app._background_operation = {
+            "dialog": progress_dialog,
+            "source_win": None,
+            "worker_result": None,
+            "done": False,
+            "started_at": 1.0,
+            "thread": None,
+        }
+
+        with mock.patch.object(self.app_mod.time, "monotonic", return_value=2.0):
+            app.poll_background_operation()
+
+        progress_dialog.set_elapsed.assert_called_once_with(1.0)
+        self.assertIsNotNone(app._background_operation)
+        app._dispatch_window_result.assert_not_called()
+
+    def test_poll_background_operation_updates_and_dispatches_completion(self):
+        app = self._make_app()
+        finished = self.actions_mod.ActionResult(self.actions_mod.ActionType.ERROR, "boom")
+        progress_dialog = types.SimpleNamespace(set_elapsed=mock.Mock())
+        source = object()
+        app._dispatch_window_result = mock.Mock()
+        app.dialog = progress_dialog
+        app._background_operation = {
+            "dialog": progress_dialog,
+            "source_win": source,
+            "worker_result": finished,
+            "done": True,
+            "started_at": 10.0,
+            "thread": None,
+        }
+
+        with mock.patch.object(self.app_mod.time, "monotonic", return_value=12.5):
+            app.poll_background_operation()
+
+        progress_dialog.set_elapsed.assert_called_once_with(2.5)
+        self.assertIsNone(app.dialog)
+        self.assertIsNone(app._background_operation)
+        app._dispatch_window_result.assert_called_once_with(finished, source)
+
+    def test_resolve_dialog_result_keeps_dialog_replaced_by_callback(self):
+        app = self._make_app()
+        replacement = object()
+
+        def _callback():
+            app.dialog = replacement
+            return None
+
+        app.dialog = types.SimpleNamespace(title="Any", buttons=["OK"], callback=_callback)
+        app._resolve_dialog_result(0)
+
+        self.assertIs(app.dialog, replacement)
+
+    def test_cleanup_joins_background_thread_when_alive(self):
+        app = self._make_app()
+        fake_thread = types.SimpleNamespace(is_alive=mock.Mock(return_value=True), join=mock.Mock())
+        app._background_operation = {"thread": fake_thread}
+
+        with mock.patch.object(self.app_mod, "disable_mouse_support") as disable_mouse_support:
+            app.cleanup()
+
+        fake_thread.join.assert_called_once_with(timeout=0.2)
+        disable_mouse_support.assert_called_once_with()
+
+    def test_show_new_dir_and_file_dialogs_set_callbacks(self):
+        app = self._make_app()
+        target = types.SimpleNamespace(
+            create_directory=mock.Mock(return_value=None),
+            create_file=mock.Mock(return_value=None),
+        )
+
+        app.show_new_dir_dialog(target)
+        self.assertIsInstance(app.dialog, self.app_mod.InputDialog)
+        result_dir = app.dialog.callback("folder")
+        target.create_directory.assert_called_once_with("folder")
+        self.assertIsNone(result_dir)
+
+        app.show_new_file_dialog(target)
+        self.assertIsInstance(app.dialog, self.app_mod.InputDialog)
+        result_file = app.dialog.callback("file.txt")
+        target.create_file.assert_called_once_with("file.txt")
+        self.assertIsNone(result_file)
+
+    def test_show_copy_move_dialogs_reject_invalid_selection(self):
+        app = self._make_app()
+        invalid = types.SimpleNamespace(
+            current_path="/tmp",
+            _selected_entry=mock.Mock(return_value=None),
+        )
+        app.show_copy_dialog(invalid)
+        self.assertEqual(app.dialog.title, "Copy Error")
+
+        invalid_parent = types.SimpleNamespace(
+            current_path="/tmp",
+            _selected_entry=mock.Mock(return_value=types.SimpleNamespace(name="..", is_dir=True)),
+        )
+        app.show_move_dialog(invalid_parent)
+        self.assertEqual(app.dialog.title, "Move Error")
 
     def test_get_active_window_and_dispatch_ignore_paths(self):
         app = self._make_app()

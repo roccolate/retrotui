@@ -17,6 +17,7 @@ class ActionResultTests(unittest.TestCase):
     def test_app_action_parses_legacy_string_values(self):
         self.assertEqual(AppAction("filemanager"), AppAction.FILE_MANAGER)
         self.assertEqual(AppAction("np_save"), AppAction.NP_SAVE)
+        self.assertEqual(AppAction("calculator"), AppAction.CALCULATOR)
 
 
 if __name__ == "__main__":

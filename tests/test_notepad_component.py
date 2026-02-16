@@ -20,6 +20,9 @@ def _install_fake_curses():
     fake.KEY_DC = 330
     fake.KEY_IC = 331
     fake.KEY_F6 = 270
+    fake.BUTTON1_CLICKED = 0x0004
+    fake.BUTTON1_PRESSED = 0x0002
+    fake.BUTTON1_DOUBLE_CLICKED = 0x0008
     fake.A_BOLD = 1
     fake.A_REVERSE = 2
     fake.error = Exception
@@ -172,6 +175,7 @@ class NotepadComponentTests(unittest.TestCase):
         )
 
         toggle = win._execute_menu_action(self.actions_mod.AppAction.NP_TOGGLE_WRAP)
+        open_result = win._execute_menu_action(self.actions_mod.AppAction.NP_OPEN)
         save = win._execute_menu_action(self.actions_mod.AppAction.NP_SAVE)
         save_as = win._execute_menu_action(self.actions_mod.AppAction.NP_SAVE_AS)
         new_win = win._execute_menu_action(self.actions_mod.AppAction.NP_NEW)
@@ -180,6 +184,7 @@ class NotepadComponentTests(unittest.TestCase):
         self.assertIsNone(toggle)
         self.assertTrue(win.wrap_mode)
         self.assertEqual(win.view_left, 0)
+        self.assertEqual(open_result.type, self.actions_mod.ActionType.REQUEST_OPEN_PATH)
         self.assertEqual(save.type, self.actions_mod.ActionType.SAVE_ERROR)
         self.assertEqual(save_as.type, self.actions_mod.ActionType.REQUEST_SAVE_AS)
         self.assertEqual(new_win.type, self.actions_mod.ActionType.EXECUTE)
@@ -415,6 +420,30 @@ class NotepadComponentTests(unittest.TestCase):
         self.assertEqual(win.buffer[0], "acd")
         self.assertTrue(win.modified)
 
+    def test_handle_key_backspace_deletes_selection_when_present(self):
+        win = self._make_window()
+        win.buffer = ["abcdef"]
+        win.selection_anchor = (0, 1)
+        win.selection_cursor = (0, 4)
+
+        win.handle_key(self.curses.KEY_BACKSPACE)
+
+        self.assertEqual(win.buffer, ["aef"])
+        self.assertEqual((win.cursor_line, win.cursor_col), (0, 1))
+        self.assertTrue(win.modified)
+
+    def test_handle_key_delete_deletes_selection_when_present(self):
+        win = self._make_window()
+        win.buffer = ["abcdef"]
+        win.selection_anchor = (0, 2)
+        win.selection_cursor = (0, 5)
+
+        win.handle_key(self.curses.KEY_DC)
+
+        self.assertEqual(win.buffer, ["abf"])
+        self.assertEqual((win.cursor_line, win.cursor_col), (0, 2))
+        self.assertTrue(win.modified)
+
     def test_handle_key_ctrl_s_returns_save_error_action_result(self):
         win = self._make_window()
         err = self.actions_mod.ActionResult(self.actions_mod.ActionType.SAVE_ERROR, "x")
@@ -424,6 +453,57 @@ class NotepadComponentTests(unittest.TestCase):
 
         self.assertEqual(result.type, self.actions_mod.ActionType.SAVE_ERROR)
 
+    def test_handle_key_ctrl_o_requests_open_dialog(self):
+        win = self._make_window()
+        result = win.handle_key(15)
+        self.assertEqual(result.type, self.actions_mod.ActionType.REQUEST_OPEN_PATH)
+
+    def test_handle_key_ctrl_a_selects_all(self):
+        win = self._make_window()
+        win.buffer = ["abc", "defg"]
+        win.cursor_line = 0
+        win.cursor_col = 1
+
+        win.handle_key(1)
+
+        self.assertEqual(win.selection_anchor, (0, 0))
+        self.assertEqual(win.selection_cursor, (1, 4))
+        self.assertEqual((win.cursor_line, win.cursor_col), (1, 4))
+
+    def test_handle_key_escape_clears_selection(self):
+        win = self._make_window()
+        win.selection_anchor = (0, 0)
+        win.selection_cursor = (0, 2)
+
+        win.handle_key(27)
+
+        self.assertIsNone(win.selection_anchor)
+        self.assertIsNone(win.selection_cursor)
+
+    def test_handle_key_ctrl_x_cuts_selected_text(self):
+        win = self._make_window()
+        win.buffer = ["abcdef"]
+        win.selection_anchor = (0, 1)
+        win.selection_cursor = (0, 4)
+        with mock.patch.object(self.notepad_mod, "copy_text") as copy_text:
+            win.handle_key(24)
+        copy_text.assert_called_once_with("bcd")
+        self.assertEqual(win.buffer, ["aef"])
+        self.assertEqual((win.cursor_line, win.cursor_col), (0, 1))
+        self.assertTrue(win.modified)
+
+    def test_handle_key_ctrl_x_without_selection_cuts_current_line(self):
+        win = self._make_window()
+        win.buffer = ["first", "second"]
+        win.cursor_line = 0
+        win.cursor_col = 2
+        with mock.patch.object(self.notepad_mod, "copy_text") as copy_text:
+            win.handle_key(24)
+        copy_text.assert_called_once_with("first")
+        self.assertEqual(win.buffer, ["second"])
+        self.assertEqual((win.cursor_line, win.cursor_col), (0, 2))
+        self.assertTrue(win.modified)
+
     def test_handle_key_copy_shortcut_copies_current_line(self):
         win = self._make_window()
         win.buffer = ["first", "second"]
@@ -431,6 +511,15 @@ class NotepadComponentTests(unittest.TestCase):
         with mock.patch.object(self.notepad_mod, "copy_text") as copy_text:
             win.handle_key(self.curses.KEY_F6)
         copy_text.assert_called_once_with("second")
+
+    def test_handle_key_copy_shortcut_prefers_selected_text(self):
+        win = self._make_window()
+        win.buffer = ["alpha beta"]
+        win.selection_anchor = (0, 0)
+        win.selection_cursor = (0, 5)
+        with mock.patch.object(self.notepad_mod, "copy_text") as copy_text:
+            win.handle_key(self.curses.KEY_F6)
+        copy_text.assert_called_once_with("alpha")
 
     def test_handle_key_ctrl_c_no_longer_triggers_copy(self):
         win = self._make_window()
@@ -510,6 +599,27 @@ class NotepadComponentTests(unittest.TestCase):
 
         self.assertEqual(win.cursor_line, 0)
         self.assertEqual(win.cursor_col, 2)
+
+    def test_handle_click_with_button_sets_selection_anchor(self):
+        win = self._make_window()
+        win.buffer = ["abcdef"]
+        bx, by, _, _ = win.body_rect()
+
+        win.handle_click(bx + 1, by, self.curses.BUTTON1_PRESSED)
+
+        self.assertEqual(win.selection_anchor, (0, 1))
+        self.assertEqual(win.selection_cursor, (0, 1))
+
+    def test_handle_mouse_drag_extends_selection(self):
+        win = self._make_window()
+        win.buffer = ["abcdefghij"]
+        bx, by, _, _ = win.body_rect()
+        win.handle_click(bx + 1, by, self.curses.BUTTON1_PRESSED)
+
+        win.handle_mouse_drag(bx + 4, by, self.curses.BUTTON1_PRESSED | 0x200000)
+
+        self.assertEqual(win.selection_anchor, (0, 1))
+        self.assertEqual(win.selection_cursor, (0, 4))
 
     def test_scroll_up_decrements_view_top(self):
         win = self._make_window()

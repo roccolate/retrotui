@@ -1,6 +1,143 @@
 """Mouse routing helpers for RetroTUI."""
 
 import curses
+import inspect
+
+
+def _invoke_mouse_handler(handler, mx, my, bstate):
+    """Call mouse handlers with backward-compatible signature support."""
+    try:
+        params = inspect.signature(handler).parameters.values()
+    except (TypeError, ValueError):
+        params = ()
+
+    positional = 0
+    has_varargs = False
+    for param in params:
+        if param.kind == inspect.Parameter.VAR_POSITIONAL:
+            has_varargs = True
+            break
+        if param.kind in (inspect.Parameter.POSITIONAL_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD):
+            positional += 1
+
+    if has_varargs or positional >= 3:
+        return handler(mx, my, bstate)
+    return handler(mx, my)
+
+
+def _clear_pending_file_drags(app):
+    """Clear pending drag candidates exposed by file-manager-like windows."""
+    for win in getattr(app, 'windows', []):
+        clearer = getattr(win, 'clear_pending_drag', None)
+        if callable(clearer):
+            clearer()
+
+
+def _set_drag_target(app, target):
+    """Track active drop target and update per-window highlight flags."""
+    for win in getattr(app, 'windows', []):
+        setattr(win, 'drop_target_highlight', bool(target is not None and win is target))
+    setattr(app, 'drag_target_window', target)
+
+
+def _clear_drag_state(app):
+    """Reset drag payload/source/target state."""
+    setattr(app, 'drag_payload', None)
+    setattr(app, 'drag_source_window', None)
+    _set_drag_target(app, None)
+
+
+def _supports_file_drop_target(win):
+    """Return True when window can accept dropped file paths."""
+    return callable(getattr(win, 'open_path', None)) or callable(
+        getattr(win, 'accept_dropped_path', None)
+    )
+
+
+def _find_drop_target_window(app, mx, my):
+    """Return topmost visible drop target under pointer, excluding source window."""
+    source = getattr(app, 'drag_source_window', None)
+    for win in reversed(getattr(app, 'windows', [])):
+        if not getattr(win, 'visible', False):
+            continue
+        contains = getattr(win, 'contains', None)
+        if not callable(contains) or not contains(mx, my):
+            continue
+        if win is source:
+            return None
+        if _supports_file_drop_target(win):
+            return win
+        return None
+    return None
+
+
+def _dispatch_drop(app, target, payload):
+    """Apply one dropped payload to target window and dispatch returned action."""
+    if target is None or not isinstance(payload, dict):
+        return
+    if payload.get('type') != 'file_path':
+        return
+    path = payload.get('path')
+    if not path:
+        return
+
+    result = None
+    open_path = getattr(target, 'open_path', None)
+    accept_path = getattr(target, 'accept_dropped_path', None)
+    if callable(open_path):
+        result = open_path(path)
+    elif callable(accept_path):
+        result = accept_path(path)
+
+    if result is not None:
+        dispatcher = getattr(app, '_dispatch_window_result', None)
+        if callable(dispatcher):
+            dispatcher(result, target)
+
+
+def handle_file_drag_drop_mouse(app, mx, my, bstate):
+    """Handle file drag-and-drop between windows (File Manager -> Notepad/Terminal)."""
+    report_flag = getattr(curses, 'REPORT_MOUSE_POSITION', 0)
+    pressed_flag = getattr(curses, 'BUTTON1_PRESSED', 0)
+    move_drag = bool((bstate & report_flag) and (bstate & pressed_flag))
+    stop_drag = bool(bstate & getattr(curses, 'BUTTON1_RELEASED', 0))
+    if not stop_drag:
+        inferred_stop = getattr(app, 'stop_drag_flags', 0) & ~pressed_flag & ~report_flag
+        stop_drag = bool(bstate & inferred_stop)
+    drag_payload = getattr(app, 'drag_payload', None)
+
+    if drag_payload is not None:
+        if stop_drag:
+            target = _find_drop_target_window(app, mx, my)
+            _dispatch_drop(app, target, drag_payload)
+            _clear_drag_state(app)
+            _clear_pending_file_drags(app)
+            return True
+        if move_drag:
+            _set_drag_target(app, _find_drop_target_window(app, mx, my))
+            return True
+        return True
+
+    if stop_drag:
+        _clear_pending_file_drags(app)
+        _set_drag_target(app, None)
+        return False
+
+    if not move_drag:
+        return False
+
+    for win in reversed(getattr(app, 'windows', [])):
+        consumer = getattr(win, 'consume_pending_drag', None)
+        if not callable(consumer):
+            continue
+        payload = consumer(mx, my, bstate)
+        if payload is None:
+            continue
+        setattr(app, 'drag_payload', payload)
+        setattr(app, 'drag_source_window', win)
+        _set_drag_target(app, _find_drop_target_window(app, mx, my))
+        return True
+    return False
 
 
 def handle_drag_resize_mouse(app, mx, my, bstate):
@@ -114,6 +251,17 @@ def handle_window_mouse(app, mx, my, bstate):
                 win.window_menu.active = False
 
         if win.contains(mx, my):
+            if (
+                bstate & curses.REPORT_MOUSE_POSITION
+                and bstate & curses.BUTTON1_PRESSED
+                and hasattr(win, "handle_mouse_drag")
+            ):
+                drag_handler = getattr(win, "handle_mouse_drag", None)
+                if callable(drag_handler):
+                    drag_result = _invoke_mouse_handler(drag_handler, mx, my, bstate)
+                    app._dispatch_window_result(drag_result, win)
+                    return True
+
             if bstate & click_flags:
                 app.set_active_window(win)
                 for other_win in app.windows:
@@ -121,7 +269,7 @@ def handle_window_mouse(app, mx, my, bstate):
                     if other_win is win or not other_menu or not other_menu.active:
                         continue
                     other_menu.active = False
-                result = win.handle_click(mx, my)
+                result = _invoke_mouse_handler(win.handle_click, mx, my, bstate)
                 app._dispatch_window_result(result, win)
                 return True
 
@@ -162,6 +310,9 @@ def handle_mouse_event(app, event):
         return
 
     if app._handle_dialog_mouse(mx, my, bstate):
+        return
+
+    if handle_file_drag_drop_mouse(app, mx, my, bstate):
         return
 
     if my == 0 and (bstate & app.click_flags):

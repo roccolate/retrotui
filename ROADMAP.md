@@ -91,7 +91,7 @@ La release que hace RetroTUI usable como shell diario.
 - [x] Workflow de release automatizado en GitHub Actions (`.github/workflows/release.yml`) con validacion de tag/version y build de artifacts
 - [x] Reporte de cobertura por modulo con stdlib `trace` (`tools/report_module_coverage.py`) y opcion en QA
 - [x] Umbral de cobertura por modulo en CI elevado a `--module-coverage-fail-under 100.0` (lane gradual en `ubuntu-latest` + Python `3.12`)
-- [x] Baseline actual de calidad: `377 tests` en QA y cobertura total por modulo `100.0%`
+- [x] Baseline actual de calidad: `458 tests` en QA y cobertura total por modulo `100.0%`
 
 ---
 ### v0.5 — Temas y Configuración
@@ -133,9 +133,9 @@ Hacer que las apps se sientan como un entorno integrado.
 - [x] Sync con xclip/xsel/wl-copy cuando este disponible (clipboard SSH)
 
 **Drag and Drop**
-- [ ] Arrastrar archivo de File Manager a Notepad -> abrir archivo
-- [ ] Arrastrar archivo de File Manager a Terminal -> pegar ruta
-- [ ] Feedback visual durante drag (highlight drop targets)
+- [x] Arrastrar archivo de File Manager a Notepad -> abrir archivo
+- [x] Arrastrar archivo de File Manager a Terminal -> pegar ruta
+- [x] Feedback visual durante drag (highlight drop targets)
 
 **Limpieza del Sistema de Acciones**
 - [x] Reemplazar magic strings (`'filemanager'`, `'np_save'`, etc.) con enum `Action`
@@ -163,9 +163,9 @@ Las apps que hacen que la gente quiera quedarse en RetroTUI.
 - [ ] Barra de resumen (uptime, load average, memoria total/usada)
 
 **Calculadora**
-- [ ] Evaluador de expresiones usando `ast` de Python (eval seguro)
-- [ ] Historial de cálculos recientes
-- [ ] Ventana pequeña de tamaño fijo, opción always-on-top
+- [x] Evaluador de expresiones usando `ast` de Python (eval seguro)
+- [x] Historial de cálculos recientes
+- [x] Ventana pequeña de tamaño fijo, opción always-on-top
 
 **Reloj/Calendario**
 - [ ] Widget pequeño mostrando hora + fecha
@@ -180,25 +180,25 @@ Las apps que hacen que la gente quiera quedarse en RetroTUI.
 Hacer el file manager competitivo con Midnight Commander.
 
 **Operaciones de Archivo**
-- [ ] Copiar / mover / renombrar / eliminar con diálogos de confirmación
-- [ ] Crear nuevo directorio / nuevo archivo
-- [ ] Diálogo de progreso para operaciones largas
-- [ ] Deshacer última operación (mover a trash)
+- [x] Copiar / mover / renombrar / eliminar con dialogos de confirmacion
+- [x] Crear nuevo directorio / nuevo archivo
+- [x] Diálogo de progreso para operaciones largas
+- [x] Deshacer última operación (mover a trash)
 
 **Modo Dual-Pane**
-- [ ] Dividir File Manager en dos paneles de directorio (estilo Norton Commander / mc)
-- [ ] Copiar/mover entre paneles
-- [ ] Tab para cambiar panel activo
+- [x] Dividir File Manager en dos paneles de directorio (estilo Norton Commander / mc)
+- [x] Copiar/mover entre paneles
+- [x] Tab para cambiar panel activo
 
 **Previews de Archivos**
-- [ ] Preview de texto en panel lateral
-- [ ] Preview de imagen vía chafa o timg (renderizado ASCII art)
-- [ ] Panel de info: permisos, propietario, fecha de modificación, tipo MIME
+- [x] Preview de texto en panel lateral
+- [x] Preview de imagen vía chafa o timg (renderizado ASCII art)
+- [x] Panel de info: permisos, propietario, fecha de modificación, tipo MIME
 
 **Bookmarks**
-- [ ] Acceso rápido a directorios frecuentes
-- [ ] ~, /, /var/log, /etc como defaults
-- [ ] Configurables por el usuario
+- [x] Acceso rápido a directorios frecuentes
+- [x] ~, /, /var/log, /etc como defaults
+- [x] Configurables por el usuario
 
 ---
 

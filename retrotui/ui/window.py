@@ -44,6 +44,8 @@ class Window:
         self.resizable = resizable
         self.resizing = False
         self.resize_edge = None       # 'right', 'bottom', 'corner'
+        self.always_on_top = False
+        self.drop_target_highlight = False
 
         # Components
         self.visible = True
@@ -172,6 +174,10 @@ class Window:
             border_attr = theme_attr('window_inactive')
             title_attr = theme_attr('window_inactive')
             body_attr = theme_attr('window_inactive')
+
+        if self.drop_target_highlight:
+            border_attr |= curses.A_BOLD | curses.A_REVERSE
+            title_attr |= curses.A_BOLD | curses.A_REVERSE
 
         draw_box(stdscr, self.y, self.x, self.h, self.w, border_attr, double=True)
 

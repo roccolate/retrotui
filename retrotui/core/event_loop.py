@@ -14,11 +14,17 @@ def clamp_windows_to_terminal(app):
 def draw_frame(app):
     """Render a full frame before reading input."""
     app.stdscr.erase()
+    normalize_layers = getattr(app, 'normalize_window_layers', None)
+    if callable(normalize_layers):
+        normalize_layers()
     app.draw_desktop()
     app.draw_icons()
 
-    for win in app.windows:
-        win.draw(app.stdscr)
+    has_bg = getattr(app, 'has_background_operation', None)
+    background_active = bool(has_bg()) if callable(has_bg) else False
+    if not background_active:
+        for win in app.windows:
+            win.draw(app.stdscr)
 
     _, width = app.stdscr.getmaxyx()
     app.menu.draw_bar(app.stdscr, width)
@@ -64,10 +70,15 @@ def dispatch_input(app, key):
 
 def run_app_loop(app):
     """Run main draw/input loop with terminal cleanup on exit."""
+    poll_background = getattr(app, 'poll_background_operation', None)
     try:
         while app.running:
+            if callable(poll_background):
+                poll_background()
             draw_frame(app)
             key = read_input_key(app.stdscr)
             dispatch_input(app, key)
+            if callable(poll_background):
+                poll_background()
     finally:
         app.cleanup()

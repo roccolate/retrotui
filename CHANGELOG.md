@@ -38,6 +38,15 @@ Todas las versiones notables de RetroTUI están documentadas aquí.
 - Modulo `retrotui/core/config.py` para cargar/guardar `~/.config/retrotui/config.toml`.
 - Modulo `retrotui/apps/settings.py` con ventana de Settings funcional (radio de tema, toggles, preview live, Save/Cancel).
 - Tests `tests/test_theme_and_config.py` y `tests/test_settings_component.py` para cubrir v0.5.
+- Drag and drop base entre apps: File Manager -> Notepad (abrir archivo) y File Manager -> Terminal (pegar ruta).
+- Highlight visual de ventanas target durante operaciones de drag and drop.
+- File Manager v0.8 base: panel lateral de preview/info, bookmarks por slots (1..4) con defaults y asignacion rapida.
+- Undo de borrado en File Manager moviendo elementos a trash local (`~/.local/share/Trash/files`).
+- Modo dual-pane en File Manager (dos paneles, `Tab` para foco interno y `F5/F4` para copiar/mover entre paneles).
+- Preview de imagen en File Manager usando backend externo (`chafa` o `timg`) cuando disponible.
+- Dialogo modal de progreso para operaciones largas de File Manager (copy/move/delete) con ejecucion en background y spinner de estado.
+- Modulo `retrotui/apps/calculator.py` con evaluador seguro (`ast`), historial de expresiones, copy/paste de resultados y modo always-on-top.
+- Tests `tests/test_calculator_component.py` para validar evaluacion, historial, input/cursor, clipboard y rendering de calculadora.
 
 ### Changed
 - README actualizado con comandos de QA y activacion de hooks locales.
@@ -52,14 +61,16 @@ Todas las versiones notables de RetroTUI están documentadas aquí.
 - `tools/qa.py` agrega modo opcional de cobertura por modulo (`--module-coverage`, `--module-coverage-top`, `--module-coverage-fail-under`).
 - `tools/report_module_coverage.py` ahora normaliza rutas y mapea sufijos de paquete para reducir falsos negativos de cobertura en entornos Windows.
 - CI eleva el gate gradual de cobertura por modulo a `--module-coverage-fail-under 100.0` (solo `ubuntu-latest` + Python `3.12`).
-- Cobertura ampliada en rutas de core modularizado, menu/action runner/notepad y terminal embebida; suite actual en QA: 335 tests.
+- Cobertura ampliada en rutas de core modularizado, menu/action runner/notepad/terminal/calculadora; suite actual en QA: 458 tests.
 - Cobertura total por modulo actualizada a 100.0% (trace + AST).
 - `AppAction.TERMINAL` deja de abrir placeholder y ahora instancia `TerminalWindow` real.
+- `RetroTUI.set_active_window()` y `core/event_loop.py` ahora respetan `always_on_top` para mantener ventanas fijadas por encima del resto.
 - `init_colors()` ahora consume el tema activo y aplica colores por roles semanticos.
 - Todo el render de UI ahora consume keys de tema via helper (`desktop`, `window_title`, `status`, etc.) en lugar de color pairs crudos.
 - `FileManagerWindow` y `NotepadWindow` ahora respetan defaults persistidos (`show_hidden`, `word_wrap_default`).
 - Atajos de clipboard ajustados para evitar conflicto con `Ctrl+C`: copy en Notepad/File Manager via `F6`/`Insert`, paste en Notepad/Terminal via `Ctrl+V`.
 - Notepad ahora soporta pegado multilinea en cursor y File Manager copia ruta completa de la entrada seleccionada.
+- `retrotui/constants.py` fue normalizado para eliminar mojibake en bordes/iconos Unicode y estabilizar rendering de layout.
 
 ---
 
