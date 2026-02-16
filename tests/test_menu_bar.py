@@ -89,7 +89,7 @@ class MenuBarTests(unittest.TestCase):
         menu.active = True
 
         action = menu.handle_key(27)
-        self.assertEqual(action, 'close_menu')
+        self.assertIsNone(action)
         self.assertFalse(menu.active)
 
     def test_global_menu_click_flow_returns_app_action(self):

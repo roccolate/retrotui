@@ -66,6 +66,24 @@ def safe_addstr(win, y, x, text, attr=0):
     except curses.error:
         pass
 
+def normalize_key_code(key):
+    """Normalize keys from get_wch()/getch() into comparable integer codes."""
+    if isinstance(key, int):
+        return key
+    if not isinstance(key, str) or not key or len(key) != 1:
+        return None
+    if key in ('\n', '\r'):
+        return 10
+    if key == '\x1b':
+        return 27
+    if key == '\t':
+        return 9
+    if key == '\x7f':
+        return 127
+    if key == '\b':
+        return 8
+    return ord(key)
+
 def draw_box(win, y, x, h, w, attr=0, double=True):
     """Draw a box with double or single line borders."""
     if double:
@@ -144,6 +162,7 @@ def play_ascii_video(stdscr, filepath):
 
     exit_code = 1
     backend_used = ''
+    playback_succeeded = False
     try:
         curses.def_prog_mode()
         curses.endwin()
@@ -154,8 +173,17 @@ def play_ascii_video(stdscr, filepath):
             exit_code = result.returncode
             backend_used = name
             if exit_code == 0 or elapsed > 2:
+                playback_succeeded = True
                 break  # Video played (even if audio failed)
-        return True, None
+        if playback_succeeded:
+            return True, None
+        if backend_used:
+            return False, (
+                'No se pudo reproducir el video.\n'
+                f'Backend probado: {backend_used}\n'
+                f'Código de salida: {exit_code}'
+            )
+        return False, 'No se pudo reproducir el video.'
     except OSError as e:
         return False, f'No se pudo ejecutar:\n{e}'
     finally:

@@ -2,7 +2,6 @@
 Entry point for RetroTUI.
 """
 import curses
-import sys
 import locale
 import logging
 import os

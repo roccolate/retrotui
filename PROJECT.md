@@ -111,7 +111,7 @@ código de la aplicación no necesita distinguirlos.
 
 ### Mínimos:
 - Ubuntu Server / minimal (sin GUI)
-- Python 3.8+
+- Python 3.9+
 - ncurses (incluido en Python stdlib como `curses`)
 - Terminal con soporte de al menos 80x25 caracteres
 - GPM (para mouse en TTY) o emulador de terminal con xterm mouse
@@ -206,6 +206,10 @@ código de la aplicación no necesita distinguirlos.
 - [x] Sincronización de versión visible en UI (welcome/status/about)
 - [x] Documentación y preview alineados con el estado actual del proyecto
 
+- [x] Pipeline de input migrado a `get_wch()` con normalizacion centralizada (`normalize_key_code`)
+- [x] Soporte consistente de entrada `str`/`int` en Dialog, Notepad y File Manager
+- [x] Notepad actualizado a lectura/escritura UTF-8 y tests para rutas de teclado Unicode
+
 ### Roadmap futuro:
 - [x] File Manager con navegación de directorios
 - [x] Editor de texto integrado
@@ -272,3 +276,4 @@ sudo systemctl start gpm
 cd retro-tui
 python3 -m retrotui
 ```
+

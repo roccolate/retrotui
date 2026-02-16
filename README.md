@@ -23,7 +23,7 @@
 ## Requisitos
 
 - **Ubuntu Server / Minimal** (sin GUI)
-- **Python 3.8+** (incluido en Ubuntu)
+- **Python 3.9+** (incluido en Ubuntu)
 - **Sin dependencias externas** — usa solo `curses` (stdlib)
 
 ## Instalación

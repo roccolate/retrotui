@@ -5,7 +5,7 @@ import curses
 from ..constants import (
     C_DIALOG, C_WIN_TITLE, C_BUTTON, C_BUTTON_SEL, C_WIN_BODY
 )
-from ..utils import safe_addstr, draw_box
+from ..utils import safe_addstr, draw_box, normalize_key_code
 
 class Dialog:
     """Modal dialog box."""
@@ -102,13 +102,15 @@ class Dialog:
 
     def handle_key(self, key):
         """Handle keyboard input. Returns button index or -1."""
-        if key == curses.KEY_LEFT:
+        key_code = normalize_key_code(key)
+
+        if key_code == curses.KEY_LEFT:
             self.selected = (self.selected - 1) % len(self.buttons)
-        elif key == curses.KEY_RIGHT:
+        elif key_code == curses.KEY_RIGHT:
             self.selected = (self.selected + 1) % len(self.buttons)
-        elif key in (curses.KEY_ENTER, 10, 13):
+        elif key_code in (curses.KEY_ENTER, 10, 13):
             return self.selected
-        elif key == 27:  # Escape
+        elif key_code == 27:  # Escape
             return len(self.buttons) - 1  # Last button (usually Cancel)
         return -1
 
@@ -163,31 +165,32 @@ class InputDialog(Dialog):
         return super().handle_click(mx, my)
 
     def handle_key(self, key):
-        # Check buttons navigation first? 
-        # Actually standard input handling usually consumes arrows for cursor
-        # So we might override navigation
-        
-        if key in (curses.KEY_ENTER, 10, 13):
+        key_code = normalize_key_code(key)
+
+        if key_code in (curses.KEY_ENTER, 10, 13):
             # If standard enter, return OK (0)
             return 0
-        elif key == 27: # Esc
+        elif key_code == 27: # Esc
             return 1 # Cancel
-        
-        elif key == curses.KEY_BACKSPACE or key == 127 or key == 8:
+
+        elif key_code in (curses.KEY_BACKSPACE, 127, 8):
             if self.cursor_pos > 0:
                 self.value = self.value[:self.cursor_pos-1] + self.value[self.cursor_pos:]
                 self.cursor_pos -= 1
-        elif key == curses.KEY_DC:
+        elif key_code == curses.KEY_DC:
             if self.cursor_pos < len(self.value):
                 self.value = self.value[:self.cursor_pos] + self.value[self.cursor_pos+1:]
-        elif key == curses.KEY_LEFT:
+        elif key_code == curses.KEY_LEFT:
             if self.cursor_pos > 0:
                 self.cursor_pos -= 1
-        elif key == curses.KEY_RIGHT:
+        elif key_code == curses.KEY_RIGHT:
             if self.cursor_pos < len(self.value):
                 self.cursor_pos += 1
-        elif 32 <= key <= 126:
+        elif isinstance(key, str) and key.isprintable() and key not in ('\n', '\r', '\t'):
+            self.value = self.value[:self.cursor_pos] + key + self.value[self.cursor_pos:]
+            self.cursor_pos += 1
+        elif isinstance(key, int) and 32 <= key <= 126:
             self.value = self.value[:self.cursor_pos] + chr(key) + self.value[self.cursor_pos:]
             self.cursor_pos += 1
-            
+
         return -1

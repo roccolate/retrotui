@@ -3,7 +3,6 @@ Main RetroTUI Application Class.
 """
 import curses
 import sys
-import time
 import os
 import termios
 import logging
@@ -14,7 +13,7 @@ from ..constants import (
 )
 from ..utils import (
     check_unicode_support, init_colors, safe_addstr, get_system_info,
-    is_video_file, play_ascii_video
+    is_video_file, play_ascii_video, normalize_key_code
 )
 from ..ui.menu import Menu
 from ..ui.dialog import Dialog, InputDialog
@@ -216,126 +215,176 @@ class RetroTUI:
                 return action
         return action
 
+    def _spawn_window(self, win):
+        """Append a window and make it active."""
+        self.windows.append(win)
+        self.set_active_window(win)
+
+    def _next_window_offset(self, base_x, base_y, step_x=2, step_y=1):
+        """Return staggered window coordinates based on open window count."""
+        count = len(self.windows)
+        return base_x + count * step_x, base_y + count * step_y
+
+    @staticmethod
+    def _about_message():
+        """Build About dialog body."""
+        sys_info = get_system_info()
+        return ('RetroTUI v0.3.4\n'
+                'A retro desktop environment for Linux console.\n\n'
+                'System Information:\n' +
+                '\n'.join(sys_info) + '\n\n'
+                'Mouse: GPM/xterm protocol\n'
+                'No X11 required!')
+
+    @staticmethod
+    def _help_message():
+        """Build keyboard/mouse help text."""
+        return ('Keyboard Controls:\n\n'
+                'Tab       - Cycle windows\n'
+                'Escape    - Close menu/dialog\n'
+                'Enter     - Activate selection\n'
+                'Ctrl+Q    - Exit\n'
+                'F10       - Open menu\n'
+                'Arrow keys - Navigate\n'
+                'PgUp/PgDn - Scroll content\n\n'
+                'File Manager:\n\n'
+                'Up/Down   - Move selection\n'
+                'Enter     - Open dir/file\n'
+                'Backspace - Parent directory\n'
+                'H         - Toggle hidden files\n'
+                'Home/End  - First/last entry\n\n'
+                'Notepad Editor:\n\n'
+                'Arrows    - Move cursor\n'
+                'Home/End  - Start/end of line\n'
+                'PgUp/PgDn - Page up/down\n'
+                'Backspace - Delete backward\n'
+                'Delete    - Delete forward\n'
+                'Ctrl+W    - Toggle word wrap\n\n'
+                'Mouse Controls:\n\n'
+                'Click     - Select/activate\n'
+                'Drag title - Move window\n'
+                'Drag border - Resize window\n'
+                'Dbl-click title - Maximize\n'
+                '[─]       - Minimize\n'
+                '[□]       - Maximize/restore\n'
+                'Scroll    - Scroll/select')
+
+    @staticmethod
+    def _settings_content():
+        """Build placeholder settings panel text."""
+        return [
+            ' ╔═ Display Settings ══════════════════════╗',
+            ' ║                                         ║',
+            ' ║  Theme: [x] Windows 3.1                 ║',
+            ' ║         [ ] DOS / CGA                   ║',
+            ' ║         [ ] Windows 95                  ║',
+            ' ║                                         ║',
+            ' ║  Desktop Pattern: ░ ▒ ▓                 ║',
+            ' ║                                         ║',
+            ' ║  Colors: 256-color mode                 ║',
+            ' ║                                         ║',
+            ' ╚═════════════════════════════════════════╝',
+        ]
+
+    def _action_exit(self):
+        self.dialog = Dialog(
+            'Exit RetroTUI',
+            'Are you sure you want to exit?\n\nAll windows will be closed.',
+            ['Yes', 'No'],
+            width=44
+        )
+
+    def _action_about(self):
+        self.dialog = Dialog('About RetroTUI', self._about_message(), ['OK'], width=52)
+
+    def _action_help(self):
+        self.dialog = Dialog('Keyboard & Mouse Help', self._help_message(), ['OK'], width=46)
+
+    def _action_file_manager(self):
+        offset_x, offset_y = self._next_window_offset(15, 3)
+        self._spawn_window(FileManagerWindow(offset_x, offset_y, 58, 22))
+
+    def _action_notepad(self):
+        offset_x, offset_y = self._next_window_offset(20, 4)
+        self._spawn_window(NotepadWindow(offset_x, offset_y, 60, 20))
+
+    def _action_ascii_video(self):
+        self.dialog = Dialog(
+            'ASCII Video',
+            'Reproduce video en la terminal.\n\n'
+            'Usa mpv (color) o mplayer (fallback).\n'
+            'Abre un video desde File Manager.',
+            ['OK'],
+            width=50,
+        )
+
+    def _action_terminal(self):
+        try:
+            host = os.uname().nodename
+        except (AttributeError, OSError):
+            host = os.environ.get('HOSTNAME', 'localhost')
+        content = [
+            f' user@{host}:~$ _',
+            '',
+            ' (Terminal emulation placeholder)',
+            ' Future: embedded terminal via pty',
+        ]
+        offset_x, offset_y = self._next_window_offset(18, 5)
+        self._spawn_window(Window('Terminal', offset_x, offset_y, 60, 15, content=content))
+
+    def _action_settings(self):
+        offset_x, offset_y = self._next_window_offset(22, 4)
+        self._spawn_window(Window(
+            'Settings',
+            offset_x,
+            offset_y,
+            48,
+            15,
+            content=self._settings_content(),
+        ))
+
+    def _action_new_window(self):
+        offset_x, offset_y = self._next_window_offset(20, 3)
+        self._spawn_window(Window(
+            f'Window {Window._next_id}',
+            offset_x,
+            offset_y,
+            40,
+            12,
+            content=['', ' New empty window', ''],
+        ))
+
     def execute_action(self, action):
         """Execute a menu/icon action."""
         action = self._normalize_action(action)
-        h, w = self.stdscr.getmaxyx()
         LOGGER.debug('execute_action: %s', action)
 
         if action == AppAction.EXIT:
-            self.dialog = Dialog(
-                'Exit RetroTUI',
-                'Are you sure you want to exit?\n\nAll windows will be closed.',
-                ['Yes', 'No'],
-                width=44
-            )
+            self._action_exit()
 
         elif action == AppAction.ABOUT:
-            sys_info = get_system_info()
-            msg = ('RetroTUI v0.3.4\n'
-                   'A retro desktop environment for Linux console.\n\n'
-                   'System Information:\n' +
-                   '\n'.join(sys_info) + '\n\n'
-                   'Mouse: GPM/xterm protocol\n'
-                   'No X11 required!')
-            self.dialog = Dialog('About RetroTUI', msg, ['OK'], width=52)
+            self._action_about()
 
         elif action == AppAction.HELP:
-            msg = ('Keyboard Controls:\n\n'
-                   'Tab       - Cycle windows\n'
-                   'Escape    - Close menu/dialog\n'
-                   'Enter     - Activate selection\n'
-                   'Ctrl+Q    - Exit\n'
-                   'F10       - Open menu\n'
-                   'Arrow keys - Navigate\n'
-                   'PgUp/PgDn - Scroll content\n\n'
-                   'File Manager:\n\n'
-                   'Up/Down   - Move selection\n'
-                   'Enter     - Open dir/file\n'
-                   'Backspace - Parent directory\n'
-                   'H         - Toggle hidden files\n'
-                   'Home/End  - First/last entry\n\n'
-                   'Notepad Editor:\n\n'
-                   'Arrows    - Move cursor\n'
-                   'Home/End  - Start/end of line\n'
-                   'PgUp/PgDn - Page up/down\n'
-                   'Backspace - Delete backward\n'
-                   'Delete    - Delete forward\n'
-                   'Ctrl+W    - Toggle word wrap\n\n'
-                   'Mouse Controls:\n\n'
-                   'Click     - Select/activate\n'
-                   'Drag title - Move window\n'
-                   'Drag border - Resize window\n'
-                   'Dbl-click title - Maximize\n'
-                   '[─]       - Minimize\n'
-                   '[□]       - Maximize/restore\n'
-                   'Scroll    - Scroll/select')
-            self.dialog = Dialog('Keyboard & Mouse Help', msg, ['OK'], width=46)
+            self._action_help()
 
         elif action == AppAction.FILE_MANAGER:
-            offset_x = 15 + len(self.windows) * 2
-            offset_y = 3 + len(self.windows) * 1
-            win = FileManagerWindow(offset_x, offset_y, 58, 22)
-            self.windows.append(win)
-            self.set_active_window(win)
+            self._action_file_manager()
 
         elif action == AppAction.NOTEPAD:
-            offset_x = 20 + len(self.windows) * 2
-            offset_y = 4 + len(self.windows) * 1
-            win = NotepadWindow(offset_x, offset_y, 60, 20)
-            self.windows.append(win)
-            self.set_active_window(win)
+            self._action_notepad()
 
         elif action == AppAction.ASCII_VIDEO:
-            self.dialog = Dialog(
-                'ASCII Video',
-                'Reproduce video en la terminal.\n\n'
-                'Usa mpv (color) o mplayer (fallback).\n'
-                'Abre un video desde File Manager.',
-                ['OK'],
-                width=50,
-            )
+            self._action_ascii_video()
 
         elif action == AppAction.TERMINAL:
-            content = [
-                f' user@{os.uname().nodename}:~$ _',
-                '',
-                ' (Terminal emulation placeholder)',
-                ' Future: embedded terminal via pty',
-            ]
-            offset_x = 18 + len(self.windows) * 2
-            offset_y = 5 + len(self.windows) * 1
-            win = Window('Terminal', offset_x, offset_y, 60, 15, content=content)
-            self.windows.append(win)
-            self.set_active_window(win)
+            self._action_terminal()
 
         elif action == AppAction.SETTINGS:
-            content = [
-                ' ╔═ Display Settings ══════════════════════╗',
-                ' ║                                         ║',
-                ' ║  Theme: [x] Windows 3.1                 ║',
-                ' ║         [ ] DOS / CGA                   ║',
-                ' ║         [ ] Windows 95                  ║',
-                ' ║                                         ║',
-                ' ║  Desktop Pattern: ░ ▒ ▓                 ║',
-                ' ║                                         ║',
-                ' ║  Colors: 256-color mode                 ║',
-                ' ║                                         ║',
-                ' ╚═════════════════════════════════════════╝',
-            ]
-            offset_x = 22 + len(self.windows) * 2
-            offset_y = 4 + len(self.windows) * 1
-            win = Window('Settings', offset_x, offset_y, 48, 15, content=content)
-            self.windows.append(win)
-            self.set_active_window(win)
+            self._action_settings()
 
         elif action == AppAction.NEW_WINDOW:
-            offset_x = 20 + len(self.windows) * 2
-            offset_y = 3 + len(self.windows) * 1
-            win = Window(f'Window {Window._next_id}', offset_x, offset_y, 40, 12,
-                          content=['', ' New empty window', ''])
-            self.windows.append(win)
-            self.set_active_window(win)
+            self._action_new_window()
         else:
             LOGGER.warning('Unknown action received: %s', action)
 
@@ -648,9 +697,17 @@ class RetroTUI:
 
         self._handle_desktop_mouse(mx, my, bstate)
 
-    def _handle_menu_hotkeys(self, key):
+    @staticmethod
+    def _key_code(key):
+        """Normalize key values from get_wch()/getch() into common control codes."""
+        return normalize_key_code(key)
+
+    def _handle_menu_hotkeys(self, key_code):
         """Handle F10 and Escape interactions for menus."""
-        if key == curses.KEY_F10:
+        if key_code is None:
+            return False
+
+        if key_code == curses.KEY_F10:
             active_win = self.get_active_window()
             if active_win and active_win.window_menu:
                 wm = active_win.window_menu
@@ -667,7 +724,7 @@ class RetroTUI:
                 self.menu.selected_item = 0
             return True
 
-        if key == 27:
+        if key_code == 27:
             active_win = self.get_active_window()
             if active_win and active_win.window_menu and active_win.window_menu.active:
                 active_win.window_menu.active = False
@@ -677,13 +734,16 @@ class RetroTUI:
 
         return False
 
-    def _handle_global_menu_key(self, key):
+    def _handle_global_menu_key(self, key_code):
         """Handle keyboard navigation for the global menu."""
         if not self.menu.active:
             return False
 
-        action = self.menu.handle_key(key)
-        if action and action != 'close_menu':
+        if key_code is None:
+            return True
+
+        action = self.menu.handle_key(key_code)
+        if action:
             self.execute_action(action)
         return True
 
@@ -709,20 +769,22 @@ class RetroTUI:
 
     def handle_key(self, key):
         """Handle keyboard input."""
+        key_code = self._key_code(key)
+
         if self._handle_dialog_key(key):
             return
 
-        if key == 17:  # Ctrl+Q
+        if key_code == 17:  # Ctrl+Q
             self.execute_action(AppAction.EXIT)
             return
 
-        if self._handle_menu_hotkeys(key):
+        if self._handle_menu_hotkeys(key_code):
             return
 
-        if self._handle_global_menu_key(key):
+        if self._handle_global_menu_key(key_code):
             return
 
-        if key == 9:  # Tab
+        if key_code == 9:  # Tab
             self._cycle_focus()
             return
 
@@ -761,19 +823,17 @@ class RetroTUI:
 
                 # Handle input
                 try:
-                    key = self.stdscr.getch()
+                    key = self.stdscr.get_wch()
                 except curses.error:
                     continue
 
-                if key == -1:
-                    continue
-                elif key == curses.KEY_MOUSE:
+                if isinstance(key, int) and key == curses.KEY_MOUSE:
                     try:
                         event = curses.getmouse()
                         self.handle_mouse(event)
                     except curses.error:
                         pass
-                elif key == curses.KEY_RESIZE:
+                elif isinstance(key, int) and key == curses.KEY_RESIZE:
                     curses.update_lines_cols()
                     # Reclamp windows to new terminal size
                     new_h, new_w = self.stdscr.getmaxyx()

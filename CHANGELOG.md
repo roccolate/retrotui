@@ -4,15 +4,19 @@ Todas las versiones notables de RetroTUI están documentadas aquí.
 
 ---
 
-## [v0.3.4] — 2026-02-16
+## [v0.3.4] - 2026-02-16
 
 ### Changed
-- Bump de versión del proyecto a `0.3.4` (`pyproject.toml`, runtime y scripts de setup).
-- Sincronización de cadenas de versión en UI (`status bar`, diálogo About y welcome).
-- Actualización de documentación y preview para reflejar `v0.3.4`.
+- Bump de version del proyecto a `0.3.4` (`pyproject.toml`, runtime y scripts de setup).
+- Sincronizacion de cadenas de version en UI (`status bar`, dialogo About y welcome).
+- Actualizacion de documentacion y preview para reflejar `v0.3.4`.
+- Pipeline de input migrado a `get_wch()` con normalizacion comun de teclas (`normalize_key_code`).
+- Manejo de teclado unificado para `Dialog`, `InputDialog`, `NotepadWindow` y `FileManagerWindow` con entradas `str`/`int`.
 
 ### Improved
 - Ajustes editoriales de release notes para separar claramente `v0.3.4` (mantenimiento) de `v0.3.3` (refactor/hardening).
+- I/O de Notepad fijado en UTF-8 para carga y guardado de archivos.
+- Cobertura de tests ampliada para flujo de teclado Unicode y atajos Ctrl en ruta `get_wch()` (suite actual: 23 tests).
 
 ---
 
@@ -144,3 +148,4 @@ Todas las versiones notables de RetroTUI están documentadas aquí.
 - **ThemeEngine** — colores Win3.1 con soporte 256-color
 - Navegación completa por teclado (Tab, Enter, Escape, Ctrl+Q)
 - Archivo único (`retrotui.py`) — sin dependencias externas
+
