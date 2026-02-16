@@ -416,6 +416,57 @@ class CoreAppTests(unittest.TestCase):
         app.show_new_dir_dialog.assert_called_once_with(source)
         app.show_new_file_dialog.assert_called_once_with(source)
 
+    def test_dispatch_request_copy_move_between_panes_routes_operation(self):
+        app = self._make_app()
+        source = types.SimpleNamespace(
+            dual_pane_enabled=True,
+            active_pane=0,
+            current_path="/left",
+            secondary_path="/right",
+        )
+        app._run_file_operation_with_progress = mock.Mock(return_value=None)
+
+        app._dispatch_window_result(
+            self.actions_mod.ActionResult(
+                self.actions_mod.ActionType.REQUEST_COPY_BETWEEN_PANES,
+            ),
+            source,
+        )
+        app._dispatch_window_result(
+            self.actions_mod.ActionResult(
+                self.actions_mod.ActionType.REQUEST_MOVE_BETWEEN_PANES,
+                {"destination": "/custom"},
+            ),
+            source,
+        )
+
+        app._run_file_operation_with_progress.assert_has_calls(
+            [
+                mock.call(source, operation="copy", destination="/right"),
+                mock.call(source, operation="move", destination="/custom"),
+            ]
+        )
+
+    def test_dispatch_request_between_panes_reports_missing_destination(self):
+        app = self._make_app()
+        source = types.SimpleNamespace(
+            dual_pane_enabled=True,
+            active_pane=0,
+            current_path="/left",
+            secondary_path="",
+        )
+
+        app._dispatch_window_result(
+            self.actions_mod.ActionResult(
+                self.actions_mod.ActionType.REQUEST_COPY_BETWEEN_PANES,
+            ),
+            source,
+        )
+
+        self.assertIsNotNone(app.dialog)
+        self.assertEqual(app.dialog.title, "Operation Error")
+        self.assertIn("destination pane path is unavailable", app.dialog.message)
+
     def test_dispatch_request_kill_confirm_calls_dialog_builder(self):
         app = self._make_app()
         source = object()
@@ -685,6 +736,19 @@ class CoreAppTests(unittest.TestCase):
 
         self.assertEqual(app.windows, [b])
         self.assertTrue(b.active)
+
+    def test_close_window_prefers_last_visible_window(self):
+        app = self._make_app()
+        closing = types.SimpleNamespace(active=True, visible=True)
+        hidden = types.SimpleNamespace(active=False, visible=False)
+        visible = types.SimpleNamespace(active=False, visible=True)
+        app.windows = [closing, hidden, visible]
+
+        app.close_window(closing)
+
+        self.assertEqual(app.windows, [hidden, visible])
+        self.assertFalse(hidden.active)
+        self.assertTrue(visible.active)
 
     def test_close_window_calls_close_hook_and_logs_failures(self):
         app = self._make_app()
@@ -1104,6 +1168,7 @@ class CoreAppTests(unittest.TestCase):
         self.assertIsNone(result)
         self.assertTrue(app.has_background_operation())
         self.assertIsInstance(app.dialog, self.app_mod.ProgressDialog)
+        self.assertFalse(app._background_operation["thread"].daemon)
 
         for _ in range(50):
             state = app._background_operation
@@ -1175,13 +1240,18 @@ class CoreAppTests(unittest.TestCase):
 
     def test_cleanup_joins_background_thread_when_alive(self):
         app = self._make_app()
-        fake_thread = types.SimpleNamespace(is_alive=mock.Mock(return_value=True), join=mock.Mock())
+        fake_thread = types.SimpleNamespace(
+            is_alive=mock.Mock(side_effect=[True, False]),
+            join=mock.Mock(),
+        )
         app._background_operation = {"thread": fake_thread}
 
         with mock.patch.object(self.app_mod, "disable_mouse_support") as disable_mouse_support:
             app.cleanup()
 
-        fake_thread.join.assert_called_once_with(timeout=0.2)
+        fake_thread.join.assert_called_once_with(
+            timeout=self.app_mod.RetroTUI.BACKGROUND_OPERATION_JOIN_TIMEOUT
+        )
         disable_mouse_support.assert_called_once_with()
 
     def test_show_new_dir_and_file_dialogs_set_callbacks(self):

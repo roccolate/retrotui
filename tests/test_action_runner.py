@@ -319,6 +319,43 @@ class ActionRunnerTests(unittest.TestCase):
         self.assertEqual(spawned.kind, "fm")
         self.assertEqual((spawned.x, spawned.y, spawned.w, spawned.h), (12, 7, 58, 22))
 
+    def test_execute_file_manager_passes_show_hidden_when_supported(self):
+        app = self._make_app()
+        app.default_show_hidden = True
+        logger = mock.Mock()
+
+        class _KwargFMWindow:
+            def __init__(self, x, y, w, h, show_hidden_default=False):
+                self.show_hidden_default = show_hidden_default
+
+        with mock.patch.object(self.action_runner, "FileManagerWindow", _KwargFMWindow):
+            self.action_runner.execute_app_action(
+                app,
+                self.actions_mod.AppAction.FILE_MANAGER,
+                logger,
+                version="0.6.0",
+            )
+
+        spawned = app._spawn_window.call_args.args[0]
+        self.assertTrue(spawned.show_hidden_default)
+
+    def test_execute_file_manager_type_error_is_not_swallowed(self):
+        app = self._make_app()
+        logger = mock.Mock()
+
+        class _BrokenFMWindow:
+            def __init__(self, x, y, w, h, show_hidden_default=False):
+                raise TypeError("internal bug")
+
+        with mock.patch.object(self.action_runner, "FileManagerWindow", _BrokenFMWindow):
+            with self.assertRaises(TypeError):
+                self.action_runner.execute_app_action(
+                    app,
+                    self.actions_mod.AppAction.FILE_MANAGER,
+                    logger,
+                    version="0.6.0",
+                )
+
     def test_execute_notepad_spawns_window_with_offset(self):
         app = self._make_app()
         logger = mock.Mock()
@@ -335,6 +372,26 @@ class ActionRunnerTests(unittest.TestCase):
         spawned = app._spawn_window.call_args.args[0]
         self.assertEqual(spawned.kind, "np")
         self.assertEqual((spawned.x, spawned.y, spawned.w, spawned.h), (12, 7, 60, 20))
+
+    def test_execute_notepad_passes_wrap_default_when_supported(self):
+        app = self._make_app()
+        app.default_word_wrap = True
+        logger = mock.Mock()
+
+        class _KwargNotepadWindow:
+            def __init__(self, x, y, w, h, wrap_default=False):
+                self.wrap_default = wrap_default
+
+        with mock.patch.object(self.action_runner, "NotepadWindow", _KwargNotepadWindow):
+            self.action_runner.execute_app_action(
+                app,
+                self.actions_mod.AppAction.NOTEPAD,
+                logger,
+                version="0.6.0",
+            )
+
+        spawned = app._spawn_window.call_args.args[0]
+        self.assertTrue(spawned.wrap_default)
 
     def test_execute_terminal_spawns_terminal_window_with_offset(self):
         app = self._make_app()
