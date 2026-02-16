@@ -159,6 +159,7 @@ README.md      — Este archivo
 - **Window** — Ventanas con resize, maximize, minimize, z-order
 - **NotepadWindow** — Editor de texto con word wrap (v0.3)
 - **FileManagerWindow** — File Manager interactivo con navegación (v0.2)
+- **TerminalWindow / TerminalSession** — Terminal embebida PTY con parser ANSI básico, forwarding de input y scrollback
 - **FileEntry** — Entrada de archivo/directorio con metadata
 - **MenuBar** — Menús globales y por ventana (unificados)
 - **Dialog** — Diálogos modales
@@ -199,4 +200,3 @@ Ver [CHANGELOG.md](CHANGELOG.md) para el historial completo de versiones.
 
 ## Licencia
 MIT
-

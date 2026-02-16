@@ -216,7 +216,7 @@ class UtilsCoreTests(unittest.TestCase):
 
         self.assertFalse(success)
         self.assertIn("Backend probado:", error)
-        self.assertIn("CÃ³digo de salida: 1", error)
+        self.assertIn("Código de salida: 1", error)
 
     def test_play_ascii_video_handles_reset_mode_errors(self):
         ok_result = types.SimpleNamespace(returncode=0)

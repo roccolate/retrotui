@@ -3,11 +3,41 @@ File Manager Application.
 """
 import os
 import curses
+import unicodedata
 from ..ui.window import Window
 from ..ui.menu import WindowMenu
 from ..core.actions import ActionResult, ActionType, AppAction
 from ..utils import safe_addstr, check_unicode_support, normalize_key_code
 from ..constants import C_FM_SELECTED
+
+
+def _cell_width(ch):
+    """Return terminal cell width for a single character."""
+    if not ch:
+        return 0
+    if unicodedata.combining(ch):
+        return 0
+    if unicodedata.east_asian_width(ch) in ('W', 'F'):
+        return 2
+    return 1
+
+
+def _fit_text_to_cells(text, max_cells):
+    """Clip/pad text so rendered width does not exceed max_cells."""
+    if max_cells <= 0:
+        return ''
+    out = []
+    used = 0
+    for ch in text:
+        w = _cell_width(ch)
+        if used + w > max_cells:
+            break
+        out.append(ch)
+        used += w
+    if used < max_cells:
+        out.append(' ' * (max_cells - used))
+    return ''.join(out)
+
 
 class FileEntry:
     """Represents a file or directory entry in the file manager."""
@@ -159,8 +189,8 @@ class FileManagerWindow(Window):
         if visible_start <= sel_content_idx < visible_end:
             screen_row = by + (sel_content_idx - self.scroll_offset)
             sel_attr = curses.color_pair(C_FM_SELECTED) | curses.A_BOLD
-            display = self.content[sel_content_idx][:bw] if sel_content_idx < len(self.content) else ''
-            safe_addstr(stdscr, screen_row, bx, display.ljust(bw), sel_attr)
+            display = self.content[sel_content_idx] if sel_content_idx < len(self.content) else ''
+            safe_addstr(stdscr, screen_row, bx, _fit_text_to_cells(display, bw), sel_attr)
 
         # Redraw dropdown ON TOP of selection highlight
         if self.window_menu:

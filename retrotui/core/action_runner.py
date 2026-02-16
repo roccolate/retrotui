@@ -1,9 +1,8 @@
 """Action execution helpers for RetroTUI app-level actions."""
 
-import os
-
 from ..apps.filemanager import FileManagerWindow
 from ..apps.notepad import NotepadWindow
+from ..apps.terminal import TerminalWindow
 from ..ui.dialog import Dialog
 from ..ui.window import Window
 from .actions import AppAction
@@ -51,18 +50,8 @@ def execute_app_action(app, action, logger, *, version: str) -> None:
         return
 
     if action == AppAction.TERMINAL:
-        try:
-            host = os.uname().nodename
-        except (AttributeError, OSError):
-            host = os.environ.get("HOSTNAME", "localhost")
-        content = [
-            f" user@{host}:~$ _",
-            "",
-            " (Terminal emulation placeholder)",
-            " Future: embedded terminal via pty",
-        ]
         offset_x, offset_y = app._next_window_offset(18, 5)
-        app._spawn_window(Window("Terminal", offset_x, offset_y, 60, 15, content=content))
+        app._spawn_window(TerminalWindow(offset_x, offset_y, 70, 18))
         return
 
     if action == AppAction.SETTINGS:

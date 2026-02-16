@@ -37,11 +37,12 @@
 La release que hace RetroTUI usable como shell diario.
 
 **Core: Terminal Embebida**
-- [ ] Ventana Terminal usando `pty.fork()` con parser de escape VT100/ANSI
-- [ ] Forwarding de input (keystrokes raw, secuencias Ctrl, señales)
-- [ ] Buffer de scrollback con soporte de scroll wheel
-- [ ] Múltiples instancias de terminal (cada una con su propio pty)
-- [ ] Detección de shell del usuario (`$SHELL` o fallback a `/bin/sh`)
+- [x] Base de sesion PTY en `retrotui/core/terminal_session.py` (spawn, I/O no bloqueante, resize, poll y cierre)
+- [x] Ventana Terminal usando `pty.fork()` con parser de escape VT100/ANSI
+- [x] Forwarding de input (keystrokes raw, secuencias Ctrl, señales)
+- [x] Buffer de scrollback con soporte de scroll wheel
+- [x] Múltiples instancias de terminal (cada una con su propio pty)
+- [x] Detección de shell del usuario (`$SHELL` o fallback a `/bin/sh`)
 
 **Refactor: Unificación de Menús**
 - [x] Fusionar `Menu` y `WindowMenu` en una sola clase `MenuBar` con coordenadas configurables
@@ -132,8 +133,8 @@ Hacer que las apps se sientan como un entorno integrado.
 - [ ] Sync con xclip/xsel/wl-copy cuando esté disponible (clipboard SSH)
 
 **Drag and Drop**
-- [ ] Arrastrar archivo de File Manager a Notepad → abrir archivo
-- [ ] Arrastrar archivo de File Manager a Terminal → pegar ruta
+- [ ] Arrastrar archivo de File Manager a Notepad â†’ abrir archivo
+- [ ] Arrastrar archivo de File Manager a Terminal â†’ pegar ruta
 - [ ] Feedback visual durante drag (highlight drop targets)
 
 **Limpieza del Sistema de Acciones**
@@ -278,4 +279,3 @@ Estas ideas no tienen versión asignada y se considerarán después de v1.0:
 ---
 
 *Última actualización: 16 de febrero de 2026*
-

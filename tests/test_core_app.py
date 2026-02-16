@@ -220,6 +220,23 @@ class CoreAppTests(unittest.TestCase):
 
         disable_mouse_support.assert_called_once_with()
 
+    def test_cleanup_calls_window_close_hooks_and_handles_errors(self):
+        app = self._make_app()
+        good = types.SimpleNamespace(close=mock.Mock())
+        bad = types.SimpleNamespace(close=mock.Mock(side_effect=RuntimeError("close failed")))
+        app.windows = [good, bad]
+
+        with (
+            mock.patch.object(self.app_mod, "disable_mouse_support") as disable_mouse_support,
+            mock.patch.object(self.app_mod.LOGGER, "debug") as log_debug,
+        ):
+            app.cleanup()
+
+        good.close.assert_called_once_with()
+        bad.close.assert_called_once_with()
+        log_debug.assert_called_once()
+        disable_mouse_support.assert_called_once_with()
+
     def test_draw_wrappers_delegate_to_rendering_helpers(self):
         app = self._make_app()
 
@@ -512,6 +529,21 @@ class CoreAppTests(unittest.TestCase):
 
         self.assertEqual(app.windows, [b])
         self.assertTrue(b.active)
+
+    def test_close_window_calls_close_hook_and_logs_failures(self):
+        app = self._make_app()
+        good = types.SimpleNamespace(active=False, close=mock.Mock())
+        bad = types.SimpleNamespace(active=False, close=mock.Mock(side_effect=RuntimeError("boom")))
+        app.windows = [good, bad]
+
+        app.close_window(good)
+        self.assertEqual(app.windows, [bad])
+        good.close.assert_called_once_with()
+
+        with mock.patch.object(self.app_mod.LOGGER, "debug") as log_debug:
+            app.close_window(bad)
+        bad.close.assert_called_once_with()
+        log_debug.assert_called_once()
 
     def test_spawn_window_and_offset_helpers(self):
         app = self._make_app()

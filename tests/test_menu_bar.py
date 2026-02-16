@@ -400,6 +400,14 @@ class MenuBarTests(unittest.TestCase):
         self.assertTrue(inside)
         self.assertTrue(handled)
 
+    def test_menu_wrapper_accepts_optional_window_kwargs(self):
+        menu = self.menu_mod.Menu()
+        menu.active = False
+        self.assertIsNone(menu.get_dropdown_rect(win_x=0, win_y=0, win_w=80))
+        self.assertFalse(menu.hit_test_dropdown(1, 1, win_x=0, win_y=0, win_w=80))
+        self.assertFalse(menu.handle_hover(1, 1, win_x=0, win_y=0, win_w=80))
+        self.assertIsNone(menu.handle_click(1, 1, win_x=0, win_y=0, win_w=80))
+
     def test_window_menu_wrapper_methods_delegate_to_base_class(self):
         menu = self.menu_mod.WindowMenu({"File": [("Open", "open")]})
         stdscr = types.SimpleNamespace()

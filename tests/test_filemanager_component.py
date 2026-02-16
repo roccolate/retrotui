@@ -128,6 +128,17 @@ class FileManagerComponentTests(unittest.TestCase):
         self.assertGreater(safe_addstr.call_count, 0)
         draw_dropdown.assert_called_once()
 
+    def test_fit_text_to_cells_handles_wide_chars(self):
+        fit = self.fm_mod._fit_text_to_cells
+        width = lambda s: sum(self.fm_mod._cell_width(ch) for ch in s)
+
+        fitted = fit("  📁 folder", 8)
+        self.assertEqual(width(fitted), 8)
+        self.assertTrue(fitted.startswith("  📁"))
+        self.assertEqual(self.fm_mod._cell_width(""), 0)
+        self.assertEqual(self.fm_mod._cell_width("\u0301"), 0)
+        self.assertEqual(fit("abc", 0), "")
+
     def test_draw_returns_early_when_no_entries(self):
         win = self._make_window()
         win.visible = True

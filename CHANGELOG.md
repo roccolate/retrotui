@@ -28,6 +28,10 @@ Todas las versiones notables de RetroTUI están documentadas aquí.
 - Script `tools/report_module_coverage.py` para reporte de cobertura por modulo (stdlib `trace` + AST).
 - Tests `tests/test_module_coverage_tool.py` para validar utilidades del reporte de cobertura.
 - Tests `tests/test_notepad_component.py` para cubrir rutas internas de wrap/cursor/draw/menu en Notepad.
+- Modulo `retrotui/core/terminal_session.py` con base PTY (spawn, lectura no bloqueante, resize y cierre) para iniciar v0.4.
+- Tests `tests/test_terminal_session.py` para validar el contrato de `TerminalSession` en rutas exito/error.
+- Modulo `retrotui/apps/terminal.py` con `TerminalWindow` embebida (sesion PTY, parser ANSI/VT100 basico, forwarding de teclas y scrollback).
+- Tests `tests/test_terminal_component.py` para validar render/input/scroll/menu/ciclo de vida de la terminal embebida.
 
 ### Changed
 - README actualizado con comandos de QA y activacion de hooks locales.
@@ -42,8 +46,9 @@ Todas las versiones notables de RetroTUI están documentadas aquí.
 - `tools/qa.py` agrega modo opcional de cobertura por modulo (`--module-coverage`, `--module-coverage-top`, `--module-coverage-fail-under`).
 - `tools/report_module_coverage.py` ahora normaliza rutas y mapea sufijos de paquete para reducir falsos negativos de cobertura en entornos Windows.
 - CI eleva el gate gradual de cobertura por modulo a `--module-coverage-fail-under 100.0` (solo `ubuntu-latest` + Python `3.12`).
-- Cobertura ampliada en rutas de core modularizado, menu/action runner/notepad y tooling de cobertura; suite actual en QA: 299 tests.
+- Cobertura ampliada en rutas de core modularizado, menu/action runner/notepad y terminal embebida; suite actual en QA: 335 tests.
 - Cobertura total por modulo actualizada a 100.0% (trace + AST).
+- `AppAction.TERMINAL` deja de abrir placeholder y ahora instancia `TerminalWindow` real.
 
 ---
 
@@ -209,4 +214,3 @@ Todas las versiones notables de RetroTUI están documentadas aquí.
 - **ThemeEngine** — colores Win3.1 con soporte 256-color
 - Navegación completa por teclado (Tab, Enter, Escape, Ctrl+Q)
 - Archivo único (`retrotui.py`) — sin dependencias externas
-

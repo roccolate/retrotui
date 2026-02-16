@@ -13,6 +13,10 @@ class Window:
     """A draggable window with title bar and content area."""
 
     _next_id = 0
+    TITLE_CONTROLS = '[─][□][×]'
+    MIN_BTN_OFFSET = 10
+    MAX_BTN_OFFSET = 7
+    CLOSE_BTN_OFFSET = 4
 
     def __init__(self, title, x, y, w, h, content=None, resizable=True):
         self.id = Window._next_id
@@ -43,7 +47,7 @@ class Window:
 
     def close_button_pos(self):
         """Return (x, y) of the close button."""
-        return (self.x + 2, self.y)
+        return (self.x + self.w - self.CLOSE_BTN_OFFSET, self.y)
 
     def body_rect(self):
         """Return inner content area (x, y, w, h).
@@ -66,29 +70,27 @@ class Window:
         """Check if point is on the title bar (draggable zone, excludes buttons)."""
         if my != self.y:
             return False
-        # Exclude [×] at left and [─][□] at right (if implementation adds them)
-        # Current implementation: [×] at left, [─][□] at right
         if mx < self.x + 1 or mx > self.x + self.w - 2:
             return False
-        # Close button area
-        if self.x + 2 <= mx <= self.x + 4:
-            return False
-        # Min/Max area
-        if mx >= self.x + self.w - 7:
+        # Reserve right-side title controls: [─][□][×]
+        if mx >= self.x + self.w - self.MIN_BTN_OFFSET:
             return False
         return True
 
     def on_close_button(self, mx, my):
         """Check if point is on the close button [×]."""
-        return my == self.y and (self.x + 2 <= mx <= self.x + 4)
+        start_x = self.x + self.w - self.CLOSE_BTN_OFFSET
+        return my == self.y and (start_x <= mx <= start_x + 2)
 
     def on_minimize_button(self, mx, my):
         """Check if point is on the minimize button [─]."""
-        return my == self.y and (self.x + self.w - 7 <= mx <= self.x + self.w - 5)
+        start_x = self.x + self.w - self.MIN_BTN_OFFSET
+        return my == self.y and (start_x <= mx <= start_x + 2)
 
     def on_maximize_button(self, mx, my):
         """Check if point is on the maximize button [□]."""
-        return my == self.y and (self.x + self.w - 4 <= mx <= self.x + self.w - 2)
+        start_x = self.x + self.w - self.MAX_BTN_OFFSET
+        return my == self.y and (start_x <= mx <= start_x + 2)
 
     def toggle_maximize(self, term_w, term_h):
         """Toggle between maximized and normal state."""
@@ -179,18 +181,21 @@ class Window:
         
         # Buttons
         if self.active:
-            # Close [×]
-            safe_addstr(stdscr, self.y, self.x + 2, '[×]', curses.color_pair(C_WIN_TITLE_INV))
-            
-            # Min [─] Max [□]
-            safe_addstr(stdscr, self.y, self.x + self.w - 7, '[─][□]', curses.color_pair(C_WIN_TITLE_INV))
+            # Right-aligned title controls: [─][□][×]
+            safe_addstr(
+                stdscr,
+                self.y,
+                self.x + self.w - self.MIN_BTN_OFFSET,
+                self.TITLE_CONTROLS,
+                curses.color_pair(C_WIN_TITLE_INV),
+            )
 
         # Window Menu Bar
         if self.window_menu:
             self.window_menu.draw_bar(stdscr, self.x, self.y, self.w, self.active)
             # Separator line below menu
             sep_y = self.y + 2
-            safe_addstr(stdscr, sep_y, self.x + 1, '╟' + '─' * (self.w - 2) + '╢', border_attr)
+            safe_addstr(stdscr, sep_y, self.x, '╟' + '─' * (self.w - 2) + '╢', border_attr)
 
         return body_attr
 
