@@ -6,8 +6,8 @@ import curses
 from ..ui.window import Window
 from ..ui.menu import WindowMenu
 from ..core.actions import ActionResult, ActionType, AppAction
-from ..utils import safe_addstr, check_unicode_support
-from ..constants import C_FM_SELECTED, SB_H
+from ..utils import safe_addstr, check_unicode_support, normalize_key_code
+from ..constants import C_FM_SELECTED
 
 class FileEntry:
     """Represents a file or directory entry in the file manager."""
@@ -261,39 +261,39 @@ class FileManagerWindow(Window):
     def handle_key(self, key):
         """Handle keyboard input for the file manager.
         Returns ActionResult when needed, else None."""
+        key_code = normalize_key_code(key)
+
         # Window menu keyboard handling
         if self.window_menu and self.window_menu.active:
-            action = self.window_menu.handle_key(key)
-            if action == 'close_menu':
-                return None
+            action = self.window_menu.handle_key(key_code)
             if action:
                 return self._execute_menu_action(action)
             return None
 
-        if key == curses.KEY_UP:
+        if key_code == curses.KEY_UP:
             self.select_up()
-        elif key == curses.KEY_DOWN:
+        elif key_code == curses.KEY_DOWN:
             self.select_down()
-        elif key in (curses.KEY_ENTER, 10, 13):
+        elif key_code in (curses.KEY_ENTER, 10, 13):
             return self.activate_selected()
-        elif key in (curses.KEY_BACKSPACE, 127, 8):
+        elif key_code in (curses.KEY_BACKSPACE, 127, 8):
             self.navigate_parent()
-        elif key == curses.KEY_PPAGE:
+        elif key_code == curses.KEY_PPAGE:
             _, _, _, bh = self.body_rect()
             for _ in range(max(1, bh - 2)):
                 self.select_up()
-        elif key == curses.KEY_NPAGE:
+        elif key_code == curses.KEY_NPAGE:
             _, _, _, bh = self.body_rect()
             for _ in range(max(1, bh - 2)):
                 self.select_down()
-        elif key == curses.KEY_HOME:
+        elif key_code == curses.KEY_HOME:
             self.selected_index = 0
             self._ensure_visible()
-        elif key == curses.KEY_END:
+        elif key_code == curses.KEY_END:
             if self.entries:
                 self.selected_index = len(self.entries) - 1
                 self._ensure_visible()
-        elif key == ord('h') or key == ord('H'):
+        elif key_code in (ord('h'), ord('H')):
             self.toggle_hidden()
         return None
 

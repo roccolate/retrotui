@@ -4,8 +4,7 @@ Base Window Class.
 import curses
 from ..constants import (
     C_WIN_BORDER, C_WIN_TITLE, C_WIN_TITLE_INV, C_WIN_BODY,
-    C_STATUS, C_SCROLLBAR, C_WIN_INACTIVE, BOX_TR, BOX_TL,
-    SB_TL
+    C_SCROLLBAR, C_WIN_INACTIVE
 )
 from ..utils import safe_addstr, draw_box
 from .menu import WindowMenu
@@ -221,6 +220,8 @@ class Window:
 
     def draw(self, stdscr):
         """Draw the window."""
+        if not self.visible:
+            return
         body_attr = self.draw_frame(stdscr)
         self.draw_body(stdscr, body_attr)
         

@@ -6,7 +6,7 @@ import os
 from ..ui.window import Window
 from ..ui.menu import WindowMenu
 from ..core.actions import ActionResult, ActionType, AppAction
-from ..utils import safe_addstr, draw_box
+from ..utils import safe_addstr, normalize_key_code
 from ..constants import C_STATUS, C_SCROLLBAR
 
 class NotepadWindow(Window):
@@ -49,7 +49,7 @@ class NotepadWindow(Window):
         filename = os.path.basename(filepath)
         self.title = f'Notepad - {filename}'
         try:
-            with open(filepath, 'r', errors='replace') as f:
+            with open(filepath, 'r', encoding='utf-8', errors='replace', newline='') as f:
                 raw = f.read()
             self.buffer = raw.split('\n')
             if self.buffer and self.buffer[-1] == '':
@@ -68,7 +68,7 @@ class NotepadWindow(Window):
         if not self.filepath:
             return ActionResult(ActionType.REQUEST_SAVE_AS)
         try:
-            with open(self.filepath, 'w') as f:
+            with open(self.filepath, 'w', encoding='utf-8', newline='\n') as f:
                 f.write('\n'.join(self.buffer))
             self.modified = False
             return True
@@ -254,34 +254,34 @@ class NotepadWindow(Window):
 
     def handle_key(self, key):
         """Handle keyboard input for the editor. Returns None always."""
+        key_code = normalize_key_code(key)
+
         # Window menu keyboard handling
         if self.window_menu and self.window_menu.active:
-            action = self.window_menu.handle_key(key)
-            if action == 'close_menu':
-                return None
+            action = self.window_menu.handle_key(key_code)
             if action:
                 return self._execute_menu_action(action)
             return None
 
         # Navigation
-        if key == curses.KEY_UP:
+        if key_code == curses.KEY_UP:
             if self.cursor_line > 0:
                 self.cursor_line -= 1
                 self._clamp_cursor()
                 self._ensure_cursor_visible()
-        elif key == curses.KEY_DOWN:
+        elif key_code == curses.KEY_DOWN:
             if self.cursor_line < len(self.buffer) - 1:
                 self.cursor_line += 1
                 self._clamp_cursor()
                 self._ensure_cursor_visible()
-        elif key == curses.KEY_LEFT:
+        elif key_code == curses.KEY_LEFT:
             if self.cursor_col > 0:
                 self.cursor_col -= 1
             elif self.cursor_line > 0:
                 self.cursor_line -= 1
                 self.cursor_col = len(self.buffer[self.cursor_line])
             self._ensure_cursor_visible()
-        elif key == curses.KEY_RIGHT:
+        elif key_code == curses.KEY_RIGHT:
             line = self.buffer[self.cursor_line]
             if self.cursor_col < len(line):
                 self.cursor_col += 1
@@ -289,25 +289,25 @@ class NotepadWindow(Window):
                 self.cursor_line += 1
                 self.cursor_col = 0
             self._ensure_cursor_visible()
-        elif key == curses.KEY_HOME:
+        elif key_code == curses.KEY_HOME:
             self.cursor_col = 0
             self._ensure_cursor_visible()
-        elif key == curses.KEY_END:
+        elif key_code == curses.KEY_END:
             self.cursor_col = len(self.buffer[self.cursor_line])
             self._ensure_cursor_visible()
-        elif key == curses.KEY_PPAGE:
+        elif key_code == curses.KEY_PPAGE:
             _, _, _, bh = self.body_rect()
             self.cursor_line = max(0, self.cursor_line - (bh - 2))
             self._clamp_cursor()
             self._ensure_cursor_visible()
-        elif key == curses.KEY_NPAGE:
+        elif key_code == curses.KEY_NPAGE:
             _, _, _, bh = self.body_rect()
             self.cursor_line = min(len(self.buffer) - 1, self.cursor_line + (bh - 2))
             self._clamp_cursor()
             self._ensure_cursor_visible()
 
         # Editing: Enter
-        elif key in (curses.KEY_ENTER, 10, 13):
+        elif key_code in (curses.KEY_ENTER, 10, 13):
             line = self.buffer[self.cursor_line]
             before = line[:self.cursor_col]
             after = line[self.cursor_col:]
@@ -320,7 +320,7 @@ class NotepadWindow(Window):
             self._ensure_cursor_visible()
 
         # Editing: Backspace
-        elif key in (curses.KEY_BACKSPACE, 127, 8):
+        elif key_code in (curses.KEY_BACKSPACE, 127, 8):
             if self.cursor_col > 0:
                 line = self.buffer[self.cursor_line]
                 self.buffer[self.cursor_line] = line[:self.cursor_col - 1] + line[self.cursor_col:]
@@ -339,7 +339,7 @@ class NotepadWindow(Window):
             self._ensure_cursor_visible()
 
         # Editing: Delete
-        elif key == curses.KEY_DC:
+        elif key_code == curses.KEY_DC:
             line = self.buffer[self.cursor_line]
             if self.cursor_col < len(line):
                 self.buffer[self.cursor_line] = line[:self.cursor_col] + line[self.cursor_col + 1:]
@@ -353,20 +353,28 @@ class NotepadWindow(Window):
                 self._invalidate_wrap()
 
         # Save: Ctrl+S (key 19)
-        elif key == 19:
+        elif key_code == 19:
             result = self._save_file()
             if result is not True:
                 return result
 
         # Toggle: Ctrl+W (key 23)
-        elif key == 23:
+        elif key_code == 23:
             self.wrap_mode = not self.wrap_mode
             self.view_left = 0
             self._invalidate_wrap()
             self._ensure_cursor_visible()
 
         # Printable characters
-        elif 32 <= key <= 126:
+        elif isinstance(key, str) and key.isprintable() and key not in ('\n', '\r', '\t'):
+            ch = key
+            line = self.buffer[self.cursor_line]
+            self.buffer[self.cursor_line] = line[:self.cursor_col] + ch + line[self.cursor_col:]
+            self.cursor_col += 1
+            self.modified = True
+            self._invalidate_wrap()
+            self._ensure_cursor_visible()
+        elif isinstance(key, int) and 32 <= key <= 126:
             ch = chr(key)
             line = self.buffer[self.cursor_line]
             self.buffer[self.cursor_line] = line[:self.cursor_col] + ch + line[self.cursor_col:]

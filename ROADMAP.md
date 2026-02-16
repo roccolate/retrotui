@@ -58,12 +58,13 @@ La release que hace RetroTUI usable como shell diario.
 - [x] Implementaciones default en Window (scroll contenido) para que subclases solo overrideen lo necesario
 
 **Calidad**
-- [x] Guard contra loop infinito en menús con solo separadores
-- [x] Verificación de tamaño mínimo de terminal al iniciar
+- [x] Guard contra loop infinito en menus con solo separadores
+- [x] Verificacion de tamano minimo de terminal al iniciar
 - [x] Fix emojis en FileEntry para respetar `check_unicode_support()`
+- [x] Pipeline de teclado consolidado para `get_wch()` con normalizacion de teclas compartida
+- [x] Compatibilidad Unicode en input de Dialog/Notepad/File Manager y guardado UTF-8 en Notepad
 
 ---
-
 ### v0.5 — Temas y Configuración
 
 Personalidad y persistencia.
@@ -249,3 +250,4 @@ Estas ideas no tienen versión asignada y se considerarán después de v1.0:
 ---
 
 *Última actualización: 16 de febrero de 2026*
+

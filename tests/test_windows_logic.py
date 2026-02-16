@@ -34,6 +34,7 @@ class WindowLogicTests(unittest.TestCase):
         for mod_name in (
             'retrotui.constants',
             'retrotui.utils',
+            'retrotui.ui.dialog',
             'retrotui.ui.menu',
             'retrotui.ui.window',
             'retrotui.apps.notepad',
@@ -43,6 +44,8 @@ class WindowLogicTests(unittest.TestCase):
             sys.modules.pop(mod_name, None)
 
         cls.actions_mod = importlib.import_module('retrotui.core.actions')
+        cls.dialog_mod = importlib.import_module('retrotui.ui.dialog')
+        cls.window_mod = importlib.import_module('retrotui.ui.window')
         cls.notepad_mod = importlib.import_module('retrotui.apps.notepad')
         cls.filemanager_mod = importlib.import_module('retrotui.apps.filemanager')
 
@@ -51,6 +54,7 @@ class WindowLogicTests(unittest.TestCase):
         for mod_name in (
             'retrotui.constants',
             'retrotui.utils',
+            'retrotui.ui.dialog',
             'retrotui.ui.menu',
             'retrotui.ui.window',
             'retrotui.apps.notepad',
@@ -115,6 +119,57 @@ class WindowLogicTests(unittest.TestCase):
 
         self.assertTrue(dir_entry.display_text.startswith('  [D]'))
         self.assertTrue(file_entry.display_text.startswith('  [F]'))
+
+    def test_hidden_window_draw_skips_rendering(self):
+        win = self.window_mod.Window('Hidden', 0, 0, 20, 8)
+        win.visible = False
+        win.draw_frame = mock.Mock()
+        win.draw_body = mock.Mock()
+
+        win.draw(None)
+
+        win.draw_frame.assert_not_called()
+        win.draw_body.assert_not_called()
+
+    def test_notepad_accepts_unicode_string_input(self):
+        win = self.notepad_mod.NotepadWindow(0, 0, 40, 12)
+
+        win.handle_key('ñ')
+
+        self.assertEqual(win.buffer[0], 'ñ')
+        self.assertEqual(win.cursor_col, 1)
+
+    def test_notepad_ctrl_s_string_key_triggers_save(self):
+        win = self.notepad_mod.NotepadWindow(0, 0, 40, 12)
+        win._save_file = mock.Mock(return_value=True)
+
+        win.handle_key('\x13')  # Ctrl+S from get_wch
+
+        win._save_file.assert_called_once()
+
+    def test_filemanager_string_h_toggles_hidden(self):
+        win = self.filemanager_mod.FileManagerWindow(0, 0, 40, 12, start_path='.')
+        self.assertFalse(win.show_hidden)
+
+        win.handle_key('h')
+
+        self.assertTrue(win.show_hidden)
+
+    def test_input_dialog_accepts_unicode_string_input(self):
+        dialog = self.dialog_mod.InputDialog('Save As', 'Enter filename:', width=40)
+
+        dialog.handle_key('á')
+
+        self.assertEqual(dialog.value, 'á')
+        self.assertEqual(dialog.cursor_pos, 1)
+
+    def test_input_dialog_backspace_from_string(self):
+        dialog = self.dialog_mod.InputDialog('Save As', 'Enter filename:', initial_value='abc', width=40)
+
+        dialog.handle_key('\x7f')
+
+        self.assertEqual(dialog.value, 'ab')
+        self.assertEqual(dialog.cursor_pos, 2)
 
 
 if __name__ == '__main__':

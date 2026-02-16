@@ -233,7 +233,7 @@ class MenuBar:
         return None
 
     def handle_key(self, key):
-        """Handle keyboard navigation. Returns action, 'close_menu', or None."""
+        """Handle keyboard navigation and return selected action or None."""
         if not self.active or not self.menu_names:
             return None
 
@@ -267,7 +267,7 @@ class MenuBar:
 
         if key == 27:  # Escape
             self.active = False
-            return 'close_menu'
+            return None
 
         return None
 

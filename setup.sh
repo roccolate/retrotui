@@ -16,8 +16,7 @@ else
 fi
 
 # Check ncurses
-python3 -c "import curses" 2>/dev/null
-if [ $? -eq 0 ]; then
+if python3 -c "import curses" 2>/dev/null; then
     echo "[✓] curses module available"
 else
     echo "[!] Installing ncurses..."
