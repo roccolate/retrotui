@@ -807,19 +807,21 @@ class CoreAppTests(unittest.TestCase):
         self.assertEqual(app.dialog.title, "ASCII Video Error")
         self.assertIn("mpv missing", app.dialog.message)
 
-    def test_open_file_viewer_binary_file_opens_warning_dialog(self):
+    def test_open_file_viewer_binary_file_spawns_hex_viewer(self):
         app = self._make_app()
         app.stdscr = types.SimpleNamespace(getmaxyx=lambda: (30, 120))
+        app.windows = []
+        app._spawn_window = mock.Mock()
 
         with (
             mock.patch.object(self.app_mod, "is_video_file", return_value=False),
             mock.patch("builtins.open", mock.mock_open(read_data=b"\x00\x01binary")),
+            mock.patch.object(self.app_mod, "HexViewerWindow") as hex_cls,
         ):
             app.open_file_viewer("/tmp/bin.dat")
 
-        self.assertIsNotNone(app.dialog)
-        self.assertEqual(app.dialog.title, "Binary File")
-        self.assertIn("binary file", app.dialog.message)
+        hex_cls.assert_called_once()
+        app._spawn_window.assert_called_once_with(hex_cls.return_value)
 
     def test_open_file_viewer_binary_probe_oserror_still_opens_notepad(self):
         app = self._make_app()
@@ -866,6 +868,22 @@ class CoreAppTests(unittest.TestCase):
 
         log_cls.assert_called_once()
         app._spawn_window.assert_called_once_with(log_cls.return_value)
+
+    def test_open_file_viewer_image_extension_spawns_image_viewer(self):
+        app = self._make_app()
+        app.stdscr = types.SimpleNamespace(getmaxyx=lambda: (30, 120))
+        app.windows = []
+        app._spawn_window = mock.Mock()
+
+        with (
+            mock.patch.object(self.app_mod, "is_video_file", return_value=False),
+            mock.patch.object(self.app_mod, "ImageViewerWindow") as image_cls,
+        ):
+            image_cls.IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif"}
+            app.open_file_viewer("/tmp/demo.png")
+
+        image_cls.assert_called_once()
+        app._spawn_window.assert_called_once_with(image_cls.return_value)
 
     def test_show_save_as_dialog_sets_callback(self):
         app = self._make_app()

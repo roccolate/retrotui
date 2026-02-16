@@ -132,6 +132,9 @@ Windows Terminal (SSH), iTerm2, tmux, screen.
 ### Terminal embebida
 | Tecla         | Acción                        |
 |---------------|-------------------------------|
+| `F6`          | Interrumpir proceso (SIGINT)  |
+| `F7`          | Terminar proceso (SIGTERM)    |
+| `F8`          | Copiar seleccion              |
 | `Ctrl+V`      | Pegar texto del clipboard     |
 | `PgUp/PgDn`  | Scroll de scrollback          |
 
@@ -149,6 +152,7 @@ Windows Terminal (SSH), iTerm2, tmux, screen.
 ### Log Viewer
 | Tecla         | Acción                               |
 |---------------|--------------------------------------|
+| `F6 / Ins`    | Copiar seleccion                     |
 | `F`           | Toggle follow tail                   |
 | `Space`       | Congelar/reanudar autoscroll         |
 | `/`           | Buscar texto                         |
@@ -168,6 +172,28 @@ Windows Terminal (SSH), iTerm2, tmux, screen.
 | `F5`          | Refrescar lista                      |
 | `Up/Down`     | Mover seleccion                      |
 | `PgUp/PgDn`   | Navegar por pagina                   |
+| `Q`           | Cerrar ventana                       |
+
+### Image Viewer
+| Tecla         | Acción                               |
+|---------------|--------------------------------------|
+| `+ / -`       | Zoom in / zoom out                   |
+| `0`           | Reset zoom (100%)                    |
+| `O`           | Abrir imagen por ruta (dialogo)      |
+| `R`           | Recargar render                      |
+| `Q`           | Cerrar ventana                       |
+
+### Hex Viewer
+| Tecla         | Acción                               |
+|---------------|--------------------------------------|
+| `F6 / Ins`    | Copiar selección                     |
+| `Up/Down`     | Navegar por filas hex                |
+| `PgUp/PgDn`   | Navegar por pagina                   |
+| `Home/End`    | Ir al inicio / final                 |
+| `/`           | Buscar bytes/texto                   |
+| `N`           | Siguiente match                      |
+| `G`           | Ir a offset (decimal o 0xHEX)        |
+| `O`           | Abrir archivo por ruta (dialogo)     |
 | `Q`           | Cerrar ventana                       |
 
 ### Reloj / Calendario
@@ -224,6 +250,8 @@ README.md      — Este archivo
 - **LogViewerWindow** — visor de logs con tail, busqueda y highlighting por severidad
 - **ProcessManagerWindow** — lista de procesos live desde `/proc`, sort y kill con confirmacion
 - **ClockCalendarWindow** — widget de hora/fecha/calendario con chime opcional
+- **ImageViewerWindow** — visor de imagenes con backend `chafa`/`timg`/`catimg` y zoom
+- **HexViewerWindow** — visor hexadecimal read-only con busqueda y go-to-offset
 - **FileEntry** — Entrada de archivo/directorio con metadata
 - **MenuBar** — Menús globales y por ventana (unificados)
 - **Dialog** — Diálogos modales
@@ -244,8 +272,9 @@ Ver [CHANGELOG.md](CHANGELOG.md) para el historial completo de versiones.
 - **Release v0.6.0** — versión sincronizada en runtime, package y setup.
 - **Clipboard base inter-app** — copy con `F6`/`Ins` en Notepad y File Manager; paste con `Ctrl+V`.
 - **Apps utilitarias v0.7** — Log Viewer (tail/busqueda/highlighting/freeze), Process Manager (/proc + sort + kill confirm), Calculadora, y Clock/Calendar (always-on-top + chime).
+- **Media/Hex v0.9 (avance)** — apertura de imagenes con visor dedicado + apertura de binarios en Hex Viewer read-only.
 - **TTY/mouse** — fixes para drag/resize en consola y fallback robusto de doble-click en iconos de escritorio.
-- **Calidad** — baseline actual: `484 tests` y cobertura por módulo `100.0%`.
+- **Calidad** — baseline actual: `501 tests`.
 - **Encoding/UI** — normalización de `retrotui/constants.py` para eliminar mojibake en bordes/iconos.
 
 ## Roadmap
@@ -258,7 +287,7 @@ Ver [CHANGELOG.md](CHANGELOG.md) para el historial completo de versiones.
 - **v0.6** - Clipboard y comunicacion inter-app (clipboard + drag and drop base listos)
 - **v0.7** - Apps utilitarias (log viewer, process manager, calculadora y clock/calendar listos)
 - **v0.8** - File Manager avanzado (en progreso: dual-pane, previews (texto/imagen), info, bookmarks, undo y progreso de operaciones largas listos)
-- **v0.9** - Media y hex editor
+- **v0.9** - Media y hex editor (en progreso: image viewer + hex viewer read-only listos)
 - **v1.0** - Empaquetado, plugins y documentacion
 
 ## Licencia

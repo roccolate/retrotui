@@ -6,7 +6,7 @@ import shlex
 
 from ..constants import C_SCROLLBAR, C_STATUS
 from ..core.actions import ActionResult, ActionType, AppAction
-from ..core.clipboard import paste_text
+from ..core.clipboard import copy_text, paste_text
 from ..core.terminal_session import TerminalSession
 from ..ui.menu import WindowMenu
 from ..ui.window import Window
@@ -18,6 +18,9 @@ class TerminalWindow(Window):
 
     DEFAULT_SCROLLBACK = 2000
     MENU_CLEAR = 'term_clear'
+    MENU_COPY = 'term_copy'
+    MENU_INTERRUPT = 'term_interrupt'
+    MENU_TERMINATE = 'term_terminate'
     MENU_RESTART = 'term_restart'
 
     def __init__(self, x, y, w, h, shell=None, cwd=None, env=None, max_scrollback=DEFAULT_SCROLLBACK):
@@ -35,15 +38,128 @@ class TerminalWindow(Window):
         self._line_chars = []
         self._cursor_col = 0
         self.scrollback_offset = 0
+        self.selection_anchor = None  # (line_idx, col)
+        self.selection_cursor = None  # (line_idx, col)
+        self._mouse_selecting = False
 
         self.window_menu = WindowMenu({
             'Terminal': [
                 ('Clear Scrollback', self.MENU_CLEAR),
+                ('Copy Selection F8', self.MENU_COPY),
+                ('Interrupt Process F6', self.MENU_INTERRUPT),
+                ('Terminate Process F7', self.MENU_TERMINATE),
                 ('Restart Shell', self.MENU_RESTART),
                 ('-------------', None),
                 ('Close', AppAction.CLOSE_WINDOW),
             ],
         })
+
+    def clear_selection(self):
+        """Clear text selection state."""
+        self.selection_anchor = None
+        self.selection_cursor = None
+        self._mouse_selecting = False
+
+    def has_selection(self):
+        """Return True when there is a non-empty selection."""
+        return (
+            self.selection_anchor is not None
+            and self.selection_cursor is not None
+            and self.selection_anchor != self.selection_cursor
+        )
+
+    def _selection_bounds(self):
+        """Return ordered ((line,col), (line,col)) selection bounds, or None."""
+        if not self.has_selection():
+            return None
+        a = self.selection_anchor
+        b = self.selection_cursor
+        return (a, b) if a <= b else (b, a)
+
+    def _line_selection_span(self, line_idx, line_len):
+        """Return [start,end) selected cols for one line, or None."""
+        bounds = self._selection_bounds()
+        if not bounds:
+            return None
+        (start_line, start_col), (end_line, end_col) = bounds
+        if line_idx < start_line or line_idx > end_line:
+            return None
+
+        if start_line == end_line:
+            start = max(0, min(line_len, start_col))
+            end = max(0, min(line_len, end_col))
+            if end <= start:
+                return None
+            return (start, end)
+
+        if line_idx == start_line:
+            start = max(0, min(line_len, start_col))
+            end = line_len
+            if end <= start:
+                return None
+            return (start, end)
+
+        if line_idx == end_line:
+            start = 0
+            end = max(0, min(line_len, end_col))
+            if end <= start:
+                return None
+            return (start, end)
+
+        return (0, line_len)
+
+    def _selected_text(self):
+        """Return selected text as plain string."""
+        bounds = self._selection_bounds()
+        if not bounds:
+            return ''
+        (start_line, start_col), (end_line, end_col) = bounds
+        lines = self._all_lines()
+        if not lines:
+            return ''
+
+        start_line = max(0, min(start_line, len(lines) - 1))
+        end_line = max(0, min(end_line, len(lines) - 1))
+        if end_line < start_line:
+            return ''
+
+        if start_line == end_line:
+            line = lines[start_line]
+            return line[max(0, start_col):max(0, end_col)]
+
+        chunks = []
+        first = lines[start_line]
+        chunks.append(first[max(0, start_col):])
+        for idx in range(start_line + 1, end_line):
+            chunks.append(lines[idx])
+        last = lines[end_line]
+        chunks.append(last[:max(0, end_col)])
+        return '\n'.join(chunks)
+
+    def _cursor_from_screen(self, mx, my):
+        """Convert body coordinates to terminal line/column cursor."""
+        bx, by, bw, bh = self.body_rect()
+        text_cols, text_rows = max(1, bw - 1), max(1, bh - 1)
+        if not (bx <= mx < bx + text_cols and by <= my < by + text_rows):
+            return None
+
+        _, start_idx, total_lines = self._visible_slice(text_rows)
+        if total_lines <= 0:
+            return None
+
+        row = my - by
+        line_idx = max(0, min(total_lines - 1, start_idx + row))
+        line = self._all_lines()[line_idx] if line_idx < len(self._all_lines()) else ''
+        col = max(0, min(len(line), mx - bx))
+        return (line_idx, col)
+
+    def _copy_selection(self):
+        """Copy selection to shared clipboard (or current line fallback)."""
+        text = self._selected_text()
+        if not text:
+            text = ''.join(self._line_chars)
+        if text:
+            copy_text(text)
 
     def _text_area_size(self):
         """Return (cols, rows) available for terminal text rendering."""
@@ -194,6 +310,8 @@ class TerminalWindow(Window):
 
     def _consume_output(self, text):
         """Apply terminal output stream to local scrollback buffer."""
+        if text:
+            self.clear_selection()
         data = self._ansi_pending + (text or '')
         self._ansi_pending = ''
         idx = 0
@@ -312,6 +430,27 @@ class TerminalWindow(Window):
 
         safe_addstr(stdscr, row, x + col, ch, body_attr | curses.A_REVERSE | curses.A_BOLD)
 
+    def _draw_selection(self, stdscr, x, y, text_cols, start_idx, visible_lines, body_attr):
+        """Draw reverse-video overlay for selected text in visible slice."""
+        if not self.has_selection():
+            return
+        for row, line in enumerate(visible_lines):
+            line_idx = start_idx + row
+            span = self._line_selection_span(line_idx, len(line))
+            if not span:
+                continue
+            start, end = span
+            if start >= text_cols:
+                continue
+            start = max(0, start)
+            end = min(max(start, end), text_cols)
+            if end <= start:
+                continue
+            segment = line[start:end]
+            if not segment:
+                segment = ' ' * (end - start)
+            safe_addstr(stdscr, y + row, x + start, segment, body_attr | curses.A_REVERSE | curses.A_BOLD)
+
     def draw(self, stdscr):
         """Draw terminal body, live output, scrollback and status line."""
         if not self.visible:
@@ -338,6 +477,7 @@ class TerminalWindow(Window):
         for i, line in enumerate(visible):
             safe_addstr(stdscr, by + i, bx, self._fit_line(line, text_cols), body_attr)
 
+        self._draw_selection(stdscr, bx, by, text_cols, start_idx, visible, body_attr)
         self._draw_live_cursor(stdscr, bx, by, text_cols, text_rows, start_idx, total_lines, body_attr)
         self._draw_scrollback_bar(stdscr, bx + text_cols, by, text_rows, start_idx, total_lines)
 
@@ -399,6 +539,16 @@ class TerminalWindow(Window):
             self._line_chars = []
             self._cursor_col = 0
             self.scrollback_offset = 0
+            self.clear_selection()
+            return None
+        if action == self.MENU_COPY:
+            self._copy_selection()
+            return None
+        if action == self.MENU_INTERRUPT:
+            self._send_interrupt()
+            return None
+        if action == self.MENU_TERMINATE:
+            self._send_terminate()
             return None
         if action == self.MENU_RESTART:
             self.restart_session()
@@ -406,6 +556,39 @@ class TerminalWindow(Window):
         if action == AppAction.CLOSE_WINDOW:
             return ActionResult(ActionType.EXECUTE, AppAction.CLOSE_WINDOW)
         return None
+
+    def _send_interrupt(self):
+        """Interrupt foreground process without using host Ctrl+C."""
+        self._ensure_session()
+        if self._session is None or not self._session.running:
+            return
+        self.scrollback_offset = 0
+        try:
+            sender = getattr(self._session, 'interrupt', None)
+            if callable(sender):
+                if sender():
+                    return
+            else:
+                self._session.write('\x03')
+                return
+            self._session.write('\x03')
+        except OSError as exc:
+            self._session_error = str(exc)
+
+    def _send_terminate(self):
+        """Terminate foreground process group (fallback: interrupt)."""
+        self._ensure_session()
+        if self._session is None or not self._session.running:
+            return
+        self.scrollback_offset = 0
+        try:
+            sender = getattr(self._session, 'terminate', None)
+            if callable(sender):
+                if sender():
+                    return
+            self._session.write('\x03')
+        except OSError as exc:
+            self._session_error = str(exc)
 
     def _forward_payload(self, payload):
         """Write one payload chunk into the PTY session when available."""
@@ -440,6 +623,16 @@ class TerminalWindow(Window):
                 return self._execute_menu_action(action)
             return None
 
+        if key_code == getattr(curses, 'KEY_F6', -1):
+            self._send_interrupt()
+            return None
+        if key_code == getattr(curses, 'KEY_F7', -1):
+            self._send_terminate()
+            return None
+        if key_code == getattr(curses, 'KEY_F8', -1):
+            self._copy_selection()
+            return None
+
         if key_code == 22:
             self._forward_payload(paste_text())
             return None
@@ -451,7 +644,7 @@ class TerminalWindow(Window):
         self._forward_payload(payload)
         return None
 
-    def handle_click(self, mx, my):
+    def handle_click(self, mx, my, bstate=None):
         """Handle click inside terminal window/menu."""
         if self.window_menu:
             if self.window_menu.on_menu_bar(mx, my, self.x, self.y, self.w) or self.window_menu.active:
@@ -461,8 +654,49 @@ class TerminalWindow(Window):
                 return None
 
         bx, by, bw, bh = self.body_rect()
-        if bx <= mx < bx + bw and by <= my < by + bh:
+        text_cols, text_rows = max(1, bw - 1), max(1, bh - 1)
+        if bx <= mx < bx + text_cols and by <= my < by + text_rows:
             self.scrollback_offset = 0
+            if bstate is not None:
+                has_button1 = bool(
+                    bstate
+                    & (
+                        getattr(curses, 'BUTTON1_PRESSED', 0)
+                        | getattr(curses, 'BUTTON1_CLICKED', 0)
+                        | getattr(curses, 'BUTTON1_DOUBLE_CLICKED', 0)
+                    )
+                )
+                if has_button1:
+                    cursor_pos = self._cursor_from_screen(mx, my)
+                    if cursor_pos is not None:
+                        self.selection_anchor = cursor_pos
+                        self.selection_cursor = cursor_pos
+                        self._mouse_selecting = bool(bstate & getattr(curses, 'BUTTON1_PRESSED', 0))
+                else:
+                    self.clear_selection()
+        elif bstate is not None and (
+            bstate
+            & (
+                getattr(curses, 'BUTTON1_CLICKED', 0)
+                | getattr(curses, 'BUTTON1_PRESSED', 0)
+                | getattr(curses, 'BUTTON1_DOUBLE_CLICKED', 0)
+            )
+        ):
+            self.clear_selection()
+        return None
+
+    def handle_mouse_drag(self, mx, my, bstate):
+        """Extend selection while primary mouse button is pressed."""
+        if not (bstate & getattr(curses, 'BUTTON1_PRESSED', 0)):
+            self._mouse_selecting = False
+            return None
+        cursor_pos = self._cursor_from_screen(mx, my)
+        if cursor_pos is None:
+            return None
+        if self.selection_anchor is None:
+            self.selection_anchor = cursor_pos
+        self.selection_cursor = cursor_pos
+        self._mouse_selecting = True
         return None
 
     def handle_scroll(self, direction, steps=1):

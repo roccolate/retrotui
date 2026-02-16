@@ -51,6 +51,8 @@ Todas las versiones notables de RetroTUI están documentadas aquí.
 - Modulo `retrotui/apps/process_manager.py` con monitoreo live de `/proc`, sort por CPU/MEM/PID y kill con confirmacion.
 - Modulo `retrotui/apps/clock.py` con reloj, calendario ASCII, always-on-top y chime opcional.
 - Tests `tests/test_logviewer_component.py`, `tests/test_process_manager_component.py` y `tests/test_clock_component.py`.
+- Modulos `retrotui/apps/image_viewer.py` y `retrotui/apps/hexviewer.py` para iniciar v0.9.
+- Tests `tests/test_image_viewer_component.py` y `tests/test_hexviewer_component.py`.
 
 ### Changed
 - README actualizado con comandos de QA y activacion de hooks locales.
@@ -77,6 +79,7 @@ Todas las versiones notables de RetroTUI están documentadas aquí.
 - `retrotui/constants.py` fue normalizado para eliminar mojibake en bordes/iconos Unicode y estabilizar rendering de layout.
 - `AppAction` y `ActionType` se ampliaron para incluir utilitarias v0.7 y confirmacion de kill (`REQUEST_KILL_CONFIRM`).
 - `open_file_viewer()` ahora enruta archivos `.log/.out/.err` a `LogViewerWindow`.
+- `open_file_viewer()` ahora enruta imagenes a `ImageViewerWindow` y binarios a `HexViewerWindow`.
 - Mouse router/bootstrap ajustados para mejorar comportamiento en TTY (drag/resize y doble-click en iconos).
 
 ---

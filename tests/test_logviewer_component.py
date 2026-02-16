@@ -9,6 +9,7 @@ from unittest import mock
 
 def _install_fake_curses():
     fake = types.ModuleType("curses")
+    fake.KEY_F6 = 270
     fake.KEY_UP = 259
     fake.KEY_DOWN = 258
     fake.KEY_PPAGE = 339
@@ -17,6 +18,10 @@ def _install_fake_curses():
     fake.KEY_END = 360
     fake.KEY_ENTER = 343
     fake.KEY_BACKSPACE = 263
+    fake.KEY_IC = 331
+    fake.BUTTON1_CLICKED = 0x1
+    fake.BUTTON1_PRESSED = 0x2
+    fake.BUTTON1_DOUBLE_CLICKED = 0x4
     fake.A_BOLD = 1
     fake.A_REVERSE = 2
     fake.COLOR_RED = 1
@@ -149,7 +154,70 @@ class LogViewerComponentTests(unittest.TestCase):
         self.assertTrue(any("WARN world" in text for text in rendered))
         self.assertTrue(any("Arrows/PgUp/PgDn" in text or "/world" in text for text in rendered))
 
+    def test_selection_drag_copy_and_escape_clear(self):
+        win = self._make_window()
+        win.lines = ["alpha", "beta", "gamma"]
+        win.scroll_offset = 0
+        win.body_rect = mock.Mock(return_value=(1, 2, 30, 8))
+
+        # Start selection and extend by drag.
+        self.assertIsNone(win.handle_click(2, 3, self.curses.BUTTON1_PRESSED))
+        self.assertIsNone(win.handle_mouse_drag(3, 4, self.curses.BUTTON1_PRESSED))
+        self.assertTrue(win.has_selection())
+        selected = win._selected_text()
+        self.assertIn("\n", selected)
+
+        with mock.patch.object(self.log_mod, "copy_text") as copy_text:
+            self.assertIsNone(win.handle_key(self.curses.KEY_F6))
+        copy_text.assert_called_once()
+
+        # Insert key alias for copy.
+        with mock.patch.object(self.log_mod, "copy_text") as copy_text:
+            self.assertIsNone(win.handle_key(self.curses.KEY_IC))
+        copy_text.assert_called_once()
+
+        # Escape clears selection first.
+        self.assertTrue(win.has_selection())
+        self.assertIsNone(win.handle_key(27))
+        self.assertFalse(win.has_selection())
+
+        # Second escape clears search.
+        win.search_query = "warn"
+        win.search_matches = [1]
+        win.search_index = 0
+        self.assertIsNone(win.handle_key(27))
+        self.assertEqual(win.search_query, "")
+        self.assertEqual(win.search_matches, [])
+        self.assertEqual(win.search_index, -1)
+
+    def test_draw_selection_overlay_and_click_outside_clears(self):
+        win = self._make_window()
+        win.lines = ["alpha", "beta", "gamma"]
+        win.scroll_offset = 0
+        win.filepath = "/tmp/demo.log"
+        win.body_rect = mock.Mock(return_value=(1, 2, 30, 8))
+        win.selection_anchor = (0, 1)
+        win.selection_cursor = (1, 2)
+
+        with (
+            mock.patch.object(win, "_poll_for_updates", return_value=None),
+            mock.patch.object(win, "draw_frame", return_value=0),
+            mock.patch.object(self.log_mod, "safe_addstr") as safe_addstr,
+            mock.patch.object(self.log_mod, "theme_attr", return_value=0),
+        ):
+            win.draw(None)
+
+        self.assertTrue(
+            any(
+                len(call.args) >= 5 and (call.args[4] & self.curses.A_REVERSE)
+                for call in safe_addstr.call_args_list
+            )
+        )
+
+        # Click outside should clear selection.
+        self.assertIsNone(win.handle_click(0, 0, self.curses.BUTTON1_CLICKED))
+        self.assertFalse(win.has_selection())
+
 
 if __name__ == "__main__":
     unittest.main()
-

@@ -6,6 +6,7 @@ import codecs
 import errno
 import importlib
 import os
+import signal
 import struct
 
 _BACKENDS_UNSET = object()
@@ -127,6 +128,40 @@ class TerminalSession:
         else:
             payload = bytes(data)
         return os.write(self.master_fd, payload)
+
+    def send_signal(self, sig):
+        """Send signal to foreground process group (or child pid fallback)."""
+        if not self.running:
+            return False
+
+        if self.master_fd is not None and hasattr(os, "tcgetpgrp") and hasattr(os, "killpg"):
+            try:
+                pgid = os.tcgetpgrp(self.master_fd)
+            except OSError:
+                pgid = None
+            if pgid and pgid > 0:
+                try:
+                    os.killpg(pgid, sig)
+                    return True
+                except OSError:
+                    pass
+
+        if self.child_pid is None:
+            return False
+
+        try:
+            os.kill(self.child_pid, sig)
+        except OSError:
+            return False
+        return True
+
+    def interrupt(self):
+        """Send SIGINT to foreground process."""
+        return self.send_signal(signal.SIGINT)
+
+    def terminate(self):
+        """Send SIGTERM to foreground process."""
+        return self.send_signal(signal.SIGTERM)
 
     def resize(self, cols, rows):
         """Update terminal window size and notify child PTY."""

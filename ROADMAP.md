@@ -208,16 +208,16 @@ Hacer el file manager competitivo con Midnight Commander.
 Extender lo que se puede hacer sin salir del escritorio.
 
 **Image Viewer**
-- [ ] Abrir PNG/JPEG/GIF desde File Manager
-- [ ] Renderizar usando chafa (preferido), timg o catimg como backend
-- [ ] Zoom (renderizar a diferentes densidades de caracteres)
-- [ ] Escalar a tamaño de ventana
+- [x] Abrir PNG/JPEG/GIF desde File Manager
+- [x] Renderizar usando chafa (preferido), timg o catimg como backend
+- [x] Zoom (renderizar a diferentes densidades de caracteres)
+- [x] Escalar a tamaño de ventana
 
 **Hex Editor**
-- [ ] Abrir archivos binarios desde File Manager (en vez de mostrar error "binary file")
-- [ ] Layout tres columnas: offset | bytes hex | ASCII
-- [ ] Navegación, búsqueda, go-to-offset
-- [ ] Inicialmente read-only; modo edición como stretch goal
+- [x] Abrir archivos binarios desde File Manager (en vez de mostrar error "binary file")
+- [x] Layout tres columnas: offset | bytes hex | ASCII
+- [x] Navegación, búsqueda, go-to-offset
+- [x] Inicialmente read-only; modo edición como stretch goal
 
 **Video Player Mejorado**
 - [ ] Diálogo selector de archivos de video (sin requerir File Manager)
