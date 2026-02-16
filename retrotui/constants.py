@@ -2,6 +2,7 @@
 Constants and Configuration for RetroTUI.
 """
 import curses
+from .core.actions import AppAction
 
 # ═══════════════════════════════════════════════════════════
 # Box drawing characters (Unicode)
@@ -28,22 +29,22 @@ DESKTOP_PATTERN = '░'
 # Icons
 # ═══════════════════════════════════════════════════════════
 ICONS = [
-    {'label': 'Files',    'action': 'filemanager', 'art': ['┌──┐', '│▒▒│', '└──┘']},
-    {'label': 'Notepad',  'action': 'notepad',     'art': ['╔══╗', '║≡≡║', '╚══╝']},
-    {'label': 'ASCII Vid', 'action': 'asciivideo', 'art': ['┌──┐', '│▶█│', '└──┘']},
-    {'label': 'Terminal', 'action': 'terminal',     'art': ['┌──┐', '│>_│', '└──┘']},
-    {'label': 'Settings', 'action': 'settings',    'art': ['╭──╮', '│⚙ │', '╰──╯']},
-    {'label': 'About',   'action': 'about',        'art': ['╭──╮', '│ ?│', '╰──╯']},
+    {'label': 'Files',    'action': AppAction.FILE_MANAGER, 'art': ['┌──┐', '│▒▒│', '└──┘']},
+    {'label': 'Notepad',  'action': AppAction.NOTEPAD,      'art': ['╔══╗', '║≡≡║', '╚══╝']},
+    {'label': 'ASCII Vid', 'action': AppAction.ASCII_VIDEO, 'art': ['┌──┐', '│▶█│', '└──┘']},
+    {'label': 'Terminal', 'action': AppAction.TERMINAL,     'art': ['┌──┐', '│>_│', '└──┘']},
+    {'label': 'Settings', 'action': AppAction.SETTINGS,     'art': ['╭──╮', '│⚙ │', '╰──╯']},
+    {'label': 'About',   'action': AppAction.ABOUT,         'art': ['╭──╮', '│ ?│', '╰──╯']},
 ]
 
 # Fallback ASCII icons for non-Unicode terminals
 ICONS_ASCII = [
-    {'label': 'Files',    'action': 'filemanager', 'art': ['+--+', '|##|', '+--+']},
-    {'label': 'Notepad',  'action': 'notepad',     'art': ['+--+', '|==|', '+--+']},
-    {'label': 'ASCII Vid', 'action': 'asciivideo', 'art': ['+--+', '|>|#', '+--+']},
-    {'label': 'Terminal', 'action': 'terminal',     'art': ['+--+', '|>_|', '+--+']},
-    {'label': 'Settings', 'action': 'settings',    'art': ['+--+', '|**|', '+--+']},
-    {'label': 'About',   'action': 'about',        'art': ['+--+', '| ?|', '+--+']},
+    {'label': 'Files',    'action': AppAction.FILE_MANAGER, 'art': ['+--+', '|##|', '+--+']},
+    {'label': 'Notepad',  'action': AppAction.NOTEPAD,      'art': ['+--+', '|==|', '+--+']},
+    {'label': 'ASCII Vid', 'action': AppAction.ASCII_VIDEO, 'art': ['+--+', '|>|#', '+--+']},
+    {'label': 'Terminal', 'action': AppAction.TERMINAL,     'art': ['+--+', '|>_|', '+--+']},
+    {'label': 'Settings', 'action': AppAction.SETTINGS,     'art': ['+--+', '|**|', '+--+']},
+    {'label': 'About',   'action': AppAction.ABOUT,         'art': ['+--+', '| ?|', '+--+']},
 ]
 
 VIDEO_EXTENSIONS = {

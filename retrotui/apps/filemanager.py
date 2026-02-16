@@ -5,24 +5,29 @@ import os
 import curses
 from ..ui.window import Window
 from ..ui.menu import WindowMenu
-from ..utils import safe_addstr
+from ..core.actions import ActionResult, ActionType, AppAction
+from ..utils import safe_addstr, check_unicode_support
 from ..constants import C_FM_SELECTED, SB_H
 
 class FileEntry:
     """Represents a file or directory entry in the file manager."""
-    __slots__ = ('name', 'is_dir', 'full_path', 'size', 'display_text')
+    __slots__ = ('name', 'is_dir', 'full_path', 'size', 'display_text', 'use_unicode')
 
-    def __init__(self, name, is_dir, full_path, size=0):
+    def __init__(self, name, is_dir, full_path, size=0, use_unicode=True):
         self.name = name
         self.is_dir = is_dir
         self.full_path = full_path
         self.size = size
+        self.use_unicode = use_unicode
+
+        dir_icon = '📁' if use_unicode else '[D]'
+        file_icon = '📄' if use_unicode else '[F]'
         if name == '..':
-            self.display_text = '  📁 ..'
+            self.display_text = f'  {dir_icon} ..'
         elif is_dir:
-            self.display_text = f'  📁 {name}/'
+            self.display_text = f'  {dir_icon} {name}/'
         else:
-            self.display_text = f'  📄 {name:<30} {self._format_size():>8}'
+            self.display_text = f'  {file_icon} {name:<30} {self._format_size():>8}'
 
     def _format_size(self):
         if self.size > 1048576:
@@ -39,20 +44,21 @@ class FileManagerWindow(Window):
     def __init__(self, x, y, w, h, start_path=None):
         super().__init__('File Manager', x, y, w, h, content=[])
         self.current_path = os.path.realpath(start_path or os.path.expanduser('~'))
+        self.use_unicode = check_unicode_support()
         self.entries = []           # List[FileEntry]
         self.selected_index = 0
         self.show_hidden = False
         self.error_message = None
         self.window_menu = WindowMenu({
             'File': [
-                ('Open       Enter', 'fm_open'),
-                ('Parent Dir  Bksp', 'fm_parent'),
+                ('Open       Enter', AppAction.FM_OPEN),
+                ('Parent Dir  Bksp', AppAction.FM_PARENT),
                 ('─────────────',    None),
-                ('Close',            'fm_close'),
+                ('Close',            AppAction.FM_CLOSE),
             ],
             'View': [
-                ('Hidden Files   H', 'fm_toggle_hidden'),
-                ('Refresh',          'fm_refresh'),
+                ('Hidden Files   H', AppAction.FM_TOGGLE_HIDDEN),
+                ('Refresh',          AppAction.FM_REFRESH),
             ],
         })
         self.h = max(self.h, 8)
@@ -80,12 +86,14 @@ class FileManagerWindow(Window):
         self.error_message = None
 
         # Header: path bar + separator
-        self.content.append(f' 📂 {self.current_path}')
+        path_icon = '📂' if self.use_unicode else '[P]'
+        error_icon = '⛔' if self.use_unicode else '[!]'
+        self.content.append(f' {path_icon} {self.current_path}')
         self.content.append(' ' + '─' * (self.w - 4))
 
         # Parent directory entry (unless at filesystem root)
         if self.current_path != '/' and os.path.dirname(self.current_path) != self.current_path:
-            entry = FileEntry('..', True, os.path.dirname(self.current_path))
+            entry = FileEntry('..', True, os.path.dirname(self.current_path), use_unicode=self.use_unicode)
             self.entries.append(entry)
             self.content.append(entry.display_text)
 
@@ -93,12 +101,12 @@ class FileManagerWindow(Window):
             raw_entries = sorted(os.listdir(self.current_path), key=str.lower)
         except PermissionError:
             self.error_message = 'Permission denied'
-            self.content.append('  ⛔ Permission denied')
+            self.content.append(f'  {error_icon} Permission denied')
             self._update_title()
             return
         except OSError as e:
             self.error_message = str(e)
-            self.content.append(f'  ⛔ {e}')
+            self.content.append(f'  {error_icon} {e}')
             self._update_title()
             return
 
@@ -110,10 +118,10 @@ class FileManagerWindow(Window):
             full_path = os.path.join(self.current_path, name)
             try:
                 if os.path.isdir(full_path):
-                    dirs.append(FileEntry(name, True, full_path))
+                    dirs.append(FileEntry(name, True, full_path, use_unicode=self.use_unicode))
                 elif os.path.isfile(full_path):
                     size = os.path.getsize(full_path)
-                    files.append(FileEntry(name, False, full_path, size))
+                    files.append(FileEntry(name, False, full_path, size, use_unicode=self.use_unicode))
             except OSError:
                 continue
 
@@ -178,7 +186,7 @@ class FileManagerWindow(Window):
                     break
 
     def activate_selected(self):
-        """Activate currently selected entry. Returns ('dir', path) or ('file', path)."""
+        """Activate currently selected entry and return optional ActionResult."""
         if not self.entries:
             return None
         if self.selected_index >= len(self.entries):
@@ -186,9 +194,9 @@ class FileManagerWindow(Window):
         entry = self.entries[self.selected_index]
         if entry.is_dir:
             self.navigate_to(entry.full_path)
-            return ('dir', entry.full_path)
+            return None
         else:
-            return ('file', entry.full_path)
+            return ActionResult(ActionType.OPEN_FILE, entry.full_path)
 
     def select_up(self):
         """Move selection up by one entry."""
@@ -218,16 +226,16 @@ class FileManagerWindow(Window):
 
     def _execute_menu_action(self, action):
         """Execute a window menu action. Returns signal or None."""
-        if action == 'fm_open':
+        if action == AppAction.FM_OPEN:
             return self.activate_selected()
-        elif action == 'fm_parent':
+        elif action == AppAction.FM_PARENT:
             self.navigate_parent()
-        elif action == 'fm_toggle_hidden':
+        elif action == AppAction.FM_TOGGLE_HIDDEN:
             self.toggle_hidden()
-        elif action == 'fm_refresh':
+        elif action == AppAction.FM_REFRESH:
             self._rebuild_content()
-        elif action == 'fm_close':
-            return ('action', 'close')
+        elif action == AppAction.FM_CLOSE:
+            return ActionResult(ActionType.EXECUTE, AppAction.CLOSE_WINDOW)
         return None
 
     def handle_click(self, mx, my):
@@ -252,7 +260,7 @@ class FileManagerWindow(Window):
 
     def handle_key(self, key):
         """Handle keyboard input for the file manager.
-        Returns ('file', path) if a file is opened, else None."""
+        Returns ActionResult when needed, else None."""
         # Window menu keyboard handling
         if self.window_menu and self.window_menu.active:
             action = self.window_menu.handle_key(key)
@@ -288,3 +296,13 @@ class FileManagerWindow(Window):
         elif key == ord('h') or key == ord('H'):
             self.toggle_hidden()
         return None
+
+    def handle_scroll(self, direction, steps=1):
+        """Scroll wheel moves selection instead of only viewport."""
+        count = max(1, steps)
+        if direction == 'up':
+            for _ in range(count):
+                self.select_up()
+        elif direction == 'down':
+            for _ in range(count):
+                self.select_down()

@@ -3,7 +3,7 @@
 set -e
 
 echo "═══════════════════════════════════════════"
-echo "  RetroTUI v0.1 — Setup"
+echo "  RetroTUI v0.3.4 — Setup"
 echo "═══════════════════════════════════════════"
 echo ""
 
@@ -66,5 +66,5 @@ fi
 echo ""
 echo "═══════════════════════════════════════════"
 echo "  Setup complete! Run with:"
-echo "  python3 src/retrotui.py"
+echo "  python3 -m retrotui"
 echo "═══════════════════════════════════════════"

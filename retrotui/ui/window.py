@@ -228,6 +228,28 @@ class Window:
         if self.window_menu:
             self.window_menu.draw_dropdown(stdscr, self.x, self.y, self.w)
 
+    def handle_click(self, mx, my):
+        """Default click handler for basic windows."""
+        return None
+
+    def handle_key(self, key):
+        """Default key handler: vertical scrolling for simple windows."""
+        if key in (curses.KEY_UP, curses.KEY_PPAGE):
+            self.scroll_up()
+        elif key in (curses.KEY_DOWN, curses.KEY_NPAGE):
+            self.scroll_down()
+        return None
+
+    def handle_scroll(self, direction, steps=1):
+        """Default scroll handler used by mouse wheel routing."""
+        count = max(1, steps)
+        if direction == 'up':
+            for _ in range(count):
+                self.scroll_up()
+        elif direction == 'down':
+            for _ in range(count):
+                self.scroll_down()
+
     def scroll_up(self):
         if self.scroll_offset > 0:
             self.scroll_offset -= 1

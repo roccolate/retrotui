@@ -4,6 +4,45 @@ Todas las versiones notables de RetroTUI están documentadas aquí.
 
 ---
 
+## [v0.3.4] — 2026-02-16
+
+### Changed
+- Bump de versión del proyecto a `0.3.4` (`pyproject.toml`, runtime y scripts de setup).
+- Sincronización de cadenas de versión en UI (`status bar`, diálogo About y welcome).
+- Actualización de documentación y preview para reflejar `v0.3.4`.
+
+### Improved
+- Ajustes editoriales de release notes para separar claramente `v0.3.4` (mantenimiento) de `v0.3.3` (refactor/hardening).
+
+---
+
+## [v0.3.3] — 2026-02-15
+
+### Added
+- **Estructura modular del paquete**: `retrotui/core`, `retrotui/ui`, `retrotui/apps`
+
+### Fixed
+- **Save As / Save Error**: flujo de guardado consistente con señales tipadas
+- Corrección de import faltante en `InputDialog` (`C_WIN_BODY`)
+- Eliminada doble instanciación de Notepad al abrir archivos
+
+### Changed
+- Refactor de enrutamiento de input: `handle_mouse()` y `handle_key()` divididos en helpers
+- Contrato interno de acciones tipado (`ActionResult` / `ActionType`)
+- Reemplazo de magic strings de acciones por enum `AppAction` en menus, apps e iconos
+- Limpieza de artefactos Python (`.pyc`/`__pycache__`) del versionado
+- Unificación de menús en `MenuBar` (global y ventana) con wrappers de compatibilidad
+- Navegación del menú global delegada a `MenuBar.handle_key()`
+- Documentación sincronizada a `v0.3.3` y normalización de encoding UTF-8 en docs clave
+
+### Improved
+- Reemplazo de `except Exception` genéricos en rutas internas por excepciones concretas
+- Tests unitarios para navegación de `MenuBar` (separadores, ESC, LEFT/RIGHT, Enter)
+- Smoke tests de integración de `MenuBar` para click global/ventana por coordenadas
+- Logging básico de acciones (`execute_action`/dispatcher) con activación por `RETROTUI_DEBUG=1`
+
+---
+
 ## [v0.3.2] — 2026-02-14
 
 ### Added

@@ -190,15 +190,32 @@ código de la aplicación no necesita distinguirlos.
 - [x] Manejo de errores: mplayer no instalado, error de ejecución
 - [x] Restauración correcta de curses después de reproducción
 
+## 4.5 Características de v0.3.3 — Modularización y Hardening
+
+- [x] Refactor del monolito a paquete Python (`retrotui/core`, `retrotui/ui`, `retrotui/apps`)
+- [x] Contrato tipado de acciones (`ActionType` / `ActionResult`) en el dispatcher principal
+- [x] Unificación de menús (`Menu` + `WindowMenu`) en `MenuBar`
+- [x] Descomposición de `handle_mouse()` y `handle_key()` en helpers de routing
+- [x] Correcciones de guardado Save/Save As y errores de `InputDialog`
+- [x] Bootstrap de packaging con `pyproject.toml` y entrypoint `retrotui`
+- [x] Tests smoke iniciales para rutas no-curses (`tests/`)
+
+## 4.6 Características de v0.3.4 — Release de Mantenimiento
+
+- [x] Bump de versión global a `0.3.4` (runtime + packaging)
+- [x] Sincronización de versión visible en UI (welcome/status/about)
+- [x] Documentación y preview alineados con el estado actual del proyecto
+
 ### Roadmap futuro:
 - [x] File Manager con navegación de directorios
 - [x] Editor de texto integrado
 - [x] Barras de menú por ventana
 - [x] ASCII Video Player
+- [x] Modularización base del proyecto
 - [ ] Terminal embebida
 - [ ] Temas configurables (CGA, EGA, VGA, Win3.1, Win95)
 - [ ] Task switcher (Alt+Tab)
-- [ ] Configuración persistente (~/.retrotui/config.json)
+- [ ] Configuración persistente (`~/.config/retrotui/config.toml`)
 
 ---
 
@@ -253,5 +270,5 @@ sudo systemctl start gpm
 
 # Ejecutar
 cd retro-tui
-python3 retrotui.py
+python3 -m retrotui
 ```
