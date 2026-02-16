@@ -72,6 +72,9 @@ class FileEntry:
 class FileManagerWindow(Window):
     """Interactive file manager window with directory navigation."""
 
+    KEY_F6 = getattr(curses, 'KEY_F6', -1)
+    KEY_INSERT = getattr(curses, 'KEY_IC', -1)
+
     def __init__(self, x, y, w, h, start_path=None, show_hidden_default=False):
         super().__init__('File Manager', x, y, w, h, content=[])
         self.current_path = os.path.realpath(start_path or os.path.expanduser('~'))
@@ -326,7 +329,7 @@ class FileManagerWindow(Window):
                 self._ensure_visible()
         elif key_code in (ord('h'), ord('H')):
             self.toggle_hidden()
-        elif key_code == 3:
+        elif key_code in (self.KEY_F6, self.KEY_INSERT):
             if 0 <= self.selected_index < len(self.entries):
                 copy_text(self.entries[self.selected_index].full_path)
         return None

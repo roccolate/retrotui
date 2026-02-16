@@ -58,7 +58,7 @@ Todas las versiones notables de RetroTUI están documentadas aquí.
 - `init_colors()` ahora consume el tema activo y aplica colores por roles semanticos.
 - Todo el render de UI ahora consume keys de tema via helper (`desktop`, `window_title`, `status`, etc.) en lugar de color pairs crudos.
 - `FileManagerWindow` y `NotepadWindow` ahora respetan defaults persistidos (`show_hidden`, `word_wrap_default`).
-- Atajos de clipboard habilitados: `Ctrl+C` en Notepad/File Manager, `Ctrl+V` en Notepad/Terminal.
+- Atajos de clipboard ajustados para evitar conflicto con `Ctrl+C`: copy en Notepad/File Manager via `F6`/`Insert`, paste en Notepad/Terminal via `Ctrl+V`.
 - Notepad ahora soporta pegado multilinea en cursor y File Manager copia ruta completa de la entrada seleccionada.
 
 ---

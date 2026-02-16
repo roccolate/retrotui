@@ -185,6 +185,11 @@ class TerminalWindow(Window):
         if final == 'K':  # Erase in line
             self._erase_line(_num(0, 0))
             return
+        if final == 'P':  # Delete character(s) at cursor
+            count = max(1, _num(0, 1))
+            if self._cursor_col < len(self._line_chars):
+                del self._line_chars[self._cursor_col:self._cursor_col + count]
+            return
 
     def _consume_output(self, text):
         """Apply terminal output stream to local scrollback buffer."""

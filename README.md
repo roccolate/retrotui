@@ -58,7 +58,7 @@ git config core.hooksPath .githooks
 
 - CI corre en GitHub Actions para Linux y Windows (Python 3.9 y 3.12).
 - CI aplica `--module-coverage-fail-under 100.0` de forma gradual (solo `ubuntu-latest` + Python `3.12`).
-- Baseline QA actual: `374 tests` en verde y cobertura total por módulo `100.0%` (trace + AST).
+- Baseline QA actual: `377 tests` en verde y cobertura total por módulo `100.0%` (trace + AST).
 - Politica de formato de texto definida con `.editorconfig` y `.gitattributes`.
 - Politica de release/tagging en `RELEASE.md`.
 - Release CI disponible en `.github/workflows/release.yml` (tag `vX.Y.Z` o dispatch manual).
@@ -106,7 +106,7 @@ Windows Terminal (SSH), iTerm2, tmux, screen.
 | `PgUp/PgDn`  | Selección por página       |
 | `Home/End`    | Inicio / final de lista    |
 | `H`           | Toggle archivos ocultos    |
-| `Ctrl+C`      | Copiar ruta seleccionada   |
+| `F6` / `Ins`  | Copiar ruta seleccionada   |
 
 ### Notepad (Editor de Texto)
 | Tecla         | Acción                     |
@@ -117,7 +117,7 @@ Windows Terminal (SSH), iTerm2, tmux, screen.
 | `Backspace`   | Borrar atrás               |
 | `Delete`      | Borrar adelante            |
 | `Enter`       | Nueva línea                |
-| `Ctrl+C`      | Copiar línea actual        |
+| `F6` / `Ins`  | Copiar línea actual        |
 | `Ctrl+V`      | Pegar clipboard (multilínea) |
 | `Ctrl+W`      | Toggle word wrap           |
 
@@ -187,7 +187,7 @@ Ver [CHANGELOG.md](CHANGELOG.md) para el historial completo de versiones.
 
 ### Últimos cambios (v0.6.0)
 - **Release v0.6.0** — versión sincronizada en runtime, package y setup.
-- **Clipboard base inter-app** — `Ctrl+C`/`Ctrl+V` en Notepad, File Manager y Terminal.
+- **Clipboard base inter-app** — copy con `F6`/`Ins` en Notepad y File Manager; paste con `Ctrl+V`.
 - **Calidad** — baseline actual: `374 tests` y cobertura por módulo `100.0%`.
 - **Roadmap** — v0.4 completada, v0.5 y v0.6 en progreso.
 

@@ -13,6 +13,9 @@ from ..constants import C_STATUS, C_SCROLLBAR
 class NotepadWindow(Window):
     """Editable text editor window with word wrap support."""
 
+    KEY_F6 = getattr(curses, 'KEY_F6', -1)
+    KEY_INSERT = getattr(curses, 'KEY_IC', -1)
+
     def __init__(self, x, y, w, h, filepath=None, wrap_default=False):
         title = 'Notepad'
         super().__init__(title, x, y, w, h, content=[])
@@ -387,8 +390,8 @@ class NotepadWindow(Window):
             if result is not True:
                 return result
 
-        # Copy line: Ctrl+C (key 3)
-        elif key_code == 3:
+        # Copy line: F6 / Insert (Ctrl+Ins fallback where modifiers collapse)
+        elif key_code in (self.KEY_F6, self.KEY_INSERT):
             if 0 <= self.cursor_line < len(self.buffer):
                 copy_text(self.buffer[self.cursor_line])
 

@@ -18,6 +18,8 @@ def _install_fake_curses():
     fake.KEY_NPAGE = 338
     fake.KEY_BACKSPACE = 263
     fake.KEY_DC = 330
+    fake.KEY_IC = 331
+    fake.KEY_F6 = 270
     fake.A_BOLD = 1
     fake.A_REVERSE = 2
     fake.error = Exception
@@ -422,13 +424,21 @@ class NotepadComponentTests(unittest.TestCase):
 
         self.assertEqual(result.type, self.actions_mod.ActionType.SAVE_ERROR)
 
-    def test_handle_key_ctrl_c_copies_current_line(self):
+    def test_handle_key_copy_shortcut_copies_current_line(self):
         win = self._make_window()
         win.buffer = ["first", "second"]
         win.cursor_line = 1
         with mock.patch.object(self.notepad_mod, "copy_text") as copy_text:
-            win.handle_key(3)
+            win.handle_key(self.curses.KEY_F6)
         copy_text.assert_called_once_with("second")
+
+    def test_handle_key_ctrl_c_no_longer_triggers_copy(self):
+        win = self._make_window()
+        win.buffer = ["first"]
+        win.cursor_line = 0
+        with mock.patch.object(self.notepad_mod, "copy_text") as copy_text:
+            win.handle_key(3)
+        copy_text.assert_not_called()
 
     def test_handle_key_ctrl_v_pastes_multiline_text(self):
         win = self._make_window()
