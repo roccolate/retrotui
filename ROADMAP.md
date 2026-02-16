@@ -99,10 +99,10 @@ La release que hace RetroTUI usable como shell diario.
 Personalidad y persistencia.
 
 **Motor de Temas**
-- [ ] Dataclass/dict `Theme` mapeando nombres semánticos a colores
-- [ ] Todos los draws referencian keys de tema, no color pairs crudos
-- [ ] `init_colors()` lee del tema activo
-- [ ] Temas built-in:
+- [x] Dataclass/dict `Theme` mapeando nombres semánticos a colores
+- [x] Todos los draws referencian keys de tema, no color pairs crudos
+- [x] `init_colors()` lee del tema activo
+- [x] Temas built-in:
   - Windows 3.1 (actual, default)
   - DOS/CGA — fondo azul, texto amarillo, bordes simples
   - Windows 95 — paneles grises biselados, efecto 3D, barra Start
@@ -110,15 +110,15 @@ Personalidad y persistencia.
   - Amiga Workbench — naranja/azul/blanco con gradiente copper
 
 **Configuración Persistente**
-- [ ] `~/.config/retrotui/config.toml`
-- [ ] Estado guardado: tema activo, mostrar ocultos, word wrap default
+- [x] `~/.config/retrotui/config.toml`
+- [x] Estado guardado: tema activo, mostrar ocultos, word wrap default
 - [ ] Restaurar sesión: recordar ventanas abiertas, posiciones, archivos abiertos
 - [ ] Detección de primera ejecución con wizard de bienvenida
 
 **Ventana de Settings (funcional)**
-- [ ] Reemplazar placeholder actual con radio buttons y toggles funcionales
-- [ ] Preview de tema (aplicar en vivo, confirmar o revertir)
-- [ ] Guardar/cargar configuración
+- [x] Reemplazar placeholder actual con radio buttons y toggles funcionales
+- [x] Preview de tema (aplicar en vivo, confirmar o revertir)
+- [x] Guardar/cargar configuración
 
 ---
 

@@ -175,7 +175,8 @@ class CoreAppTests(unittest.TestCase):
 
         configure_terminal.assert_called_once_with(stdscr, timeout_ms=500)
         disable_flow_control.assert_called_once_with()
-        init_colors.assert_called_once_with()
+        init_colors.assert_called_once_with(app.theme)
+        self.assertEqual(app.theme.key, "win31")
         welcome_builder.assert_called_once_with(self.app_mod.APP_VERSION)
         window_cls.assert_called_once()
         self.assertEqual(app.click_flags, 11)
@@ -555,6 +556,87 @@ class CoreAppTests(unittest.TestCase):
         app._spawn_window(win)
         self.assertIn(win, app.windows)
         app.set_active_window.assert_called_once_with(win)
+
+    def test_apply_theme_updates_state_and_calls_init_colors(self):
+        app = self._make_app()
+
+        with (
+            mock.patch.object(self.app_mod, "get_theme", return_value=types.SimpleNamespace(key="hacker")) as get_theme,
+            mock.patch.object(self.app_mod, "init_colors") as init_colors,
+        ):
+            app.apply_theme("hacker")
+
+        get_theme.assert_called_once_with("hacker")
+        init_colors.assert_called_once_with(app.theme)
+        self.assertEqual(app.theme_name, "hacker")
+
+    def test_apply_preferences_updates_defaults_and_open_windows(self):
+        app = self._make_app()
+        app.default_show_hidden = False
+        app.default_word_wrap = False
+
+        file_win = types.SimpleNamespace(
+            show_hidden=False,
+            _rebuild_content=mock.Mock(),
+        )
+        notepad_win = types.SimpleNamespace(
+            wrap_mode=False,
+            view_left=9,
+            _invalidate_wrap=mock.Mock(),
+            _ensure_cursor_visible=mock.Mock(),
+        )
+        app.windows = [file_win, notepad_win]
+
+        app.apply_preferences(
+            show_hidden=True,
+            word_wrap_default=True,
+            apply_to_open_windows=True,
+        )
+
+        self.assertTrue(app.default_show_hidden)
+        self.assertTrue(app.default_word_wrap)
+        self.assertTrue(file_win.show_hidden)
+        self.assertTrue(notepad_win.wrap_mode)
+        self.assertEqual(notepad_win.view_left, 0)
+        file_win._rebuild_content.assert_called_once_with()
+        notepad_win._invalidate_wrap.assert_called_once_with()
+        notepad_win._ensure_cursor_visible.assert_called_once_with()
+
+    def test_apply_preferences_early_return_and_no_op_when_same_values(self):
+        app = self._make_app()
+        app.default_show_hidden = True
+        app.default_word_wrap = True
+        file_win = types.SimpleNamespace(show_hidden=False, _rebuild_content=mock.Mock())
+        notepad_win = types.SimpleNamespace(
+            wrap_mode=True,
+            view_left=2,
+            _invalidate_wrap=mock.Mock(),
+            _ensure_cursor_visible=mock.Mock(),
+        )
+        app.windows = [file_win, notepad_win]
+
+        app.apply_preferences(show_hidden=False, apply_to_open_windows=False)
+        self.assertFalse(app.default_show_hidden)
+        file_win._rebuild_content.assert_not_called()
+
+        app.apply_preferences(show_hidden=False, word_wrap_default=True, apply_to_open_windows=True)
+        file_win._rebuild_content.assert_not_called()
+        notepad_win._invalidate_wrap.assert_not_called()
+
+    def test_persist_config_builds_dataclass_and_calls_save(self):
+        app = self._make_app()
+        app.theme_name = "amiga"
+        app.default_show_hidden = True
+        app.default_word_wrap = False
+
+        with mock.patch.object(self.app_mod, "save_config", return_value="/tmp/config.toml") as save_config:
+            result = app.persist_config()
+
+        self.assertEqual(result, "/tmp/config.toml")
+        save_config.assert_called_once_with(app.config)
+        self.assertEqual(app.config.theme, "amiga")
+        self.assertTrue(app.config.show_hidden)
+        self.assertFalse(app.config.word_wrap_default)
 
     def test_open_file_viewer_video_error_opens_dialog(self):
         app = self._make_app()

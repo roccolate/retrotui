@@ -7,7 +7,7 @@ import unicodedata
 from ..ui.window import Window
 from ..ui.menu import WindowMenu
 from ..core.actions import ActionResult, ActionType, AppAction
-from ..utils import safe_addstr, check_unicode_support, normalize_key_code
+from ..utils import safe_addstr, check_unicode_support, normalize_key_code, theme_attr
 from ..constants import C_FM_SELECTED
 
 
@@ -71,13 +71,13 @@ class FileEntry:
 class FileManagerWindow(Window):
     """Interactive file manager window with directory navigation."""
 
-    def __init__(self, x, y, w, h, start_path=None):
+    def __init__(self, x, y, w, h, start_path=None, show_hidden_default=False):
         super().__init__('File Manager', x, y, w, h, content=[])
         self.current_path = os.path.realpath(start_path or os.path.expanduser('~'))
         self.use_unicode = check_unicode_support()
         self.entries = []           # List[FileEntry]
         self.selected_index = 0
-        self.show_hidden = False
+        self.show_hidden = bool(show_hidden_default)
         self.error_message = None
         self.window_menu = WindowMenu({
             'File': [
@@ -188,7 +188,7 @@ class FileManagerWindow(Window):
 
         if visible_start <= sel_content_idx < visible_end:
             screen_row = by + (sel_content_idx - self.scroll_offset)
-            sel_attr = curses.color_pair(C_FM_SELECTED) | curses.A_BOLD
+            sel_attr = theme_attr('file_selected') | curses.A_BOLD
             display = self.content[sel_content_idx] if sel_content_idx < len(self.content) else ''
             safe_addstr(stdscr, screen_row, bx, _fit_text_to_cells(display, bw), sel_attr)
 

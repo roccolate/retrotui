@@ -6,13 +6,13 @@ import os
 from ..ui.window import Window
 from ..ui.menu import WindowMenu
 from ..core.actions import ActionResult, ActionType, AppAction
-from ..utils import safe_addstr, normalize_key_code
+from ..utils import safe_addstr, normalize_key_code, theme_attr
 from ..constants import C_STATUS, C_SCROLLBAR
 
 class NotepadWindow(Window):
     """Editable text editor window with word wrap support."""
 
-    def __init__(self, x, y, w, h, filepath=None):
+    def __init__(self, x, y, w, h, filepath=None, wrap_default=False):
         title = 'Notepad'
         super().__init__(title, x, y, w, h, content=[])
         self.buffer = ['']  # list[str] — one string per logical line
@@ -22,7 +22,7 @@ class NotepadWindow(Window):
         self.cursor_col = 0
         self.view_top = 0    # First visible line in buffer
         self.view_left = 0   # Horizontal scroll offset
-        self.wrap_mode = False
+        self.wrap_mode = bool(wrap_default)
         self._wrap_cache = []       # list[(buf_line, start_col, text)]
         self._wrap_cache_w = -1     # Width used to build cache
         self._wrap_stale = True
@@ -220,14 +220,14 @@ class NotepadWindow(Window):
             thumb_pos = int(self.view_top / max(1, total_lines - body_h) * (body_h - 1))
             for i in range(body_h):
                 ch = '█' if i == thumb_pos else '░'
-                safe_addstr(stdscr, by + i, sb_x, ch, curses.color_pair(C_SCROLLBAR))
+                safe_addstr(stdscr, by + i, sb_x, ch, theme_attr('scrollbar'))
 
         # Status bar (inside window, last body row)
         status_y = by + bh - 1
         mod_flag = ' [Modified]' if self.modified else ''
         wrap_flag = ' WRAP' if self.wrap_mode else ''
         status = f' Ln {self.cursor_line + 1}, Col {self.cursor_col + 1}{wrap_flag}{mod_flag}'
-        safe_addstr(stdscr, status_y, bx, status.ljust(bw)[:bw], curses.color_pair(C_STATUS))
+        safe_addstr(stdscr, status_y, bx, status.ljust(bw)[:bw], theme_attr('status'))
 
         # Window menu dropdown (on top of body content)
         if self.window_menu:

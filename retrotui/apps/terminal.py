@@ -8,7 +8,7 @@ from ..core.actions import ActionResult, ActionType, AppAction
 from ..core.terminal_session import TerminalSession
 from ..ui.menu import WindowMenu
 from ..ui.window import Window
-from ..utils import normalize_key_code, safe_addstr
+from ..utils import normalize_key_code, safe_addstr, theme_attr
 
 
 class TerminalWindow(Window):
@@ -278,7 +278,7 @@ class TerminalWindow(Window):
         thumb_pos = int(start_idx / max(1, total_lines - rows) * (rows - 1))
         for i in range(rows):
             ch = '█' if i == thumb_pos else '░'
-            safe_addstr(stdscr, y + i, x, ch, curses.color_pair(C_SCROLLBAR))
+            safe_addstr(stdscr, y + i, x, ch, theme_attr('scrollbar'))
 
     def _draw_live_cursor(self, stdscr, x, y, text_cols, text_rows, start_idx, total_lines, body_attr):
         """Draw a visual cursor on the current editable line when in LIVE mode."""
@@ -298,7 +298,12 @@ class TerminalWindow(Window):
 
         line_text = ''.join(self._line_chars)
         ch = line_text[col] if col < len(line_text) else ' '
-        safe_addstr(stdscr, row, x + col, ch, body_attr | curses.A_REVERSE)
+        if ch == ' ':
+            # Some terminals do not show reverse-video spaces clearly.
+            safe_addstr(stdscr, row, x + col, '_', body_attr | curses.A_BOLD)
+            return
+
+        safe_addstr(stdscr, row, x + col, ch, body_attr | curses.A_REVERSE | curses.A_BOLD)
 
     def draw(self, stdscr):
         """Draw terminal body, live output, scrollback and status line."""
@@ -339,7 +344,7 @@ class TerminalWindow(Window):
             state = 'EXIT'
         live_state = 'LIVE' if self.scrollback_offset == 0 else f'BACK {self.scrollback_offset}'
         status = f' {state}  {live_state} '
-        safe_addstr(stdscr, by + bh - 1, bx, status.ljust(bw)[:bw], curses.color_pair(C_STATUS))
+        safe_addstr(stdscr, by + bh - 1, bx, status.ljust(bw)[:bw], theme_attr('status'))
 
         if self.window_menu:
             self.window_menu.draw_dropdown(stdscr, self.x, self.y, self.w)

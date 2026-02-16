@@ -72,6 +72,17 @@ class UtilsCoreTests(unittest.TestCase):
         init_color.assert_not_called()
         self.assertGreaterEqual(init_pair.call_count, 15)
 
+    def test_init_colors_accepts_theme_key_and_theme_object(self):
+        with (
+            mock.patch.object(self.utils.curses, "can_change_color", return_value=False),
+            mock.patch.object(self.utils.curses, "init_pair") as init_pair,
+        ):
+            self.utils.init_colors("win31")
+            theme_obj = self.utils.get_theme("win95")
+            self.utils.init_colors(theme_obj)
+
+        self.assertGreaterEqual(init_pair.call_count, 30)
+
     def test_safe_addstr_clips_and_handles_errors(self):
         win = types.SimpleNamespace(
             getmaxyx=mock.Mock(return_value=(5, 10)),

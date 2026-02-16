@@ -383,7 +383,15 @@ class TerminalComponentTests(unittest.TestCase):
 
         with mock.patch.object(self.terminal_mod, "safe_addstr") as safe_addstr:
             win._draw_live_cursor(None, 4, 5, 3, 2, 0, 1, 7)
-        self.assertTrue(any(call.args[2] == 6 for call in safe_addstr.call_args_list))
+        self.assertTrue(
+            any(
+                len(call.args) >= 5
+                and call.args[2] == 6
+                and call.args[3] == "_"
+                and (call.args[4] & self.curses.A_BOLD)
+                for call in safe_addstr.call_args_list
+            )
+        )
 
         with mock.patch.object(self.terminal_mod, "safe_addstr") as safe_addstr:
             win._draw_live_cursor(None, 4, 5, 3, 1, 0, 0, 7)
@@ -392,6 +400,24 @@ class TerminalComponentTests(unittest.TestCase):
         with mock.patch.object(self.terminal_mod, "safe_addstr") as safe_addstr:
             win._draw_live_cursor(None, 4, 5, 3, 1, 0, 3, 7)
         safe_addstr.assert_not_called()
+
+    def test_draw_live_cursor_uses_underscore_on_blank_cell(self):
+        win = self._make_window()
+        win.active = True
+        win.scrollback_offset = 0
+        win._line_chars = list("abc")
+        win._cursor_col = 10
+
+        with mock.patch.object(self.terminal_mod, "safe_addstr") as safe_addstr:
+            win._draw_live_cursor(None, 4, 5, 12, 3, 0, 1, 9)
+        self.assertTrue(
+            any(
+                len(call.args) >= 5
+                and call.args[3] == "_"
+                and (call.args[4] & self.curses.A_BOLD)
+                for call in safe_addstr.call_args_list
+            )
+        )
 
     def test_key_to_input_mapping_covers_special_and_printable(self):
         win = self._make_window()

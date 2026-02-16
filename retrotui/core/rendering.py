@@ -6,18 +6,18 @@ from ..constants import (
     C_DESKTOP,
     C_ICON,
     C_ICON_SEL,
-    C_TASKBAR,
     C_STATUS,
+    C_TASKBAR,
     DESKTOP_PATTERN,
 )
-from ..utils import safe_addstr
+from ..utils import safe_addstr, theme_attr
 
 
 def draw_desktop(app):
     """Draw the desktop background pattern."""
     h, w = app.stdscr.getmaxyx()
-    attr = curses.color_pair(C_DESKTOP)
-    pattern = DESKTOP_PATTERN
+    attr = theme_attr("desktop")
+    pattern = getattr(getattr(app, "theme", None), "desktop_pattern", DESKTOP_PATTERN)
 
     for row in range(1, h - 1):
         line = (pattern * (w // len(pattern) + 1))[: w - 1]
@@ -36,7 +36,7 @@ def draw_icons(app):
         if y + 3 >= h - 1:
             break
         is_selected = idx == app.selected_icon
-        attr = curses.color_pair(C_ICON_SEL if is_selected else C_ICON) | curses.A_BOLD
+        attr = theme_attr("icon_selected" if is_selected else "icon") | curses.A_BOLD
         for row, line in enumerate(icon['art']):
             safe_addstr(app.stdscr, y + row, start_x, line, attr)
         label = icon['label'].center(len(icon['art'][0]))
@@ -50,7 +50,7 @@ def draw_taskbar(app):
     minimized = [win for win in app.windows if win.minimized]
     if not minimized:
         return
-    attr = curses.color_pair(C_TASKBAR)
+    attr = theme_attr("taskbar")
     safe_addstr(app.stdscr, taskbar_y, 0, ' ' * (w - 1), attr)
     x = 1
     for win in minimized:
@@ -65,7 +65,7 @@ def draw_taskbar(app):
 def draw_statusbar(app, version):
     """Draw the bottom status bar."""
     h, w = app.stdscr.getmaxyx()
-    attr = curses.color_pair(C_STATUS)
+    attr = theme_attr("status")
     visible = sum(1 for win in app.windows if win.visible)
     total = len(app.windows)
     status = f' RetroTUI v{version} | Windows: {visible}/{total} | Mouse: Enabled | Ctrl+Q: Exit'

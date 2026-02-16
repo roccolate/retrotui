@@ -4,9 +4,9 @@ Menu components.
 import curses
 import time
 
-from ..constants import C_MENUBAR, C_MENU_ITEM, C_MENU_SEL, SB_H
+from ..constants import SB_H
 from ..core.actions import AppAction
-from ..utils import draw_box, safe_addstr
+from ..utils import draw_box, safe_addstr, theme_attr
 
 
 DEFAULT_GLOBAL_ITEMS = {
@@ -100,7 +100,7 @@ class MenuBar:
     def draw_bar(self, stdscr, *, width=None, win_x=0, win_y=0, win_w=None, is_active=True):
         """Draw the bar row for either global or window mode."""
         bar_y = self._bar_row(win_y)
-        bar_attr = curses.color_pair(C_MENUBAR)
+        bar_attr = theme_attr("menubar")
 
         if self.mode == 'global':
             if width is None:
@@ -117,7 +117,7 @@ class MenuBar:
         for i, name in enumerate(self.menu_names):
             attr = bar_attr
             if self.active and i == self.selected_menu and is_active:
-                attr = curses.color_pair(C_MENU_SEL)
+                attr = theme_attr("menu_selected")
             safe_addstr(stdscr, bar_y, positions[i], f' {name} ', attr)
 
         if self.mode == 'global' and self.show_clock and width:
@@ -133,11 +133,11 @@ class MenuBar:
         if layout is None:
             return
         x, y, dropdown_w, items = layout
-        item_attr = curses.color_pair(C_MENU_ITEM)
+        item_attr = theme_attr("menu_item")
         draw_box(stdscr, y, x - 1, len(items) + 2, dropdown_w + 2, item_attr, double=False)
 
         for i, (label, action) in enumerate(items):
-            attr = curses.color_pair(C_MENU_SEL) if i == self.selected_item else item_attr
+            attr = theme_attr("menu_selected") if i == self.selected_item else item_attr
             if action is None:
                 safe_addstr(stdscr, y + 1 + i, x, SB_H * dropdown_w, item_attr)
             else:
