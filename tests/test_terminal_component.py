@@ -154,6 +154,79 @@ class TerminalComponentTests(unittest.TestCase):
         self.assertEqual("".join(win._line_chars), "")
         self.assertEqual(win._cursor_col, 0)
 
+    def test_consume_output_applies_csi_line_edit_sequences(self):
+        win = self._make_window()
+
+        # Typical shell behavior for erase: backspace + CSI K.
+        win._consume_output("abc\b\x1b[K")
+        self.assertEqual("".join(win._line_chars), "ab")
+        self.assertEqual(win._cursor_col, 2)
+
+        # Cursor-left rewrite using CSI D.
+        win._consume_output("\r1234\x1b[2DXY")
+        self.assertEqual("".join(win._line_chars), "12XY")
+        self.assertEqual(win._cursor_col, 4)
+
+        # Explicit cursor absolute and erase whole line.
+        win._consume_output("\x1b[GQ")
+        self.assertEqual("".join(win._line_chars), "Q2XY")
+        win._consume_output("\x1b[2K")
+        self.assertEqual("".join(win._line_chars), "")
+        self.assertEqual(win._cursor_col, 0)
+
+    def test_apply_csi_covers_extra_cursor_and_erase_modes(self):
+        win = self._make_window()
+        win._line_chars = list("abcd")
+        win._cursor_col = 2
+
+        win._apply_csi("1", "K")
+        self.assertEqual("".join(win._line_chars), "   d")
+
+        win._cursor_col = 0
+        win._apply_csi("", "C")
+        self.assertEqual(win._cursor_col, 1)
+
+        win._apply_csi("x", "C")
+        self.assertEqual(win._cursor_col, 2)
+
+        win._apply_csi("2", "C")
+        self.assertEqual(win._cursor_col, 4)
+
+        win._apply_csi("1;7", "H")
+        self.assertEqual(win._cursor_col, 6)
+
+        win._apply_csi("10", "f")
+        self.assertEqual(win._cursor_col, 0)
+
+    def test_consume_output_handles_partial_escape_osc_and_two_byte_sequences(self):
+        win = self._make_window()
+
+        win._consume_output("A\x1b")
+        self.assertEqual("".join(win._line_chars), "A")
+        self.assertEqual(win._ansi_pending, "\x1b")
+
+        win._consume_output("[31")
+        self.assertEqual(win._ansi_pending, "\x1b[31")
+
+        win._consume_output("mB")
+        self.assertEqual("".join(win._line_chars), "AB")
+        self.assertEqual(win._ansi_pending, "")
+
+        win._consume_output("\x1b]0;title\x07C")
+        self.assertEqual("".join(win._line_chars), "ABC")
+
+        win._consume_output("\x1b]0;x\x1b\\D")
+        self.assertEqual("".join(win._line_chars), "ABCD")
+
+        win._consume_output("\x1b]0;partial")
+        self.assertEqual(win._ansi_pending, "\x1b]0;partial")
+        win._consume_output("\x07E")
+        self.assertEqual("".join(win._line_chars), "ABCDE")
+        self.assertEqual(win._ansi_pending, "")
+
+        win._consume_output("\x1bcF")
+        self.assertEqual("".join(win._line_chars), "ABCDEF")
+
     def test_ensure_session_supported_and_start_errors(self):
         win = self._make_window()
         with mock.patch.object(self.terminal_mod, "TerminalSession", _FakeSession):

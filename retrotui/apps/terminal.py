@@ -139,25 +139,113 @@ class TerminalWindow(Window):
         if overflow > 0:
             del self._scroll_lines[:overflow]
 
+    def _erase_line(self, mode):
+        """Apply CSI K (erase in line) mode."""
+        if mode == 2:
+            self._line_chars = []
+            self._cursor_col = 0
+            return
+
+        if mode == 1:
+            end = min(len(self._line_chars), self._cursor_col + 1)
+            for i in range(end):
+                self._line_chars[i] = ' '
+            return
+
+        # mode 0 (default): erase from cursor to end
+        if self._cursor_col < len(self._line_chars):
+            del self._line_chars[self._cursor_col:]
+
+    def _apply_csi(self, params, final):
+        """Handle the subset of CSI controls needed for shell line editing."""
+        parts = params.split(';') if params else []
+
+        def _num(index, default):
+            if index >= len(parts):
+                return default
+            token = parts[index]
+            if not token or not token.isdigit():
+                return default
+            return int(token)
+
+        if final == 'D':  # Cursor left
+            self._cursor_col = max(0, self._cursor_col - max(1, _num(0, 1)))
+            return
+        if final == 'C':  # Cursor right
+            self._cursor_col = max(0, self._cursor_col + max(1, _num(0, 1)))
+            return
+        if final == 'G':  # Cursor horizontal absolute (1-based)
+            self._cursor_col = max(0, _num(0, 1) - 1)
+            return
+        if final in ('H', 'f'):  # Cursor position (row;col), we only track column
+            col = _num(1, 1) if len(parts) > 1 else 1
+            self._cursor_col = max(0, col - 1)
+            return
+        if final == 'K':  # Erase in line
+            self._erase_line(_num(0, 0))
+            return
+
     def _consume_output(self, text):
         """Apply terminal output stream to local scrollback buffer."""
-        for ch in self._strip_ansi(text):
+        data = self._ansi_pending + (text or '')
+        self._ansi_pending = ''
+        idx = 0
+        data_len = len(data)
+
+        while idx < data_len:
+            ch = data[idx]
+            if ch == '\x1b':
+                if idx + 1 >= data_len:
+                    break
+
+                marker = data[idx + 1]
+                if marker == '[':
+                    end = idx + 2
+                    while end < data_len and not ('@' <= data[end] <= '~'):
+                        end += 1
+                    if end >= data_len:
+                        break
+                    self._apply_csi(data[idx + 2:end], data[end])
+                    idx = end + 1
+                    continue
+
+                if marker == ']':
+                    end = idx + 2
+                    found = False
+                    while end < data_len:
+                        if data[end] == '\x07':
+                            end += 1
+                            found = True
+                            break
+                        if data[end] == '\x1b' and end + 1 < data_len and data[end + 1] == '\\':
+                            end += 2
+                            found = True
+                            break
+                        end += 1
+                    if not found:
+                        break
+                    idx = end
+                    continue
+
+                # Two-byte escape sequence: ignore.
+                idx += 2
+                continue
+
             if ch == '\n':
                 self._append_newline()
-                continue
-            if ch == '\r':
+            elif ch == '\r':
                 self._cursor_col = 0
-                continue
-            if ch == '\b':
+            elif ch == '\b':
                 self._cursor_col = max(0, self._cursor_col - 1)
-                continue
-            if ch == '\t':
+            elif ch == '\t':
                 spaces = 4 - (self._cursor_col % 4)
                 for _ in range(spaces):
                     self._write_char(' ')
-                continue
-            if ch >= ' ' and ch != '\x7f':
+            elif ch >= ' ' and ch != '\x7f':
                 self._write_char(ch)
+            idx += 1
+
+        self._ansi_pending = data[idx:]
 
     def _all_lines(self):
         """Return all lines including current editable line."""
