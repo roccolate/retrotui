@@ -265,9 +265,7 @@ class RetroTUI:
         lower_path = filepath.lower()
 
         if is_video_file(filepath):
-            success, error = play_ascii_video(self.stdscr, filepath)
-            if not success:
-                self.dialog = Dialog('ASCII Video Error', error, ['OK'], width=50)
+            self._play_ascii_video(filepath)
             return
 
         if (
@@ -322,6 +320,55 @@ class RetroTUI:
             wrap_default=getattr(self, 'default_word_wrap', False),
         )
         self._spawn_window(win)
+
+    def _play_ascii_video(self, filepath, subtitle_path=None):
+        """Run ASCII video playback and surface backend errors in a dialog."""
+        success, error = play_ascii_video(self.stdscr, filepath, subtitle_path=subtitle_path)
+        if not success:
+            self.dialog = Dialog('ASCII Video Error', error, ['OK'], width=58)
+
+    def show_video_open_dialog(self):
+        """Open dialog flow to play a video path without using File Manager."""
+        dialog = InputDialog('Open Video', 'Enter video path:', width=64)
+        dialog.callback = self._handle_video_path_input
+        self.dialog = dialog
+
+    def _handle_video_path_input(self, filepath):
+        """Validate selected video path and request optional subtitle path."""
+        raw_path = str(filepath or '').strip()
+        if not raw_path:
+            return ActionResult(ActionType.ERROR, 'Video path cannot be empty.')
+        video_path = os.path.abspath(os.path.expanduser(raw_path))
+        if not os.path.isfile(video_path):
+            return ActionResult(ActionType.ERROR, f'Video file not found:\n{video_path}')
+        if not is_video_file(video_path):
+            return ActionResult(ActionType.ERROR, f'Unsupported video format:\n{video_path}')
+
+        dialog = InputDialog(
+            'Subtitles (Optional)',
+            'Enter subtitle path (.srt/.ass/.vtt) or leave empty:',
+            width=70,
+        )
+        dialog.callback = (
+            lambda subtitle_path, selected_video=video_path: self._handle_subtitle_path_input(
+                selected_video,
+                subtitle_path,
+            )
+        )
+        self.dialog = dialog
+        return None
+
+    def _handle_subtitle_path_input(self, video_path, subtitle_path):
+        """Validate optional subtitle path and start playback."""
+        subtitle = str(subtitle_path or '').strip()
+        if subtitle:
+            subtitle = os.path.abspath(os.path.expanduser(subtitle))
+            if not os.path.isfile(subtitle):
+                return ActionResult(ActionType.ERROR, f'Subtitle file not found:\n{subtitle}')
+        else:
+            subtitle = None
+        self._play_ascii_video(video_path, subtitle_path=subtitle)
+        return None
 
     def show_save_as_dialog(self, win):
         """Show dialog to get filename for saving."""

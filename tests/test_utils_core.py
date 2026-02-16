@@ -1,4 +1,4 @@
-import importlib
+﻿import importlib
 import io
 import os
 import sys
@@ -200,6 +200,28 @@ class UtilsCoreTests(unittest.TestCase):
         self.assertIsNone(error)
         stdscr.refresh.assert_called_once()
 
+    def test_play_ascii_video_mplayer_receives_subtitle_argument(self):
+        stdscr = types.SimpleNamespace(refresh=mock.Mock())
+
+        def which(name):
+            return "/usr/bin/mplayer" if name == "mplayer" else None
+
+        ok_result = types.SimpleNamespace(returncode=0)
+        with (
+            mock.patch("retrotui.utils.shutil.which", side_effect=which),
+            mock.patch("retrotui.utils.subprocess.run", return_value=ok_result) as run_mock,
+            mock.patch("retrotui.utils.curses.def_prog_mode"),
+            mock.patch("retrotui.utils.curses.endwin"),
+            mock.patch("retrotui.utils.curses.reset_prog_mode"),
+        ):
+            success, error = self.utils.play_ascii_video(stdscr, "demo.mp4", subtitle_path="demo.srt")
+
+        self.assertTrue(success)
+        self.assertIsNone(error)
+        called_cmd = run_mock.call_args.args[0]
+        self.assertIn("-sub", called_cmd)
+        self.assertTrue(any(str(arg).endswith("demo.srt") for arg in called_cmd))
+
     def test_play_ascii_video_returns_error_on_subprocess_oserror(self):
         with (
             mock.patch("retrotui.utils.shutil.which", side_effect=lambda name: "/usr/bin/mpv" if name == "mpv" else None),
@@ -227,7 +249,7 @@ class UtilsCoreTests(unittest.TestCase):
 
         self.assertFalse(success)
         self.assertIn("Backend probado:", error)
-        self.assertIn("Código de salida: 1", error)
+        self.assertIn("Codigo de salida: 1", error)
 
     def test_play_ascii_video_handles_reset_mode_errors(self):
         ok_result = types.SimpleNamespace(returncode=0)
@@ -247,3 +269,4 @@ class UtilsCoreTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
