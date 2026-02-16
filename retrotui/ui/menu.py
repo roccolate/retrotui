@@ -16,6 +16,7 @@ DEFAULT_GLOBAL_ITEMS = {
         ('File Manager', AppAction.FILE_MANAGER),
         ('ASCII Video', AppAction.ASCII_VIDEO),
         ('Terminal', AppAction.TERMINAL),
+        ('Calculator', AppAction.CALCULATOR),
         ('-------------', None),
         ('Exit  Ctrl+Q', AppAction.EXIT),
     ],

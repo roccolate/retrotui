@@ -182,6 +182,18 @@ class WindowComponentTests(unittest.TestCase):
             body_attr = win.draw_frame(types.SimpleNamespace())
         self.assertEqual(body_attr, self.curses.color_pair(self.window_mod.C_WIN_INACTIVE))
 
+    def test_draw_frame_highlights_drop_target(self):
+        win = self.window_mod.Window("Target", 1, 1, 20, 8)
+        win.active = True
+        win.drop_target_highlight = True
+        with (
+            mock.patch.object(self.window_mod, "draw_box") as draw_box,
+            mock.patch.object(self.window_mod, "safe_addstr"),
+        ):
+            win.draw_frame(types.SimpleNamespace())
+        border_attr = draw_box.call_args.args[5]
+        self.assertTrue(border_attr & self.curses.A_REVERSE)
+
     def test_default_key_and_scroll_handlers(self):
         win = self.window_mod.Window("Scroll", 0, 0, 20, 8, content=[str(i) for i in range(30)])
         win.scroll_offset = 5

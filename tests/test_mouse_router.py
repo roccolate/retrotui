@@ -41,6 +41,9 @@ class MouseRouterTests(unittest.TestCase):
         )
         return types.SimpleNamespace(
             windows=[],
+            drag_payload=None,
+            drag_source_window=None,
+            drag_target_window=None,
             stdscr=types.SimpleNamespace(getmaxyx=mock.Mock(return_value=(25, 80))),
             stop_drag_flags=0xFFFF,
             click_flags=click_flags,
@@ -221,6 +224,82 @@ class MouseRouterTests(unittest.TestCase):
         app.windows = [FlakyResizeWindow()]
         handled = self.mouse_router.handle_drag_resize_mouse(app, 8, 8, 0)
         self.assertTrue(handled)
+
+    def test_handle_file_drag_drop_mouse_starts_drag_and_highlights_target(self):
+        app = self._make_app()
+        payload = {"type": "file_path", "path": "/tmp/demo.txt"}
+        source = self._make_window(consume_pending_drag=mock.Mock(return_value=payload))
+        target = self._make_window(
+            contains=mock.Mock(return_value=True),
+            open_path=mock.Mock(return_value=None),
+        )
+        app.windows = [source, target]
+
+        handled = self.mouse_router.handle_file_drag_drop_mouse(
+            app,
+            10,
+            7,
+            self.curses.REPORT_MOUSE_POSITION | self.curses.BUTTON1_PRESSED,
+        )
+
+        self.assertTrue(handled)
+        self.assertEqual(app.drag_payload, payload)
+        self.assertIs(app.drag_source_window, source)
+        self.assertIs(app.drag_target_window, target)
+        self.assertTrue(target.drop_target_highlight)
+
+    def test_handle_file_drag_drop_mouse_drop_opens_notepad_target(self):
+        app = self._make_app()
+        payload = {"type": "file_path", "path": "/tmp/demo.txt"}
+        source = self._make_window()
+        target = self._make_window(
+            contains=mock.Mock(return_value=True),
+            open_path=mock.Mock(return_value="opened"),
+        )
+        app.windows = [source, target]
+        app.drag_payload = payload
+        app.drag_source_window = source
+        app.drag_target_window = target
+        target.drop_target_highlight = True
+
+        handled = self.mouse_router.handle_file_drag_drop_mouse(app, 12, 8, app.stop_drag_flags)
+
+        self.assertTrue(handled)
+        target.open_path.assert_called_once_with("/tmp/demo.txt")
+        app._dispatch_window_result.assert_called_once_with("opened", target)
+        self.assertIsNone(app.drag_payload)
+        self.assertIsNone(app.drag_source_window)
+        self.assertIsNone(app.drag_target_window)
+        self.assertFalse(target.drop_target_highlight)
+
+    def test_handle_file_drag_drop_mouse_drop_forwards_terminal_target(self):
+        app = self._make_app()
+        payload = {"type": "file_path", "path": "/tmp/demo.txt"}
+        source = self._make_window()
+        target = self._make_window(
+            contains=mock.Mock(return_value=True),
+            accept_dropped_path=mock.Mock(return_value=None),
+        )
+        app.windows = [source, target]
+        app.drag_payload = payload
+        app.drag_source_window = source
+
+        handled = self.mouse_router.handle_file_drag_drop_mouse(app, 12, 8, app.stop_drag_flags)
+
+        self.assertTrue(handled)
+        target.accept_dropped_path.assert_called_once_with("/tmp/demo.txt")
+        app._dispatch_window_result.assert_not_called()
+        self.assertIsNone(app.drag_payload)
+
+    def test_handle_file_drag_drop_mouse_stop_without_active_drag_clears_candidates(self):
+        app = self._make_app()
+        source = self._make_window(clear_pending_drag=mock.Mock())
+        app.windows = [source]
+
+        handled = self.mouse_router.handle_file_drag_drop_mouse(app, 0, 0, app.stop_drag_flags)
+
+        self.assertFalse(handled)
+        source.clear_pending_drag.assert_called_once_with()
 
     def test_handle_global_menu_mouse_hover_calls_menu_hover(self):
         app = self._make_app()
@@ -447,6 +526,82 @@ class MouseRouterTests(unittest.TestCase):
         self.assertTrue(handled)
         self.assertFalse(active_menu.active)
         app._dispatch_window_result.assert_called_once_with("result", win)
+        win.handle_click.assert_called_once_with(11, 7, self.curses.BUTTON1_CLICKED)
+
+    def test_handle_window_mouse_click_inside_supports_legacy_two_arg_handler(self):
+        app = self._make_app()
+
+        class LegacyWin:
+            visible = True
+            active = False
+            minimized = False
+            maximized = False
+            x = 4
+            y = 4
+            w = 20
+            h = 10
+            dragging = False
+            drag_offset_x = 0
+            drag_offset_y = 0
+            resizing = False
+            resize_edge = None
+            window_menu = None
+
+            def on_close_button(self, *_):
+                return False
+
+            def on_minimize_button(self, *_):
+                return False
+
+            def on_maximize_button(self, *_):
+                return False
+
+            def on_border(self, *_):
+                return None
+
+            def on_title_bar(self, *_):
+                return False
+
+            def contains(self, *_):
+                return True
+
+            def handle_click(self, mx, my):
+                return ("legacy", mx, my)
+
+            def handle_scroll(self, *_):
+                return None
+
+        win = LegacyWin()
+        app.windows = [win]
+
+        handled = self.mouse_router.handle_window_mouse(app, 11, 7, self.curses.BUTTON1_CLICKED)
+
+        self.assertTrue(handled)
+        app._dispatch_window_result.assert_called_once_with(("legacy", 11, 7), win)
+
+    def test_handle_window_mouse_drag_routes_to_handler(self):
+        app = self._make_app()
+        win = self._make_window(
+            contains=mock.Mock(return_value=True),
+            handle_mouse_drag=mock.Mock(return_value="drag-result"),
+            window_menu=types.SimpleNamespace(active=False, handle_hover=mock.Mock(return_value=False)),
+        )
+        app.windows = [win]
+
+        handled = self.mouse_router.handle_window_mouse(
+            app,
+            11,
+            7,
+            self.curses.REPORT_MOUSE_POSITION | self.curses.BUTTON1_PRESSED,
+        )
+
+        self.assertTrue(handled)
+        win.handle_mouse_drag.assert_called_once_with(
+            11,
+            7,
+            self.curses.REPORT_MOUSE_POSITION | self.curses.BUTTON1_PRESSED,
+        )
+        app._dispatch_window_result.assert_called_once_with("drag-result", win)
 
     def test_handle_window_mouse_scroll_paths(self):
         app = self._make_app()

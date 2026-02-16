@@ -4,6 +4,7 @@ from ..apps.filemanager import FileManagerWindow
 from ..apps.notepad import NotepadWindow
 from ..apps.settings import SettingsWindow
 from ..apps.terminal import TerminalWindow
+from ..apps.calculator import CalculatorWindow
 from ..ui.dialog import Dialog
 from ..ui.window import Window
 from .actions import AppAction
@@ -78,6 +79,11 @@ def execute_app_action(app, action, logger, *, version: str) -> None:
     if action == AppAction.SETTINGS:
         offset_x, offset_y = app._next_window_offset(22, 4)
         app._spawn_window(SettingsWindow(offset_x, offset_y, 56, 18, app))
+        return
+
+    if action == AppAction.CALCULATOR:
+        offset_x, offset_y = app._next_window_offset(24, 5)
+        app._spawn_window(CalculatorWindow(offset_x, offset_y, 44, 14))
         return
 
     if action == AppAction.NEW_WINDOW:

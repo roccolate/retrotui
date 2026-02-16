@@ -98,6 +98,10 @@ def handle_key_event(app, key):
         return
 
     if key_code == 9:  # Tab
+        active_win = app.get_active_window()
+        local_tab = getattr(active_win, 'handle_tab_key', None) if active_win else None
+        if callable(local_tab) and local_tab():
+            return
         app._cycle_focus()
         return
 

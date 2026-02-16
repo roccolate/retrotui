@@ -144,6 +144,26 @@ class DialogComponentTests(unittest.TestCase):
         self.assertEqual(result, 1)
         handle_click.assert_called_once_with(10, 10)
 
+    def test_progress_dialog_draw_updates_spinner_and_is_non_interactive(self):
+        dialog = self.dialog_mod.ProgressDialog("Copying", "Please wait...", width=28)
+        dialog.set_elapsed(1.25)
+        stdscr = types.SimpleNamespace(getmaxyx=mock.Mock(return_value=(24, 80)))
+
+        with (
+            mock.patch.object(self.dialog_mod, "safe_addstr") as safe_addstr,
+            mock.patch.object(self.dialog_mod, "draw_box") as draw_box,
+        ):
+            dialog.draw(stdscr)
+
+        draw_box.assert_called_once()
+        self.assertGreater(safe_addstr.call_count, 0)
+        self.assertEqual(dialog.handle_click(10, 10), -1)
+        self.assertEqual(dialog.handle_key(10), -1)
+
+    def test_progress_dialog_wraps_empty_paragraphs(self):
+        dialog = self.dialog_mod.ProgressDialog("Move", "line1\n\nline3", width=30)
+        self.assertIn("", dialog.lines)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -4,6 +4,27 @@ Dialog Component.
 import curses
 from ..utils import safe_addstr, draw_box, normalize_key_code, theme_attr
 
+
+def _wrap_dialog_message(message, inner_w):
+    """Word-wrap a dialog message into a list of lines."""
+    lines = []
+    for paragraph in str(message).split('\n'):
+        words = paragraph.split()
+        if not words:
+            lines.append('')
+            continue
+        line = ''
+        for word in words:
+            needs_space = 1 if line else 0
+            if len(line) + len(word) + needs_space <= inner_w:
+                line = f'{line} {word}' if line else word
+            else:
+                lines.append(line)
+                line = word
+        lines.append(line)
+    return lines or ['']
+
+
 class Dialog:
     """Modal dialog box."""
 
@@ -15,18 +36,8 @@ class Dialog:
         self.width = max(width, len(title) + 8)
 
         # Word wrap message
-        self.lines = []
         inner_w = self.width - 6
-        for paragraph in message.split('\n'):
-            words = paragraph.split()
-            line = ''
-            for word in words:
-                if len(line) + len(word) + 1 <= inner_w:
-                    line = line + ' ' + word if line else word
-                else:
-                    self.lines.append(line)
-                    line = word
-            self.lines.append(line)
+        self.lines = _wrap_dialog_message(message, inner_w)
 
         self.height = len(self.lines) + 7
 
@@ -190,4 +201,62 @@ class InputDialog(Dialog):
             self.value = self.value[:self.cursor_pos] + chr(key) + self.value[self.cursor_pos:]
             self.cursor_pos += 1
 
+        return -1
+
+
+class ProgressDialog:
+    """Modal progress dialog for background operations."""
+
+    SPINNER_FRAMES = ('|', '/', '-', '\\')
+
+    def __init__(self, title, message, width=58):
+        self.title = title
+        self.message = message
+        self.buttons = []
+        self.width = max(width, len(title) + 8)
+        self.lines = _wrap_dialog_message(message, self.width - 6)
+        self.elapsed_seconds = 0.0
+        self.height = len(self.lines) + 8
+
+    def set_elapsed(self, seconds):
+        """Update elapsed runtime shown by the spinner row."""
+        self.elapsed_seconds = max(0.0, float(seconds))
+
+    def draw(self, stdscr):
+        max_h, max_w = stdscr.getmaxyx()
+        x = (max_w - self.width) // 2
+        y = (max_h - self.height) // 2
+
+        attr = theme_attr('dialog')
+        title_attr = theme_attr('window_title') | curses.A_BOLD
+        info_attr = theme_attr('status') | curses.A_BOLD
+
+        shadow_attr = curses.A_DIM
+        for row in range(self.height):
+            safe_addstr(stdscr, y + row + 1, x + 2, ' ' * self.width, shadow_attr)
+
+        for row in range(self.height):
+            safe_addstr(stdscr, y + row, x, ' ' * self.width, attr)
+
+        draw_box(stdscr, y, x, self.height, self.width, attr, double=True)
+
+        title_text = f' {self.title} '
+        safe_addstr(stdscr, y, x + 1, title_text.ljust(self.width - 2), title_attr)
+
+        for i, line in enumerate(self.lines):
+            safe_addstr(stdscr, y + 2 + i, x + 3, line[: self.width - 6], attr)
+
+        spinner_idx = int(self.elapsed_seconds * 8) % len(self.SPINNER_FRAMES)
+        spinner = self.SPINNER_FRAMES[spinner_idx]
+        status = f'Working {spinner}  {self.elapsed_seconds:5.1f}s'
+        safe_addstr(stdscr, y + self.height - 3, x + 3, status.ljust(self.width - 6), info_attr)
+
+    def handle_click(self, mx, my):
+        """Progress dialogs do not process click actions."""
+        _ = (mx, my)
+        return -1
+
+    def handle_key(self, key):
+        """Progress dialogs do not process keyboard actions."""
+        _ = key
         return -1

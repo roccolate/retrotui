@@ -521,6 +521,12 @@ class TerminalComponentTests(unittest.TestCase):
             win._forward_payload(None)
         ensure_session.assert_not_called()
 
+    def test_accept_dropped_path_quotes_and_forwards(self):
+        win = self._make_window()
+        with mock.patch.object(win, "_forward_payload") as forward_payload:
+            self.assertIsNone(win.accept_dropped_path("/tmp/a b.txt"))
+        forward_payload.assert_called_once_with("'/tmp/a b.txt' ")
+
     def test_handle_key_without_running_session_is_noop(self):
         win = self._make_window()
         win.window_menu = types.SimpleNamespace(active=False)
