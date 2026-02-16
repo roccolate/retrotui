@@ -220,9 +220,9 @@ Extender lo que se puede hacer sin salir del escritorio.
 - [x] Inicialmente read-only; modo edición como stretch goal
 
 **Video Player Mejorado**
-- [ ] Diálogo selector de archivos de video (sin requerir File Manager)
-- [ ] Soporte de subtítulos (si mpv lo maneja)
-- [ ] Overlay de controles de playback
+- [x] Diálogo selector de archivos de video (sin requerir File Manager)
+- [x] Soporte de subtítulos (si mpv lo maneja)
+- [x] Overlay de controles de playback
 
 ---
 

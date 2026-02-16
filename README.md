@@ -211,7 +211,7 @@ Windows Terminal (SSH), iTerm2, tmux, screen.
 | `Space`       | Pausa / reanudar                    |
 | `← / →`       | Seek atrás / adelante               |
 
-> Usa `mpv --vo=tct` (color, preferido) o `mplayer -vo caca/aa` (fallback).
+> Abre desde `File > ASCII Video` (diálogo de ruta y subtítulos opcionales). Usa `mpv --vo=tct` (color, preferido) o `mplayer -vo caca/aa` (fallback).
 
 ### Ventanas
 | Acción             | Resultado                    |
@@ -272,9 +272,9 @@ Ver [CHANGELOG.md](CHANGELOG.md) para el historial completo de versiones.
 - **Release v0.6.0** — versión sincronizada en runtime, package y setup.
 - **Clipboard base inter-app** — copy con `F6`/`Ins` en Notepad y File Manager; paste con `Ctrl+V`.
 - **Apps utilitarias v0.7** — Log Viewer (tail/busqueda/highlighting/freeze), Process Manager (/proc + sort + kill confirm), Calculadora, y Clock/Calendar (always-on-top + chime).
-- **Media/Hex v0.9 (avance)** — apertura de imagenes con visor dedicado + apertura de binarios en Hex Viewer read-only.
+- **Media/Hex v0.9 (avance)** — image viewer + hex viewer read-only + video player mejorado (diálogo, subtítulos y overlay).
 - **TTY/mouse** — fixes para drag/resize en consola y fallback robusto de doble-click en iconos de escritorio.
-- **Calidad** — baseline actual: `501 tests`.
+- **Calidad** — baseline actual: `518 tests`.
 - **Encoding/UI** — normalización de `retrotui/constants.py` para eliminar mojibake en bordes/iconos.
 
 ## Roadmap
@@ -287,7 +287,7 @@ Ver [CHANGELOG.md](CHANGELOG.md) para el historial completo de versiones.
 - **v0.6** - Clipboard y comunicacion inter-app (clipboard + drag and drop base listos)
 - **v0.7** - Apps utilitarias (log viewer, process manager, calculadora y clock/calendar listos)
 - **v0.8** - File Manager avanzado (en progreso: dual-pane, previews (texto/imagen), info, bookmarks, undo y progreso de operaciones largas listos)
-- **v0.9** - Media y hex editor (en progreso: image viewer + hex viewer read-only listos)
+- **v0.9** - Media y hex editor (en progreso: image viewer + hex viewer + video player mejorado listos)
 - **v1.0** - Empaquetado, plugins y documentacion
 
 ## Licencia
