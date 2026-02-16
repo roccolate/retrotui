@@ -40,6 +40,16 @@ sudo systemctl enable --now gpm
 python3 -m retrotui
 ```
 
+## Calidad de desarrollo
+
+```bash
+# Ejecuta validaciones de encoding + compile + tests
+python tools/qa.py
+
+# Activa hook local de pre-commit para correr QA automaticamente
+git config core.hooksPath .githooks
+```
+
 ## Soporte de Mouse sin X11
 
 RetroTUI funciona con mouse en **dos escenarios**:
