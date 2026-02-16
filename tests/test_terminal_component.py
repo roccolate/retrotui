@@ -671,7 +671,7 @@ class TerminalComponentTests(unittest.TestCase):
         menu.handle_click = mock.Mock(return_value=None)
         win.scrollback_offset = 3
         self.assertIsNone(win.handle_click(5, 6))
-        self.assertEqual(win.scrollback_offset, 0)
+        self.assertEqual(win.scrollback_offset, 3)
         self.assertIsNone(win.handle_click(999, 999))
 
     def test_handle_scroll_bounds(self):
@@ -686,6 +686,36 @@ class TerminalComponentTests(unittest.TestCase):
         current = win.scrollback_offset
         win.handle_scroll("noop", steps=2)
         self.assertEqual(win.scrollback_offset, current)
+
+    def test_consume_output_keeps_viewport_when_scrolled_back(self):
+        win = self._make_window()
+        win._scroll_lines = [f"L{i}" for i in range(20)]
+        win._line_chars = list("tail")
+        win.scrollback_offset = 4
+
+        win._consume_output("next\n")
+        self.assertEqual(win.scrollback_offset, 5)
+
+        win.scrollback_offset = 0
+        win._consume_output("more\n")
+        self.assertEqual(win.scrollback_offset, 0)
+
+    def test_handle_key_pgup_pgdn_scrolls_scrollback_without_forwarding(self):
+        win = self._make_window()
+        win.window_menu = types.SimpleNamespace(active=False)
+        fake_session = _FakeSession()
+        win._session = fake_session
+        win._scroll_lines = [f"L{i}" for i in range(30)]
+        win._line_chars = []
+
+        self.assertIsNone(win.handle_key(self.curses.KEY_PPAGE))
+        self.assertGreater(win.scrollback_offset, 0)
+        self.assertEqual(fake_session.writes, [])
+
+        up_offset = win.scrollback_offset
+        self.assertIsNone(win.handle_key(self.curses.KEY_NPAGE))
+        self.assertLessEqual(win.scrollback_offset, up_offset)
+        self.assertEqual(fake_session.writes, [])
 
     def test_close_and_restart_reset_session_state(self):
         win = self._make_window()
