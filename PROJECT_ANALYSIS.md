@@ -119,7 +119,7 @@ Reducir riesgo de regresiones y acelerar desarrollo en 2 sprints, sin frenar fea
 ## Pendiente recomendado (siguiente iteración)
 1. Aumentar cobertura de tests en rutas no-curses (acciones, parsing de comandos, file ops).
 2. Definir política de release/tagging (version bump + checklist de verificación manual).
-3. Automatizar chequeo de encoding/docs en CI o pre-commit para evitar regresiones.
+3. Extender CI a chequeos por plataforma (Linux/Windows) y mantener hook activo en todos los entornos de dev.
 
 ## Avance ejecutado (2026-02-16)
 - [x] Pipeline de teclado consolidado para `get_wch()` con normalizacion comun (`normalize_key_code`).
@@ -128,4 +128,7 @@ Reducir riesgo de regresiones y acelerar desarrollo en 2 sprints, sin frenar fea
 - [x] `FileManagerWindow` actualizado para hotkeys y navegacion con entrada normalizada.
 - [x] I/O de Notepad fijado en UTF-8 (`open(..., encoding='utf-8')` para carga y guardado).
 - [x] Cobertura de tests ampliada para flujo Unicode/`get_wch` (suite total: 23 tests OK).
+- [x] QA automatizado con `tools/qa.py` (UTF-8 + compileall + unittest).
+- [x] Workflow CI en `.github/workflows/ci.yml` ejecutando QA en push/PR.
+- [x] Hook local `.githooks/pre-commit` para ejecutar QA antes de cada commit.
 
