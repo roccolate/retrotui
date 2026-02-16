@@ -111,7 +111,12 @@ class BootstrapTests(unittest.TestCase):
             | self.fake_curses.BUTTON1_PRESSED
             | self.fake_curses.BUTTON1_DOUBLE_CLICKED,
         )
-        self.assertEqual(stop_drag_flags, click_flags | self.fake_curses.BUTTON1_RELEASED)
+        self.assertEqual(
+            stop_drag_flags,
+            self.fake_curses.BUTTON1_RELEASED
+            | self.fake_curses.BUTTON1_CLICKED
+            | self.fake_curses.BUTTON1_DOUBLE_CLICKED,
+        )
         self.assertEqual(scroll_down_mask, self.fake_curses.BUTTON5_PRESSED)
         self.assertEqual(print_mock.call_count, 2)
 

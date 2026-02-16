@@ -58,7 +58,7 @@ git config core.hooksPath .githooks
 
 - CI corre en GitHub Actions para Linux y Windows (Python 3.9 y 3.12).
 - CI aplica `--module-coverage-fail-under 100.0` de forma gradual (solo `ubuntu-latest` + Python `3.12`).
-- Baseline QA actual: `458 tests` en verde y cobertura total por módulo `100.0%` (trace + AST).
+- Baseline QA actual: `484 tests` en verde y cobertura total por módulo `100.0%` (trace + AST).
 - Politica de formato de texto definida con `.editorconfig` y `.gitattributes`.
 - Politica de release/tagging en `RELEASE.md`.
 - Release CI disponible en `.github/workflows/release.yml` (tag `vX.Y.Z` o dispatch manual).
@@ -144,6 +144,37 @@ Windows Terminal (SSH), iTerm2, tmux, screen.
 | `Ctrl+L`      | Limpiar historial                 |
 | `Ctrl+Q`      | Cerrar calculadora                |
 
+### Log Viewer
+| Tecla         | Acción                               |
+|---------------|--------------------------------------|
+| `F`           | Toggle follow tail                   |
+| `Space`       | Congelar/reanudar autoscroll         |
+| `/`           | Buscar texto                         |
+| `n / N`       | Siguiente / anterior match           |
+| `O`           | Abrir ruta (dialogo)                 |
+| `R`           | Recargar archivo                     |
+| `Home/End`    | Ir al inicio/fin del buffer          |
+| `Q`           | Cerrar ventana                       |
+
+### Process Manager
+| Tecla         | Acción                               |
+|---------------|--------------------------------------|
+| `C`           | Ordenar por CPU                      |
+| `M`           | Ordenar por memoria                  |
+| `P`           | Ordenar por PID                      |
+| `K` / `Del`   | Solicitar kill con confirmacion      |
+| `F5`          | Refrescar lista                      |
+| `Up/Down`     | Mover seleccion                      |
+| `PgUp/PgDn`   | Navegar por pagina                   |
+| `Q`           | Cerrar ventana                       |
+
+### Reloj / Calendario
+| Tecla         | Acción                               |
+|---------------|--------------------------------------|
+| `T`           | Toggle always-on-top                 |
+| `B`           | Toggle chime por hora                |
+| `Q`           | Cerrar widget                        |
+
 ### ASCII Video Player (mpv / mplayer)
 | Tecla         | Acción                              |
 |---------------|-------------------------------------|
@@ -187,6 +218,9 @@ README.md      — Este archivo
 - **FileManagerWindow** — File Manager interactivo con navegación (v0.2)
 - **TerminalWindow / TerminalSession** — Terminal embebida PTY con parser ANSI básico, forwarding de input y scrollback
 - **CalculatorWindow** — Calculadora segura con evaluador `ast`, historial y modo always-on-top
+- **LogViewerWindow** — visor de logs con tail, busqueda y highlighting por severidad
+- **ProcessManagerWindow** — lista de procesos live desde `/proc`, sort y kill con confirmacion
+- **ClockCalendarWindow** — widget de hora/fecha/calendario con chime opcional
 - **FileEntry** — Entrada de archivo/directorio con metadata
 - **MenuBar** — Menús globales y por ventana (unificados)
 - **Dialog** — Diálogos modales
@@ -206,8 +240,9 @@ Ver [CHANGELOG.md](CHANGELOG.md) para el historial completo de versiones.
 ### Últimos cambios (v0.6.0)
 - **Release v0.6.0** — versión sincronizada en runtime, package y setup.
 - **Clipboard base inter-app** — copy con `F6`/`Ins` en Notepad y File Manager; paste con `Ctrl+V`.
-- **Calculadora v0.7 (base)** — app nueva con evaluator seguro, historial y always-on-top.
-- **Calidad** — baseline actual: `458 tests` y cobertura por módulo `100.0%`.
+- **Apps utilitarias v0.7** — Log Viewer (tail/busqueda/highlighting/freeze), Process Manager (/proc + sort + kill confirm), Calculadora, y Clock/Calendar (always-on-top + chime).
+- **TTY/mouse** — fixes para drag/resize en consola y fallback robusto de doble-click en iconos de escritorio.
+- **Calidad** — baseline actual: `484 tests` y cobertura por módulo `100.0%`.
 - **Encoding/UI** — normalización de `retrotui/constants.py` para eliminar mojibake en bordes/iconos.
 
 ## Roadmap
@@ -218,7 +253,7 @@ Ver [CHANGELOG.md](CHANGELOG.md) para el historial completo de versiones.
 - ~~**v0.4** - Terminal embebida (via pty)~~
 - **v0.5** - Temas y configuracion (en progreso: motor de temas y settings listos)
 - **v0.6** - Clipboard y comunicacion inter-app (clipboard + drag and drop base listos)
-- **v0.7** - Apps utilitarias (en progreso: calculadora base lista; faltan log viewer y process manager)
+- **v0.7** - Apps utilitarias (log viewer, process manager, calculadora y clock/calendar listos)
 - **v0.8** - File Manager avanzado (en progreso: dual-pane, previews (texto/imagen), info, bookmarks, undo y progreso de operaciones largas listos)
 - **v0.9** - Media y hex editor
 - **v1.0** - Empaquetado, plugins y documentacion

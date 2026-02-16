@@ -11,6 +11,7 @@ def _install_fake_curses():
     fake.BUTTON1_CLICKED = 0x0004
     fake.BUTTON1_PRESSED = 0x0002
     fake.BUTTON1_DOUBLE_CLICKED = 0x0008
+    fake.BUTTON1_RELEASED = 0x0001
     fake.BUTTON4_PRESSED = 0x100000
     return fake
 
@@ -141,6 +142,35 @@ class MouseRouterTests(unittest.TestCase):
 
         self.assertTrue(handled)
         self.assertFalse(win.dragging)
+
+    def test_handle_drag_resize_mouse_keeps_dragging_on_pressed_event(self):
+        app = self._make_app()
+        app.stop_drag_flags = self.curses.BUTTON1_RELEASED
+        win = types.SimpleNamespace(
+            dragging=True,
+            drag_offset_x=1,
+            drag_offset_y=1,
+            resizing=False,
+            resize_edge=None,
+            w=10,
+            h=5,
+            x=0,
+            y=0,
+            apply_resize=mock.Mock(),
+        )
+        app.windows = [win]
+
+        handled = self.mouse_router.handle_drag_resize_mouse(
+            app,
+            9,
+            7,
+            self.curses.BUTTON1_PRESSED,
+        )
+
+        self.assertTrue(handled)
+        self.assertTrue(win.dragging)
+        self.assertEqual(win.x, 8)
+        self.assertEqual(win.y, 6)
 
     def test_handle_drag_resize_mouse_drag_state_changes_mid_pass(self):
         app = self._make_app()
@@ -626,6 +656,41 @@ class MouseRouterTests(unittest.TestCase):
 
         self.assertTrue(handled)
         app.execute_action.assert_called_once_with("about")
+
+    def test_handle_desktop_mouse_fallback_double_click_executes_icon_action(self):
+        app = self._make_app()
+        app.get_icon_at.return_value = 0
+
+        with mock.patch.object(self.mouse_router.time, "monotonic", side_effect=[10.0, 10.2]):
+            first = self.mouse_router.handle_desktop_mouse(app, 9, 9, self.curses.BUTTON1_CLICKED)
+            second = self.mouse_router.handle_desktop_mouse(app, 9, 9, self.curses.BUTTON1_CLICKED)
+
+        self.assertTrue(first)
+        self.assertTrue(second)
+        app.execute_action.assert_called_once_with("about")
+
+    def test_handle_desktop_mouse_fallback_double_click_times_out(self):
+        app = self._make_app()
+        app.get_icon_at.return_value = 0
+
+        with mock.patch.object(self.mouse_router.time, "monotonic", side_effect=[1.0, 2.0]):
+            self.mouse_router.handle_desktop_mouse(app, 9, 9, self.curses.BUTTON1_CLICKED)
+            self.mouse_router.handle_desktop_mouse(app, 9, 9, self.curses.BUTTON1_CLICKED)
+
+        app.execute_action.assert_not_called()
+        self.assertEqual(app.selected_icon, 0)
+
+    def test_handle_desktop_mouse_motion_event_does_not_trigger_fallback_double_click(self):
+        app = self._make_app()
+        app.get_icon_at.return_value = 0
+        moving_click = self.curses.REPORT_MOUSE_POSITION | self.curses.BUTTON1_PRESSED
+
+        with mock.patch.object(self.mouse_router.time, "monotonic", side_effect=[5.0, 5.1]):
+            self.mouse_router.handle_desktop_mouse(app, 9, 9, self.curses.BUTTON1_CLICKED)
+            self.mouse_router.handle_desktop_mouse(app, 9, 9, moving_click)
+
+        app.execute_action.assert_not_called()
+        self.assertEqual(app.selected_icon, 0)
 
     def test_handle_desktop_mouse_deselects_when_no_icon_hit(self):
         app = self._make_app()

@@ -18,6 +18,7 @@ from ..ui.menu import Menu
 from ..ui.dialog import Dialog, InputDialog, ProgressDialog
 from ..ui.window import Window
 from ..apps.notepad import NotepadWindow
+from ..apps.logviewer import LogViewerWindow
 from .config import AppConfig, load_config, save_config
 from .actions import ActionResult, ActionType, AppAction
 from .action_runner import execute_app_action
@@ -260,11 +261,25 @@ class RetroTUI:
         """Open file in best viewer: ASCII video or Notepad."""
         h, w = self.stdscr.getmaxyx()
         filename = os.path.basename(filepath)
+        lower_path = filepath.lower()
 
         if is_video_file(filepath):
             success, error = play_ascii_video(self.stdscr, filepath)
             if not success:
                 self.dialog = Dialog('ASCII Video Error', error, ['OK'], width=50)
+            return
+
+        if (
+            lower_path.endswith(('.log', '.out', '.err'))
+            or '/log/' in lower_path
+            or '\\log\\' in lower_path
+        ):
+            offset_x = 16 + len(self.windows) * 2
+            offset_y = 4 + len(self.windows)
+            win_w = min(74, w - 4)
+            win_h = min(22, h - 4)
+            win = LogViewerWindow(offset_x, offset_y, win_w, win_h, filepath=filepath)
+            self._spawn_window(win)
             return
 
         # Check if file seems to be binary
@@ -386,6 +401,29 @@ class RetroTUI:
         """Show input dialog to create a new file in current path."""
         dialog = InputDialog('New File', 'Enter file name:', width=52)
         dialog.callback = lambda name, target=win: target.create_file(name)
+        self.dialog = dialog
+
+    def show_kill_confirm_dialog(self, win, payload):
+        """Show confirmation dialog before sending signal to a process."""
+        data = payload or {}
+        pid = data.get('pid')
+        command = data.get('command', '')
+        if not pid:
+            self.dialog = Dialog('Kill Error', 'No process selected.', ['OK'], width=44)
+            return
+
+        title = 'Confirm Kill'
+        message = (
+            f"Kill process PID {pid}?\n"
+            f"{command[:40]}\n\n"
+            "Signal: SIGTERM (15)"
+        )
+        dialog = Dialog(title, message, ['Kill', 'Cancel'], width=58)
+        dialog.callback = (
+            lambda target=win, data=data: target.kill_process(data)
+            if callable(getattr(target, 'kill_process', None))
+            else ActionResult(ActionType.ERROR, 'Window does not support process kill.')
+        )
         self.dialog = dialog
 
     @staticmethod
@@ -562,6 +600,10 @@ class RetroTUI:
 
         if result.type == ActionType.REQUEST_NEW_FILE and source_win:
             self.show_new_file_dialog(source_win)
+            return
+
+        if result.type == ActionType.REQUEST_KILL_CONFIRM and source_win:
+            self.show_kill_confirm_dialog(source_win, result.payload)
             return
 
         if result.type == ActionType.SAVE_ERROR:

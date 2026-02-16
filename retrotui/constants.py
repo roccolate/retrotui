@@ -47,6 +47,21 @@ ICONS = [
     },
     {"label": "Calc", "action": AppAction.CALCULATOR, "art": ["+--+", "|+-|", "+--+"]},
     {
+        "label": "Logs",
+        "action": AppAction.LOG_VIEWER,
+        "art": ["\u250c\u2500\u2500\u2510", "\u2502LN\u2502", "\u2514\u2500\u2500\u2518"],
+    },
+    {
+        "label": "Procs",
+        "action": AppAction.PROCESS_MANAGER,
+        "art": ["\u250c\u2500\u2500\u2510", "\u2502PS\u2502", "\u2514\u2500\u2500\u2518"],
+    },
+    {
+        "label": "Clock",
+        "action": AppAction.CLOCK_CALENDAR,
+        "art": ["\u250c\u2500\u2500\u2510", "\u2502CL\u2502", "\u2514\u2500\u2500\u2518"],
+    },
+    {
         "label": "Settings",
         "action": AppAction.SETTINGS,
         "art": ["\u256d\u2500\u2500\u256e", "\u2502\u2699 \u2502", "\u2570\u2500\u2500\u256f"],
@@ -65,6 +80,9 @@ ICONS_ASCII = [
     {"label": "ASCII Vid", "action": AppAction.ASCII_VIDEO, "art": ["+--+", "|>|#", "+--+"]},
     {"label": "Terminal", "action": AppAction.TERMINAL, "art": ["+--+", "|>_|", "+--+"]},
     {"label": "Calc", "action": AppAction.CALCULATOR, "art": ["+--+", "|+-|", "+--+"]},
+    {"label": "Logs", "action": AppAction.LOG_VIEWER, "art": ["+--+", "|LN|", "+--+"]},
+    {"label": "Procs", "action": AppAction.PROCESS_MANAGER, "art": ["+--+", "|PS|", "+--+"]},
+    {"label": "Clock", "action": AppAction.CLOCK_CALENDAR, "art": ["+--+", "|CL|", "+--+"]},
     {"label": "Settings", "action": AppAction.SETTINGS, "art": ["+--+", "|**|", "+--+"]},
     {"label": "About", "action": AppAction.ABOUT, "art": ["+--+", "| ?|", "+--+"]},
 ]

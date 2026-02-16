@@ -103,6 +103,33 @@ class _DummyCalculatorWindow:
         self.h = h
 
 
+class _DummyLogViewerWindow:
+    def __init__(self, x, y, w, h):
+        self.kind = "log"
+        self.x = x
+        self.y = y
+        self.w = w
+        self.h = h
+
+
+class _DummyProcessManagerWindow:
+    def __init__(self, x, y, w, h):
+        self.kind = "proc"
+        self.x = x
+        self.y = y
+        self.w = w
+        self.h = h
+
+
+class _DummyClockCalendarWindow:
+    def __init__(self, x, y, w, h):
+        self.kind = "clock"
+        self.x = x
+        self.y = y
+        self.w = w
+        self.h = h
+
+
 class ActionRunnerTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -120,6 +147,9 @@ class ActionRunnerTests(unittest.TestCase):
             "retrotui.apps.settings",
             "retrotui.apps.terminal",
             "retrotui.apps.calculator",
+            "retrotui.apps.logviewer",
+            "retrotui.apps.process_manager",
+            "retrotui.apps.clock",
             "retrotui.core.actions",
             "retrotui.core.content",
             "retrotui.core.action_runner",
@@ -142,6 +172,9 @@ class ActionRunnerTests(unittest.TestCase):
             "retrotui.apps.settings",
             "retrotui.apps.terminal",
             "retrotui.apps.calculator",
+            "retrotui.apps.logviewer",
+            "retrotui.apps.process_manager",
+            "retrotui.apps.clock",
             "retrotui.core.actions",
             "retrotui.core.content",
             "retrotui.core.action_runner",
@@ -318,6 +351,61 @@ class ActionRunnerTests(unittest.TestCase):
         spawned = app._spawn_window.call_args.args[0]
         self.assertEqual(spawned.kind, "calc")
         self.assertEqual((spawned.x, spawned.y, spawned.w, spawned.h), (12, 7, 44, 14))
+
+    def test_execute_log_viewer_spawns_log_window(self):
+        app = self._make_app()
+        logger = mock.Mock()
+
+        with mock.patch.object(self.action_runner, "LogViewerWindow", _DummyLogViewerWindow):
+            self.action_runner.execute_app_action(
+                app,
+                self.actions_mod.AppAction.LOG_VIEWER,
+                logger,
+                version="0.6.0",
+            )
+
+        app._next_window_offset.assert_called_once_with(16, 4)
+        spawned = app._spawn_window.call_args.args[0]
+        self.assertEqual(spawned.kind, "log")
+        self.assertEqual((spawned.x, spawned.y, spawned.w, spawned.h), (12, 7, 74, 22))
+
+    def test_execute_process_manager_spawns_proc_window(self):
+        app = self._make_app()
+        logger = mock.Mock()
+
+        with mock.patch.object(
+            self.action_runner, "ProcessManagerWindow", _DummyProcessManagerWindow
+        ):
+            self.action_runner.execute_app_action(
+                app,
+                self.actions_mod.AppAction.PROCESS_MANAGER,
+                logger,
+                version="0.6.0",
+            )
+
+        app._next_window_offset.assert_called_once_with(14, 3)
+        spawned = app._spawn_window.call_args.args[0]
+        self.assertEqual(spawned.kind, "proc")
+        self.assertEqual((spawned.x, spawned.y, spawned.w, spawned.h), (12, 7, 76, 22))
+
+    def test_execute_clock_calendar_spawns_clock_window(self):
+        app = self._make_app()
+        logger = mock.Mock()
+
+        with mock.patch.object(
+            self.action_runner, "ClockCalendarWindow", _DummyClockCalendarWindow
+        ):
+            self.action_runner.execute_app_action(
+                app,
+                self.actions_mod.AppAction.CLOCK_CALENDAR,
+                logger,
+                version="0.6.0",
+            )
+
+        app._next_window_offset.assert_called_once_with(30, 6)
+        spawned = app._spawn_window.call_args.args[0]
+        self.assertEqual(spawned.kind, "clock")
+        self.assertEqual((spawned.x, spawned.y, spawned.w, spawned.h), (12, 7, 34, 14))
 
     def test_execute_new_window_uses_incremental_title(self):
         app = self._make_app()

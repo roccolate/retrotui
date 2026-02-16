@@ -47,6 +47,10 @@ Todas las versiones notables de RetroTUI están documentadas aquí.
 - Dialogo modal de progreso para operaciones largas de File Manager (copy/move/delete) con ejecucion en background y spinner de estado.
 - Modulo `retrotui/apps/calculator.py` con evaluador seguro (`ast`), historial de expresiones, copy/paste de resultados y modo always-on-top.
 - Tests `tests/test_calculator_component.py` para validar evaluacion, historial, input/cursor, clipboard y rendering de calculadora.
+- Modulo `retrotui/apps/logviewer.py` con tail mode, highlighting por severidad, busqueda estilo vim y freeze/reanudar scroll.
+- Modulo `retrotui/apps/process_manager.py` con monitoreo live de `/proc`, sort por CPU/MEM/PID y kill con confirmacion.
+- Modulo `retrotui/apps/clock.py` con reloj, calendario ASCII, always-on-top y chime opcional.
+- Tests `tests/test_logviewer_component.py`, `tests/test_process_manager_component.py` y `tests/test_clock_component.py`.
 
 ### Changed
 - README actualizado con comandos de QA y activacion de hooks locales.
@@ -61,7 +65,7 @@ Todas las versiones notables de RetroTUI están documentadas aquí.
 - `tools/qa.py` agrega modo opcional de cobertura por modulo (`--module-coverage`, `--module-coverage-top`, `--module-coverage-fail-under`).
 - `tools/report_module_coverage.py` ahora normaliza rutas y mapea sufijos de paquete para reducir falsos negativos de cobertura en entornos Windows.
 - CI eleva el gate gradual de cobertura por modulo a `--module-coverage-fail-under 100.0` (solo `ubuntu-latest` + Python `3.12`).
-- Cobertura ampliada en rutas de core modularizado, menu/action runner/notepad/terminal/calculadora; suite actual en QA: 458 tests.
+- Cobertura ampliada en rutas de core modularizado, menu/action runner/notepad/terminal/calculadora/apps utilitarias; suite actual en QA: 484 tests.
 - Cobertura total por modulo actualizada a 100.0% (trace + AST).
 - `AppAction.TERMINAL` deja de abrir placeholder y ahora instancia `TerminalWindow` real.
 - `RetroTUI.set_active_window()` y `core/event_loop.py` ahora respetan `always_on_top` para mantener ventanas fijadas por encima del resto.
@@ -71,6 +75,9 @@ Todas las versiones notables de RetroTUI están documentadas aquí.
 - Atajos de clipboard ajustados para evitar conflicto con `Ctrl+C`: copy en Notepad/File Manager via `F6`/`Insert`, paste en Notepad/Terminal via `Ctrl+V`.
 - Notepad ahora soporta pegado multilinea en cursor y File Manager copia ruta completa de la entrada seleccionada.
 - `retrotui/constants.py` fue normalizado para eliminar mojibake en bordes/iconos Unicode y estabilizar rendering de layout.
+- `AppAction` y `ActionType` se ampliaron para incluir utilitarias v0.7 y confirmacion de kill (`REQUEST_KILL_CONFIRM`).
+- `open_file_viewer()` ahora enruta archivos `.log/.out/.err` a `LogViewerWindow`.
+- Mouse router/bootstrap ajustados para mejorar comportamiento en TTY (drag/resize y doble-click en iconos).
 
 ---
 

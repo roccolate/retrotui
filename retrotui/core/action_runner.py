@@ -5,6 +5,9 @@ from ..apps.notepad import NotepadWindow
 from ..apps.settings import SettingsWindow
 from ..apps.terminal import TerminalWindow
 from ..apps.calculator import CalculatorWindow
+from ..apps.logviewer import LogViewerWindow
+from ..apps.process_manager import ProcessManagerWindow
+from ..apps.clock import ClockCalendarWindow
 from ..ui.dialog import Dialog
 from ..ui.window import Window
 from .actions import AppAction
@@ -84,6 +87,21 @@ def execute_app_action(app, action, logger, *, version: str) -> None:
     if action == AppAction.CALCULATOR:
         offset_x, offset_y = app._next_window_offset(24, 5)
         app._spawn_window(CalculatorWindow(offset_x, offset_y, 44, 14))
+        return
+
+    if action == AppAction.LOG_VIEWER:
+        offset_x, offset_y = app._next_window_offset(16, 4)
+        app._spawn_window(LogViewerWindow(offset_x, offset_y, 74, 22))
+        return
+
+    if action == AppAction.PROCESS_MANAGER:
+        offset_x, offset_y = app._next_window_offset(14, 3)
+        app._spawn_window(ProcessManagerWindow(offset_x, offset_y, 76, 22))
+        return
+
+    if action == AppAction.CLOCK_CALENDAR:
+        offset_x, offset_y = app._next_window_offset(30, 6)
+        app._spawn_window(ClockCalendarWindow(offset_x, offset_y, 34, 14))
         return
 
     if action == AppAction.NEW_WINDOW:
