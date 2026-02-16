@@ -95,7 +95,7 @@ def get_system_info():
         info.append(f'OS: {uname.sysname} {uname.release}')
         info.append(f'Host: {uname.nodename}')
         info.append(f'Arch: {uname.machine}')
-    except Exception:
+    except (AttributeError, OSError):
         info.append('OS: Linux')
 
     try:
@@ -105,7 +105,7 @@ def get_system_info():
                     mem_kb = int(line.split()[1])
                     info.append(f'RAM: {mem_kb // 1024} MB')
                     break
-    except Exception:
+    except (OSError, ValueError, IndexError):
         pass
 
     info.append(f'Terminal: {os.environ.get("TERM", "unknown")}')

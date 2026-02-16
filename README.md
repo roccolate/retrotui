@@ -16,7 +16,7 @@
 ║░░ 💻 ░░░░║  📄 config.json           512B      ║░░░░░░░░░░║
 ║░Terminal░╚══════════════════════════════════════╝░░░░░░░░░░║
 ║░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░║
-║ RetroTUI v0.3.2│ Windows: 1/1 │ Mouse: Enabled │ Ctrl+Q: Exit║
+║ RetroTUI v0.3.4│ Windows: 1/1 │ Mouse: Enabled │ Ctrl+Q: Exit║
 ╚══════════════════════════════════════════════════════════════╝
 ```
 
@@ -37,7 +37,7 @@ sudo apt install gpm
 sudo systemctl enable --now gpm
 
 # Ejecutar:
-python3 retrotui.py
+python3 -m retrotui
 ```
 
 ## Soporte de Mouse sin X11
@@ -124,7 +124,7 @@ Windows Terminal (SSH), iTerm2, tmux, screen.
 ## Arquitectura
 
 ```
-retrotui.py    — Aplicación principal (archivo único)
+retrotui/      — Paquete principal (core/ui/apps)
 preview.html   — Preview interactiva en browser
 PROJECT.md     — Documentación técnica del proyecto
 README.md      — Este archivo
@@ -136,19 +136,19 @@ README.md      — Este archivo
 - **NotepadWindow** — Editor de texto con word wrap (v0.3)
 - **FileManagerWindow** — File Manager interactivo con navegación (v0.2)
 - **FileEntry** — Entrada de archivo/directorio con metadata
-- **Menu** — Sistema de menú desplegable
+- **MenuBar** — Menús globales y por ventana (unificados)
 - **Dialog** — Diálogos modales
+- **ActionResult/AppAction** — Contrato interno tipado para acciones
 - **ThemeEngine** — Colores Win3.1 (256-color cuando disponible)
 
 ## Changelog
 
 Ver [CHANGELOG.md](CHANGELOG.md) para el historial completo de versiones.
 
-### Últimos cambios (v0.3.2)
-- **ASCII Video Player** — reproduce videos en terminal vía mpv (color) o mplayer (fallback)
-- **Barras de menú por ventana** estilo Win 3.1 (File, View) para FileManager y Notepad
-- Editor de texto, resize de ventanas, maximize/minimize (v0.3)
-- File Manager interactivo con navegación (v0.2)
+### Últimos cambios (v0.3.4)
+- **Release de mantenimiento** — sincronización de versión y metadata del proyecto
+- **Documentación/preview actualizados** y normalizados en UTF-8
+- Se mantienen los hitos de v0.3.x: modularización base, menús por ventana, Notepad y ASCII Video
 
 ## Roadmap
 

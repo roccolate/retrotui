@@ -6,6 +6,7 @@ import sys
 import time
 import os
 import termios
+import logging
 
 from ..constants import (
     C_DESKTOP, C_ICON, C_ICON_SEL, C_TASKBAR, C_STATUS,
@@ -20,9 +21,14 @@ from ..ui.dialog import Dialog, InputDialog
 from ..ui.window import Window
 from ..apps.filemanager import FileManagerWindow
 from ..apps.notepad import NotepadWindow
+from .actions import ActionResult, ActionType, AppAction
+
+LOGGER = logging.getLogger(__name__)
 
 class RetroTUI:
     """Main application class."""
+    MIN_TERM_WIDTH = 80
+    MIN_TERM_HEIGHT = 24
 
     def __init__(self, stdscr):
         self.stdscr = stdscr
@@ -41,6 +47,7 @@ class RetroTUI:
         stdscr.keypad(True)
         stdscr.nodelay(False)
         stdscr.timeout(500)  # 500ms for clock updates
+        self._validate_terminal_size()
 
         # Disable XON/XOFF flow control so Ctrl+Q/Ctrl+S reach the app
         try:
@@ -57,6 +64,13 @@ class RetroTUI:
             curses.ALL_MOUSE_EVENTS |
             curses.REPORT_MOUSE_POSITION
         )
+        self.click_flags = (
+            curses.BUTTON1_CLICKED |
+            curses.BUTTON1_PRESSED |
+            curses.BUTTON1_DOUBLE_CLICKED
+        )
+        self.stop_drag_flags = self.click_flags | curses.BUTTON1_RELEASED
+        self.scroll_down_mask = getattr(curses, 'BUTTON5_PRESSED', 0x200000)
         # Enable SGR extended mouse mode for better coordinate support
         # Use 1002 (button-event tracking) — reports motion only while button held
         # This gives us implicit release detection: motion events stop when released
@@ -70,12 +84,12 @@ class RetroTUI:
         welcome_content = [
             '',
             '   ╔══════════════════════════════════════╗',
-            '   ║      Welcome to RetroTUI v0.3.3        ║',
+            '   ║      Welcome to RetroTUI v0.3.4        ║',
             '   ║                                      ║',
             '   ║  A Windows 3.1 style desktop         ║',
             '   ║  environment for the Linux console.  ║',
             '   ║                                      ║',
-            '   ║  New in v0.3.3:                      ║',
+            '   ║  Highlights:                         ║',
             '   ║  • Modular Package Structure         ║',
             '   ║  • ASCII Video Player (mpv/mplayer)   ║',
             '   ║  • Per-window menus (File, View)     ║',
@@ -90,6 +104,15 @@ class RetroTUI:
                       content=welcome_content)
         win.active = True
         self.windows.append(win)
+
+    def _validate_terminal_size(self):
+        """Fail fast when terminal is too small for the base desktop layout."""
+        h, w = self.stdscr.getmaxyx()
+        if h < self.MIN_TERM_HEIGHT or w < self.MIN_TERM_WIDTH:
+            raise ValueError(
+                f'Terminal too small ({w}x{h}). '
+                f'Minimum supported size is {self.MIN_TERM_WIDTH}x{self.MIN_TERM_HEIGHT}.'
+            )
 
     def cleanup(self):
         """Restore terminal state."""
@@ -150,7 +173,7 @@ class RetroTUI:
         attr = curses.color_pair(C_STATUS)
         visible = sum(1 for win in self.windows if win.visible)
         total = len(self.windows)
-        status = f' RetroTUI v0.3.3 │ Windows: {visible}/{total} │ Mouse: Enabled │ Ctrl+Q: Exit'
+        status = f' RetroTUI v0.3.4 │ Windows: {visible}/{total} │ Mouse: Enabled │ Ctrl+Q: Exit'
         safe_addstr(self.stdscr, h - 1, 0, status.ljust(w - 1), attr)
 
     def get_icon_at(self, mx, my):
@@ -181,11 +204,25 @@ class RetroTUI:
         if self.windows:
             self.windows[-1].active = True
 
+    @staticmethod
+    def _normalize_action(action):
+        """Convert legacy string actions to AppAction when possible."""
+        if isinstance(action, AppAction):
+            return action
+        if isinstance(action, str):
+            try:
+                return AppAction(action)
+            except ValueError:
+                return action
+        return action
+
     def execute_action(self, action):
         """Execute a menu/icon action."""
+        action = self._normalize_action(action)
         h, w = self.stdscr.getmaxyx()
+        LOGGER.debug('execute_action: %s', action)
 
-        if action == 'exit':
+        if action == AppAction.EXIT:
             self.dialog = Dialog(
                 'Exit RetroTUI',
                 'Are you sure you want to exit?\n\nAll windows will be closed.',
@@ -193,9 +230,9 @@ class RetroTUI:
                 width=44
             )
 
-        elif action == 'about':
+        elif action == AppAction.ABOUT:
             sys_info = get_system_info()
-            msg = ('RetroTUI v0.3.3\n'
+            msg = ('RetroTUI v0.3.4\n'
                    'A retro desktop environment for Linux console.\n\n'
                    'System Information:\n' +
                    '\n'.join(sys_info) + '\n\n'
@@ -203,7 +240,7 @@ class RetroTUI:
                    'No X11 required!')
             self.dialog = Dialog('About RetroTUI', msg, ['OK'], width=52)
 
-        elif action == 'help':
+        elif action == AppAction.HELP:
             msg = ('Keyboard Controls:\n\n'
                    'Tab       - Cycle windows\n'
                    'Escape    - Close menu/dialog\n'
@@ -235,21 +272,21 @@ class RetroTUI:
                    'Scroll    - Scroll/select')
             self.dialog = Dialog('Keyboard & Mouse Help', msg, ['OK'], width=46)
 
-        elif action == 'filemanager':
+        elif action == AppAction.FILE_MANAGER:
             offset_x = 15 + len(self.windows) * 2
             offset_y = 3 + len(self.windows) * 1
             win = FileManagerWindow(offset_x, offset_y, 58, 22)
             self.windows.append(win)
             self.set_active_window(win)
 
-        elif action == 'notepad':
+        elif action == AppAction.NOTEPAD:
             offset_x = 20 + len(self.windows) * 2
             offset_y = 4 + len(self.windows) * 1
             win = NotepadWindow(offset_x, offset_y, 60, 20)
             self.windows.append(win)
             self.set_active_window(win)
 
-        elif action == 'asciivideo':
+        elif action == AppAction.ASCII_VIDEO:
             self.dialog = Dialog(
                 'ASCII Video',
                 'Reproduce video en la terminal.\n\n'
@@ -259,7 +296,7 @@ class RetroTUI:
                 width=50,
             )
 
-        elif action == 'terminal':
+        elif action == AppAction.TERMINAL:
             content = [
                 f' user@{os.uname().nodename}:~$ _',
                 '',
@@ -272,7 +309,7 @@ class RetroTUI:
             self.windows.append(win)
             self.set_active_window(win)
 
-        elif action == 'settings':
+        elif action == AppAction.SETTINGS:
             content = [
                 ' ╔═ Display Settings ══════════════════════╗',
                 ' ║                                         ║',
@@ -292,13 +329,15 @@ class RetroTUI:
             self.windows.append(win)
             self.set_active_window(win)
 
-        elif action == 'new_window':
+        elif action == AppAction.NEW_WINDOW:
             offset_x = 20 + len(self.windows) * 2
             offset_y = 3 + len(self.windows) * 1
             win = Window(f'Window {Window._next_id}', offset_x, offset_y, 40, 12,
                           content=['', ' New empty window', ''])
             self.windows.append(win)
             self.set_active_window(win)
+        else:
+            LOGGER.warning('Unknown action received: %s', action)
 
     def open_file_viewer(self, filepath):
         """Open file in best viewer: ASCII video or Notepad."""
@@ -329,15 +368,90 @@ class RetroTUI:
         win_w = min(70, w - 4)
         win_h = min(25, h - 4)
         win = NotepadWindow(offset_x, offset_y, win_w, win_h, filepath=filepath)
-        win = NotepadWindow(offset_x, offset_y, win_w, win_h, filepath=filepath)
         self.windows.append(win)
         self.set_active_window(win)
 
     def show_save_as_dialog(self, win):
         """Show dialog to get filename for saving."""
-        self.dialog = InputDialog('Save As', 'Enter filename:', width=40)
-        self.dialog.callback = lambda filename: win.save_as(filename)
+        dialog = InputDialog('Save As', 'Enter filename:', width=40)
+        dialog.callback = lambda filename, target=win: target.save_as(filename)
+        self.dialog = dialog
 
+    def get_active_window(self):
+        """Return the active window, if any."""
+        return next((w for w in self.windows if w.active), None)
+
+    def _dispatch_window_result(self, result, source_win):
+        """Handle ActionResult returned by window/dialog callbacks."""
+        if not result or result is True:
+            return
+
+        if not isinstance(result, ActionResult):
+            LOGGER.debug('Ignoring non-ActionResult return from window callback: %r', result)
+            return
+
+        LOGGER.debug('Dispatching window result: type=%s payload=%r', result.type, result.payload)
+
+        if result.type == ActionType.OPEN_FILE and result.payload:
+            self.open_file_viewer(result.payload)
+            return
+
+        if result.type == ActionType.EXECUTE:
+            exec_action = self._normalize_action(result.payload)
+            if exec_action == AppAction.CLOSE_WINDOW and source_win:
+                self.close_window(source_win)
+            elif exec_action:
+                self.execute_action(exec_action)
+            return
+
+        if result.type == ActionType.REQUEST_SAVE_AS and source_win:
+            self.show_save_as_dialog(source_win)
+            return
+
+        if result.type == ActionType.SAVE_ERROR:
+            message = result.payload or 'Unknown save error.'
+            self.dialog = Dialog('Save Error', str(message), ['OK'], width=50)
+            return
+
+        LOGGER.debug('Unhandled ActionResult type: %s', result.type)
+
+    def _resolve_dialog_result(self, result_idx):
+        """Apply dialog button result and run dialog callback when needed."""
+        if result_idx < 0 or not self.dialog:
+            return
+
+        dialog = self.dialog
+        btn_text = dialog.buttons[result_idx] if result_idx < len(dialog.buttons) else ''
+        callback_result = None
+
+        if dialog.title == 'Exit RetroTUI' and btn_text == 'Yes':
+            self.running = False
+        elif result_idx == 0:
+            callback = getattr(dialog, 'callback', None)
+            if callable(callback) and isinstance(dialog, InputDialog):
+                callback_result = callback(dialog.value)
+
+        self.dialog = None
+        if callback_result is not None:
+            self._dispatch_window_result(callback_result, self.get_active_window())
+
+    def _handle_dialog_mouse(self, mx, my, bstate):
+        """Handle mouse events when a modal dialog is open."""
+        if not self.dialog:
+            return False
+        if not (bstate & self.click_flags):
+            return True
+        result = self.dialog.handle_click(mx, my)
+        self._resolve_dialog_result(result)
+        return True
+
+    def _handle_dialog_key(self, key):
+        """Handle keyboard events when a modal dialog is open."""
+        if not self.dialog:
+            return False
+        result = self.dialog.handle_key(key)
+        self._resolve_dialog_result(result)
+        return True
 
     def handle_taskbar_click(self, mx, my):
         """Handle click on taskbar row. Returns True if handled."""
@@ -359,45 +473,14 @@ class RetroTUI:
             x += btn_w + 1
         return False
 
-    def handle_mouse(self, event):
-        """Handle mouse events."""
-        try:
-            _, mx, my, _, bstate = event
-        except Exception:
-            return
-
-        # Dialog takes priority
-        if self.dialog:
-            if bstate & (curses.BUTTON1_CLICKED | curses.BUTTON1_PRESSED | curses.BUTTON1_DOUBLE_CLICKED):
-                result = self.dialog.handle_click(mx, my)
-                if result >= 0:
-                    btn_text = self.dialog.buttons[result]
-                    if self.dialog.title == 'Exit RetroTUI' and btn_text == 'Yes':
-                        self.running = False
-                    elif hasattr(self.dialog, 'callback') and result == 0:
-                         # For InputDialog, result 0 is OK
-                         if hasattr(self.dialog, 'value'):
-                             self.dialog.callback(self.dialog.value)
-                    
-                    self.dialog = None
-            return
-
-        # Menu bar click
-        if my == 0 and (bstate & (curses.BUTTON1_CLICKED | curses.BUTTON1_PRESSED | curses.BUTTON1_DOUBLE_CLICKED)):
-            action = self.menu.handle_click(mx, my)
-            if action:
-                self.execute_action(action)
-            return
-
-        # Window dragging — check FIRST, before menu/window clicks
+    def _handle_drag_resize_mouse(self, mx, my, bstate):
+        """Handle active drag or resize operations."""
         any_dragging = any(w.dragging for w in self.windows)
         if any_dragging:
-            stop_flags = (curses.BUTTON1_CLICKED | curses.BUTTON1_RELEASED |
-                          curses.BUTTON1_DOUBLE_CLICKED)
-            if bstate & stop_flags:
+            if bstate & self.stop_drag_flags:
                 for win in self.windows:
                     win.dragging = False
-                return
+                return True
             for win in self.windows:
                 if win.dragging:
                     h, w = self.stdscr.getmaxyx()
@@ -405,276 +488,245 @@ class RetroTUI:
                     new_y = my - win.drag_offset_y
                     win.x = max(0, min(new_x, w - win.w))
                     win.y = max(1, min(new_y, h - win.h - 1))
-                    return
-            return
+                    return True
+            return True
 
-        # Window resizing — parallel to dragging
         any_resizing = any(w.resizing for w in self.windows)
         if any_resizing:
-            stop_flags = (curses.BUTTON1_CLICKED | curses.BUTTON1_RELEASED |
-                          curses.BUTTON1_DOUBLE_CLICKED)
-            if bstate & stop_flags:
+            if bstate & self.stop_drag_flags:
                 for win in self.windows:
                     win.resizing = False
                     win.resize_edge = None
-                return
+                return True
             for win in self.windows:
                 if win.resizing:
                     h, w = self.stdscr.getmaxyx()
                     win.apply_resize(mx, my, w, h)
-                    return
-            return
+                    return True
+            return True
+        return False
 
-        # Menu dropdown handling (when menu is active)
-        if self.menu.active:
-            # Mouse movement — update hover highlight, don't close
-            if bstate & curses.REPORT_MOUSE_POSITION:
-                self.menu.handle_hover(mx, my)
-                return
-            # Actual click — select item or close menu
-            if bstate & (curses.BUTTON1_CLICKED | curses.BUTTON1_PRESSED | curses.BUTTON1_DOUBLE_CLICKED):
-                action = self.menu.handle_click(mx, my)
-                if action:
-                    self.execute_action(action)
-                return
-            # For any other mouse event while menu is active, check if inside menu area
-            if self.menu.hit_test_dropdown(mx, my) or my == 0:
-                return  # Stay active, absorb event
+    def _handle_global_menu_mouse(self, mx, my, bstate):
+        """Handle mouse interaction when the global menu is active."""
+        if not self.menu.active:
+            return False
+        if bstate & curses.REPORT_MOUSE_POSITION:
+            self.menu.handle_hover(mx, my)
+            return True
+        if bstate & self.click_flags:
+            action = self.menu.handle_click(mx, my)
+            if action:
+                self.execute_action(action)
+            return True
+        if self.menu.hit_test_dropdown(mx, my) or my == 0:
+            return True
+        return False
 
-        # Taskbar click — restore minimized windows
-        if bstate & (curses.BUTTON1_CLICKED | curses.BUTTON1_PRESSED | curses.BUTTON1_DOUBLE_CLICKED):
-            if self.handle_taskbar_click(mx, my):
-                return
-
-        # Check windows (reverse z-order for top window first)
+    def _handle_window_mouse(self, mx, my, bstate):
+        """Route mouse events to windows in z-order."""
         for win in reversed(self.windows):
             if not win.visible:
                 continue
 
-            click_flags = curses.BUTTON1_CLICKED | curses.BUTTON1_PRESSED | curses.BUTTON1_DOUBLE_CLICKED
+            click_flags = self.click_flags
 
-            # Close button [×]
             if win.on_close_button(mx, my) and (bstate & click_flags):
                 self.close_window(win)
-                return
+                return True
 
-            # Minimize button [─]
             if win.on_minimize_button(mx, my) and (bstate & click_flags):
                 self.set_active_window(win)
                 win.toggle_minimize()
-                # Activate next visible window
                 visible = [w for w in self.windows if w.visible]
                 if visible:
                     self.set_active_window(visible[-1])
-                return
+                return True
 
-            # Maximize button [□]
             if win.on_maximize_button(mx, my) and (bstate & click_flags):
                 self.set_active_window(win)
                 h, w = self.stdscr.getmaxyx()
                 win.toggle_maximize(w, h)
-                return
+                return True
 
-            # Border resize (check before title bar to capture corners)
             if bstate & curses.BUTTON1_PRESSED:
                 edge = win.on_border(mx, my)
                 if edge:
                     win.resizing = True
                     win.resize_edge = edge
                     self.set_active_window(win)
-                    return
+                    return True
 
-            # Title bar — drag or double-click maximize
             if win.on_title_bar(mx, my):
                 if bstate & curses.BUTTON1_DOUBLE_CLICKED:
                     self.set_active_window(win)
                     h, w = self.stdscr.getmaxyx()
                     win.toggle_maximize(w, h)
-                    return
-                elif bstate & curses.BUTTON1_PRESSED:
+                    return True
+                if bstate & curses.BUTTON1_PRESSED:
                     if not win.maximized:
                         win.dragging = True
                         win.drag_offset_x = mx - win.x
                         win.drag_offset_y = my - win.y
                     self.set_active_window(win)
-                    return
-                elif bstate & curses.BUTTON1_CLICKED:
+                    return True
+                if bstate & curses.BUTTON1_CLICKED:
                     self.set_active_window(win)
-                    return
+                    return True
 
-            # Window menu hover tracking
             if (bstate & curses.REPORT_MOUSE_POSITION) and win.window_menu and win.window_menu.active:
                 if win.window_menu.handle_hover(mx, my, win.x, win.y, win.w):
-                    return
+                    return True
 
-            # Click outside window with active menu — close menu
             if win.window_menu and win.window_menu.active and not win.contains(mx, my):
                 if bstate & click_flags:
                     win.window_menu.active = False
-                    # Don't return — let click propagate to other windows
 
             if win.contains(mx, my):
                 if bstate & click_flags:
                     self.set_active_window(win)
-                    # Close other windows' menus when clicking on a different window
                     for other_win in self.windows:
                         if other_win is not win and other_win.window_menu and other_win.window_menu.active:
                             other_win.window_menu.active = False
-                    # Delegate click to window if it has a handler
-                    if hasattr(win, 'handle_click'):
-                        result = win.handle_click(mx, my)
-                        if result and result[0] == 'file':
-                            self.open_file_viewer(result[1])
-                        elif result and result[0] == 'action':
-                            if result[1] == 'close':
-                                self.close_window(win)
-                            else:
-                                self.execute_action(result[1])
-                        elif result:
-                             # Forward other signals like save_as_request or error strings
-                             return result
-                    return
-                # Scroll wheel
-                if bstate & curses.BUTTON4_PRESSED:  # Scroll up
-                    if hasattr(win, 'select_up'):
-                        for _ in range(3):
-                            win.select_up()
-                    else:
-                        win.scroll_up()
-                    return
-                if bstate & 0x200000:  # Scroll down (BUTTON5)
-                    if hasattr(win, 'select_down'):
-                        for _ in range(3):
-                            win.select_down()
-                    else:
-                        win.scroll_down()
-                    return
+                    result = win.handle_click(mx, my)
+                    self._dispatch_window_result(result, win)
+                    return True
 
-        # Desktop icons — check double-click FIRST (bstate includes CLICKED on double-click)
+                if bstate & curses.BUTTON4_PRESSED:
+                    win.handle_scroll('up', 3)
+                    return True
+
+                if bstate & self.scroll_down_mask:
+                    win.handle_scroll('down', 3)
+                    return True
+        return False
+
+    def _handle_desktop_mouse(self, mx, my, bstate):
+        """Handle desktop icon interactions and deselection."""
         if bstate & curses.BUTTON1_DOUBLE_CLICKED:
             icon_idx = self.get_icon_at(mx, my)
             if icon_idx >= 0:
                 self.execute_action(self.icons[icon_idx]['action'])
-                return
+                return True
 
-        if bstate & curses.BUTTON1_CLICKED or bstate & curses.BUTTON1_PRESSED:
+        if bstate & (curses.BUTTON1_CLICKED | curses.BUTTON1_PRESSED):
             icon_idx = self.get_icon_at(mx, my)
             if icon_idx >= 0:
                 self.selected_icon = icon_idx
-                return
+                return True
 
-        # Click on desktop - deselect
         self.selected_icon = -1
         self.menu.active = False
+        return True
 
-    def handle_key(self, key):
-        """Handle keyboard input."""
-        # Dialog takes priority
-        if self.dialog:
-            result = self.dialog.handle_key(key)
-            if result >= 0:
-                # Standard button press
-                btn_text = self.dialog.buttons[result]
-                if self.dialog.title == 'Exit RetroTUI' and btn_text == 'Yes':
-                    self.running = False
-                elif hasattr(self.dialog, 'callback') and result == 0:
-                     if hasattr(self.dialog, 'value'):
-                         self.dialog.callback(self.dialog.value)
-                self.dialog = None
+    def handle_mouse(self, event):
+        """Handle mouse events."""
+        try:
+            _, mx, my, _, bstate = event
+        except (TypeError, ValueError):
             return
 
-        # Global shortcuts
-        if key == 17:  # Ctrl+Q
-            self.execute_action('exit')
+        if self._handle_dialog_mouse(mx, my, bstate):
             return
 
-        # F10: window menu (if active window has one) or global menu
+        if my == 0 and (bstate & self.click_flags):
+            action = self.menu.handle_click(mx, my)
+            if action:
+                self.execute_action(action)
+            return
+
+        if self._handle_drag_resize_mouse(mx, my, bstate):
+            return
+
+        if self._handle_global_menu_mouse(mx, my, bstate):
+            return
+
+        if (bstate & self.click_flags) and self.handle_taskbar_click(mx, my):
+            return
+
+        if self._handle_window_mouse(mx, my, bstate):
+            return
+
+        self._handle_desktop_mouse(mx, my, bstate)
+
+    def _handle_menu_hotkeys(self, key):
+        """Handle F10 and Escape interactions for menus."""
         if key == curses.KEY_F10:
-            active_win = next((w for w in self.windows if w.active), None)
+            active_win = self.get_active_window()
             if active_win and active_win.window_menu:
                 wm = active_win.window_menu
                 wm.active = not wm.active
                 if wm.active:
                     wm.selected_menu = 0
                     wm.selected_item = 0
-                return
+                return True
             if self.menu.active:
                 self.menu.active = False
             else:
                 self.menu.active = True
                 self.menu.selected_menu = 0
                 self.menu.selected_item = 0
-            return
+            return True
 
-        # Escape: close window menu, then global menu
         if key == 27:
-            active_win = next((w for w in self.windows if w.active), None)
+            active_win = self.get_active_window()
             if active_win and active_win.window_menu and active_win.window_menu.active:
                 active_win.window_menu.active = False
             elif self.menu.active:
                 self.menu.active = False
+            return True
+
+        return False
+
+    def _handle_global_menu_key(self, key):
+        """Handle keyboard navigation for the global menu."""
+        if not self.menu.active:
+            return False
+
+        action = self.menu.handle_key(key)
+        if action and action != 'close_menu':
+            self.execute_action(action)
+        return True
+
+    def _cycle_focus(self):
+        """Cycle focus through visible windows."""
+        visible_windows = [w for w in self.windows if w.visible]
+        if not visible_windows:
+            return
+        current = next((i for i, w in enumerate(visible_windows) if w.active), -1)
+        next_idx = (current + 1) % len(visible_windows)
+        for w in self.windows:
+            w.active = False
+        visible_windows[next_idx].active = True
+
+    def _handle_active_window_key(self, key):
+        """Delegate key input to active window."""
+        active_win = self.get_active_window()
+        if not active_win:
             return
 
-        # Menu navigation
-        if self.menu.active:
-            if key == curses.KEY_LEFT:
-                self.menu.selected_menu = (self.menu.selected_menu - 1) % len(self.menu.menu_names)
-                self.menu.selected_item = 0
-            elif key == curses.KEY_RIGHT:
-                self.menu.selected_menu = (self.menu.selected_menu + 1) % len(self.menu.menu_names)
-                self.menu.selected_item = 0
-            elif key == curses.KEY_UP:
-                items = self.menu.items[self.menu.menu_names[self.menu.selected_menu]]
-                self.menu.selected_item = (self.menu.selected_item - 1) % len(items)
-                while items[self.menu.selected_item][1] is None:
-                    self.menu.selected_item = (self.menu.selected_item - 1) % len(items)
-            elif key == curses.KEY_DOWN:
-                items = self.menu.items[self.menu.menu_names[self.menu.selected_menu]]
-                self.menu.selected_item = (self.menu.selected_item + 1) % len(items)
-                while items[self.menu.selected_item][1] is None:
-                    self.menu.selected_item = (self.menu.selected_item + 1) % len(items)
-            elif key in (curses.KEY_ENTER, 10, 13):
-                menu_name = self.menu.menu_names[self.menu.selected_menu]
-                items = self.menu.items[menu_name]
-                action = items[self.menu.selected_item][1]
-                if action:
-                    self.menu.active = False
-                    self.execute_action(action)
+        result = active_win.handle_key(key)
+        self._dispatch_window_result(result, active_win)
+
+    def handle_key(self, key):
+        """Handle keyboard input."""
+        if self._handle_dialog_key(key):
             return
 
-        # Window focus cycling (skip minimized windows)
+        if key == 17:  # Ctrl+Q
+            self.execute_action(AppAction.EXIT)
+            return
+
+        if self._handle_menu_hotkeys(key):
+            return
+
+        if self._handle_global_menu_key(key):
+            return
+
         if key == 9:  # Tab
-            visible_windows = [w for w in self.windows if w.visible]
-            if visible_windows:
-                current = next((i for i, w in enumerate(visible_windows) if w.active), -1)
-                next_idx = (current + 1) % len(visible_windows)
-                for w in self.windows:
-                    w.active = False
-                visible_windows[next_idx].active = True
+            self._cycle_focus()
             return
 
-        # Delegate to active window
-        active_win = next((w for w in self.windows if w.active), None)
-        if active_win:
-            if hasattr(active_win, 'handle_key'):
-                result = active_win.handle_key(key)
-                if result and result[0] == 'file':
-                    self.open_file_viewer(result[1])
-                elif result and result[0] == 'action':
-                    if result[1] == 'close':
-                        self.close_window(active_win)
-                    else:
-                        self.execute_action(result[1])
-                elif result and result[0] == 'save_as_request':
-                    self.show_save_as_dialog(active_win)
-                elif result and result[0] == 'save_error':
-                    self.dialog = Dialog('Save Error', result[1], ['OK'], width=50)
-            else:
-                # Default scroll behavior for regular windows
-                if key == curses.KEY_UP or key == curses.KEY_PPAGE:
-                    active_win.scroll_up()
-                elif key == curses.KEY_DOWN or key == curses.KEY_NPAGE:
-                    active_win.scroll_down()
+        self._handle_active_window_key(key)
 
     def run(self):
         """Main event loop."""

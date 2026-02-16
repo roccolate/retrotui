@@ -3,7 +3,7 @@ Dialog Component.
 """
 import curses
 from ..constants import (
-    C_DIALOG, C_WIN_TITLE, C_BUTTON, C_BUTTON_SEL
+    C_DIALOG, C_WIN_TITLE, C_BUTTON, C_BUTTON_SEL, C_WIN_BODY
 )
 from ..utils import safe_addstr, draw_box
 

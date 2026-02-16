@@ -5,6 +5,7 @@ import curses
 import os
 from ..ui.window import Window
 from ..ui.menu import WindowMenu
+from ..core.actions import ActionResult, ActionType, AppAction
 from ..utils import safe_addstr, draw_box
 from ..constants import C_STATUS, C_SCROLLBAR
 
@@ -27,14 +28,14 @@ class NotepadWindow(Window):
         self._wrap_stale = True
         self.window_menu = WindowMenu({
             'File': [
-                ('New',           'np_new'),
-                ('Save   Ctrl+S', 'np_save'),
-                ('Save As...',    'np_save_as'),
+                ('New',           AppAction.NP_NEW),
+                ('Save   Ctrl+S', AppAction.NP_SAVE),
+                ('Save As...',    AppAction.NP_SAVE_AS),
                 ('─────────────', None),
-                ('Close',         'np_close'),
+                ('Close',         AppAction.NP_CLOSE),
             ],
             'View': [
-                ('Word Wrap  Ctrl+W', 'np_toggle_wrap'),
+                ('Word Wrap  Ctrl+W', AppAction.NP_TOGGLE_WRAP),
             ],
         })
         self.h = max(self.h, 8)
@@ -63,16 +64,16 @@ class NotepadWindow(Window):
         self._wrap_stale = True
 
     def _save_file(self):
-        """Save buffer to file. Returns True on success, error string on failure, or tuple for request."""
+        """Save buffer to file. Returns True or ActionResult."""
         if not self.filepath:
-            return ('save_as_request',)
+            return ActionResult(ActionType.REQUEST_SAVE_AS)
         try:
             with open(self.filepath, 'w') as f:
                 f.write('\n'.join(self.buffer))
             self.modified = False
             return True
         except (PermissionError, OSError) as e:
-            return str(e)
+            return ActionResult(ActionType.SAVE_ERROR, str(e))
 
     def save_as(self, filepath):
         """Set filepath and save."""
@@ -234,21 +235,21 @@ class NotepadWindow(Window):
 
     def _execute_menu_action(self, action):
         """Execute a window menu action. Returns signal or None."""
-        if action == 'np_toggle_wrap':
+        if action == AppAction.NP_TOGGLE_WRAP:
             self.wrap_mode = not self.wrap_mode
             self.view_left = 0
             self._invalidate_wrap()
             self._ensure_cursor_visible()
-        elif action == 'np_save':
+        elif action == AppAction.NP_SAVE:
             result = self._save_file()
             if result is not True:
-                return result  # Signal or error string
-        elif action == 'np_save_as':
-            return ('save_as_request',)
-        elif action == 'np_new':
-            return ('action', 'notepad')
-        elif action == 'np_close':
-            return ('action', 'close')
+                return result
+        elif action == AppAction.NP_SAVE_AS:
+            return ActionResult(ActionType.REQUEST_SAVE_AS)
+        elif action == AppAction.NP_NEW:
+            return ActionResult(ActionType.EXECUTE, AppAction.NOTEPAD)
+        elif action == AppAction.NP_CLOSE:
+            return ActionResult(ActionType.EXECUTE, AppAction.CLOSE_WINDOW)
         return None
 
     def handle_key(self, key):
