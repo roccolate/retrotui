@@ -225,12 +225,12 @@ código de la aplicación no necesita distinguirlos.
 - [x] Baseline de calidad actualizado: `190 tests` en QA y cobertura total por modulo `78.4%`.
 - [x] Sincronización de documentación de release/deuda para reflejar el nuevo baseline de calidad.
 
-## 4.8 Caracteristicas de v0.3.6 - Version Sync
+## 4.8 Caracteristicas de v0.6.0 - Version Sync
 
-- [x] Bump de version global a `0.3.6` (runtime + packaging + setup script).
-- [x] Sincronizacion de tests/documentacion para reflejar `v0.3.6`.
-- [x] Gate gradual de cobertura por modulo elevado en CI a `100.0` (lane `ubuntu-latest` + Python `3.12`).
-- [x] Baseline de calidad actualizado: `299 tests` en QA y cobertura total por modulo `100.0%`.
+- [x] Bump de version global a `0.6.0` (runtime + packaging + setup script).
+- [x] Sincronizacion de tests/documentacion para reflejar `v0.6.0`.
+- [x] Gate gradual de cobertura por modulo mantenido en CI a `100.0` (lane `ubuntu-latest` + Python `3.12`).
+- [x] Baseline de calidad actualizado: `374 tests` en QA y cobertura total por modulo `100.0%`.
 
 ### Roadmap futuro:
 - [x] File Manager con navegación de directorios
@@ -298,4 +298,3 @@ sudo systemctl start gpm
 cd retro-tui
 python3 -m retrotui
 ```
-

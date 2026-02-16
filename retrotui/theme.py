@@ -102,7 +102,7 @@ THEMES = {
     "win31": Theme(
         key="win31",
         label="Windows 3.1",
-        desktop_pattern="░",
+        desktop_pattern=" ",
         pairs_base=_mk_pairs(
             (
                 (curses.COLOR_BLACK, curses.COLOR_CYAN),
@@ -166,7 +166,7 @@ THEMES = {
         desktop_pattern="·",
         pairs_base=_mk_pairs(
             (
-                (curses.COLOR_WHITE, curses.COLOR_CYAN),
+                (curses.COLOR_BLUE, curses.COLOR_CYAN),
                 (curses.COLOR_BLACK, curses.COLOR_WHITE),
                 (curses.COLOR_WHITE, curses.COLOR_BLUE),
                 (curses.COLOR_BLACK, curses.COLOR_WHITE),

@@ -36,6 +36,7 @@ class NotepadComponentTests(unittest.TestCase):
             "retrotui.utils",
             "retrotui.ui.menu",
             "retrotui.ui.window",
+            "retrotui.core.clipboard",
             "retrotui.apps.notepad",
             "retrotui.core.actions",
         ):
@@ -52,6 +53,7 @@ class NotepadComponentTests(unittest.TestCase):
             "retrotui.utils",
             "retrotui.ui.menu",
             "retrotui.ui.window",
+            "retrotui.core.clipboard",
             "retrotui.apps.notepad",
             "retrotui.core.actions",
         ):
@@ -419,6 +421,47 @@ class NotepadComponentTests(unittest.TestCase):
         result = win.handle_key(19)
 
         self.assertEqual(result.type, self.actions_mod.ActionType.SAVE_ERROR)
+
+    def test_handle_key_ctrl_c_copies_current_line(self):
+        win = self._make_window()
+        win.buffer = ["first", "second"]
+        win.cursor_line = 1
+        with mock.patch.object(self.notepad_mod, "copy_text") as copy_text:
+            win.handle_key(3)
+        copy_text.assert_called_once_with("second")
+
+    def test_handle_key_ctrl_v_pastes_multiline_text(self):
+        win = self._make_window()
+        win.buffer = ["ab"]
+        win.cursor_line = 0
+        win.cursor_col = 1
+        with mock.patch.object(self.notepad_mod, "paste_text", return_value="X\nY\nZ"):
+            win.handle_key(22)
+        self.assertEqual(win.buffer, ["aX", "Y", "Zb"])
+        self.assertEqual((win.cursor_line, win.cursor_col), (2, 1))
+        self.assertTrue(win.modified)
+
+    def test_handle_key_ctrl_v_pastes_single_line_text(self):
+        win = self._make_window()
+        win.buffer = ["ab"]
+        win.cursor_line = 0
+        win.cursor_col = 1
+        with mock.patch.object(self.notepad_mod, "paste_text", return_value="Q"):
+            win.handle_key(22)
+        self.assertEqual(win.buffer, ["aQb"])
+        self.assertEqual((win.cursor_line, win.cursor_col), (0, 2))
+        self.assertTrue(win.modified)
+
+    def test_handle_key_ctrl_v_ignores_empty_clipboard(self):
+        win = self._make_window()
+        win.buffer = ["ab"]
+        win.cursor_line = 0
+        win.cursor_col = 1
+        with mock.patch.object(self.notepad_mod, "paste_text", return_value=""):
+            win.handle_key(22)
+        self.assertEqual(win.buffer, ["ab"])
+        self.assertEqual((win.cursor_line, win.cursor_col), (0, 1))
+        self.assertFalse(win.modified)
 
     def test_handle_key_int_printable_inserts_character(self):
         win = self._make_window()

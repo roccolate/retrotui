@@ -5,6 +5,7 @@ import curses
 
 from ..constants import C_SCROLLBAR, C_STATUS
 from ..core.actions import ActionResult, ActionType, AppAction
+from ..core.clipboard import paste_text
 from ..core.terminal_session import TerminalSession
 from ..ui.menu import WindowMenu
 from ..ui.window import Window
@@ -400,6 +401,19 @@ class TerminalWindow(Window):
             return ActionResult(ActionType.EXECUTE, AppAction.CLOSE_WINDOW)
         return None
 
+    def _forward_payload(self, payload):
+        """Write one payload chunk into the PTY session when available."""
+        if payload is None or payload == '':
+            return
+        self._ensure_session()
+        if self._session is None or not self._session.running:
+            return
+        self.scrollback_offset = 0
+        try:
+            self._session.write(payload)
+        except OSError as exc:
+            self._session_error = str(exc)
+
     def handle_key(self, key):
         """Handle keyboard input and forward supported keys to the PTY."""
         key_code = normalize_key_code(key)
@@ -410,19 +424,15 @@ class TerminalWindow(Window):
                 return self._execute_menu_action(action)
             return None
 
+        if key_code == 22:
+            self._forward_payload(paste_text())
+            return None
+
         payload = self._key_to_input(key, key_code)
         if payload is None:
             return None
 
-        self._ensure_session()
-        if self._session is None or not self._session.running:
-            return None
-
-        self.scrollback_offset = 0
-        try:
-            self._session.write(payload)
-        except OSError as exc:
-            self._session_error = str(exc)
+        self._forward_payload(payload)
         return None
 
     def handle_click(self, mx, my):

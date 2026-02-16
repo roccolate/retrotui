@@ -22,8 +22,8 @@ SB_BR = '┘'
 SB_H  = '─'
 SB_V  = '│'
 
-# Desktop pattern (Win 3.1 style)
-DESKTOP_PATTERN = '░'
+# Desktop pattern fallback
+DESKTOP_PATTERN = ' '
 
 # ═══════════════════════════════════════════════════════════
 # Icons

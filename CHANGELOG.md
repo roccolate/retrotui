@@ -32,6 +32,8 @@ Todas las versiones notables de RetroTUI están documentadas aquí.
 - Tests `tests/test_terminal_session.py` para validar el contrato de `TerminalSession` en rutas exito/error.
 - Modulo `retrotui/apps/terminal.py` con `TerminalWindow` embebida (sesion PTY, parser ANSI/VT100 basico, forwarding de teclas y scrollback).
 - Tests `tests/test_terminal_component.py` para validar render/input/scroll/menu/ciclo de vida de la terminal embebida.
+- Modulo `retrotui/core/clipboard.py` con clipboard interno y sync opcional con `wl-copy/wl-paste`, `xclip` y `xsel`.
+- Tests `tests/test_clipboard_core.py` para cubrir el contrato del clipboard (deteccion backend, copy/paste y fallbacks).
 - Modulo `retrotui/theme.py` con `Theme` dataclass, roles semanticos y 5 temas built-in (`win31`, `dos_cga`, `win95`, `hacker`, `amiga`).
 - Modulo `retrotui/core/config.py` para cargar/guardar `~/.config/retrotui/config.toml`.
 - Modulo `retrotui/apps/settings.py` con ventana de Settings funcional (radio de tema, toggles, preview live, Save/Cancel).
@@ -56,6 +58,17 @@ Todas las versiones notables de RetroTUI están documentadas aquí.
 - `init_colors()` ahora consume el tema activo y aplica colores por roles semanticos.
 - Todo el render de UI ahora consume keys de tema via helper (`desktop`, `window_title`, `status`, etc.) en lugar de color pairs crudos.
 - `FileManagerWindow` y `NotepadWindow` ahora respetan defaults persistidos (`show_hidden`, `word_wrap_default`).
+- Atajos de clipboard habilitados: `Ctrl+C` en Notepad/File Manager, `Ctrl+V` en Notepad/Terminal.
+- Notepad ahora soporta pegado multilinea en cursor y File Manager copia ruta completa de la entrada seleccionada.
+
+---
+
+## [v0.6.0] - 2026-02-16
+
+### Changed
+- Bump de version del proyecto a `0.6.0` (`pyproject.toml`, runtime y script `setup.sh`).
+- Sincronizacion de version en tests/documentacion de runtime (`README.md`, `ROADMAP.md`, `RELEASE.md`).
+- Roadmap actualizado para reflejar estado actual: v0.4 completada, v0.5/v0.6 en progreso.
 
 ---
 

@@ -7,6 +7,7 @@ import unicodedata
 from ..ui.window import Window
 from ..ui.menu import WindowMenu
 from ..core.actions import ActionResult, ActionType, AppAction
+from ..core.clipboard import copy_text
 from ..utils import safe_addstr, check_unicode_support, normalize_key_code, theme_attr
 from ..constants import C_FM_SELECTED
 
@@ -325,6 +326,9 @@ class FileManagerWindow(Window):
                 self._ensure_visible()
         elif key_code in (ord('h'), ord('H')):
             self.toggle_hidden()
+        elif key_code == 3:
+            if 0 <= self.selected_index < len(self.entries):
+                copy_text(self.entries[self.selected_index].full_path)
         return None
 
     def handle_scroll(self, direction, steps=1):
