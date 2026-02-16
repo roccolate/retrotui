@@ -3,10 +3,14 @@ Base Window Class.
 """
 import curses
 from ..constants import (
-    C_WIN_BORDER, C_WIN_TITLE, C_WIN_TITLE_INV, C_WIN_BODY,
-    C_SCROLLBAR, C_WIN_INACTIVE
+    C_SCROLLBAR,
+    C_WIN_BODY,
+    C_WIN_BORDER,
+    C_WIN_INACTIVE,
+    C_WIN_TITLE,
+    C_WIN_TITLE_INV,
 )
-from ..utils import safe_addstr, draw_box
+from ..utils import safe_addstr, draw_box, theme_attr
 from .menu import WindowMenu
 
 class Window:
@@ -161,13 +165,13 @@ class Window:
 
         # Colors
         if self.active:
-            border_attr = curses.color_pair(C_WIN_BORDER)
-            title_attr = curses.color_pair(C_WIN_TITLE) | curses.A_BOLD
-            body_attr = curses.color_pair(C_WIN_BODY)
+            border_attr = theme_attr('window_border')
+            title_attr = theme_attr('window_title') | curses.A_BOLD
+            body_attr = theme_attr('window_body')
         else:
-            border_attr = curses.color_pair(C_WIN_INACTIVE)
-            title_attr = curses.color_pair(C_WIN_INACTIVE)
-            body_attr = curses.color_pair(C_WIN_INACTIVE)
+            border_attr = theme_attr('window_inactive')
+            title_attr = theme_attr('window_inactive')
+            body_attr = theme_attr('window_inactive')
 
         draw_box(stdscr, self.y, self.x, self.h, self.w, border_attr, double=True)
 
@@ -187,7 +191,7 @@ class Window:
                 self.y,
                 self.x + self.w - self.MIN_BTN_OFFSET,
                 self.TITLE_CONTROLS,
-                curses.color_pair(C_WIN_TITLE_INV),
+                theme_attr('window_title_invert'),
             )
 
         # Window Menu Bar
@@ -221,7 +225,7 @@ class Window:
             thumb_pos = int(self.scroll_offset / max(1, len(self.content) - bh) * (bh - 1))
             for i in range(bh):
                 ch = '█' if i == thumb_pos else '░'
-                safe_addstr(stdscr, by + i, sb_x, ch, curses.color_pair(C_SCROLLBAR))
+                safe_addstr(stdscr, by + i, sb_x, ch, theme_attr('scrollbar'))
 
     def draw(self, stdscr):
         """Draw the window."""

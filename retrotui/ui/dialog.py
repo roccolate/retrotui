@@ -2,10 +2,7 @@
 Dialog Component.
 """
 import curses
-from ..constants import (
-    C_DIALOG, C_WIN_TITLE, C_BUTTON, C_BUTTON_SEL, C_WIN_BODY
-)
-from ..utils import safe_addstr, draw_box, normalize_key_code
+from ..utils import safe_addstr, draw_box, normalize_key_code, theme_attr
 
 class Dialog:
     """Modal dialog box."""
@@ -44,8 +41,8 @@ class Dialog:
         x = (max_w - self.width) // 2
         y = (max_h - self.height) // 2
 
-        attr = curses.color_pair(C_DIALOG)
-        title_attr = curses.color_pair(C_WIN_TITLE) | curses.A_BOLD
+        attr = theme_attr('dialog')
+        title_attr = theme_attr('window_title') | curses.A_BOLD
 
         # Shadow
         shadow_attr = curses.A_DIM
@@ -75,10 +72,10 @@ class Dialog:
         for i, btn_text in enumerate(self.buttons):
             btn_w = len(btn_text) + 4
             if i == self.selected:
-                btn_attr = curses.color_pair(C_BUTTON_SEL) | curses.A_BOLD
+                btn_attr = theme_attr('button_selected') | curses.A_BOLD
                 label = f'▸ {btn_text} ◂'
             else:
-                btn_attr = curses.color_pair(C_BUTTON)
+                btn_attr = theme_attr('button')
                 label = f'[ {btn_text} ]'
             safe_addstr(stdscr, btn_y, btn_x, label, btn_attr)
             btn_x += btn_w + 2
@@ -144,7 +141,7 @@ class InputDialog(Dialog):
         input_w = self.width - 8
         
         # Draw input box background
-        attr = curses.color_pair(C_WIN_BODY)
+        attr = theme_attr('window_body')
         safe_addstr(stdscr, input_y, input_x, ' ' * input_w, attr)
         
         # Draw value

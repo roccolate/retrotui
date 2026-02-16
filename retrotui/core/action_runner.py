@@ -2,11 +2,12 @@
 
 from ..apps.filemanager import FileManagerWindow
 from ..apps.notepad import NotepadWindow
+from ..apps.settings import SettingsWindow
 from ..apps.terminal import TerminalWindow
 from ..ui.dialog import Dialog
 from ..ui.window import Window
 from .actions import AppAction
-from .content import build_about_message, build_help_message, build_settings_content
+from .content import build_about_message, build_help_message
 
 
 def execute_app_action(app, action, logger, *, version: str) -> None:
@@ -30,12 +31,32 @@ def execute_app_action(app, action, logger, *, version: str) -> None:
 
     if action == AppAction.FILE_MANAGER:
         offset_x, offset_y = app._next_window_offset(15, 3)
-        app._spawn_window(FileManagerWindow(offset_x, offset_y, 58, 22))
+        try:
+            win = FileManagerWindow(
+                offset_x,
+                offset_y,
+                58,
+                22,
+                show_hidden_default=getattr(app, 'default_show_hidden', False),
+            )
+        except TypeError:
+            win = FileManagerWindow(offset_x, offset_y, 58, 22)
+        app._spawn_window(win)
         return
 
     if action == AppAction.NOTEPAD:
         offset_x, offset_y = app._next_window_offset(20, 4)
-        app._spawn_window(NotepadWindow(offset_x, offset_y, 60, 20))
+        try:
+            win = NotepadWindow(
+                offset_x,
+                offset_y,
+                60,
+                20,
+                wrap_default=getattr(app, 'default_word_wrap', False),
+            )
+        except TypeError:
+            win = NotepadWindow(offset_x, offset_y, 60, 20)
+        app._spawn_window(win)
         return
 
     if action == AppAction.ASCII_VIDEO:
@@ -56,16 +77,7 @@ def execute_app_action(app, action, logger, *, version: str) -> None:
 
     if action == AppAction.SETTINGS:
         offset_x, offset_y = app._next_window_offset(22, 4)
-        app._spawn_window(
-            Window(
-                "Settings",
-                offset_x,
-                offset_y,
-                48,
-                15,
-                content=build_settings_content(),
-            )
-        )
+        app._spawn_window(SettingsWindow(offset_x, offset_y, 56, 18, app))
         return
 
     if action == AppAction.NEW_WINDOW:

@@ -32,6 +32,10 @@ Todas las versiones notables de RetroTUI están documentadas aquí.
 - Tests `tests/test_terminal_session.py` para validar el contrato de `TerminalSession` en rutas exito/error.
 - Modulo `retrotui/apps/terminal.py` con `TerminalWindow` embebida (sesion PTY, parser ANSI/VT100 basico, forwarding de teclas y scrollback).
 - Tests `tests/test_terminal_component.py` para validar render/input/scroll/menu/ciclo de vida de la terminal embebida.
+- Modulo `retrotui/theme.py` con `Theme` dataclass, roles semanticos y 5 temas built-in (`win31`, `dos_cga`, `win95`, `hacker`, `amiga`).
+- Modulo `retrotui/core/config.py` para cargar/guardar `~/.config/retrotui/config.toml`.
+- Modulo `retrotui/apps/settings.py` con ventana de Settings funcional (radio de tema, toggles, preview live, Save/Cancel).
+- Tests `tests/test_theme_and_config.py` y `tests/test_settings_component.py` para cubrir v0.5.
 
 ### Changed
 - README actualizado con comandos de QA y activacion de hooks locales.
@@ -49,6 +53,9 @@ Todas las versiones notables de RetroTUI están documentadas aquí.
 - Cobertura ampliada en rutas de core modularizado, menu/action runner/notepad y terminal embebida; suite actual en QA: 335 tests.
 - Cobertura total por modulo actualizada a 100.0% (trace + AST).
 - `AppAction.TERMINAL` deja de abrir placeholder y ahora instancia `TerminalWindow` real.
+- `init_colors()` ahora consume el tema activo y aplica colores por roles semanticos.
+- Todo el render de UI ahora consume keys de tema via helper (`desktop`, `window_title`, `status`, etc.) en lugar de color pairs crudos.
+- `FileManagerWindow` y `NotepadWindow` ahora respetan defaults persistidos (`show_hidden`, `word_wrap_default`).
 
 ---
 

@@ -11,10 +11,12 @@ from ..utils import (
     check_unicode_support, init_colors,
     is_video_file, play_ascii_video
 )
+from ..theme import get_theme
 from ..ui.menu import Menu
 from ..ui.dialog import Dialog, InputDialog
 from ..ui.window import Window
 from ..apps.notepad import NotepadWindow
+from .config import AppConfig, load_config, save_config
 from .actions import ActionResult, ActionType, AppAction
 from .action_runner import execute_app_action
 from .content import build_welcome_content
@@ -66,6 +68,12 @@ class RetroTUI:
         self.use_unicode = check_unicode_support()
         self.icons = ICONS if self.use_unicode else ICONS_ASCII
 
+        self.config = load_config()
+        self.theme_name = self.config.theme
+        self.theme = get_theme(self.theme_name)
+        self.default_show_hidden = bool(self.config.show_hidden)
+        self.default_word_wrap = bool(self.config.word_wrap_default)
+
         # Setup terminal
         configure_terminal(stdscr, timeout_ms=500)
         self._validate_terminal_size()
@@ -73,7 +81,7 @@ class RetroTUI:
         disable_flow_control()
         self.click_flags, self.stop_drag_flags, self.scroll_down_mask = enable_mouse_support()
 
-        init_colors()
+        init_colors(self.theme)
 
         # Create a welcome window
         h, w = stdscr.getmaxyx()
@@ -82,6 +90,45 @@ class RetroTUI:
                       content=welcome_content)
         win.active = True
         self.windows.append(win)
+
+    def apply_theme(self, theme_name):
+        """Apply a theme immediately to current runtime."""
+        self.theme = get_theme(theme_name)
+        self.theme_name = self.theme.key
+        init_colors(self.theme)
+
+    def apply_preferences(self, *, show_hidden=None, word_wrap_default=None, apply_to_open_windows=False):
+        """Apply runtime preferences used by app windows and defaults."""
+        if show_hidden is not None:
+            self.default_show_hidden = bool(show_hidden)
+        if word_wrap_default is not None:
+            self.default_word_wrap = bool(word_wrap_default)
+
+        if not apply_to_open_windows:
+            return
+
+        for win in list(self.windows):
+            if hasattr(win, 'show_hidden') and hasattr(win, '_rebuild_content'):
+                if win.show_hidden != self.default_show_hidden:
+                    win.show_hidden = self.default_show_hidden
+                    win._rebuild_content()
+            if hasattr(win, 'wrap_mode') and hasattr(win, '_invalidate_wrap'):
+                if win.wrap_mode != self.default_word_wrap:
+                    win.wrap_mode = self.default_word_wrap
+                    win.view_left = 0
+                    win._invalidate_wrap()
+                    ensure_visible = getattr(win, '_ensure_cursor_visible', None)
+                    if callable(ensure_visible):
+                        ensure_visible()
+
+    def persist_config(self):
+        """Persist current runtime preferences to ~/.config/retrotui/config.toml."""
+        self.config = AppConfig(
+            theme=self.theme_name,
+            show_hidden=self.default_show_hidden,
+            word_wrap_default=self.default_word_wrap,
+        )
+        return save_config(self.config)
 
     def _validate_terminal_size(self):
         """Fail fast when terminal is too small for the base desktop layout."""
@@ -209,7 +256,14 @@ class RetroTUI:
         offset_y = 3 + len(self.windows)
         win_w = min(70, w - 4)
         win_h = min(25, h - 4)
-        win = NotepadWindow(offset_x, offset_y, win_w, win_h, filepath=filepath)
+        win = NotepadWindow(
+            offset_x,
+            offset_y,
+            win_w,
+            win_h,
+            filepath=filepath,
+            wrap_default=getattr(self, 'default_word_wrap', False),
+        )
         self._spawn_window(win)
 
     def show_save_as_dialog(self, win):
