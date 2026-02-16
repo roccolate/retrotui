@@ -100,7 +100,7 @@ def draw_box(win, y, x, h, w, attr=0, double=True):
 def check_unicode_support():
     """Check if terminal supports Unicode."""
     try:
-        '╔'.encode(locale.getpreferredencoding())
+        'â•”'.encode(locale.getpreferredencoding())
         return True
     except (UnicodeEncodeError, LookupError):
         return False
@@ -145,7 +145,7 @@ def play_ascii_video(stdscr, filepath):
     mplayer = shutil.which('mplayer')
 
     if not mpv and not mplayer:
-        return False, 'No se encontró mpv ni mplayer.\n\nInstala uno de los siguientes:\n  sudo apt install mpv\n  sudo apt install mplayer'
+        return False, 'No se encontrÃ³ mpv ni mplayer.\n\nInstala uno de los siguientes:\n  sudo apt install mpv\n  sudo apt install mplayer'
 
     # Build command list: try best option first
     if mpv:
@@ -177,13 +177,12 @@ def play_ascii_video(stdscr, filepath):
                 break  # Video played (even if audio failed)
         if playback_succeeded:
             return True, None
-        if backend_used:
-            return False, (
-                'No se pudo reproducir el video.\n'
-                f'Backend probado: {backend_used}\n'
-                f'Código de salida: {exit_code}'
-            )
-        return False, 'No se pudo reproducir el video.'
+        backend_label = backend_used or 'desconocido'
+        return False, (
+            'No se pudo reproducir el video.\n'
+            f'Backend probado: {backend_label}\n'
+            f'CÃ³digo de salida: {exit_code}'
+        )
     except OSError as e:
         return False, f'No se pudo ejecutar:\n{e}'
     finally:

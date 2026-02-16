@@ -2,7 +2,7 @@
 
 **Objetivo:** Un entorno de escritorio estilo Windows 3.1 completamente funcional para la terminal Linux. Sin X11. Sin Wayland. Solo curses, una TTY y vibes.
 
-**Estado actual:** v0.3.4 (febrero 2026)
+**Estado actual:** v0.3.6 (febrero 2026)
 
 ---
 
@@ -51,6 +51,23 @@ La release que hace RetroTUI usable como shell diario.
 **Refactor: Descomposición de Mouse Handler**
 - [x] Dividir `handle_mouse()` en métodos auxiliares para routing por etapas
 - [x] Formalizar orden de routing de eventos como pipeline claro
+- [x] Extraer routing de mouse a `retrotui/core/mouse_router.py` para desacoplar `retrotui/core/app.py`
+
+**Refactor: Descomposición de Keyboard Handler**
+- [x] Extraer routing de teclado a `retrotui/core/key_router.py`
+- [x] Mantener compatibilidad de contratos internos (`_handle_*`) delegando desde `RetroTUI`
+
+**Refactor: Descomposición de Rendering**
+- [x] Extraer render de desktop/iconos/taskbar/statusbar a `retrotui/core/rendering.py`
+- [x] Mantener API publica de `RetroTUI` con wrappers (`draw_*`) para compatibilidad
+
+**Refactor: Descomposición de Event Loop**
+- [x] Extraer ciclo principal de ejecucion a `retrotui/core/event_loop.py`
+- [x] Mantener `RetroTUI.run()` como wrapper estable hacia `run_app_loop()`
+
+**Refactor: Bootstrap de Terminal**
+- [x] Extraer inicializacion/restauracion de terminal a `retrotui/core/bootstrap.py`
+- [x] Centralizar configuracion de mouse tracking y flow control (`XON/XOFF`)
 
 **Refactor: Protocolo de Ventana**
 - [x] Definir métodos base en Window: `handle_key()`, `handle_click()`, `handle_scroll()`
@@ -65,6 +82,15 @@ La release que hace RetroTUI usable como shell diario.
 - [x] Compatibilidad Unicode en input de Dialog/Notepad/File Manager y guardado UTF-8 en Notepad
 - [x] Automatizacion de QA en CI/pre-commit (UTF-8, compileall, unittest) con matriz Linux/Windows
 - [x] Politica de archivos de texto (UTF-8 + EOL LF) via `.editorconfig` y `.gitattributes`
+- [x] Tests unitarios directos para modulos extraidos `core/event_loop.py` y `core/bootstrap.py`
+- [x] Tests unitarios directos para `core/key_router.py`, `core/mouse_router.py`, `core/rendering.py` y `core/action_runner.py`
+- [x] Politica de release/tagging documentada (`RELEASE.md`)
+- [x] Verificacion automatica de version sync en QA (`pyproject.toml` vs `retrotui/core/app.py`)
+- [x] Tests de manejo de errores de file I/O para Notepad/File Manager (PermissionError)
+- [x] Workflow de release automatizado en GitHub Actions (`.github/workflows/release.yml`) con validacion de tag/version y build de artifacts
+- [x] Reporte de cobertura por modulo con stdlib `trace` (`tools/report_module_coverage.py`) y opcion en QA
+- [x] Umbral de cobertura por modulo en CI elevado a `--module-coverage-fail-under 100.0` (lane gradual en `ubuntu-latest` + Python `3.12`)
+- [x] Baseline actual de calidad: `299 tests` en QA y cobertura total por modulo `100.0%`
 
 ---
 ### v0.5 — Temas y Configuración
