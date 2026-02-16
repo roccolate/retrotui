@@ -94,6 +94,13 @@ class RetroTUI:
 
     def cleanup(self):
         """Restore terminal state."""
+        for win in list(self.windows):
+            closer = getattr(win, 'close', None)
+            if callable(closer):
+                try:
+                    closer()
+                except Exception:  # pragma: no cover - defensive cleanup path
+                    LOGGER.debug('Window cleanup failed for %r', win, exc_info=True)
         disable_mouse_support()
 
     def draw_desktop(self):
@@ -136,6 +143,12 @@ class RetroTUI:
 
     def close_window(self, win):
         """Close a window."""
+        closer = getattr(win, 'close', None)
+        if callable(closer):
+            try:
+                closer()
+            except Exception:  # pragma: no cover - defensive window cleanup path
+                LOGGER.debug('Window close hook failed for %r', win, exc_info=True)
         self.windows.remove(win)
         if self.windows:
             self.windows[-1].active = True

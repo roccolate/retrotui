@@ -75,6 +75,15 @@ class _DummyNotepadWindow:
         self.h = h
 
 
+class _DummyTerminalWindow:
+    def __init__(self, x, y, w, h):
+        self.kind = "term"
+        self.x = x
+        self.y = y
+        self.w = w
+        self.h = h
+
+
 class ActionRunnerTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -89,6 +98,7 @@ class ActionRunnerTests(unittest.TestCase):
             "retrotui.ui.window",
             "retrotui.apps.notepad",
             "retrotui.apps.filemanager",
+            "retrotui.apps.terminal",
             "retrotui.core.actions",
             "retrotui.core.content",
             "retrotui.core.action_runner",
@@ -108,6 +118,7 @@ class ActionRunnerTests(unittest.TestCase):
             "retrotui.ui.window",
             "retrotui.apps.notepad",
             "retrotui.apps.filemanager",
+            "retrotui.apps.terminal",
             "retrotui.core.actions",
             "retrotui.core.content",
             "retrotui.core.action_runner",
@@ -232,18 +243,12 @@ class ActionRunnerTests(unittest.TestCase):
         self.assertEqual(spawned.kind, "np")
         self.assertEqual((spawned.x, spawned.y, spawned.w, spawned.h), (12, 7, 60, 20))
 
-    def test_execute_terminal_uses_uname_host(self):
+    def test_execute_terminal_spawns_terminal_window_with_offset(self):
         app = self._make_app()
         logger = mock.Mock()
 
         with (
-            mock.patch.object(self.action_runner, "Window", _DummyWindow),
-            mock.patch.object(
-                self.action_runner.os,
-                "uname",
-                return_value=types.SimpleNamespace(nodename="retro-host"),
-                create=True,
-            ),
+            mock.patch.object(self.action_runner, "TerminalWindow", _DummyTerminalWindow),
         ):
             self.action_runner.execute_app_action(
                 app,
@@ -254,27 +259,8 @@ class ActionRunnerTests(unittest.TestCase):
 
         app._next_window_offset.assert_called_once_with(18, 5)
         spawned = app._spawn_window.call_args.args[0]
-        self.assertEqual(spawned.title, "Terminal")
-        self.assertTrue(any("user@retro-host" in line for line in spawned.content))
-
-    def test_execute_terminal_falls_back_to_hostname_env(self):
-        app = self._make_app()
-        logger = mock.Mock()
-
-        with (
-            mock.patch.object(self.action_runner, "Window", _DummyWindow),
-            mock.patch.object(self.action_runner.os, "uname", side_effect=OSError("no uname"), create=True),
-            mock.patch.dict(self.action_runner.os.environ, {"HOSTNAME": "fallback-host"}, clear=False),
-        ):
-            self.action_runner.execute_app_action(
-                app,
-                self.actions_mod.AppAction.TERMINAL,
-                logger,
-                version="0.3.4",
-            )
-
-        spawned = app._spawn_window.call_args.args[0]
-        self.assertTrue(any("user@fallback-host" in line for line in spawned.content))
+        self.assertEqual(spawned.kind, "term")
+        self.assertEqual((spawned.x, spawned.y, spawned.w, spawned.h), (12, 7, 70, 18))
 
     def test_execute_settings_builds_content_and_spawns_window(self):
         app = self._make_app()

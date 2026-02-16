@@ -284,17 +284,17 @@ class Menu(MenuBar):
     def draw_dropdown(self, stdscr):
         super().draw_dropdown(stdscr)
 
-    def get_dropdown_rect(self):
-        return super().get_dropdown_rect()
+    def get_dropdown_rect(self, *, win_x=0, win_y=0, win_w=None):
+        return super().get_dropdown_rect(win_x=win_x, win_y=win_y, win_w=win_w)
 
-    def hit_test_dropdown(self, mx, my):
-        return super().hit_test_dropdown(mx, my)
+    def hit_test_dropdown(self, mx, my, *, win_x=0, win_y=0, win_w=None):
+        return super().hit_test_dropdown(mx, my, win_x=win_x, win_y=win_y, win_w=win_w)
 
-    def handle_hover(self, mx, my):
-        return super().handle_hover(mx, my)
+    def handle_hover(self, mx, my, *, win_x=0, win_y=0, win_w=None):
+        return super().handle_hover(mx, my, win_x=win_x, win_y=win_y, win_w=win_w)
 
-    def handle_click(self, mx, my):
-        return super().handle_click(mx, my)
+    def handle_click(self, mx, my, *, win_x=0, win_y=0, win_w=None):
+        return super().handle_click(mx, my, win_x=win_x, win_y=win_y, win_w=win_w)
 
 
 class WindowMenu(MenuBar):

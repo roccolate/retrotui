@@ -56,7 +56,7 @@ class WindowComponentTests(unittest.TestCase):
 
         win.window_menu = mock.Mock()
         self.assertEqual(win.body_rect(), (6, 7, 28, 8))
-        self.assertEqual(win.close_button_pos(), (7, 4))
+        self.assertEqual(win.close_button_pos(), (31, 4))
 
     def test_contains_and_hit_regions(self):
         win = self.window_mod.Window("Test", 10, 3, 20, 10)
@@ -64,10 +64,10 @@ class WindowComponentTests(unittest.TestCase):
         self.assertTrue(win.contains(10, 3))
         self.assertTrue(win.contains(29, 12))
         self.assertFalse(win.contains(30, 12))
-        self.assertTrue(win.on_close_button(12, 3))
-        self.assertTrue(win.on_minimize_button(23, 3))
-        self.assertTrue(win.on_maximize_button(27, 3))
-        self.assertFalse(win.on_title_bar(12, 3))  # close button area excluded
+        self.assertTrue(win.on_close_button(27, 3))
+        self.assertTrue(win.on_minimize_button(21, 3))
+        self.assertTrue(win.on_maximize_button(24, 3))
+        self.assertFalse(win.on_title_bar(27, 3))  # close button area excluded
         self.assertFalse(win.on_title_bar(25, 3))  # min/max area excluded
         self.assertTrue(win.on_title_bar(18, 3))
         self.assertFalse(win.on_title_bar(18, 4))
@@ -149,6 +149,9 @@ class WindowComponentTests(unittest.TestCase):
         self.assertEqual(body_attr, self.curses.color_pair(self.window_mod.C_WIN_BODY))
         draw_box.assert_called()
         self.assertTrue(any("[[" not in str(call.args[3]) for call in safe_addstr.call_args_list))
+        self.assertTrue(
+            any(call.args[1] == win.y + 2 and call.args[2] == win.x for call in safe_addstr.call_args_list)
+        )
         win.window_menu.draw_bar.assert_called()
         win.window_menu.draw_dropdown.assert_called()
 
