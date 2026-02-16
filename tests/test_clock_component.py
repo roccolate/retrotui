@@ -59,12 +59,15 @@ class ClockComponentTests(unittest.TestCase):
         win = self._make_window()
         self.assertTrue(win.always_on_top)
         self.assertFalse(win.chime_enabled)
+        self.assertFalse(win.week_starts_sunday)
 
         win.handle_key(ord("t"))
         win.handle_key(ord("b"))
+        win.handle_key(ord("s"))
 
         self.assertFalse(win.always_on_top)
         self.assertTrue(win.chime_enabled)
+        self.assertTrue(win.week_starts_sunday)
 
     def test_close_key_returns_close_action(self):
         win = self._make_window()
@@ -102,8 +105,19 @@ class ClockComponentTests(unittest.TestCase):
         self.assertTrue(any("10:15:30" in text for text in rendered))
         self.assertTrue(any("February 2026" in text for text in rendered))
         self.assertTrue(any("top:" in text for text in rendered))
+        self.assertTrue(any("week:" in text for text in rendered))
+
+    def test_month_lines_respect_first_weekday_toggle(self):
+        win = self._make_window()
+        now = datetime(2026, 2, 16, 10, 15, 30)
+
+        monday_lines = win._month_lines(now)
+        self.assertTrue(any(line.strip().startswith("Mo Tu") for line in monday_lines))
+
+        win.week_starts_sunday = True
+        sunday_lines = win._month_lines(now)
+        self.assertTrue(any(line.strip().startswith("Su Mo") for line in sunday_lines))
 
 
 if __name__ == "__main__":
     unittest.main()
-

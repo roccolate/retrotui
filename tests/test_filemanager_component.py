@@ -745,6 +745,41 @@ class FileManagerComponentTests(unittest.TestCase):
         self.assertTrue(win.handle_tab_key())
         self.assertEqual(win.active_pane, 1)
 
+    def test_toggle_dual_pane_requires_min_width(self):
+        win = self._make_window()
+        win.dual_pane_enabled = False
+        win.w = 80
+
+        result = win.toggle_dual_pane()
+
+        self.assertEqual(result.type, self.actions_mod.ActionType.ERROR)
+        self.assertFalse(win.dual_pane_enabled)
+
+    def test_toggle_dual_pane_enables_and_disables_when_wide(self):
+        win = self.fm_mod.FileManagerWindow(0, 0, 100, 14, start_path=".")
+        win.dual_pane_enabled = False
+
+        with mock.patch.object(win, "_rebuild_secondary_content") as rebuild_secondary:
+            enabled = win.toggle_dual_pane()
+        self.assertIsNone(enabled)
+        self.assertTrue(win.dual_pane_enabled)
+        rebuild_secondary.assert_called_once_with()
+
+        disabled = win.toggle_dual_pane()
+        self.assertIsNone(disabled)
+        self.assertFalse(win.dual_pane_enabled)
+
+    def test_handle_key_d_toggles_dual_pane(self):
+        win = self.fm_mod.FileManagerWindow(0, 0, 100, 14, start_path=".")
+        win.window_menu.active = False
+        win.dual_pane_enabled = False
+
+        with mock.patch.object(win, "toggle_dual_pane", return_value=None) as toggle_dual:
+            result = win.handle_key(ord("d"))
+
+        self.assertIsNone(result)
+        toggle_dual.assert_called_once_with()
+
     def test_selected_entry_for_operation_uses_active_pane(self):
         win = self._make_window()
         left_entry = self.fm_mod.FileEntry("left.txt", False, "/tmp/left.txt", 1, use_unicode=False)

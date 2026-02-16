@@ -111,6 +111,8 @@ Windows Terminal (SSH), iTerm2, tmux, screen.
 | `Delete`      | Eliminar item seleccionado  |
 | `F7`          | Crear carpeta               |
 | `F8`          | Crear archivo               |
+| `D`           | Toggle dual-pane (>= 92 col)|
+| `Tab`         | Cambiar panel activo (dual) |
 | `H`           | Toggle archivos ocultos     |
 | `F6 / Ins`    | Copiar ruta seleccionada    |
 
@@ -173,6 +175,7 @@ Windows Terminal (SSH), iTerm2, tmux, screen.
 |---------------|--------------------------------------|
 | `T`           | Toggle always-on-top                 |
 | `B`           | Toggle chime por hora                |
+| `S`           | Semana inicia en domingo/lunes       |
 | `Q`           | Cerrar widget                        |
 
 ### ASCII Video Player (mpv / mplayer)
