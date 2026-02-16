@@ -133,4 +133,5 @@ Reducir riesgo de regresiones y acelerar desarrollo en 2 sprints, sin frenar fea
 - [x] Hook local `.githooks/pre-commit` para ejecutar QA antes de cada commit.
 - [x] Tests nuevos para rutas críticas de `retrotui/core/app.py` (`tests/test_core_app.py`).
 - [x] Política de EOL/UTF-8 aplicada con `.editorconfig` y `.gitattributes`.
+- [x] Split inicial de `retrotui/core/app.py`: ejecución de acciones y contenido estático movidos a `retrotui/core/action_runner.py` y `retrotui/core/content.py`.
 

@@ -12,17 +12,20 @@ from ..constants import (
     DESKTOP_PATTERN, ICONS, ICONS_ASCII
 )
 from ..utils import (
-    check_unicode_support, init_colors, safe_addstr, get_system_info,
+    check_unicode_support, init_colors, safe_addstr,
     is_video_file, play_ascii_video, normalize_key_code
 )
 from ..ui.menu import Menu
 from ..ui.dialog import Dialog, InputDialog
 from ..ui.window import Window
-from ..apps.filemanager import FileManagerWindow
 from ..apps.notepad import NotepadWindow
 from .actions import ActionResult, ActionType, AppAction
+from .action_runner import execute_app_action
+from .content import build_welcome_content
 
 LOGGER = logging.getLogger(__name__)
+
+APP_VERSION = '0.3.4'
 
 class RetroTUI:
     """Main application class."""
@@ -80,25 +83,7 @@ class RetroTUI:
 
         # Create a welcome window
         h, w = stdscr.getmaxyx()
-        welcome_content = [
-            '',
-            '   ╔══════════════════════════════════════╗',
-            '   ║      Welcome to RetroTUI v0.3.4        ║',
-            '   ║                                      ║',
-            '   ║  A Windows 3.1 style desktop         ║',
-            '   ║  environment for the Linux console.  ║',
-            '   ║                                      ║',
-            '   ║  Highlights:                         ║',
-            '   ║  • Modular Package Structure         ║',
-            '   ║  • ASCII Video Player (mpv/mplayer)   ║',
-            '   ║  • Per-window menus (File, View)     ║',
-            '   ║  • Text editor (Notepad)             ║',
-            '   ║                                      ║',
-            '   ║  Use mouse or keyboard to navigate.  ║',
-            '   ║  Press Ctrl+Q to exit.               ║',
-            '   ╚══════════════════════════════════════╝',
-            '',
-        ]
+        welcome_content = build_welcome_content(APP_VERSION)
         win = Window('Welcome to RetroTUI', w // 2 - 25, h // 2 - 10, 50, 20,
                       content=welcome_content)
         win.active = True
@@ -172,7 +157,7 @@ class RetroTUI:
         attr = curses.color_pair(C_STATUS)
         visible = sum(1 for win in self.windows if win.visible)
         total = len(self.windows)
-        status = f' RetroTUI v0.3.4 │ Windows: {visible}/{total} │ Mouse: Enabled │ Ctrl+Q: Exit'
+        status = f' RetroTUI v{APP_VERSION} | Windows: {visible}/{total} | Mouse: Enabled | Ctrl+Q: Exit'
         safe_addstr(self.stdscr, h - 1, 0, status.ljust(w - 1), attr)
 
     def get_icon_at(self, mx, my):
@@ -225,168 +210,11 @@ class RetroTUI:
         count = len(self.windows)
         return base_x + count * step_x, base_y + count * step_y
 
-    @staticmethod
-    def _about_message():
-        """Build About dialog body."""
-        sys_info = get_system_info()
-        return ('RetroTUI v0.3.4\n'
-                'A retro desktop environment for Linux console.\n\n'
-                'System Information:\n' +
-                '\n'.join(sys_info) + '\n\n'
-                'Mouse: GPM/xterm protocol\n'
-                'No X11 required!')
-
-    @staticmethod
-    def _help_message():
-        """Build keyboard/mouse help text."""
-        return ('Keyboard Controls:\n\n'
-                'Tab       - Cycle windows\n'
-                'Escape    - Close menu/dialog\n'
-                'Enter     - Activate selection\n'
-                'Ctrl+Q    - Exit\n'
-                'F10       - Open menu\n'
-                'Arrow keys - Navigate\n'
-                'PgUp/PgDn - Scroll content\n\n'
-                'File Manager:\n\n'
-                'Up/Down   - Move selection\n'
-                'Enter     - Open dir/file\n'
-                'Backspace - Parent directory\n'
-                'H         - Toggle hidden files\n'
-                'Home/End  - First/last entry\n\n'
-                'Notepad Editor:\n\n'
-                'Arrows    - Move cursor\n'
-                'Home/End  - Start/end of line\n'
-                'PgUp/PgDn - Page up/down\n'
-                'Backspace - Delete backward\n'
-                'Delete    - Delete forward\n'
-                'Ctrl+W    - Toggle word wrap\n\n'
-                'Mouse Controls:\n\n'
-                'Click     - Select/activate\n'
-                'Drag title - Move window\n'
-                'Drag border - Resize window\n'
-                'Dbl-click title - Maximize\n'
-                '[─]       - Minimize\n'
-                '[□]       - Maximize/restore\n'
-                'Scroll    - Scroll/select')
-
-    @staticmethod
-    def _settings_content():
-        """Build placeholder settings panel text."""
-        return [
-            ' ╔═ Display Settings ══════════════════════╗',
-            ' ║                                         ║',
-            ' ║  Theme: [x] Windows 3.1                 ║',
-            ' ║         [ ] DOS / CGA                   ║',
-            ' ║         [ ] Windows 95                  ║',
-            ' ║                                         ║',
-            ' ║  Desktop Pattern: ░ ▒ ▓                 ║',
-            ' ║                                         ║',
-            ' ║  Colors: 256-color mode                 ║',
-            ' ║                                         ║',
-            ' ╚═════════════════════════════════════════╝',
-        ]
-
-    def _action_exit(self):
-        self.dialog = Dialog(
-            'Exit RetroTUI',
-            'Are you sure you want to exit?\n\nAll windows will be closed.',
-            ['Yes', 'No'],
-            width=44
-        )
-
-    def _action_about(self):
-        self.dialog = Dialog('About RetroTUI', self._about_message(), ['OK'], width=52)
-
-    def _action_help(self):
-        self.dialog = Dialog('Keyboard & Mouse Help', self._help_message(), ['OK'], width=46)
-
-    def _action_file_manager(self):
-        offset_x, offset_y = self._next_window_offset(15, 3)
-        self._spawn_window(FileManagerWindow(offset_x, offset_y, 58, 22))
-
-    def _action_notepad(self):
-        offset_x, offset_y = self._next_window_offset(20, 4)
-        self._spawn_window(NotepadWindow(offset_x, offset_y, 60, 20))
-
-    def _action_ascii_video(self):
-        self.dialog = Dialog(
-            'ASCII Video',
-            'Reproduce video en la terminal.\n\n'
-            'Usa mpv (color) o mplayer (fallback).\n'
-            'Abre un video desde File Manager.',
-            ['OK'],
-            width=50,
-        )
-
-    def _action_terminal(self):
-        try:
-            host = os.uname().nodename
-        except (AttributeError, OSError):
-            host = os.environ.get('HOSTNAME', 'localhost')
-        content = [
-            f' user@{host}:~$ _',
-            '',
-            ' (Terminal emulation placeholder)',
-            ' Future: embedded terminal via pty',
-        ]
-        offset_x, offset_y = self._next_window_offset(18, 5)
-        self._spawn_window(Window('Terminal', offset_x, offset_y, 60, 15, content=content))
-
-    def _action_settings(self):
-        offset_x, offset_y = self._next_window_offset(22, 4)
-        self._spawn_window(Window(
-            'Settings',
-            offset_x,
-            offset_y,
-            48,
-            15,
-            content=self._settings_content(),
-        ))
-
-    def _action_new_window(self):
-        offset_x, offset_y = self._next_window_offset(20, 3)
-        self._spawn_window(Window(
-            f'Window {Window._next_id}',
-            offset_x,
-            offset_y,
-            40,
-            12,
-            content=['', ' New empty window', ''],
-        ))
-
     def execute_action(self, action):
         """Execute a menu/icon action."""
         action = self._normalize_action(action)
         LOGGER.debug('execute_action: %s', action)
-
-        if action == AppAction.EXIT:
-            self._action_exit()
-
-        elif action == AppAction.ABOUT:
-            self._action_about()
-
-        elif action == AppAction.HELP:
-            self._action_help()
-
-        elif action == AppAction.FILE_MANAGER:
-            self._action_file_manager()
-
-        elif action == AppAction.NOTEPAD:
-            self._action_notepad()
-
-        elif action == AppAction.ASCII_VIDEO:
-            self._action_ascii_video()
-
-        elif action == AppAction.TERMINAL:
-            self._action_terminal()
-
-        elif action == AppAction.SETTINGS:
-            self._action_settings()
-
-        elif action == AppAction.NEW_WINDOW:
-            self._action_new_window()
-        else:
-            LOGGER.warning('Unknown action received: %s', action)
+        execute_app_action(self, action, LOGGER, version=APP_VERSION)
 
     def open_file_viewer(self, filepath):
         """Open file in best viewer: ASCII video or Notepad."""
@@ -417,8 +245,7 @@ class RetroTUI:
         win_w = min(70, w - 4)
         win_h = min(25, h - 4)
         win = NotepadWindow(offset_x, offset_y, win_w, win_h, filepath=filepath)
-        self.windows.append(win)
-        self.set_active_window(win)
+        self._spawn_window(win)
 
     def show_save_as_dialog(self, win):
         """Show dialog to get filename for saving."""

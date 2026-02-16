@@ -12,11 +12,13 @@ Todas las versiones notables de RetroTUI están documentadas aquí.
 - Hook local `.githooks/pre-commit` para correr QA antes de commitear.
 - Tests `tests/test_core_app.py` para rutas criticas del dispatcher y hotkeys en `retrotui/core/app.py`.
 - Archivos `.editorconfig` y `.gitattributes` para fijar UTF-8 y EOL consistentes.
+- Módulos `retrotui/core/action_runner.py` y `retrotui/core/content.py` para separar responsabilidades de `retrotui/core/app.py`.
 
 ### Changed
 - README actualizado con comandos de QA y activacion de hooks locales.
 - ROADMAP/PROJECT_ANALYSIS actualizados para reflejar automatizacion de calidad.
 - CI extendido a matriz Linux + Windows (Python 3.9/3.12).
+- `RetroTUI.execute_action()` ahora delega en `execute_app_action()` para reducir acoplamiento del core.
 
 ---
 
