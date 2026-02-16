@@ -334,6 +334,65 @@ class TerminalComponentTests(unittest.TestCase):
             win._draw_scrollback_bar(None, x=1, y=2, rows=3, start_idx=0, total_lines=3)
         safe_addstr.assert_not_called()
 
+    def test_draw_live_cursor_visibility_rules(self):
+        win = self._make_window()
+        win.active = True
+        win._line_chars = list("abc")
+        win._cursor_col = 1
+        win.scrollback_offset = 0
+
+        with mock.patch.object(self.terminal_mod, "safe_addstr") as safe_addstr:
+            win._draw_live_cursor(
+                stdscr=None,
+                x=4,
+                y=5,
+                text_cols=29,
+                text_rows=7,
+                start_idx=0,
+                total_lines=1,
+                body_attr=10,
+            )
+        self.assertTrue(
+            any(
+                len(call.args) >= 5
+                and call.args[1] == 5
+                and call.args[2] == 5
+                and call.args[3] == "b"
+                and (call.args[4] & self.curses.A_REVERSE)
+                for call in safe_addstr.call_args_list
+            )
+        )
+
+        win.scrollback_offset = 2
+        with mock.patch.object(self.terminal_mod, "safe_addstr") as safe_addstr:
+            win._draw_live_cursor(None, 4, 5, 29, 7, 0, 1, 10)
+        safe_addstr.assert_not_called()
+
+        win.scrollback_offset = 0
+        win.active = False
+        with mock.patch.object(self.terminal_mod, "safe_addstr") as safe_addstr:
+            win._draw_live_cursor(None, 4, 5, 29, 7, 0, 1, 10)
+        safe_addstr.assert_not_called()
+
+    def test_draw_live_cursor_clamps_and_skips_outside_view(self):
+        win = self._make_window()
+        win.active = True
+        win.scrollback_offset = 0
+        win._line_chars = list("xy")
+        win._cursor_col = 500
+
+        with mock.patch.object(self.terminal_mod, "safe_addstr") as safe_addstr:
+            win._draw_live_cursor(None, 4, 5, 3, 2, 0, 1, 7)
+        self.assertTrue(any(call.args[2] == 6 for call in safe_addstr.call_args_list))
+
+        with mock.patch.object(self.terminal_mod, "safe_addstr") as safe_addstr:
+            win._draw_live_cursor(None, 4, 5, 3, 1, 0, 0, 7)
+        safe_addstr.assert_not_called()
+
+        with mock.patch.object(self.terminal_mod, "safe_addstr") as safe_addstr:
+            win._draw_live_cursor(None, 4, 5, 3, 1, 0, 3, 7)
+        safe_addstr.assert_not_called()
+
     def test_key_to_input_mapping_covers_special_and_printable(self):
         win = self._make_window()
 
