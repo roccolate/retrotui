@@ -8,6 +8,8 @@ from ..apps.calculator import CalculatorWindow
 from ..apps.logviewer import LogViewerWindow
 from ..apps.process_manager import ProcessManagerWindow
 from ..apps.clock import ClockCalendarWindow
+from ..apps.image_viewer import ImageViewerWindow
+from ..apps.trash import TrashWindow
 from ..ui.dialog import Dialog
 from ..ui.window import Window
 from .actions import AppAction
@@ -78,9 +80,19 @@ def execute_app_action(app, action, logger, *, version: str) -> None:
         )
         return
 
+    if action == AppAction.IMAGE_VIEWER:
+        offset_x, offset_y = app._next_window_offset(14, 3)
+        app._spawn_window(ImageViewerWindow(offset_x, offset_y, 84, 26))
+        return
+
     if action == AppAction.TERMINAL:
         offset_x, offset_y = app._next_window_offset(18, 5)
         app._spawn_window(TerminalWindow(offset_x, offset_y, 70, 18))
+        return
+
+    if action == AppAction.TRASH_BIN:
+        offset_x, offset_y = app._next_window_offset(15, 4)
+        app._spawn_window(TrashWindow(offset_x, offset_y, 62, 20))
         return
 
     if action == AppAction.SETTINGS:

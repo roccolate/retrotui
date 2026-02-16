@@ -130,6 +130,24 @@ class _DummyClockCalendarWindow:
         self.h = h
 
 
+class _DummyImageViewerWindow:
+    def __init__(self, x, y, w, h):
+        self.kind = "image"
+        self.x = x
+        self.y = y
+        self.w = w
+        self.h = h
+
+
+class _DummyTrashWindow:
+    def __init__(self, x, y, w, h):
+        self.kind = "trash"
+        self.x = x
+        self.y = y
+        self.w = w
+        self.h = h
+
+
 class ActionRunnerTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -150,6 +168,8 @@ class ActionRunnerTests(unittest.TestCase):
             "retrotui.apps.logviewer",
             "retrotui.apps.process_manager",
             "retrotui.apps.clock",
+            "retrotui.apps.image_viewer",
+            "retrotui.apps.trash",
             "retrotui.core.actions",
             "retrotui.core.content",
             "retrotui.core.action_runner",
@@ -175,6 +195,8 @@ class ActionRunnerTests(unittest.TestCase):
             "retrotui.apps.logviewer",
             "retrotui.apps.process_manager",
             "retrotui.apps.clock",
+            "retrotui.apps.image_viewer",
+            "retrotui.apps.trash",
             "retrotui.core.actions",
             "retrotui.core.content",
             "retrotui.core.action_runner",
@@ -332,6 +354,40 @@ class ActionRunnerTests(unittest.TestCase):
         spawned = app._spawn_window.call_args.args[0]
         self.assertEqual(spawned.kind, "term")
         self.assertEqual((spawned.x, spawned.y, spawned.w, spawned.h), (12, 7, 70, 18))
+
+    def test_execute_image_viewer_spawns_image_window(self):
+        app = self._make_app()
+        logger = mock.Mock()
+
+        with mock.patch.object(self.action_runner, "ImageViewerWindow", _DummyImageViewerWindow):
+            self.action_runner.execute_app_action(
+                app,
+                self.actions_mod.AppAction.IMAGE_VIEWER,
+                logger,
+                version="0.6.0",
+            )
+
+        app._next_window_offset.assert_called_once_with(14, 3)
+        spawned = app._spawn_window.call_args.args[0]
+        self.assertEqual(spawned.kind, "image")
+        self.assertEqual((spawned.x, spawned.y, spawned.w, spawned.h), (12, 7, 84, 26))
+
+    def test_execute_trash_spawns_trash_window(self):
+        app = self._make_app()
+        logger = mock.Mock()
+
+        with mock.patch.object(self.action_runner, "TrashWindow", _DummyTrashWindow):
+            self.action_runner.execute_app_action(
+                app,
+                self.actions_mod.AppAction.TRASH_BIN,
+                logger,
+                version="0.6.0",
+            )
+
+        app._next_window_offset.assert_called_once_with(15, 4)
+        spawned = app._spawn_window.call_args.args[0]
+        self.assertEqual(spawned.kind, "trash")
+        self.assertEqual((spawned.x, spawned.y, spawned.w, spawned.h), (12, 7, 62, 20))
 
     def test_execute_settings_spawns_settings_window(self):
         app = self._make_app()

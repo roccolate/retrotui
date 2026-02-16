@@ -41,6 +41,8 @@ class AppAction(str, Enum):
     LOG_VIEWER = "log_viewer"
     PROCESS_MANAGER = "process_manager"
     CLOCK_CALENDAR = "clock_calendar"
+    IMAGE_VIEWER = "image_viewer"
+    TRASH_BIN = "trash_bin"
     NEW_WINDOW = "new_window"
     CLOSE_WINDOW = "close"
     NP_NEW = "np_new"
