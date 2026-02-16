@@ -152,6 +152,7 @@ README.md      — Este archivo
 - **MenuBar** — Menús globales y por ventana (unificados)
 - **Dialog** — Diálogos modales
 - **ActionResult/AppAction** — Contrato interno tipado para acciones
+- **Action Runner / Content Builders** — ejecución de acciones y contenido estático desacoplados del `core/app.py`
 - **ThemeEngine** — Colores Win3.1 (256-color cuando disponible)
 
 ## Changelog

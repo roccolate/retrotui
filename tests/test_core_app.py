@@ -134,6 +134,19 @@ class CoreAppTests(unittest.TestCase):
         )
         self.assertEqual(app._normalize_action("unknown_action"), "unknown_action")
 
+    def test_execute_action_delegates_to_action_runner(self):
+        app = self._make_app()
+
+        with mock.patch.object(self.app_mod, "execute_app_action") as runner:
+            app.execute_action("about")
+
+        runner.assert_called_once_with(
+            app,
+            self.actions_mod.AppAction.ABOUT,
+            self.app_mod.LOGGER,
+            version=self.app_mod.APP_VERSION,
+        )
+
     def test_dispatch_open_file_calls_file_viewer(self):
         app = self._make_app()
         app.open_file_viewer = mock.Mock()
