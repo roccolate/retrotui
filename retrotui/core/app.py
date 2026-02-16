@@ -63,6 +63,7 @@ class RetroTUI:
     MIN_TERM_WIDTH = 80
     MIN_TERM_HEIGHT = 24
     LONG_FILE_OPERATION_BYTES = 8 * 1024 * 1024
+    BACKGROUND_OPERATION_JOIN_TIMEOUT = 5.0
 
     def __init__(self, stdscr):
         self.stdscr = stdscr
@@ -155,7 +156,12 @@ class RetroTUI:
         if op_state:
             thread = op_state.get('thread')
             if thread and thread.is_alive():
-                thread.join(timeout=0.2)
+                thread.join(timeout=self.BACKGROUND_OPERATION_JOIN_TIMEOUT)
+                if thread.is_alive():
+                    LOGGER.warning(
+                        'Background operation did not finish within %.1fs during shutdown.',
+                        self.BACKGROUND_OPERATION_JOIN_TIMEOUT,
+                    )
         for win in list(self.windows):
             closer = getattr(win, 'close', None)
             if callable(closer):
@@ -228,8 +234,17 @@ class RetroTUI:
             except Exception:  # pragma: no cover - defensive window cleanup path
                 LOGGER.debug('Window close hook failed for %r', win, exc_info=True)
         self.windows.remove(win)
-        if self.windows:
-            self.windows[-1].active = True
+        self._activate_last_visible_window()
+
+    def _activate_last_visible_window(self):
+        """Activate topmost visible window after z-order/window-list changes."""
+        for candidate in self.windows:
+            candidate.active = False
+        for candidate in reversed(self.windows):
+            if getattr(candidate, 'visible', True):
+                candidate.active = True
+                return candidate
+        return None
 
     @staticmethod
     def _normalize_action(action):
@@ -498,6 +513,21 @@ class RetroTUI:
             return selector()
         return None
 
+    @staticmethod
+    def _resolve_between_panes_destination(win, payload):
+        """Resolve destination path for copy/move between panes requests."""
+        if isinstance(payload, dict):
+            destination = str(payload.get('destination') or '').strip()
+            if destination:
+                return destination
+
+        if not win or not getattr(win, 'dual_pane_enabled', False):
+            return None
+        active_pane = int(getattr(win, 'active_pane', 0) or 0)
+        if active_pane == 0:
+            return getattr(win, 'secondary_path', None)
+        return getattr(win, 'current_path', None)
+
     def _is_long_file_operation(self, entry):
         """Return True when operation should show a modal progress dialog."""
         if entry is None or getattr(entry, 'name', None) == '..':
@@ -540,7 +570,7 @@ class RetroTUI:
             finally:
                 op_state['done'] = True
 
-        thread = threading.Thread(target=_runner, daemon=True, name='retrotui-file-op')
+        thread = threading.Thread(target=_runner, name='retrotui-file-op')
         op_state['thread'] = thread
         self._background_operation = op_state
         self.dialog = progress_dialog
@@ -653,6 +683,41 @@ class RetroTUI:
 
         if result.type == ActionType.REQUEST_MOVE_ENTRY and source_win:
             self.show_move_dialog(source_win)
+            return
+
+        if result.type in (
+            ActionType.REQUEST_COPY_BETWEEN_PANES,
+            ActionType.REQUEST_MOVE_BETWEEN_PANES,
+        ):
+            operation = (
+                'copy'
+                if result.type == ActionType.REQUEST_COPY_BETWEEN_PANES
+                else 'move'
+            )
+            destination = self._resolve_between_panes_destination(source_win, result.payload)
+            if not source_win:
+                self.dialog = Dialog(
+                    'Operation Error',
+                    f'Cannot {operation}: no source window context.',
+                    ['OK'],
+                    width=54,
+                )
+                return
+            if not destination:
+                self.dialog = Dialog(
+                    'Operation Error',
+                    f'Cannot {operation}: destination pane path is unavailable.',
+                    ['OK'],
+                    width=62,
+                )
+                return
+            op_result = self._run_file_operation_with_progress(
+                source_win,
+                operation=operation,
+                destination=destination,
+            )
+            if op_result is not None:
+                self._dispatch_window_result(op_result, source_win)
             return
 
         if result.type == ActionType.REQUEST_NEW_DIR and source_win:

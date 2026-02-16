@@ -1,5 +1,7 @@
 """Action execution helpers for RetroTUI app-level actions."""
 
+import inspect
+
 from ..apps.filemanager import FileManagerWindow
 from ..apps.notepad import NotepadWindow
 from ..apps.settings import SettingsWindow
@@ -14,6 +16,27 @@ from ..ui.dialog import Dialog
 from ..ui.window import Window
 from .actions import AppAction
 from .content import build_about_message, build_help_message
+
+
+def _supports_constructor_kwarg(constructor, kwarg: str) -> bool:
+    """Return True when callable constructor accepts the provided keyword."""
+    try:
+        params = inspect.signature(constructor).parameters.values()
+    except (TypeError, ValueError):
+        return False
+
+    for param in params:
+        if param.kind == inspect.Parameter.VAR_KEYWORD:
+            return True
+        if (
+            param.name == kwarg
+            and param.kind in (
+                inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                inspect.Parameter.KEYWORD_ONLY,
+            )
+        ):
+            return True
+    return False
 
 
 def execute_app_action(app, action, logger, *, version: str) -> None:
@@ -37,31 +60,19 @@ def execute_app_action(app, action, logger, *, version: str) -> None:
 
     if action == AppAction.FILE_MANAGER:
         offset_x, offset_y = app._next_window_offset(15, 3)
-        try:
-            win = FileManagerWindow(
-                offset_x,
-                offset_y,
-                58,
-                22,
-                show_hidden_default=getattr(app, 'default_show_hidden', False),
-            )
-        except TypeError:
-            win = FileManagerWindow(offset_x, offset_y, 58, 22)
+        kwargs = {}
+        if _supports_constructor_kwarg(FileManagerWindow, 'show_hidden_default'):
+            kwargs['show_hidden_default'] = getattr(app, 'default_show_hidden', False)
+        win = FileManagerWindow(offset_x, offset_y, 58, 22, **kwargs)
         app._spawn_window(win)
         return
 
     if action == AppAction.NOTEPAD:
         offset_x, offset_y = app._next_window_offset(20, 4)
-        try:
-            win = NotepadWindow(
-                offset_x,
-                offset_y,
-                60,
-                20,
-                wrap_default=getattr(app, 'default_word_wrap', False),
-            )
-        except TypeError:
-            win = NotepadWindow(offset_x, offset_y, 60, 20)
+        kwargs = {}
+        if _supports_constructor_kwarg(NotepadWindow, 'wrap_default'):
+            kwargs['wrap_default'] = getattr(app, 'default_word_wrap', False)
+        win = NotepadWindow(offset_x, offset_y, 60, 20, **kwargs)
         app._spawn_window(win)
         return
 
