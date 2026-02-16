@@ -344,7 +344,7 @@
 
   <!-- Status Bar -->
   <div class="statusbar" id="statusbar">
-    RetroTUI v0.2.2 │ Windows: <span id="win-count">0</span> │ Mouse: Enabled │ Double-click icons to open
+    RetroTUI v0.3.6 │ Windows: <span id="win-count">0</span> │ Mouse: Enabled │ Double-click icons to open
   </div>
 
   <!-- Dialog Overlay -->
@@ -375,7 +375,7 @@ const mockFS = {
     files: [
       { name: 'readme.txt', size: '2.4K', content: 'Welcome to RetroTUI!\n\nThis is a sample text file.\nYou can browse files and open them\nin the built-in Notepad viewer.\n\nFeatures:\n  - Directory navigation\n  - File viewer\n  - Keyboard & mouse support' },
       { name: 'config.json', size: '512B', content: '{\n  "theme": "win31",\n  "show_hidden": false,\n  "colors": 256,\n  "desktop_pattern": "░"\n}' },
-      { name: 'retrotui.py', size: '28.5K', content: '#!/usr/bin/env python3\n"""RetroTUI v0.2"""\nimport curses\nimport time\nimport os\n\n# ... (28.5K of Python code)\n# Full source at github.com/roccolate/RetroTUI' },
+      { name: 'retrotui/core/app.py', size: '17.1K', content: '"""RetroTUI v0.3.6 core app"""\nfrom retrotui.core.actions import ActionType\nfrom retrotui.ui.menu import MenuBar\n\n# ... event loop, input routing, dispatcher ...\n# Full source at github.com/roccolate/RetroTUI' },
       { name: 'setup.sh', size: '1.8K', content: '#!/bin/bash\n# RetroTUI Setup\necho "Installing..."\nsudo apt install gpm\necho "Done!"' },
     ]
   },
@@ -396,7 +396,7 @@ const mockFS = {
   '/home/user/Documents/Projects/retrotui': {
     dirs: [],
     files: [
-      { name: 'retrotui.py', size: '28.5K', content: '#!/usr/bin/env python3\n"""RetroTUI v0.2"""\n# Main application source' },
+      { name: 'retrotui/apps/notepad.py', size: '9.4K', content: '"""Notepad app for RetroTUI v0.3.6"""\n# Text editor app source' },
       { name: 'preview.html', size: '12.4K', content: '<!DOCTYPE html>\n<!-- Interactive preview -->' },
       { name: 'PROJECT.md', size: '5.2K', content: '# RetroTUI Project Documentation\n\n## Architecture\n...' },
     ]
@@ -404,14 +404,14 @@ const mockFS = {
   '/home/user/Documents/Projects/dotfiles': {
     dirs: [],
     files: [
-      { name: '.bashrc', size: '2.1K', content: '# .bashrc\nexport PS1="\\u@\\h:\\w$ "\nalias ll="ls -la"\nalias retro="python3 ~/retrotui.py"' },
+      { name: '.bashrc', size: '2.1K', content: '# .bashrc\nexport PS1="\\u@\\h:\\w$ "\nalias ll="ls -la"\nalias retro="python3 -m retrotui"' },
       { name: '.vimrc', size: '1.5K', content: '" .vimrc\nset number\nset tabstop=4\nsyntax on\ncolorscheme desert' },
     ]
   },
   '/home/user/Documents/Notes': {
     dirs: [],
     files: [
-      { name: 'meeting.txt', size: '1.1K', content: 'Meeting Notes - 2024\n\n- Discuss RetroTUI roadmap\n- Review v0.2 features\n- Plan v0.3 text editor' },
+      { name: 'meeting.txt', size: '1.3K', content: 'Meeting Notes - 2026\n\n- Ship v0.3.6 maintenance release\n- Validate docs/version sync\n- Plan v0.4 embedded terminal' },
       { name: 'shortcuts.txt', size: '384B', content: 'RetroTUI Shortcuts:\n\nTab      - Cycle windows\nCtrl+Q   - Exit\nF10      - Menu\nArrows   - Navigate\nEnter    - Open\nBackspace- Go up\nH        - Toggle hidden' },
     ]
   },
@@ -802,13 +802,13 @@ function doAction(action) {
 
     case 'about':
       showDialog('About RetroTUI',
-        `<b>RetroTUI v0.2.2</b>\n\n` +
+        `<b>RetroTUI v0.3.6</b>\n\n` +
         `A retro desktop environment\n` +
         `for the Linux console.\n\n` +
-        `<b>v0.2.2 - Bugfixes</b>\n` +
-        `- Directory navigation\n` +
-        `- File viewer (Notepad)\n` +
-        `- Click or keyboard browse\n\n` +
+        `<b>v0.3.6 - Maintenance release</b>\n` +
+        `- Version and metadata sync\n` +
+        `- Docs/preview updated\n` +
+        `- Runtime strings aligned\n\n` +
         `- No X11 required\n` +
         `- Mouse via GPM/xterm\n` +
         `- Python 3 + curses\n` +
@@ -889,16 +889,16 @@ document.getElementById('dialog-overlay').addEventListener('click', (e) => {
 // Create initial welcome window
 createWindow('Welcome to RetroTUI',
   `╔══════════════════════════════════════╗\n` +
-  `║     Welcome to RetroTUI v0.2.2      ║\n` +
+  `║     Welcome to RetroTUI v0.3.6      ║\n` +
   `║                                     ║\n` +
   `║  A Windows 3.1 style desktop        ║\n` +
   `║  for the Linux console.             ║\n` +
   `║                                     ║\n` +
-  `║  ✨ NEW in v0.2.2:                  ║\n` +
-  `║  • File Manager with navigation     ║\n` +
-  `║  • Click folders to browse          ║\n` +
-  `║  • Open text files in Notepad       ║\n` +
-  `║  • Keyboard: ↑↓ Enter Backspace     ║\n` +
+  `║  ✨ NEW in v0.3.6:                  ║\n` +
+  `║  • Version/metadata sync            ║\n` +
+  `║  • Updated docs and preview         ║\n` +
+  `║  • Runtime version strings unified  ║\n` +
+  `║  • Ready for v0.4 planning          ║\n` +
   `║                                     ║\n` +
   `║  Double-click icons to open apps.   ║\n` +
   `║  Drag title bars to move windows.   ║\n` +
@@ -907,3 +907,4 @@ createWindow('Welcome to RetroTUI',
 </script>
 </body>
 </html>
+
