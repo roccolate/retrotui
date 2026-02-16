@@ -807,6 +807,78 @@ class CoreAppTests(unittest.TestCase):
         self.assertEqual(app.dialog.title, "ASCII Video Error")
         self.assertIn("mpv missing", app.dialog.message)
 
+    def test_play_ascii_video_helper_success_and_error(self):
+        app = self._make_app()
+
+        with mock.patch.object(self.app_mod, "play_ascii_video", return_value=(True, None)) as player:
+            app._play_ascii_video("/tmp/demo.mp4")
+        player.assert_called_once_with(app.stdscr, "/tmp/demo.mp4", subtitle_path=None)
+        self.assertIsNone(app.dialog)
+
+        with mock.patch.object(self.app_mod, "play_ascii_video", return_value=(False, "backend error")):
+            app._play_ascii_video("/tmp/demo.mp4", subtitle_path="/tmp/demo.srt")
+        self.assertIsNotNone(app.dialog)
+        self.assertEqual(app.dialog.title, "ASCII Video Error")
+        self.assertIn("backend error", app.dialog.message)
+
+    def test_show_video_open_dialog_sets_input_callback(self):
+        app = self._make_app()
+        app.show_video_open_dialog()
+        self.assertIsNotNone(app.dialog)
+        self.assertEqual(app.dialog.title, "Open Video")
+        self.assertTrue(callable(getattr(app.dialog, "callback", None)))
+
+    def test_handle_video_path_input_validation_and_subtitle_prompt(self):
+        app = self._make_app()
+
+        result = app._handle_video_path_input("")
+        self.assertEqual(result.type, self.actions_mod.ActionType.ERROR)
+        self.assertIn("cannot be empty", result.payload)
+
+        with mock.patch.object(self.app_mod.os.path, "isfile", return_value=False):
+            result = app._handle_video_path_input("/tmp/missing.mp4")
+        self.assertEqual(result.type, self.actions_mod.ActionType.ERROR)
+        self.assertIn("not found", result.payload)
+
+        with (
+            mock.patch.object(self.app_mod.os.path, "isfile", return_value=True),
+            mock.patch.object(self.app_mod, "is_video_file", return_value=False),
+        ):
+            result = app._handle_video_path_input("/tmp/demo.txt")
+        self.assertEqual(result.type, self.actions_mod.ActionType.ERROR)
+        self.assertIn("Unsupported video format", result.payload)
+
+        with (
+            mock.patch.object(self.app_mod.os.path, "isfile", return_value=True),
+            mock.patch.object(self.app_mod, "is_video_file", return_value=True),
+        ):
+            result = app._handle_video_path_input("/tmp/demo.mp4")
+        self.assertIsNone(result)
+        self.assertIsNotNone(app.dialog)
+        self.assertEqual(app.dialog.title, "Subtitles (Optional)")
+        self.assertTrue(callable(getattr(app.dialog, "callback", None)))
+
+    def test_handle_subtitle_path_input_validation_and_playback(self):
+        app = self._make_app()
+        app._play_ascii_video = mock.Mock()
+
+        with mock.patch.object(self.app_mod.os.path, "isfile", return_value=False):
+            result = app._handle_subtitle_path_input("/tmp/demo.mp4", "/tmp/missing.srt")
+        self.assertEqual(result.type, self.actions_mod.ActionType.ERROR)
+        self.assertIn("Subtitle file not found", result.payload)
+        app._play_ascii_video.assert_not_called()
+
+        app._play_ascii_video.reset_mock()
+        with mock.patch.object(self.app_mod.os.path, "isfile", return_value=True):
+            result = app._handle_subtitle_path_input("/tmp/demo.mp4", "/tmp/demo.srt")
+        self.assertIsNone(result)
+        app._play_ascii_video.assert_called_once()
+
+        app._play_ascii_video.reset_mock()
+        result = app._handle_subtitle_path_input("/tmp/demo.mp4", "")
+        self.assertIsNone(result)
+        app._play_ascii_video.assert_called_once_with("/tmp/demo.mp4", subtitle_path=None)
+
     def test_open_file_viewer_binary_file_spawns_hex_viewer(self):
         app = self._make_app()
         app.stdscr = types.SimpleNamespace(getmaxyx=lambda: (30, 120))

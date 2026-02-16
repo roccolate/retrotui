@@ -191,6 +191,7 @@ class ActionRunnerTests(unittest.TestCase):
             dialog=None,
             _next_window_offset=mock.Mock(return_value=(12, 7)),
             _spawn_window=mock.Mock(),
+            show_video_open_dialog=mock.Mock(),
         )
 
     def test_execute_exit_action_opens_confirmation_dialog(self):
@@ -248,8 +249,22 @@ class ActionRunnerTests(unittest.TestCase):
         self.assertEqual(app.dialog.buttons, ["OK"])
         self.assertIn("help body", app.dialog.message)
 
-    def test_execute_ascii_video_action_opens_info_dialog(self):
+    def test_execute_ascii_video_action_opens_video_dialog(self):
         app = self._make_app()
+        logger = mock.Mock()
+
+        self.action_runner.execute_app_action(
+            app,
+            self.actions_mod.AppAction.ASCII_VIDEO,
+            logger,
+            version="0.3.4",
+        )
+        app.show_video_open_dialog.assert_called_once_with()
+        self.assertIsNone(app.dialog)
+
+    def test_execute_ascii_video_action_falls_back_to_info_dialog(self):
+        app = self._make_app()
+        delattr(app, "show_video_open_dialog")
         logger = mock.Mock()
 
         with mock.patch.object(self.action_runner, "Dialog", _DummyDialog):

@@ -53,6 +53,9 @@ Todas las versiones notables de RetroTUI están documentadas aquí.
 - Tests `tests/test_logviewer_component.py`, `tests/test_process_manager_component.py` y `tests/test_clock_component.py`.
 - Modulos `retrotui/apps/image_viewer.py` y `retrotui/apps/hexviewer.py` para iniciar v0.9.
 - Tests `tests/test_image_viewer_component.py` y `tests/test_hexviewer_component.py`.
+- Flujo de apertura de video desde menu: dialogo de ruta + dialogo opcional de subtitulos.
+- Overlay inicial de controles de playback para backend `mpv` (`Space`, `Left/Right`, `q`).
+- Tests de video extendidos para validar argumentos de subtitulos y fallback por backend.
 
 ### Changed
 - README actualizado con comandos de QA y activacion de hooks locales.
@@ -81,6 +84,9 @@ Todas las versiones notables de RetroTUI están documentadas aquí.
 - `open_file_viewer()` ahora enruta archivos `.log/.out/.err` a `LogViewerWindow`.
 - `open_file_viewer()` ahora enruta imagenes a `ImageViewerWindow` y binarios a `HexViewerWindow`.
 - Mouse router/bootstrap ajustados para mejorar comportamiento en TTY (drag/resize y doble-click en iconos).
+- `AppAction.ASCII_VIDEO` ahora abre selector de ruta sin depender de File Manager.
+- `play_ascii_video()` ahora soporta subtitulos opcionales (`mpv --sub-file`, `mplayer -sub`) y usa rutas normalizadas.
+- Suite QA actualizada a 518 tests en verde.
 
 ---
 

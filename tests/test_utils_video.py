@@ -71,6 +71,26 @@ class PlayAsciiVideoTests(unittest.TestCase):
         self.assertTrue(success)
         self.assertIsNone(error)
 
+    def test_mpv_command_includes_overlay_and_subtitle_args(self):
+        ok_result = types.SimpleNamespace(returncode=0)
+
+        def which(name):
+            return '/usr/bin/mpv' if name == 'mpv' else None
+
+        with mock.patch('retrotui.utils.shutil.which', side_effect=which), \
+                mock.patch('retrotui.utils.curses.def_prog_mode'), \
+                mock.patch('retrotui.utils.curses.endwin'), \
+                mock.patch('retrotui.utils.curses.reset_prog_mode'), \
+                mock.patch('retrotui.utils.subprocess.run', return_value=ok_result) as run_mock:
+            success, error = self.utils.play_ascii_video(None, 'demo.mp4', subtitle_path='captions.srt')
+
+        self.assertTrue(success)
+        self.assertIsNone(error)
+        called_cmd = run_mock.call_args.args[0]
+        self.assertIn('--vo=tct', called_cmd)
+        self.assertIn('--osd-level=1', called_cmd)
+        self.assertIn('--sub-file=', ' '.join(called_cmd))
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -64,6 +64,10 @@ def execute_app_action(app, action, logger, *, version: str) -> None:
         return
 
     if action == AppAction.ASCII_VIDEO:
+        opener = getattr(app, "show_video_open_dialog", None)
+        if callable(opener):
+            opener()
+            return
         app.dialog = Dialog(
             "ASCII Video",
             "Reproduce video en la terminal.\n\n"

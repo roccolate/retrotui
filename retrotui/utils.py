@@ -135,28 +135,61 @@ def is_video_file(filepath):
     _, ext = os.path.splitext(filepath.lower())
     return ext in VIDEO_EXTENSIONS
 
-def play_ascii_video(stdscr, filepath):
+def _with_subtitle_args(cmd, subtitle_path, *, backend):
+    """Append subtitle arguments for the selected backend."""
+    if not subtitle_path:
+        return cmd
+    if backend == 'mpv':
+        return cmd + [f'--sub-file={subtitle_path}']
+    return cmd + ['-sub', subtitle_path]
+
+def play_ascii_video(stdscr, filepath, subtitle_path=None):
     """
     Play video in terminal using mpv (preferred) or mplayer (fallback).
     Returns (success, error_message).
     """
+    video_path = os.path.abspath(os.path.expanduser(str(filepath)))
+    subtitle_path = str(subtitle_path or '').strip()
+    subtitle_path = os.path.abspath(os.path.expanduser(subtitle_path)) if subtitle_path else None
+
     mpv = shutil.which('mpv')
     mplayer = shutil.which('mplayer')
 
     if not mpv and not mplayer:
-        return False, 'No se encontró mpv ni mplayer.\n\nInstala uno de los siguientes:\n  sudo apt install mpv\n  sudo apt install mplayer'
+        return (
+            False,
+            'No se encontro mpv ni mplayer.\n\n'
+            'Instala uno de los siguientes:\n'
+            '  sudo apt install mpv\n'
+            '  sudo apt install mplayer'
+        )
 
     # Build command list: try best option first
     if mpv:
+        base = [
+            mpv,
+            '--vo=tct',
+            '--really-quiet',
+            '--osd-level=1',
+            '--osd-duration=2200',
+            '--osd-playing-msg=RetroTUI: Space pause | Left/Right seek | q quit',
+        ]
+        with_sub = _with_subtitle_args(base, subtitle_path, backend='mpv')
         commands = [
-            ([mpv, '--vo=tct', '--really-quiet', filepath], 'mpv (tct)'),
-            ([mpv, '--vo=tct', '--really-quiet', '--ao=null', filepath], 'mpv (tct, no audio)'),
+            (with_sub + [video_path], 'mpv (tct)'),
+            (with_sub + ['--ao=null', video_path], 'mpv (tct, no audio)'),
         ]
     else:
+        base = [mplayer, '-vo', 'caca', '-really-quiet', '-osdlevel', '1']
+        with_sub = _with_subtitle_args(base, subtitle_path, backend='mplayer')
         commands = [
-            ([mplayer, '-vo', 'caca', '-really-quiet', filepath], 'mplayer (caca)'),
-            ([mplayer, '-vo', 'caca', '-really-quiet', '-ao', 'null', filepath], 'mplayer (caca, no audio)'),
-            ([mplayer, '-vo', 'aa', '-really-quiet', '-ao', 'null', filepath], 'mplayer (aa, no audio)'),
+            (with_sub + [video_path], 'mplayer (caca)'),
+            (with_sub + ['-ao', 'null', video_path], 'mplayer (caca, no audio)'),
+            (
+                _with_subtitle_args([mplayer, '-vo', 'aa', '-really-quiet'], subtitle_path, backend='mplayer')
+                + ['-ao', 'null', video_path],
+                'mplayer (aa, no audio)',
+            ),
         ]
 
     exit_code = 1
@@ -180,7 +213,7 @@ def play_ascii_video(stdscr, filepath):
         return False, (
             'No se pudo reproducir el video.\n'
             f'Backend probado: {backend_label}\n'
-            f'Código de salida: {exit_code}'
+            f'Codigo de salida: {exit_code}'
         )
     except OSError as e:
         return False, f'No se pudo ejecutar:\n{e}'
