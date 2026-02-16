@@ -119,7 +119,7 @@ Reducir riesgo de regresiones y acelerar desarrollo en 2 sprints, sin frenar fea
 ## Pendiente recomendado (siguiente iteración)
 1. Aumentar cobertura de tests en rutas no-curses (acciones, parsing de comandos, file ops).
 2. Definir política de release/tagging (version bump + checklist de verificación manual).
-3. Extender CI a chequeos por plataforma (Linux/Windows) y mantener hook activo en todos los entornos de dev.
+3. Reducir complejidad residual de `retrotui/core/app.py` con separación adicional por módulos.
 
 ## Avance ejecutado (2026-02-16)
 - [x] Pipeline de teclado consolidado para `get_wch()` con normalizacion comun (`normalize_key_code`).
@@ -127,8 +127,10 @@ Reducir riesgo de regresiones y acelerar desarrollo en 2 sprints, sin frenar fea
 - [x] `NotepadWindow` actualizado para input Unicode real y atajos Ctrl via `get_wch`.
 - [x] `FileManagerWindow` actualizado para hotkeys y navegacion con entrada normalizada.
 - [x] I/O de Notepad fijado en UTF-8 (`open(..., encoding='utf-8')` para carga y guardado).
-- [x] Cobertura de tests ampliada para flujo Unicode/`get_wch` (suite total: 23 tests OK).
+- [x] Cobertura de tests ampliada para flujo Unicode/`get_wch` y dispatcher core (suite total: 33 tests OK).
 - [x] QA automatizado con `tools/qa.py` (UTF-8 + compileall + unittest).
-- [x] Workflow CI en `.github/workflows/ci.yml` ejecutando QA en push/PR.
+- [x] Workflow CI en `.github/workflows/ci.yml` ejecutando QA en push/PR (Linux + Windows).
 - [x] Hook local `.githooks/pre-commit` para ejecutar QA antes de cada commit.
+- [x] Tests nuevos para rutas críticas de `retrotui/core/app.py` (`tests/test_core_app.py`).
+- [x] Política de EOL/UTF-8 aplicada con `.editorconfig` y `.gitattributes`.
 
