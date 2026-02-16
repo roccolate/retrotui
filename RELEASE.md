@@ -2,7 +2,7 @@
 
 ## Versioning
 - Follow SemVer: `MAJOR.MINOR.PATCH`.
-- Tag format: `vX.Y.Z` (example: `v0.3.6`).
+- Tag format: `vX.Y.Z` (example: `v0.6.0`).
 - Source of truth for runtime/package version:
   - `pyproject.toml` -> `[project].version`
   - `retrotui/core/app.py` -> `APP_VERSION`

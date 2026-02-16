@@ -15,7 +15,7 @@ class PackageInitTraceTests(unittest.TestCase):
 
         import retrotui  # noqa: PLC0415
 
-        self.assertEqual(retrotui.__version__, "0.3.6")
+        self.assertEqual(retrotui.__version__, "0.6.0")
         self.assertEqual(Path(retrotui.__file__).resolve(), Path(root) / "retrotui" / "__init__.py")
 
 

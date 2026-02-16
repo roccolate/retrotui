@@ -6,6 +6,7 @@ import os
 from ..ui.window import Window
 from ..ui.menu import WindowMenu
 from ..core.actions import ActionResult, ActionType, AppAction
+from ..core.clipboard import copy_text, paste_text
 from ..utils import safe_addstr, normalize_key_code, theme_attr
 from ..constants import C_STATUS, C_SCROLLBAR
 
@@ -158,6 +159,34 @@ class NotepadWindow(Window):
             self.cursor_col = len(line)
         if self.cursor_col < 0:
             self.cursor_col = 0
+
+    def _insert_text(self, text):
+        """Insert plain text at cursor position, supporting multiline paste."""
+        if not text:
+            return
+
+        normalized = text.replace('\r\n', '\n').replace('\r', '\n')
+        current = self.buffer[self.cursor_line]
+        before = current[:self.cursor_col]
+        after = current[self.cursor_col:]
+        parts = normalized.split('\n')
+
+        if len(parts) == 1:
+            self.buffer[self.cursor_line] = before + parts[0] + after
+            self.cursor_col += len(parts[0])
+        else:
+            self.buffer[self.cursor_line] = before + parts[0]
+            insert_at = self.cursor_line + 1
+            for middle in parts[1:-1]:
+                self.buffer.insert(insert_at, middle)
+                insert_at += 1
+            self.buffer.insert(insert_at, parts[-1] + after)
+            self.cursor_line = insert_at
+            self.cursor_col = len(parts[-1])
+
+        self.modified = True
+        self._invalidate_wrap()
+        self._ensure_cursor_visible()
 
     def draw(self, stdscr):
         """Draw notepad with buffer, cursor, and status bar."""
@@ -357,6 +386,15 @@ class NotepadWindow(Window):
             result = self._save_file()
             if result is not True:
                 return result
+
+        # Copy line: Ctrl+C (key 3)
+        elif key_code == 3:
+            if 0 <= self.cursor_line < len(self.buffer):
+                copy_text(self.buffer[self.cursor_line])
+
+        # Paste: Ctrl+V (key 22)
+        elif key_code == 22:
+            self._insert_text(paste_text())
 
         # Toggle: Ctrl+W (key 23)
         elif key_code == 23:

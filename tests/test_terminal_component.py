@@ -90,6 +90,7 @@ class TerminalComponentTests(unittest.TestCase):
             "retrotui.ui.menu",
             "retrotui.ui.window",
             "retrotui.core.actions",
+            "retrotui.core.clipboard",
             "retrotui.core.terminal_session",
             "retrotui.apps.terminal",
         ):
@@ -107,6 +108,7 @@ class TerminalComponentTests(unittest.TestCase):
             "retrotui.ui.menu",
             "retrotui.ui.window",
             "retrotui.core.actions",
+            "retrotui.core.clipboard",
             "retrotui.core.terminal_session",
             "retrotui.apps.terminal",
         ):
@@ -478,6 +480,32 @@ class TerminalComponentTests(unittest.TestCase):
         win.handle_key("a")
         self.assertEqual(win._session_error, "ioerr")
         self.assertIsNone(win.handle_key(object()))
+
+    def test_handle_key_ctrl_v_pastes_clipboard_into_session(self):
+        win = self._make_window()
+        win.window_menu = types.SimpleNamespace(active=False)
+        fake_session = _FakeSession()
+        win._session = fake_session
+        win.scrollback_offset = 3
+        with mock.patch.object(self.terminal_mod, "paste_text", return_value="echo hi"):
+            self.assertIsNone(win.handle_key(22))
+        self.assertEqual(fake_session.writes[-1], "echo hi")
+        self.assertEqual(win.scrollback_offset, 0)
+
+    def test_handle_key_ctrl_v_noop_when_clipboard_empty(self):
+        win = self._make_window()
+        win.window_menu = types.SimpleNamespace(active=False)
+        fake_session = _FakeSession()
+        win._session = fake_session
+        with mock.patch.object(self.terminal_mod, "paste_text", return_value=""):
+            self.assertIsNone(win.handle_key(22))
+        self.assertEqual(fake_session.writes, [])
+
+    def test_forward_payload_ignores_none(self):
+        win = self._make_window()
+        with mock.patch.object(win, "_ensure_session") as ensure_session:
+            win._forward_payload(None)
+        ensure_session.assert_not_called()
 
     def test_handle_key_without_running_session_is_noop(self):
         win = self._make_window()

@@ -44,6 +44,7 @@ class FileManagerComponentTests(unittest.TestCase):
             "retrotui.utils",
             "retrotui.ui.menu",
             "retrotui.ui.window",
+            "retrotui.core.clipboard",
             "retrotui.apps.filemanager",
             "retrotui.core.actions",
         ):
@@ -60,6 +61,7 @@ class FileManagerComponentTests(unittest.TestCase):
             "retrotui.utils",
             "retrotui.ui.menu",
             "retrotui.ui.window",
+            "retrotui.core.clipboard",
             "retrotui.apps.filemanager",
             "retrotui.core.actions",
         ):
@@ -287,6 +289,23 @@ class FileManagerComponentTests(unittest.TestCase):
             self.assertNotEqual(win.show_hidden, hidden_before)
         finally:
             shutil.rmtree(root, ignore_errors=True)
+
+    def test_handle_key_ctrl_c_copies_selected_entry_path(self):
+        win = self._make_window()
+        win.window_menu.active = False
+        win.entries = [self.fm_mod.FileEntry("demo.txt", False, "/tmp/demo.txt", 10)]
+        win.selected_index = 0
+        with mock.patch.object(self.fm_mod, "copy_text") as copy_text:
+            win.handle_key(3)
+        copy_text.assert_called_once_with("/tmp/demo.txt")
+
+    def test_handle_key_ctrl_c_noop_without_entries(self):
+        win = self._make_window()
+        win.window_menu.active = False
+        win.entries = []
+        with mock.patch.object(self.fm_mod, "copy_text") as copy_text:
+            win.handle_key(3)
+        copy_text.assert_not_called()
 
 
 if __name__ == "__main__":

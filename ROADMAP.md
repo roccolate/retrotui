@@ -2,7 +2,7 @@
 
 **Objetivo:** Un entorno de escritorio estilo Windows 3.1 completamente funcional para la terminal Linux. Sin X11. Sin Wayland. Solo curses, una TTY y vibes.
 
-**Estado actual:** v0.3.6 (febrero 2026)
+**Estado actual:** v0.6.0 (febrero 2026)
 
 ---
 
@@ -91,7 +91,7 @@ La release que hace RetroTUI usable como shell diario.
 - [x] Workflow de release automatizado en GitHub Actions (`.github/workflows/release.yml`) con validacion de tag/version y build de artifacts
 - [x] Reporte de cobertura por modulo con stdlib `trace` (`tools/report_module_coverage.py`) y opcion en QA
 - [x] Umbral de cobertura por modulo en CI elevado a `--module-coverage-fail-under 100.0` (lane gradual en `ubuntu-latest` + Python `3.12`)
-- [x] Baseline actual de calidad: `299 tests` en QA y cobertura total por modulo `100.0%`
+- [x] Baseline actual de calidad: `374 tests` en QA y cobertura total por modulo `100.0%`
 
 ---
 ### v0.5 — Temas y Configuración
@@ -122,19 +122,19 @@ Personalidad y persistencia.
 
 ---
 
-### v0.6 — Clipboard y Comunicación Inter-App
+### v0.6 - Clipboard y Comunicacion Inter-App
 
 Hacer que las apps se sientan como un entorno integrado.
 
 **Clipboard Interno**
-- [ ] Ctrl+C / Ctrl+V (o Ctrl+Ins / Shift+Ins para autenticidad retro)
-- [ ] Copiar texto desde Notepad, pegar en Terminal u otro Notepad
-- [ ] Copiar nombre/ruta desde File Manager
-- [ ] Sync con xclip/xsel/wl-copy cuando esté disponible (clipboard SSH)
+- [x] Ctrl+C / Ctrl+V (base funcional)
+- [x] Copiar texto desde Notepad, pegar en Terminal u otro Notepad
+- [x] Copiar nombre/ruta desde File Manager
+- [x] Sync con xclip/xsel/wl-copy cuando este disponible (clipboard SSH)
 
 **Drag and Drop**
-- [ ] Arrastrar archivo de File Manager a Notepad â†’ abrir archivo
-- [ ] Arrastrar archivo de File Manager a Terminal â†’ pegar ruta
+- [ ] Arrastrar archivo de File Manager a Notepad -> abrir archivo
+- [ ] Arrastrar archivo de File Manager a Terminal -> pegar ruta
 - [ ] Feedback visual durante drag (highlight drop targets)
 
 **Limpieza del Sistema de Acciones**
