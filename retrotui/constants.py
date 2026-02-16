@@ -62,6 +62,16 @@ ICONS = [
         "art": ["\u250c\u2500\u2500\u2510", "\u2502CL\u2502", "\u2514\u2500\u2500\u2518"],
     },
     {
+        "label": "Images",
+        "action": AppAction.IMAGE_VIEWER,
+        "art": ["\u250c\u2500\u2500\u2510", "\u2502IM\u2502", "\u2514\u2500\u2500\u2518"],
+    },
+    {
+        "label": "Trash",
+        "action": AppAction.TRASH_BIN,
+        "art": ["\u250c\u2500\u2500\u2510", "\u2502TR\u2502", "\u2514\u2500\u2500\u2518"],
+    },
+    {
         "label": "Settings",
         "action": AppAction.SETTINGS,
         "art": ["\u256d\u2500\u2500\u256e", "\u2502\u2699 \u2502", "\u2570\u2500\u2500\u256f"],
@@ -83,6 +93,8 @@ ICONS_ASCII = [
     {"label": "Logs", "action": AppAction.LOG_VIEWER, "art": ["+--+", "|LN|", "+--+"]},
     {"label": "Procs", "action": AppAction.PROCESS_MANAGER, "art": ["+--+", "|PS|", "+--+"]},
     {"label": "Clock", "action": AppAction.CLOCK_CALENDAR, "art": ["+--+", "|CL|", "+--+"]},
+    {"label": "Images", "action": AppAction.IMAGE_VIEWER, "art": ["+--+", "|IM|", "+--+"]},
+    {"label": "Trash", "action": AppAction.TRASH_BIN, "art": ["+--+", "|TR|", "+--+"]},
     {"label": "Settings", "action": AppAction.SETTINGS, "art": ["+--+", "|**|", "+--+"]},
     {"label": "About", "action": AppAction.ABOUT, "art": ["+--+", "| ?|", "+--+"]},
 ]
