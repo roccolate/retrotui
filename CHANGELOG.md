@@ -10,10 +10,13 @@ Todas las versiones notables de RetroTUI están documentadas aquí.
 - Script `tools/qa.py` para chequeos locales de UTF-8, compilacion y tests.
 - Workflow `.github/workflows/ci.yml` para ejecutar QA en push/pull request.
 - Hook local `.githooks/pre-commit` para correr QA antes de commitear.
+- Tests `tests/test_core_app.py` para rutas criticas del dispatcher y hotkeys en `retrotui/core/app.py`.
+- Archivos `.editorconfig` y `.gitattributes` para fijar UTF-8 y EOL consistentes.
 
 ### Changed
 - README actualizado con comandos de QA y activacion de hooks locales.
 - ROADMAP/PROJECT_ANALYSIS actualizados para reflejar automatizacion de calidad.
+- CI extendido a matriz Linux + Windows (Python 3.9/3.12).
 
 ---
 

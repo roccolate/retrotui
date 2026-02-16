@@ -29,11 +29,17 @@ TEXT_EXTENSIONS = {
 
 EXPLICIT_TEXT_FILES = {
     ".gitignore",
+    ".gitattributes",
+    ".editorconfig",
+    "pre-commit",
 }
 
 DEFAULT_SCAN_PATHS = [
     "retrotui",
     "tests",
+    "tools",
+    ".github",
+    ".githooks",
     "README.md",
     "ROADMAP.md",
     "CHANGELOG.md",
@@ -42,6 +48,8 @@ DEFAULT_SCAN_PATHS = [
     "pyproject.toml",
     "setup.sh",
     ".gitignore",
+    ".gitattributes",
+    ".editorconfig",
 ]
 
 COMPILE_PATHS = [

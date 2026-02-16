@@ -50,6 +50,9 @@ python tools/qa.py
 git config core.hooksPath .githooks
 ```
 
+- CI corre en GitHub Actions para Linux y Windows (Python 3.9 y 3.12).
+- Politica de formato de texto definida con `.editorconfig` y `.gitattributes`.
+
 ## Soporte de Mouse sin X11
 
 RetroTUI funciona con mouse en **dos escenarios**:

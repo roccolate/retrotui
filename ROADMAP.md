@@ -63,7 +63,8 @@ La release que hace RetroTUI usable como shell diario.
 - [x] Fix emojis en FileEntry para respetar `check_unicode_support()`
 - [x] Pipeline de teclado consolidado para `get_wch()` con normalizacion de teclas compartida
 - [x] Compatibilidad Unicode en input de Dialog/Notepad/File Manager y guardado UTF-8 en Notepad
-- [x] Automatizacion de QA en CI/pre-commit (UTF-8, compileall, unittest)
+- [x] Automatizacion de QA en CI/pre-commit (UTF-8, compileall, unittest) con matriz Linux/Windows
+- [x] Politica de archivos de texto (UTF-8 + EOL LF) via `.editorconfig` y `.gitattributes`
 
 ---
 ### v0.5 — Temas y Configuración
