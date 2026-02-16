@@ -5,6 +5,7 @@ import os
 import time
 
 from ..core.actions import ActionResult, ActionType, AppAction
+from ..core.clipboard import copy_text
 from ..ui.menu import WindowMenu
 from ..ui.window import Window
 from ..utils import normalize_key_code, safe_addstr, theme_attr
@@ -38,6 +39,9 @@ class LogViewerWindow(Window):
         self.search_index = -1
         self.search_input_mode = False
         self.search_input = ""
+        self.selection_anchor = None  # (line_idx, col)
+        self.selection_cursor = None  # (line_idx, col)
+        self._mouse_selecting = False
 
         self.window_menu = WindowMenu(
             {
@@ -50,6 +54,7 @@ class LogViewerWindow(Window):
                 "View": [
                     ("Follow Tail    F", "lv_follow"),
                     ("Freeze Scroll  Space", "lv_freeze"),
+                    ("Copy Selection F6", "lv_copy"),
                     ("Search           /", "lv_search"),
                     ("Next Match       n", "lv_next"),
                     ("Prev Match       N", "lv_prev"),
@@ -60,6 +65,102 @@ class LogViewerWindow(Window):
 
         if filepath:
             self.open_path(filepath)
+
+    def clear_selection(self):
+        """Clear line/column selection state."""
+        self.selection_anchor = None
+        self.selection_cursor = None
+        self._mouse_selecting = False
+
+    def has_selection(self):
+        """Return True when there is a non-empty text selection."""
+        return (
+            self.selection_anchor is not None
+            and self.selection_cursor is not None
+            and self.selection_anchor != self.selection_cursor
+        )
+
+    def _selection_bounds(self):
+        """Return ordered ((line,col),(line,col)) bounds or None."""
+        if not self.has_selection():
+            return None
+        a = self.selection_anchor
+        b = self.selection_cursor
+        return (a, b) if a <= b else (b, a)
+
+    def _line_selection_span(self, line_idx, line_len):
+        """Return [start,end) selection span for one line, or None."""
+        bounds = self._selection_bounds()
+        if not bounds:
+            return None
+        (start_line, start_col), (end_line, end_col) = bounds
+        if line_idx < start_line or line_idx > end_line:
+            return None
+
+        if start_line == end_line:
+            start = max(0, min(line_len, start_col))
+            end = max(0, min(line_len, end_col))
+            if end <= start:
+                return None
+            return (start, end)
+
+        if line_idx == start_line:
+            start = max(0, min(line_len, start_col))
+            if line_len <= start:
+                return None
+            return (start, line_len)
+        if line_idx == end_line:
+            end = max(0, min(line_len, end_col))
+            if end <= 0:
+                return None
+            return (0, end)
+        return (0, line_len)
+
+    def _selected_text(self):
+        """Return selected text as plain string."""
+        bounds = self._selection_bounds()
+        if not bounds or not self.lines:
+            return ""
+        (start_line, start_col), (end_line, end_col) = bounds
+        start_line = max(0, min(start_line, len(self.lines) - 1))
+        end_line = max(0, min(end_line, len(self.lines) - 1))
+        if end_line < start_line:
+            return ""
+
+        if start_line == end_line:
+            line = self.lines[start_line]
+            return line[max(0, start_col):max(0, end_col)]
+
+        chunks = []
+        chunks.append(self.lines[start_line][max(0, start_col):])
+        for idx in range(start_line + 1, end_line):
+            chunks.append(self.lines[idx])
+        chunks.append(self.lines[end_line][:max(0, end_col)])
+        return "\n".join(chunks)
+
+    def _cursor_from_screen(self, mx, my):
+        """Map body coordinates into (line_idx, col) in log buffer."""
+        bx, by, bw, bh = self.body_rect()
+        if bw <= 0 or bh <= 0:
+            return None
+        view_rows = self._visible_line_rows()
+        if not (bx <= mx < bx + bw and by + 1 <= my < by + 1 + view_rows):
+            return None
+        line_idx = self.scroll_offset + (my - (by + 1))
+        if not (0 <= line_idx < len(self.lines)):
+            return None
+        line = self.lines[line_idx]
+        col = max(0, min(len(line), mx - bx))
+        return (line_idx, col)
+
+    def _copy_selection(self):
+        """Copy selected text (or current line fallback) into clipboard."""
+        text = self._selected_text()
+        if not text and self.lines:
+            idx = max(0, min(self.scroll_offset, len(self.lines) - 1))
+            text = self.lines[idx]
+        if text:
+            copy_text(text)
 
     @classmethod
     def _ensure_log_colors(cls):
@@ -260,6 +361,9 @@ class LogViewerWindow(Window):
         if action == "lv_freeze":
             self.freeze_scroll = not self.freeze_scroll
             return None
+        if action == "lv_copy":
+            self._copy_selection()
+            return None
         if action == "lv_search":
             self.search_input_mode = True
             self.search_input = self.search_query
@@ -288,6 +392,7 @@ class LogViewerWindow(Window):
         self.search_matches = []
         self.search_index = -1
         self.scroll_offset = 0
+        self.clear_selection()
         self._tail_remainder = ""
         self.file_position = 0
         return self._reload_file()
@@ -324,7 +429,27 @@ class LogViewerWindow(Window):
             line_attr = self._severity_attr(line, body_attr)
             if query_lc and query_lc in line.lower():
                 line_attr |= curses.A_REVERSE
-            safe_addstr(stdscr, by + row, bx, line[:bw].ljust(bw), line_attr)
+            rendered = line[:bw].ljust(bw)
+            span = self._line_selection_span(line_index, len(line))
+            if not span:
+                safe_addstr(stdscr, by + row, bx, rendered, line_attr)
+                continue
+
+            start_col, end_col = span
+            start_col = max(0, min(start_col, bw))
+            end_col = max(start_col, min(end_col, bw))
+            if start_col > 0:
+                safe_addstr(stdscr, by + row, bx, rendered[:start_col], line_attr)
+            if end_col > start_col:
+                safe_addstr(
+                    stdscr,
+                    by + row,
+                    bx + start_col,
+                    rendered[start_col:end_col],
+                    line_attr | curses.A_BOLD | curses.A_REVERSE,
+                )
+            if end_col < bw:
+                safe_addstr(stdscr, by + row, bx + end_col, rendered[end_col:bw], line_attr)
 
         if self.search_input_mode:
             status = f"/{self.search_input}"
@@ -349,7 +474,6 @@ class LogViewerWindow(Window):
 
     def handle_click(self, mx, my, bstate=None):
         """Handle menu interactions and line-based scroll focus."""
-        _ = bstate
         if self.window_menu:
             if self.window_menu.on_menu_bar(mx, my, self.x, self.y, self.w) or self.window_menu.active:
                 action = self.window_menu.handle_click(mx, my, self.x, self.y, self.w)
@@ -357,12 +481,47 @@ class LogViewerWindow(Window):
                     return self._execute_menu_action(action)
                 return None
 
-        bx, by, bw, bh = self.body_rect()
-        if not (bx <= mx < bx + bw and by + 1 <= my < by + bh - 1):
+        cursor_pos = self._cursor_from_screen(mx, my)
+        if cursor_pos is None:
+            if bstate is not None and (
+                bstate
+                & (
+                    getattr(curses, "BUTTON1_CLICKED", 0)
+                    | getattr(curses, "BUTTON1_PRESSED", 0)
+                    | getattr(curses, "BUTTON1_DOUBLE_CLICKED", 0)
+                )
+            ):
+                self.clear_selection()
             return None
-        line = self.scroll_offset + (my - (by + 1))
-        if 0 <= line < len(self.lines):
-            self._scroll_to_line(line)
+
+        has_button1 = bool(
+            bstate
+            and (
+                bstate & getattr(curses, "BUTTON1_CLICKED", 0)
+                or bstate & getattr(curses, "BUTTON1_PRESSED", 0)
+                or bstate & getattr(curses, "BUTTON1_DOUBLE_CLICKED", 0)
+            )
+        )
+        if has_button1:
+            self.selection_anchor = cursor_pos
+            self.selection_cursor = cursor_pos
+            self._mouse_selecting = bool(bstate & getattr(curses, "BUTTON1_PRESSED", 0))
+        else:
+            self._scroll_to_line(cursor_pos[0])
+        return None
+
+    def handle_mouse_drag(self, mx, my, bstate):
+        """Extend selection while dragging with primary button."""
+        if not (bstate & getattr(curses, "BUTTON1_PRESSED", 0)):
+            self._mouse_selecting = False
+            return None
+        cursor_pos = self._cursor_from_screen(mx, my)
+        if cursor_pos is None:
+            return None
+        if self.selection_anchor is None:
+            self.selection_anchor = cursor_pos
+        self.selection_cursor = cursor_pos
+        self._mouse_selecting = True
         return None
 
     def _handle_search_input_key(self, key, key_code):
@@ -428,6 +587,8 @@ class LogViewerWindow(Window):
             self.follow_mode = not self.follow_mode
             if self.follow_mode and not self.freeze_scroll:
                 self._scroll_to_bottom()
+        elif key_code in (getattr(curses, "KEY_F6", -1), getattr(curses, "KEY_IC", -1)):
+            self._copy_selection()
         elif key_code in (ord(" "), ord("p"), ord("P")):
             self.freeze_scroll = not self.freeze_scroll
         elif key_code in (ord("/"),):
@@ -444,9 +605,11 @@ class LogViewerWindow(Window):
         elif key_code in (ord("q"), ord("Q")):
             return ActionResult(ActionType.EXECUTE, AppAction.CLOSE_WINDOW)
         elif key_code == 27:
-            self.search_query = ""
-            self.search_matches = []
-            self.search_index = -1
+            if self.has_selection():
+                self.clear_selection()
+            else:
+                self.search_query = ""
+                self.search_matches = []
+                self.search_index = -1
 
         return None
-

@@ -7,6 +7,9 @@ from unittest import mock
 
 def _install_fake_curses():
     fake = types.ModuleType("curses")
+    fake.KEY_F6 = 270
+    fake.KEY_F7 = 271
+    fake.KEY_F8 = 272
     fake.KEY_LEFT = 260
     fake.KEY_RIGHT = 261
     fake.KEY_UP = 259
@@ -19,6 +22,9 @@ def _install_fake_curses():
     fake.KEY_BACKSPACE = 263
     fake.KEY_DC = 330
     fake.KEY_IC = 331
+    fake.BUTTON1_CLICKED = 0x1
+    fake.BUTTON1_PRESSED = 0x2
+    fake.BUTTON1_DOUBLE_CLICKED = 0x4
     fake.A_BOLD = 1
     fake.A_REVERSE = 2
     fake.error = Exception
@@ -30,6 +36,8 @@ class _FakeSession:
     instances = []
     supported = True
     start_error = None
+    interrupt_result = True
+    terminate_result = True
 
     def __init__(self, shell=None, cwd=None, env=None, cols=80, rows=24):
         self.shell = shell
@@ -44,6 +52,8 @@ class _FakeSession:
         self.writes = []
         self.resize_calls = []
         self.poll_calls = 0
+        self.interrupt_calls = 0
+        self.terminate_calls = 0
         _FakeSession.instances.append(self)
 
     @staticmethod
@@ -72,6 +82,14 @@ class _FakeSession:
     def poll_exit(self):
         self.poll_calls += 1
         return False
+
+    def interrupt(self):
+        self.interrupt_calls += 1
+        return _FakeSession.interrupt_result
+
+    def terminate(self):
+        self.terminate_calls += 1
+        return _FakeSession.terminate_result
 
     def close(self):
         self.closed = True
@@ -123,6 +141,8 @@ class TerminalComponentTests(unittest.TestCase):
         _FakeSession.instances = []
         _FakeSession.supported = True
         _FakeSession.start_error = None
+        _FakeSession.interrupt_result = True
+        _FakeSession.terminate_result = True
 
     def _make_window(self):
         win = self.terminal_mod.TerminalWindow(2, 3, 40, 12)
@@ -465,6 +485,18 @@ class TerminalComponentTests(unittest.TestCase):
         self.assertEqual(win.scrollback_offset, 0)
 
         win._session = _FakeSession()
+        self.assertIsNone(win._execute_menu_action(win.MENU_INTERRUPT))
+        self.assertEqual(win._session.interrupt_calls, 1)
+        self.assertIsNone(win._execute_menu_action(win.MENU_TERMINATE))
+        self.assertEqual(win._session.terminate_calls, 1)
+
+        _FakeSession.interrupt_result = False
+        _FakeSession.terminate_result = False
+        self.assertIsNone(win._execute_menu_action(win.MENU_INTERRUPT))
+        self.assertEqual(win._session.writes[-1], "\x03")
+        self.assertIsNone(win._execute_menu_action(win.MENU_TERMINATE))
+        self.assertEqual(win._session.writes[-1], "\x03")
+
         result = win._execute_menu_action(win.MENU_RESTART)
         self.assertIsNone(result)
         self.assertIsNone(win._session)
@@ -494,6 +526,92 @@ class TerminalComponentTests(unittest.TestCase):
         win.handle_key("a")
         self.assertEqual(win._session_error, "ioerr")
         self.assertIsNone(win.handle_key(object()))
+
+    def test_handle_key_f6_f7_send_interrupt_and_terminate(self):
+        win = self._make_window()
+        win.window_menu = types.SimpleNamespace(active=False)
+        fake_session = _FakeSession()
+        win._session = fake_session
+        win.scrollback_offset = 5
+
+        self.assertIsNone(win.handle_key(self.curses.KEY_F6))
+        self.assertEqual(fake_session.interrupt_calls, 1)
+        self.assertEqual(win.scrollback_offset, 0)
+
+        win.scrollback_offset = 4
+        self.assertIsNone(win.handle_key(self.curses.KEY_F7))
+        self.assertEqual(fake_session.terminate_calls, 1)
+        self.assertEqual(win.scrollback_offset, 0)
+
+        win._session = types.SimpleNamespace(running=False, interrupt=mock.Mock(), terminate=mock.Mock())
+        self.assertIsNone(win.handle_key(self.curses.KEY_F6))
+        self.assertIsNone(win.handle_key(self.curses.KEY_F7))
+
+    def test_terminal_selection_drag_and_copy_f8(self):
+        win = self._make_window()
+        win.window_menu = None
+        win._scroll_lines = ["alpha", "beta"]
+        win._line_chars = list("gamma")
+        win.scrollback_offset = 1
+
+        # Start selection on first visible row.
+        self.assertIsNone(win.handle_click(4, 5, self.curses.BUTTON1_PRESSED))
+        # Extend selection to next row.
+        self.assertIsNone(win.handle_mouse_drag(6, 6, self.curses.BUTTON1_PRESSED))
+        self.assertTrue(win.has_selection())
+        self.assertEqual(win.scrollback_offset, 0)
+
+        with mock.patch.object(self.terminal_mod, "copy_text") as copy_text:
+            self.assertIsNone(win.handle_key(self.curses.KEY_F8))
+        copy_text.assert_called_once()
+        self.assertIn("\n", copy_text.call_args.args[0])
+
+        # Without selection, fallback copies current editable line.
+        win.clear_selection()
+        with mock.patch.object(self.terminal_mod, "copy_text") as copy_text:
+            self.assertIsNone(win.handle_key(self.curses.KEY_F8))
+        copy_text.assert_called_once_with("gamma")
+
+    def test_terminal_selection_draw_overlay_and_clear(self):
+        win = self._make_window()
+        win.active = True
+        win._scroll_lines = ["abc", "def"]
+        win._line_chars = []
+        win.selection_anchor = (0, 1)
+        win.selection_cursor = (1, 2)
+
+        with mock.patch.object(self.terminal_mod, "safe_addstr") as safe_addstr:
+            win._draw_selection(
+                stdscr=None,
+                x=10,
+                y=20,
+                text_cols=10,
+                start_idx=0,
+                visible_lines=["abc", "def"],
+                body_attr=0,
+            )
+        self.assertTrue(any((call.args[4] & self.curses.A_REVERSE) for call in safe_addstr.call_args_list if len(call.args) >= 5))
+
+        self.assertEqual(win._selected_text(), "bc\nde")
+        win.clear_selection()
+        self.assertFalse(win.has_selection())
+
+    def test_send_interrupt_and_terminate_error_paths(self):
+        win = self._make_window()
+        win._session = types.SimpleNamespace(running=True, interrupt=mock.Mock(side_effect=OSError("int-err")))
+        win._send_interrupt()
+        self.assertEqual(win._session_error, "int-err")
+
+        win._session = types.SimpleNamespace(running=True, terminate=mock.Mock(side_effect=OSError("term-err")))
+        win._send_terminate()
+        self.assertEqual(win._session_error, "term-err")
+
+        # Fallback branch when session lacks dedicated methods.
+        fallback = types.SimpleNamespace(running=True, write=mock.Mock())
+        win._session = fallback
+        win._send_interrupt()
+        win._send_terminate()
+        self.assertEqual(fallback.write.call_count, 2)
 
     def test_handle_key_ctrl_v_pastes_clipboard_into_session(self):
         win = self._make_window()

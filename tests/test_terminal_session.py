@@ -1,5 +1,6 @@
 import errno
 import importlib
+import signal
 import types
 import unittest
 from unittest import mock
@@ -218,6 +219,56 @@ class TerminalSessionTests(unittest.TestCase):
             count = session.write(bytearray(b"xy"))
             self.assertEqual(count, 2)
             self.assertEqual(os_write.call_args.args[1], b"xy")
+
+    def test_send_signal_uses_foreground_pgid_then_child_fallback(self):
+        session = self.mod.TerminalSession()
+        self.assertFalse(session.send_signal(signal.SIGINT))
+
+        session.running = True
+        session.master_fd = 123
+        session.child_pid = 4321
+
+        with (
+            mock.patch.object(self.mod.os, "tcgetpgrp", return_value=987, create=True),
+            mock.patch.object(self.mod.os, "killpg", create=True) as killpg,
+            mock.patch.object(self.mod.os, "kill") as kill,
+        ):
+            self.assertTrue(session.send_signal(signal.SIGINT))
+        killpg.assert_called_once_with(987, signal.SIGINT)
+        kill.assert_not_called()
+
+        with (
+            mock.patch.object(self.mod.os, "tcgetpgrp", side_effect=OSError("bad"), create=True),
+            mock.patch.object(self.mod.os, "killpg", side_effect=OSError("bad"), create=True),
+            mock.patch.object(self.mod.os, "kill") as kill,
+        ):
+            self.assertTrue(session.send_signal(signal.SIGTERM))
+        kill.assert_called_once_with(4321, signal.SIGTERM)
+
+        session.child_pid = None
+        with (
+            mock.patch.object(self.mod.os, "tcgetpgrp", side_effect=OSError("bad"), create=True),
+            mock.patch.object(self.mod.os, "killpg", side_effect=OSError("bad"), create=True),
+        ):
+            self.assertFalse(session.send_signal(signal.SIGTERM))
+
+    def test_send_signal_returns_false_when_kill_fails(self):
+        session = self.mod.TerminalSession()
+        session.running = True
+        session.child_pid = 1
+
+        with mock.patch.object(self.mod.os, "kill", side_effect=OSError("denied")):
+            self.assertFalse(session.send_signal(signal.SIGTERM))
+
+    def test_interrupt_and_terminate_delegate_to_send_signal(self):
+        session = self.mod.TerminalSession()
+        with mock.patch.object(session, "send_signal", return_value=True) as send_signal:
+            self.assertTrue(session.interrupt())
+            self.assertTrue(session.terminate())
+
+        self.assertEqual(send_signal.call_count, 2)
+        self.assertEqual(send_signal.call_args_list[0].args[0], signal.SIGINT)
+        self.assertEqual(send_signal.call_args_list[1].args[0], signal.SIGTERM)
 
     def test_resize_updates_dimensions_and_handles_backends(self):
         session = self.mod.TerminalSession(cols=10, rows=5)

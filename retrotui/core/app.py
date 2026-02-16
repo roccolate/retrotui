@@ -19,6 +19,8 @@ from ..ui.dialog import Dialog, InputDialog, ProgressDialog
 from ..ui.window import Window
 from ..apps.notepad import NotepadWindow
 from ..apps.logviewer import LogViewerWindow
+from ..apps.image_viewer import ImageViewerWindow
+from ..apps.hexviewer import HexViewerWindow
 from .config import AppConfig, load_config, save_config
 from .actions import ActionResult, ActionType, AppAction
 from .action_runner import execute_app_action
@@ -260,7 +262,6 @@ class RetroTUI:
     def open_file_viewer(self, filepath):
         """Open file in best viewer: ASCII video or Notepad."""
         h, w = self.stdscr.getmaxyx()
-        filename = os.path.basename(filepath)
         lower_path = filepath.lower()
 
         if is_video_file(filepath):
@@ -282,14 +283,27 @@ class RetroTUI:
             self._spawn_window(win)
             return
 
+        image_ext = os.path.splitext(lower_path)[1]
+        if image_ext in ImageViewerWindow.IMAGE_EXTENSIONS:
+            offset_x = 14 + len(self.windows) * 2
+            offset_y = 3 + len(self.windows)
+            win_w = min(84, w - 4)
+            win_h = min(26, h - 4)
+            win = ImageViewerWindow(offset_x, offset_y, win_w, win_h, filepath=filepath)
+            self._spawn_window(win)
+            return
+
         # Check if file seems to be binary
         try:
             with open(filepath, 'rb') as f:
                 chunk = f.read(1024)
                 if b'\x00' in chunk:
-                    self.dialog = Dialog('Binary File',
-                        f'{filename}\n\nThis appears to be a binary file\nand cannot be displayed as text.',
-                        ['OK'], width=48)
+                    offset_x = 12 + len(self.windows) * 2
+                    offset_y = 3 + len(self.windows)
+                    win_w = min(92, w - 4)
+                    win_h = min(26, h - 4)
+                    win = HexViewerWindow(offset_x, offset_y, win_w, win_h, filepath=filepath)
+                    self._spawn_window(win)
                     return
         except OSError:
             pass
