@@ -17,12 +17,14 @@ class ClockCalendarWindow(Window):
         super().__init__("Clock / Calendar", x, y, max(32, w), max(13, h), content=[], resizable=False)
         self.always_on_top = True
         self.chime_enabled = False
+        self.week_starts_sunday = False
         self._last_chime_hour = None
         self.window_menu = WindowMenu(
             {
                 "Options": [
                     ("Always on Top   T", "clk_top"),
                     ("Hourly Chime    B", "clk_chime"),
+                    ("Week Starts Sun S", "clk_week"),
                     ("-------------", None),
                     ("Close           Q", "clk_close"),
                 ]
@@ -52,9 +54,18 @@ class ClockCalendarWindow(Window):
         if action == "clk_chime":
             self.chime_enabled = not self.chime_enabled
             return None
+        if action == "clk_week":
+            self.week_starts_sunday = not self.week_starts_sunday
+            return None
         if action == "clk_close":
             return ActionResult(ActionType.EXECUTE, AppAction.CLOSE_WINDOW)
         return None
+
+    def _month_lines(self, now):
+        """Return ASCII calendar lines honoring first weekday preference."""
+        first_weekday = calendar.SUNDAY if self.week_starts_sunday else calendar.MONDAY
+        text_calendar = calendar.TextCalendar(firstweekday=first_weekday)
+        return text_calendar.formatmonth(now.year, now.month).splitlines()
 
     def draw(self, stdscr):
         """Draw digital clock and month calendar."""
@@ -77,14 +88,15 @@ class ClockCalendarWindow(Window):
         safe_addstr(stdscr, by, bx, time_label.center(bw)[:bw], theme_attr("menubar"))
         safe_addstr(stdscr, by + 1, bx, date_label.center(bw)[:bw], body_attr | curses.A_BOLD)
 
-        month_lines = calendar.month(now.year, now.month).splitlines()
+        month_lines = self._month_lines(now)
         max_cal_rows = max(0, bh - 4)
         for i, line in enumerate(month_lines[:max_cal_rows]):
             safe_addstr(stdscr, by + 2 + i, bx, line.center(bw)[:bw], body_attr)
 
         top_state = "ON" if self.always_on_top else "OFF"
         chime_state = "ON" if self.chime_enabled else "OFF"
-        status = f"T top:{top_state} | B chime:{chime_state} | Q close"
+        week_state = "SUN" if self.week_starts_sunday else "MON"
+        status = f"T top:{top_state} | B chime:{chime_state} | S week:{week_state} | Q close"
         safe_addstr(stdscr, by + bh - 1, bx, status[:bw].ljust(bw), theme_attr("status"))
 
         if self.window_menu:
@@ -114,7 +126,8 @@ class ClockCalendarWindow(Window):
             self.always_on_top = not self.always_on_top
         elif key_code in (ord("b"), ord("B")):
             self.chime_enabled = not self.chime_enabled
+        elif key_code in (ord("s"), ord("S")):
+            self.week_starts_sunday = not self.week_starts_sunday
         elif key_code in (ord("q"), ord("Q")):
             return ActionResult(ActionType.EXECUTE, AppAction.CLOSE_WINDOW)
         return None
-

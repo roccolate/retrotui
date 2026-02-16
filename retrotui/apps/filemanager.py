@@ -117,6 +117,7 @@ class FileManagerWindow(Window):
             ],
             'View': [
                 ('Hidden Files   H', AppAction.FM_TOGGLE_HIDDEN),
+                ('Dual Pane      D', 'fm_toggle_dual'),
                 ('Refresh',          AppAction.FM_REFRESH),
             ],
             'Bookmarks': [
@@ -149,6 +150,33 @@ class FileManagerWindow(Window):
         self._rebuild_content()
         if self.dual_pane_enabled:
             self._rebuild_secondary_content()
+
+    @staticmethod
+    def _dual_pane_min_width():
+        """Minimum window width needed to render two panes cleanly."""
+        return 92
+
+    def _dual_pane_available(self):
+        """Return True when current window size supports dual-pane layout."""
+        return self.w >= self._dual_pane_min_width()
+
+    def toggle_dual_pane(self):
+        """Toggle dual-pane mode on/off, validating minimum width."""
+        if self.dual_pane_enabled:
+            self.dual_pane_enabled = False
+            self.active_pane = 0
+            return None
+
+        if not self._dual_pane_available():
+            return ActionResult(
+                ActionType.ERROR,
+                f'Dual-pane requires window width >= {self._dual_pane_min_width()} columns.',
+            )
+
+        self.dual_pane_enabled = True
+        self.active_pane = 0
+        self._rebuild_secondary_content()
+        return None
 
     def _header_lines(self):
         """Number of non-entry header lines at top of content."""
@@ -613,6 +641,10 @@ class FileManagerWindow(Window):
         super().draw(stdscr)
         if not self.visible:
             return
+        if self.dual_pane_enabled and not self._dual_pane_available():
+            # Auto-fallback when resized below split threshold.
+            self.dual_pane_enabled = False
+            self.active_pane = 0
         if not self.dual_pane_enabled and not self.entries:
             return
 
@@ -1051,6 +1083,8 @@ class FileManagerWindow(Window):
                 self.navigate_parent()
         elif action == AppAction.FM_TOGGLE_HIDDEN:
             self.toggle_hidden()
+        elif action == 'fm_toggle_dual':
+            return self.toggle_dual_pane()
         elif action == AppAction.FM_REFRESH:
             self._rebuild_content()
         elif action == AppAction.FM_BOOKMARK_1:
@@ -1193,6 +1227,8 @@ class FileManagerWindow(Window):
                 self._secondary_ensure_visible()
         elif key_code in (ord('h'), ord('H')):
             self.toggle_hidden()
+        elif key_code in (ord('d'), ord('D')):
+            return self.toggle_dual_pane()
         elif key_code in (ord('u'), ord('U'), 26):
             return self.undo_last_delete()
         elif key_code in (ord('1'), ord('2'), ord('3'), ord('4')):
