@@ -79,7 +79,11 @@ class CoreAppTests(unittest.TestCase):
             "retrotui.ui.window",
             "retrotui.apps.notepad",
             "retrotui.apps.filemanager",
+            "retrotui.apps.logviewer",
+            "retrotui.apps.process_manager",
+            "retrotui.apps.clock",
             "retrotui.core.actions",
+            "retrotui.core.action_runner",
             "retrotui.core.key_router",
             "retrotui.core.mouse_router",
             "retrotui.core.rendering",
@@ -103,7 +107,11 @@ class CoreAppTests(unittest.TestCase):
             "retrotui.ui.window",
             "retrotui.apps.notepad",
             "retrotui.apps.filemanager",
+            "retrotui.apps.logviewer",
+            "retrotui.apps.process_manager",
+            "retrotui.apps.clock",
             "retrotui.core.actions",
+            "retrotui.core.action_runner",
             "retrotui.core.key_router",
             "retrotui.core.mouse_router",
             "retrotui.core.rendering",
@@ -408,6 +416,22 @@ class CoreAppTests(unittest.TestCase):
         app.show_new_dir_dialog.assert_called_once_with(source)
         app.show_new_file_dialog.assert_called_once_with(source)
 
+    def test_dispatch_request_kill_confirm_calls_dialog_builder(self):
+        app = self._make_app()
+        source = object()
+        payload = {"pid": 123, "command": "bash", "signal": 15}
+        app.show_kill_confirm_dialog = mock.Mock()
+
+        app._dispatch_window_result(
+            self.actions_mod.ActionResult(
+                self.actions_mod.ActionType.REQUEST_KILL_CONFIRM,
+                payload,
+            ),
+            source,
+        )
+
+        app.show_kill_confirm_dialog.assert_called_once_with(source, payload)
+
     def test_dispatch_execute_non_close_routes_to_execute_action(self):
         app = self._make_app()
         app.execute_action = mock.Mock()
@@ -572,6 +596,18 @@ class CoreAppTests(unittest.TestCase):
         app.execute_action = mock.Mock()
 
         app.handle_mouse((0, 10, 6, 0, self.curses.BUTTON1_DOUBLE_CLICKED))
+
+        app.execute_action.assert_called_once_with(self.actions_mod.AppAction.ABOUT)
+
+    def test_handle_mouse_desktop_fallback_double_click_executes_icon_action(self):
+        app = self._make_app()
+        app.handle_taskbar_click = mock.Mock(return_value=False)
+        app.get_icon_at = mock.Mock(return_value=0)
+        app.execute_action = mock.Mock()
+
+        with mock.patch.object(self.app_mod.time, "monotonic", side_effect=[10.0, 10.2]):
+            app.handle_mouse((0, 10, 6, 0, self.curses.BUTTON1_CLICKED))
+            app.handle_mouse((0, 10, 6, 0, self.curses.BUTTON1_CLICKED))
 
         app.execute_action.assert_called_once_with(self.actions_mod.AppAction.ABOUT)
 
@@ -815,6 +851,21 @@ class CoreAppTests(unittest.TestCase):
 
         notepad_cls.assert_called_once()
         app._spawn_window.assert_called_once_with(notepad_cls.return_value)
+
+    def test_open_file_viewer_log_extension_spawns_log_viewer(self):
+        app = self._make_app()
+        app.stdscr = types.SimpleNamespace(getmaxyx=lambda: (30, 120))
+        app.windows = []
+        app._spawn_window = mock.Mock()
+
+        with (
+            mock.patch.object(self.app_mod, "is_video_file", return_value=False),
+            mock.patch.object(self.app_mod, "LogViewerWindow") as log_cls,
+        ):
+            app.open_file_viewer("/var/log/syslog.log")
+
+        log_cls.assert_called_once()
+        app._spawn_window.assert_called_once_with(log_cls.return_value)
 
     def test_show_save_as_dialog_sets_callback(self):
         app = self._make_app()
@@ -1061,6 +1112,26 @@ class CoreAppTests(unittest.TestCase):
         result_file = app.dialog.callback("file.txt")
         target.create_file.assert_called_once_with("file.txt")
         self.assertIsNone(result_file)
+
+    def test_show_kill_confirm_dialog_sets_callback(self):
+        app = self._make_app()
+        payload = {"pid": 42, "command": "python app.py", "signal": 15}
+        target = types.SimpleNamespace(kill_process=mock.Mock(return_value=None))
+
+        app.show_kill_confirm_dialog(target, payload)
+
+        self.assertIsInstance(app.dialog, self.app_mod.Dialog)
+        result = app.dialog.callback()
+        target.kill_process.assert_called_once_with(payload)
+        self.assertIsNone(result)
+
+    def test_show_kill_confirm_dialog_handles_missing_pid(self):
+        app = self._make_app()
+        target = types.SimpleNamespace()
+
+        app.show_kill_confirm_dialog(target, {"command": "missing pid"})
+
+        self.assertEqual(app.dialog.title, "Kill Error")
 
     def test_show_copy_move_dialogs_reject_invalid_selection(self):
         app = self._make_app()

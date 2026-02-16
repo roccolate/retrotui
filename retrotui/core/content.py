@@ -7,21 +7,21 @@ def build_welcome_content(version: str) -> list[str]:
     """Build startup window content."""
     return [
         "",
-        "   ╔══════════════════════════════════════╗",
-        f"   ║      Welcome to RetroTUI v{version}       ║",
-        "   ║                                      ║",
-        "   ║  A Windows 3.1 style desktop         ║",
-        "   ║  environment for the Linux console.  ║",
-        "   ║                                      ║",
-        "   ║  Highlights:                         ║",
-        "   ║  • Modular Package Structure         ║",
-        "   ║  • ASCII Video Player (mpv/mplayer)  ║",
-        "   ║  • Per-window menus (File, View)     ║",
-        "   ║  • Text editor (Notepad)             ║",
-        "   ║                                      ║",
-        "   ║  Use mouse or keyboard to navigate.  ║",
-        "   ║  Press Ctrl+Q to exit.               ║",
-        "   ╚══════════════════════════════════════╝",
+        " +--------------------------------------+",
+        f" |      Welcome to RetroTUI v{version:<6} |",
+        " |                                      |",
+        " |  A Windows 3.1 style desktop         |",
+        " |  environment for the Linux console.  |",
+        " |                                      |",
+        " |  Highlights:                         |",
+        " |  - Modular package structure         |",
+        " |  - ASCII video player                |",
+        " |  - Per-window menus                  |",
+        " |  - Text editor + file manager        |",
+        " |                                      |",
+        " |  Use mouse or keyboard to navigate.  |",
+        " |  Press Ctrl+Q to exit.               |",
+        " +--------------------------------------+",
         "",
     ]
 
@@ -63,12 +63,12 @@ def build_help_message() -> str:
         "Delete    - Delete forward\n"
         "Ctrl+W    - Toggle word wrap\n\n"
         "Mouse Controls:\n\n"
-        "Click     - Select/activate\n"
+        "Click      - Select/activate\n"
         "Drag title - Move window\n"
         "Drag border - Resize window\n"
         "Dbl-click title - Maximize\n"
-        "[─]       - Minimize\n"
-        "[□]       - Maximize/restore\n"
+        "[_]       - Minimize\n"
+        "[#]       - Maximize/restore\n"
         "Scroll    - Scroll/select"
     )
 
@@ -76,15 +76,16 @@ def build_help_message() -> str:
 def build_settings_content() -> list[str]:
     """Build placeholder settings panel text."""
     return [
-        " ╔═ Display Settings ══════════════════════╗",
-        " ║                                         ║",
-        " ║  Theme: [x] Windows 3.1                 ║",
-        " ║         [ ] DOS / CGA                   ║",
-        " ║         [ ] Windows 95                  ║",
-        " ║                                         ║",
-        " ║  Desktop Pattern: ░ ▒ ▓                 ║",
-        " ║                                         ║",
-        " ║  Colors: 256-color mode                 ║",
-        " ║                                         ║",
-        " ╚═════════════════════════════════════════╝",
+        " +-- Display Settings ------------------+",
+        " |                                      |",
+        " |  Theme: [x] Windows 3.1              |",
+        " |         [ ] DOS / CGA                |",
+        " |         [ ] Windows 95               |",
+        " |                                      |",
+        " |  Desktop Pattern: . : *              |",
+        " |                                      |",
+        " |  Colors: 256-color mode              |",
+        " |                                      |",
+        " +--------------------------------------+",
     ]
+

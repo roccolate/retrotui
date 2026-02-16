@@ -21,6 +21,7 @@ class ActionType(str, Enum):
     REQUEST_MOVE_BETWEEN_PANES = "request_move_between_panes"
     REQUEST_NEW_DIR = "request_new_dir"
     REQUEST_NEW_FILE = "request_new_file"
+    REQUEST_KILL_CONFIRM = "request_kill_confirm"
     SAVE_ERROR = "save_error"
     ERROR = "error"
 
@@ -37,6 +38,9 @@ class AppAction(str, Enum):
     TERMINAL = "terminal"
     SETTINGS = "settings"
     CALCULATOR = "calculator"
+    LOG_VIEWER = "log_viewer"
+    PROCESS_MANAGER = "process_manager"
+    CLOCK_CALENDAR = "clock_calendar"
     NEW_WINDOW = "new_window"
     CLOSE_WINDOW = "close"
     NP_NEW = "np_new"

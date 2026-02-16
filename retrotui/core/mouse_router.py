@@ -2,6 +2,7 @@
 
 import curses
 import inspect
+import time
 
 
 def _invoke_mouse_handler(handler, mx, my, bstate):
@@ -93,6 +94,39 @@ def _dispatch_drop(app, target, payload):
         dispatcher = getattr(app, '_dispatch_window_result', None)
         if callable(dispatcher):
             dispatcher(result, target)
+
+
+def _is_button1_click_event(bstate):
+    """Return True for discrete button-1 click-like events (not motion reports)."""
+    report_flag = getattr(curses, 'REPORT_MOUSE_POSITION', 0)
+    if bstate & report_flag:
+        return False
+    return bool(
+        bstate
+        & (
+            getattr(curses, 'BUTTON1_CLICKED', 0)
+            | getattr(curses, 'BUTTON1_PRESSED', 0)
+            | getattr(curses, 'BUTTON1_RELEASED', 0)
+        )
+    )
+
+
+def _is_desktop_double_click(app, icon_idx, bstate):
+    """Detect double-click for desktop icons with a time-based fallback."""
+    if bstate & getattr(curses, 'BUTTON1_DOUBLE_CLICKED', 0):
+        return True
+
+    if not _is_button1_click_event(bstate):
+        return False
+
+    now = time.monotonic()
+    last_idx = getattr(app, '_last_icon_click_idx', None)
+    last_ts = float(getattr(app, '_last_icon_click_ts', 0.0) or 0.0)
+    interval = float(getattr(app, 'double_click_interval', 0.35) or 0.35)
+    is_double = (last_idx == icon_idx) and ((now - last_ts) <= interval)
+    setattr(app, '_last_icon_click_idx', icon_idx)
+    setattr(app, '_last_icon_click_ts', now)
+    return is_double
 
 
 def handle_file_drag_drop_mouse(app, mx, my, bstate):
@@ -285,17 +319,18 @@ def handle_window_mouse(app, mx, my, bstate):
 
 def handle_desktop_mouse(app, mx, my, bstate):
     """Handle desktop icon interactions and deselection."""
-    if bstate & curses.BUTTON1_DOUBLE_CLICKED:
-        icon_idx = app.get_icon_at(mx, my)
-        if icon_idx >= 0:
-            app.execute_action(app.icons[icon_idx]['action'])
-            return True
+    icon_idx = app.get_icon_at(mx, my)
+    if icon_idx >= 0 and _is_desktop_double_click(app, icon_idx, bstate):
+        setattr(app, '_last_icon_click_idx', None)
+        setattr(app, '_last_icon_click_ts', 0.0)
+        app.execute_action(app.icons[icon_idx]['action'])
+        return True
 
-    if bstate & (curses.BUTTON1_CLICKED | curses.BUTTON1_PRESSED):
-        icon_idx = app.get_icon_at(mx, my)
-        if icon_idx >= 0:
-            app.selected_icon = icon_idx
-            return True
+    if icon_idx >= 0 and _is_button1_click_event(bstate):
+        app.selected_icon = icon_idx
+        return True
+    if icon_idx >= 0 and (bstate & getattr(curses, 'REPORT_MOUSE_POSITION', 0)):
+        return True
 
     app.selected_icon = -1
     app.menu.active = False

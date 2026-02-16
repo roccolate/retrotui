@@ -39,7 +39,13 @@ def enable_mouse_support():
         | curses.BUTTON1_PRESSED
         | curses.BUTTON1_DOUBLE_CLICKED
     )
-    stop_drag_flags = click_flags | curses.BUTTON1_RELEASED
+    # End drag/resize on release-like events, not on BUTTON1_PRESSED.
+    # This keeps TTY/GPM drag streams working where motion is reported with PRESSED.
+    stop_drag_flags = (
+        curses.BUTTON1_RELEASED
+        | curses.BUTTON1_CLICKED
+        | curses.BUTTON1_DOUBLE_CLICKED
+    )
     scroll_down_mask = getattr(curses, 'BUTTON5_PRESSED', 0x200000)
 
     # Use 1002 (button-event tracking) + 1006 (SGR coordinates)

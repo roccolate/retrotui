@@ -2,7 +2,7 @@
 
 **Objetivo:** Un entorno de escritorio estilo Windows 3.1 completamente funcional para la terminal Linux. Sin X11. Sin Wayland. Solo curses, una TTY y vibes.
 
-**Estado actual:** v0.6.0 (febrero 2026)
+**Estado actual:** v0.6.0 estable + v0.7 utilitarias implementadas en rama principal (febrero 2026)
 
 ---
 
@@ -91,7 +91,7 @@ La release que hace RetroTUI usable como shell diario.
 - [x] Workflow de release automatizado en GitHub Actions (`.github/workflows/release.yml`) con validacion de tag/version y build de artifacts
 - [x] Reporte de cobertura por modulo con stdlib `trace` (`tools/report_module_coverage.py`) y opcion en QA
 - [x] Umbral de cobertura por modulo en CI elevado a `--module-coverage-fail-under 100.0` (lane gradual en `ubuntu-latest` + Python `3.12`)
-- [x] Baseline actual de calidad: `458 tests` en QA y cobertura total por modulo `100.0%`
+- [x] Baseline actual de calidad: `484 tests` en QA y cobertura total por modulo `100.0%`
 
 ---
 ### v0.5 — Temas y Configuración
@@ -147,20 +147,21 @@ Hacer que las apps se sientan como un entorno integrado.
 ### v0.7 — Aplicaciones Utilitarias
 
 Las apps que hacen que la gente quiera quedarse en RetroTUI.
+Estado: checklist completado en codigo; pendiente empaquetado/release formal.
 
 **Log Viewer**
-- [ ] Modo tail (`tail -f` equivalente) con auto-scroll
-- [ ] Color highlighting: rojo ERROR, amarillo WARN, verde INFO
-- [ ] Búsqueda con `/` (estilo vim)
-- [ ] Abrir desde File Manager o por ruta desde diálogo
-- [ ] Congelar/reanudar scroll
+- [x] Modo tail (`tail -f` equivalente) con auto-scroll
+- [x] Color highlighting: rojo ERROR, amarillo WARN, verde INFO
+- [x] Búsqueda con `/` (estilo vim)
+- [x] Abrir desde File Manager o por ruta desde diálogo
+- [x] Congelar/reanudar scroll
 
 **Process Manager**
-- [ ] Lista de tareas actualizada en vivo desde `/proc`
-- [ ] CPU %, memoria, PID, nombre de comando
-- [ ] Ordenar por columna (CPU, MEM, PID)
-- [ ] Kill proceso con diálogo de confirmación
-- [ ] Barra de resumen (uptime, load average, memoria total/usada)
+- [x] Lista de tareas actualizada en vivo desde `/proc`
+- [x] CPU %, memoria, PID, nombre de comando
+- [x] Ordenar por columna (CPU, MEM, PID)
+- [x] Kill proceso con diálogo de confirmación
+- [x] Barra de resumen (uptime, load average, memoria total/usada)
 
 **Calculadora**
 - [x] Evaluador de expresiones usando `ast` de Python (eval seguro)
@@ -168,10 +169,10 @@ Las apps que hacen que la gente quiera quedarse en RetroTUI.
 - [x] Ventana pequeña de tamaño fijo, opción always-on-top
 
 **Reloj/Calendario**
-- [ ] Widget pequeño mostrando hora + fecha
-- [ ] Calendario ASCII del mes actual
-- [ ] Toggle always-on-top
-- [ ] Chime opcional en punto (terminal bell)
+- [x] Widget pequeño mostrando hora + fecha
+- [x] Calendario ASCII del mes actual
+- [x] Toggle always-on-top
+- [x] Chime opcional en punto (terminal bell)
 
 ---
 
