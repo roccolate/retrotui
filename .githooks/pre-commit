@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+set -uo pipefail
+
+echo "[pre-commit] Running quality checks..."
+
+run_qa() {
+  "$@" tools/qa.py
+}
+
+if command -v py >/dev/null 2>&1 && py -3 -c "import sys" >/dev/null 2>&1; then
+  run_qa py -3
+  exit $?
+fi
+
+if command -v python3 >/dev/null 2>&1 && python3 -c "import sys" >/dev/null 2>&1; then
+  run_qa python3
+  exit $?
+fi
+
+if command -v python >/dev/null 2>&1 && python -c "import sys" >/dev/null 2>&1; then
+  run_qa python
+  exit $?
+fi
+
+echo "[pre-commit] Python runtime not available. Skipping checks."
+exit 0

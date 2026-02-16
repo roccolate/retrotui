@@ -1,0 +1,332 @@
+import importlib
+import sys
+import types
+import unittest
+from unittest import mock
+
+
+def _install_fake_curses():
+    fake = types.ModuleType("curses")
+    fake.KEY_LEFT = 260
+    fake.KEY_RIGHT = 261
+    fake.KEY_UP = 259
+    fake.KEY_DOWN = 258
+    fake.KEY_ENTER = 343
+    fake.KEY_HOME = 262
+    fake.KEY_END = 360
+    fake.KEY_PPAGE = 339
+    fake.KEY_NPAGE = 338
+    fake.KEY_BACKSPACE = 263
+    fake.KEY_DC = 330
+    fake.A_BOLD = 1
+    fake.A_REVERSE = 2
+    fake.A_DIM = 4
+    fake.COLOR_WHITE = 7
+    fake.COLOR_BLUE = 4
+    fake.COLOR_BLACK = 0
+    fake.COLOR_CYAN = 6
+    fake.COLOR_YELLOW = 3
+    fake.COLORS = 256
+    fake.error = Exception
+    fake.color_pair = lambda _: 0
+    fake.can_change_color = lambda: False
+    fake.start_color = lambda: None
+    fake.use_default_colors = lambda: None
+    fake.init_color = lambda *_: None
+    fake.init_pair = lambda *_: None
+    return fake
+
+
+class _DummyDialog:
+    def __init__(self, title, message, buttons, width=None):
+        self.title = title
+        self.message = message
+        self.buttons = buttons
+        self.width = width
+
+
+class _DummyWindow:
+    _next_id = 99
+
+    def __init__(self, title, x, y, w, h, content=None):
+        self.title = title
+        self.x = x
+        self.y = y
+        self.w = w
+        self.h = h
+        self.content = content
+
+
+class _DummyFMWindow:
+    def __init__(self, x, y, w, h):
+        self.kind = "fm"
+        self.x = x
+        self.y = y
+        self.w = w
+        self.h = h
+
+
+class _DummyNotepadWindow:
+    def __init__(self, x, y, w, h):
+        self.kind = "np"
+        self.x = x
+        self.y = y
+        self.w = w
+        self.h = h
+
+
+class ActionRunnerTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls._prev_curses = sys.modules.get("curses")
+        sys.modules["curses"] = _install_fake_curses()
+
+        for mod_name in (
+            "retrotui.constants",
+            "retrotui.utils",
+            "retrotui.ui.menu",
+            "retrotui.ui.dialog",
+            "retrotui.ui.window",
+            "retrotui.apps.notepad",
+            "retrotui.apps.filemanager",
+            "retrotui.core.actions",
+            "retrotui.core.content",
+            "retrotui.core.action_runner",
+        ):
+            sys.modules.pop(mod_name, None)
+
+        cls.actions_mod = importlib.import_module("retrotui.core.actions")
+        cls.action_runner = importlib.import_module("retrotui.core.action_runner")
+
+    @classmethod
+    def tearDownClass(cls):
+        for mod_name in (
+            "retrotui.constants",
+            "retrotui.utils",
+            "retrotui.ui.menu",
+            "retrotui.ui.dialog",
+            "retrotui.ui.window",
+            "retrotui.apps.notepad",
+            "retrotui.apps.filemanager",
+            "retrotui.core.actions",
+            "retrotui.core.content",
+            "retrotui.core.action_runner",
+        ):
+            sys.modules.pop(mod_name, None)
+
+        if cls._prev_curses is not None:
+            sys.modules["curses"] = cls._prev_curses
+        else:
+            sys.modules.pop("curses", None)
+
+    def _make_app(self):
+        return types.SimpleNamespace(
+            dialog=None,
+            _next_window_offset=mock.Mock(return_value=(12, 7)),
+            _spawn_window=mock.Mock(),
+        )
+
+    def test_execute_exit_action_opens_confirmation_dialog(self):
+        app = self._make_app()
+        logger = mock.Mock()
+
+        with mock.patch.object(self.action_runner, "Dialog", _DummyDialog):
+            self.action_runner.execute_app_action(
+                app,
+                self.actions_mod.AppAction.EXIT,
+                logger,
+                version="0.3.4",
+            )
+
+        self.assertIsNotNone(app.dialog)
+        self.assertEqual(app.dialog.title, "Exit RetroTUI")
+        self.assertEqual(app.dialog.buttons, ["Yes", "No"])
+
+    def test_execute_about_action_uses_versioned_about_message(self):
+        app = self._make_app()
+        logger = mock.Mock()
+
+        with (
+            mock.patch.object(self.action_runner, "Dialog", _DummyDialog),
+            mock.patch.object(self.action_runner, "build_about_message", return_value="about vX") as about_builder,
+        ):
+            self.action_runner.execute_app_action(
+                app,
+                self.actions_mod.AppAction.ABOUT,
+                logger,
+                version="0.3.4",
+            )
+
+        about_builder.assert_called_once_with("0.3.4")
+        self.assertEqual(app.dialog.title, "About RetroTUI")
+        self.assertIn("about vX", app.dialog.message)
+
+    def test_execute_help_action_uses_help_builder(self):
+        app = self._make_app()
+        logger = mock.Mock()
+
+        with (
+            mock.patch.object(self.action_runner, "Dialog", _DummyDialog),
+            mock.patch.object(self.action_runner, "build_help_message", return_value="help body") as builder,
+        ):
+            self.action_runner.execute_app_action(
+                app,
+                self.actions_mod.AppAction.HELP,
+                logger,
+                version="0.3.4",
+            )
+
+        builder.assert_called_once_with()
+        self.assertEqual(app.dialog.title, "Keyboard & Mouse Help")
+        self.assertEqual(app.dialog.buttons, ["OK"])
+        self.assertIn("help body", app.dialog.message)
+
+    def test_execute_ascii_video_action_opens_info_dialog(self):
+        app = self._make_app()
+        logger = mock.Mock()
+
+        with mock.patch.object(self.action_runner, "Dialog", _DummyDialog):
+            self.action_runner.execute_app_action(
+                app,
+                self.actions_mod.AppAction.ASCII_VIDEO,
+                logger,
+                version="0.3.4",
+            )
+
+        self.assertEqual(app.dialog.title, "ASCII Video")
+        self.assertIn("mpv", app.dialog.message)
+        self.assertEqual(app.dialog.buttons, ["OK"])
+
+    def test_execute_file_manager_spawns_window_with_offset(self):
+        app = self._make_app()
+        logger = mock.Mock()
+
+        with mock.patch.object(self.action_runner, "FileManagerWindow", _DummyFMWindow):
+            self.action_runner.execute_app_action(
+                app,
+                self.actions_mod.AppAction.FILE_MANAGER,
+                logger,
+                version="0.3.4",
+            )
+
+        app._next_window_offset.assert_called_once_with(15, 3)
+        app._spawn_window.assert_called_once()
+        spawned = app._spawn_window.call_args.args[0]
+        self.assertEqual(spawned.kind, "fm")
+        self.assertEqual((spawned.x, spawned.y, spawned.w, spawned.h), (12, 7, 58, 22))
+
+    def test_execute_notepad_spawns_window_with_offset(self):
+        app = self._make_app()
+        logger = mock.Mock()
+
+        with mock.patch.object(self.action_runner, "NotepadWindow", _DummyNotepadWindow):
+            self.action_runner.execute_app_action(
+                app,
+                self.actions_mod.AppAction.NOTEPAD,
+                logger,
+                version="0.3.4",
+            )
+
+        app._next_window_offset.assert_called_once_with(20, 4)
+        spawned = app._spawn_window.call_args.args[0]
+        self.assertEqual(spawned.kind, "np")
+        self.assertEqual((spawned.x, spawned.y, spawned.w, spawned.h), (12, 7, 60, 20))
+
+    def test_execute_terminal_uses_uname_host(self):
+        app = self._make_app()
+        logger = mock.Mock()
+
+        with (
+            mock.patch.object(self.action_runner, "Window", _DummyWindow),
+            mock.patch.object(
+                self.action_runner.os,
+                "uname",
+                return_value=types.SimpleNamespace(nodename="retro-host"),
+                create=True,
+            ),
+        ):
+            self.action_runner.execute_app_action(
+                app,
+                self.actions_mod.AppAction.TERMINAL,
+                logger,
+                version="0.3.4",
+            )
+
+        app._next_window_offset.assert_called_once_with(18, 5)
+        spawned = app._spawn_window.call_args.args[0]
+        self.assertEqual(spawned.title, "Terminal")
+        self.assertTrue(any("user@retro-host" in line for line in spawned.content))
+
+    def test_execute_terminal_falls_back_to_hostname_env(self):
+        app = self._make_app()
+        logger = mock.Mock()
+
+        with (
+            mock.patch.object(self.action_runner, "Window", _DummyWindow),
+            mock.patch.object(self.action_runner.os, "uname", side_effect=OSError("no uname"), create=True),
+            mock.patch.dict(self.action_runner.os.environ, {"HOSTNAME": "fallback-host"}, clear=False),
+        ):
+            self.action_runner.execute_app_action(
+                app,
+                self.actions_mod.AppAction.TERMINAL,
+                logger,
+                version="0.3.4",
+            )
+
+        spawned = app._spawn_window.call_args.args[0]
+        self.assertTrue(any("user@fallback-host" in line for line in spawned.content))
+
+    def test_execute_settings_builds_content_and_spawns_window(self):
+        app = self._make_app()
+        logger = mock.Mock()
+
+        with (
+            mock.patch.object(self.action_runner, "Window", _DummyWindow),
+            mock.patch.object(self.action_runner, "build_settings_content", return_value=["settings"]) as builder,
+        ):
+            self.action_runner.execute_app_action(
+                app,
+                self.actions_mod.AppAction.SETTINGS,
+                logger,
+                version="0.3.4",
+            )
+
+        builder.assert_called_once_with()
+        app._next_window_offset.assert_called_once_with(22, 4)
+        spawned = app._spawn_window.call_args.args[0]
+        self.assertEqual(spawned.title, "Settings")
+        self.assertEqual(spawned.content, ["settings"])
+
+    def test_execute_new_window_uses_incremental_title(self):
+        app = self._make_app()
+        logger = mock.Mock()
+
+        with mock.patch.object(self.action_runner, "Window", _DummyWindow):
+            self.action_runner.execute_app_action(
+                app,
+                self.actions_mod.AppAction.NEW_WINDOW,
+                logger,
+                version="0.3.4",
+            )
+
+        app._next_window_offset.assert_called_once_with(20, 3)
+        spawned = app._spawn_window.call_args.args[0]
+        self.assertEqual(spawned.title, "Window 99")
+        self.assertEqual(spawned.content, ["", " New empty window", ""])
+
+    def test_execute_unknown_action_logs_warning(self):
+        app = self._make_app()
+        logger = mock.Mock()
+
+        self.action_runner.execute_app_action(
+            app,
+            "unknown",
+            logger,
+            version="0.3.4",
+        )
+
+        logger.warning.assert_called_once_with("Unknown action received: %s", "unknown")
+
+
+if __name__ == "__main__":
+    unittest.main()

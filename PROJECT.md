@@ -111,7 +111,7 @@ código de la aplicación no necesita distinguirlos.
 
 ### Mínimos:
 - Ubuntu Server / minimal (sin GUI)
-- Python 3.8+
+- Python 3.9+
 - ncurses (incluido en Python stdlib como `curses`)
 - Terminal con soporte de al menos 80x25 caracteres
 - GPM (para mouse en TTY) o emulador de terminal con xterm mouse
@@ -190,15 +190,58 @@ código de la aplicación no necesita distinguirlos.
 - [x] Manejo de errores: mplayer no instalado, error de ejecución
 - [x] Restauración correcta de curses después de reproducción
 
+## 4.5 Características de v0.3.3 — Modularización y Hardening
+
+- [x] Refactor del monolito a paquete Python (`retrotui/core`, `retrotui/ui`, `retrotui/apps`)
+- [x] Contrato tipado de acciones (`ActionType` / `ActionResult`) en el dispatcher principal
+- [x] Unificación de menús (`Menu` + `WindowMenu`) en `MenuBar`
+- [x] Descomposición de `handle_mouse()` y `handle_key()` en helpers de routing
+- [x] Correcciones de guardado Save/Save As y errores de `InputDialog`
+- [x] Bootstrap de packaging con `pyproject.toml` y entrypoint `retrotui`
+- [x] Tests smoke iniciales para rutas no-curses (`tests/`)
+
+## 4.6 Características de v0.3.4 — Release de Mantenimiento
+
+- [x] Bump de versión global a `0.3.4` (runtime + packaging)
+- [x] Sincronización de versión visible en UI (welcome/status/about)
+- [x] Documentación y preview alineados con el estado actual del proyecto
+
+- [x] Pipeline de input migrado a `get_wch()` con normalizacion centralizada (`normalize_key_code`)
+- [x] Soporte consistente de entrada `str`/`int` en Dialog, Notepad y File Manager
+- [x] Notepad actualizado a lectura/escritura UTF-8 y tests para rutas de teclado Unicode
+- [x] Split de routing de input a modulos dedicados (`retrotui/core/mouse_router.py`, `retrotui/core/key_router.py`)
+- [x] Split del loop principal a `retrotui/core/event_loop.py` con `RetroTUI.run()` como wrapper
+- [x] Split de bootstrap de terminal/mouse a `retrotui/core/bootstrap.py`
+- [x] Cobertura unitaria directa para modulos core extraidos (`action_runner`, `key_router`, `mouse_router`, `rendering`, `event_loop`, `bootstrap`)
+- [x] Politica de release/tagging + check automatizado de version sync en QA
+- [x] Workflow de release automatizado en GitHub Actions (`.github/workflows/release.yml`) + validador de tag/version (`tools/check_release_tag.py`)
+- [x] Reporte de cobertura por modulo y soporte QA opcional (`tools/report_module_coverage.py`, `tools/qa.py --module-coverage`)
+- [x] Umbral de cobertura por modulo en CI (`--module-coverage-fail-under 70.0`) con adopcion gradual en `ubuntu-latest` + Python `3.12`
+
+## 4.7 Características de v0.3.5 — Debt Hardening Incremental
+
+- [x] Bump de versión global a `0.3.5` (runtime + packaging + setup script).
+- [x] Gate gradual de cobertura por modulo elevado en CI a `70.0` (lane `ubuntu-latest` + Python `3.12`).
+- [x] Baseline de calidad actualizado: `190 tests` en QA y cobertura total por modulo `78.4%`.
+- [x] Sincronización de documentación de release/deuda para reflejar el nuevo baseline de calidad.
+
+## 4.8 Caracteristicas de v0.3.6 - Version Sync
+
+- [x] Bump de version global a `0.3.6` (runtime + packaging + setup script).
+- [x] Sincronizacion de tests/documentacion para reflejar `v0.3.6`.
+- [x] Gate gradual de cobertura por modulo elevado en CI a `100.0` (lane `ubuntu-latest` + Python `3.12`).
+- [x] Baseline de calidad actualizado: `299 tests` en QA y cobertura total por modulo `100.0%`.
+
 ### Roadmap futuro:
 - [x] File Manager con navegación de directorios
 - [x] Editor de texto integrado
 - [x] Barras de menú por ventana
 - [x] ASCII Video Player
+- [x] Modularización base del proyecto
 - [ ] Terminal embebida
 - [ ] Temas configurables (CGA, EGA, VGA, Win3.1, Win95)
 - [ ] Task switcher (Alt+Tab)
-- [ ] Configuración persistente (~/.retrotui/config.json)
+- [ ] Configuración persistente (`~/.config/retrotui/config.toml`)
 
 ---
 
@@ -253,5 +296,6 @@ sudo systemctl start gpm
 
 # Ejecutar
 cd retro-tui
-python3 retrotui.py
+python3 -m retrotui
 ```
+

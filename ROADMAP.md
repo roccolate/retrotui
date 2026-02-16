@@ -2,7 +2,7 @@
 
 **Objetivo:** Un entorno de escritorio estilo Windows 3.1 completamente funcional para la terminal Linux. Sin X11. Sin Wayland. Solo curses, una TTY y vibes.
 
-**Estado actual:** v0.3.2 (febrero 2026)
+**Estado actual:** v0.3.6 (febrero 2026)
 
 ---
 
@@ -44,26 +44,55 @@ La release que hace RetroTUI usable como shell diario.
 - [ ] Detección de shell del usuario (`$SHELL` o fallback a `/bin/sh`)
 
 **Refactor: Unificación de Menús**
-- [ ] Fusionar `Menu` y `WindowMenu` en una sola clase `MenuBar` con coordenadas configurables
-- [ ] Mover lógica de teclado del menú global inline a `MenuBar.handle_key()`
-- [ ] Eliminar código duplicado de hover/click/draw
+- [x] Fusionar `Menu` y `WindowMenu` en una sola clase `MenuBar` con coordenadas configurables
+- [x] Mover lógica de teclado del menú global inline a `MenuBar.handle_key()`
+- [x] Eliminar código duplicado de hover/click/draw
 
 **Refactor: Descomposición de Mouse Handler**
-- [ ] Dividir `handle_mouse()` (~150 líneas) en métodos enfocados: `_mouse_dialog()`, `_mouse_menu()`, `_mouse_drag()`, `_mouse_resize()`, `_mouse_window_buttons()`, `_mouse_body()`, `_mouse_desktop()`
-- [ ] Formalizar orden de routing de eventos como pipeline claro
+- [x] Dividir `handle_mouse()` en métodos auxiliares para routing por etapas
+- [x] Formalizar orden de routing de eventos como pipeline claro
+- [x] Extraer routing de mouse a `retrotui/core/mouse_router.py` para desacoplar `retrotui/core/app.py`
+
+**Refactor: Descomposición de Keyboard Handler**
+- [x] Extraer routing de teclado a `retrotui/core/key_router.py`
+- [x] Mantener compatibilidad de contratos internos (`_handle_*`) delegando desde `RetroTUI`
+
+**Refactor: Descomposición de Rendering**
+- [x] Extraer render de desktop/iconos/taskbar/statusbar a `retrotui/core/rendering.py`
+- [x] Mantener API publica de `RetroTUI` con wrappers (`draw_*`) para compatibilidad
+
+**Refactor: Descomposición de Event Loop**
+- [x] Extraer ciclo principal de ejecucion a `retrotui/core/event_loop.py`
+- [x] Mantener `RetroTUI.run()` como wrapper estable hacia `run_app_loop()`
+
+**Refactor: Bootstrap de Terminal**
+- [x] Extraer inicializacion/restauracion de terminal a `retrotui/core/bootstrap.py`
+- [x] Centralizar configuracion de mouse tracking y flow control (`XON/XOFF`)
 
 **Refactor: Protocolo de Ventana**
-- [ ] Definir métodos base en Window: `handle_key()`, `handle_click()`, `handle_scroll()`
-- [ ] Eliminar chequeos duck-typing con `hasattr()`
-- [ ] Implementaciones default en Window (scroll contenido) para que subclases solo overrideen lo necesario
+- [x] Definir métodos base en Window: `handle_key()`, `handle_click()`, `handle_scroll()`
+- [x] Eliminar chequeos duck-typing con `hasattr()` en routing de ventanas
+- [x] Implementaciones default en Window (scroll contenido) para que subclases solo overrideen lo necesario
 
 **Calidad**
-- [ ] Guard contra loop infinito en menús con solo separadores
-- [ ] Verificación de tamaño mínimo de terminal al iniciar
-- [ ] Fix emojis en FileEntry para respetar `check_unicode_support()`
+- [x] Guard contra loop infinito en menus con solo separadores
+- [x] Verificacion de tamano minimo de terminal al iniciar
+- [x] Fix emojis en FileEntry para respetar `check_unicode_support()`
+- [x] Pipeline de teclado consolidado para `get_wch()` con normalizacion de teclas compartida
+- [x] Compatibilidad Unicode en input de Dialog/Notepad/File Manager y guardado UTF-8 en Notepad
+- [x] Automatizacion de QA en CI/pre-commit (UTF-8, compileall, unittest) con matriz Linux/Windows
+- [x] Politica de archivos de texto (UTF-8 + EOL LF) via `.editorconfig` y `.gitattributes`
+- [x] Tests unitarios directos para modulos extraidos `core/event_loop.py` y `core/bootstrap.py`
+- [x] Tests unitarios directos para `core/key_router.py`, `core/mouse_router.py`, `core/rendering.py` y `core/action_runner.py`
+- [x] Politica de release/tagging documentada (`RELEASE.md`)
+- [x] Verificacion automatica de version sync en QA (`pyproject.toml` vs `retrotui/core/app.py`)
+- [x] Tests de manejo de errores de file I/O para Notepad/File Manager (PermissionError)
+- [x] Workflow de release automatizado en GitHub Actions (`.github/workflows/release.yml`) con validacion de tag/version y build de artifacts
+- [x] Reporte de cobertura por modulo con stdlib `trace` (`tools/report_module_coverage.py`) y opcion en QA
+- [x] Umbral de cobertura por modulo en CI elevado a `--module-coverage-fail-under 100.0` (lane gradual en `ubuntu-latest` + Python `3.12`)
+- [x] Baseline actual de calidad: `299 tests` en QA y cobertura total por modulo `100.0%`
 
 ---
-
 ### v0.5 — Temas y Configuración
 
 Personalidad y persistencia.
@@ -108,9 +137,9 @@ Hacer que las apps se sientan como un entorno integrado.
 - [ ] Feedback visual durante drag (highlight drop targets)
 
 **Limpieza del Sistema de Acciones**
-- [ ] Reemplazar magic strings (`'filemanager'`, `'np_save'`, etc.) con enum `Action`
-- [ ] Formalizar protocolo de retorno con dataclass: `ActionResult(type, payload)`
-- [ ] Dispatcher centralizado de acciones con logging para debug
+- [x] Reemplazar magic strings (`'filemanager'`, `'np_save'`, etc.) con enum `Action`
+- [x] Formalizar protocolo de retorno con dataclass: `ActionResult(type, payload)`
+- [x] Dispatcher centralizado de acciones con logging para debug
 
 ---
 
@@ -200,20 +229,20 @@ Extender lo que se puede hacer sin salir del escritorio.
 Calidad de release.
 
 **Empaquetado**
-- [ ] `pyproject.toml` con entry point de consola (comando `retrotui`)
-- [ ] `pip install retrotui`
+- [x] `pyproject.toml` con entry point de consola (comando `retrotui`)
+- [ ] Publicación en PyPI para `pip install retrotui`
 - [ ] Paquete `.deb` para Ubuntu/Debian
 - [ ] Paquete AUR para Arch
 - [ ] Opción auto-start: agregar a `.bash_profile` como reemplazo de login shell
 
 **Modularización**
-- [ ] Separar monolito en paquete Python:
+- [x] Separar monolito base en paquete Python:
   - `retrotui/core/` — event loop, window manager
-  - `retrotui/apps/` — filemanager, notepad, terminal...
-  - `retrotui/widgets/` — botones, menús, inputs, scrollbars
-  - `retrotui/themes/` — motor de temas y temas built-in
-- [ ] Cada app como módulo autocontenido
-- [ ] API interna limpia para comunicación window manager ↔ app
+  - `retrotui/apps/` — filemanager, notepad
+  - `retrotui/ui/` — ventanas, menús y diálogos
+- [ ] Completar separación adicional en `widgets/` reutilizables y `themes/` dedicados
+- [x] Cada app principal como módulo autocontenido
+- [x] API interna limpia para comunicación window manager ↔ app (`ActionResult` / `AppAction`)
 
 **Sistema de Plugins**
 - [ ] Directorio `~/.config/retrotui/plugins/`
@@ -248,4 +277,5 @@ Estas ideas no tienen versión asignada y se considerarán después de v1.0:
 
 ---
 
-*Última actualización: febrero 2026*
+*Última actualización: 16 de febrero de 2026*
+
