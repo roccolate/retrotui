@@ -280,6 +280,26 @@ class TerminalWindow(Window):
             ch = '█' if i == thumb_pos else '░'
             safe_addstr(stdscr, y + i, x, ch, curses.color_pair(C_SCROLLBAR))
 
+    def _draw_live_cursor(self, stdscr, x, y, text_cols, text_rows, start_idx, total_lines, body_attr):
+        """Draw a visual cursor on the current editable line when in LIVE mode."""
+        if not self.active or self.scrollback_offset != 0:
+            return
+        if total_lines <= 0:
+            return
+
+        cursor_line_idx = total_lines - 1
+        if not (start_idx <= cursor_line_idx < start_idx + text_rows):
+            return
+
+        row = y + (cursor_line_idx - start_idx)
+        col = max(0, self._cursor_col)
+        if col >= text_cols:
+            col = text_cols - 1
+
+        line_text = ''.join(self._line_chars)
+        ch = line_text[col] if col < len(line_text) else ' '
+        safe_addstr(stdscr, row, x + col, ch, body_attr | curses.A_REVERSE)
+
     def draw(self, stdscr):
         """Draw terminal body, live output, scrollback and status line."""
         if not self.visible:
@@ -306,6 +326,7 @@ class TerminalWindow(Window):
         for i, line in enumerate(visible):
             safe_addstr(stdscr, by + i, bx, self._fit_line(line, text_cols), body_attr)
 
+        self._draw_live_cursor(stdscr, bx, by, text_cols, text_rows, start_idx, total_lines, body_attr)
         self._draw_scrollback_bar(stdscr, bx + text_cols, by, text_rows, start_idx, total_lines)
 
         if self._session_error:
