@@ -4,6 +4,9 @@ on:
   push:
   pull_request:
 
+env:
+  MODULE_COVERAGE_FAIL_UNDER: "100.0"
+
 jobs:
   quality:
     runs-on: ${{ matrix.os }}
@@ -28,4 +31,10 @@ jobs:
           python -m pip install -e .
 
       - name: Run quality checks
+        if: ${{ !(matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12') }}
         run: python tools/qa.py
+
+      - name: Run quality checks + module coverage gate
+        if: ${{ matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12' }}
+        run: |
+          python tools/qa.py --module-coverage --module-coverage-top 10 --module-coverage-fail-under ${{ env.MODULE_COVERAGE_FAIL_UNDER }}

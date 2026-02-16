@@ -10,3 +10,6 @@ env/
 # OS/editor noise
 .DS_Store
 Thumbs.db
+
+# Local test scratch files
+tests/_tmp_*

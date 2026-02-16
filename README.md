@@ -16,7 +16,7 @@
 ║░░ 💻 ░░░░║  📄 config.json           512B      ║░░░░░░░░░░║
 ║░Terminal░╚══════════════════════════════════════╝░░░░░░░░░░║
 ║░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░║
-║ RetroTUI v0.3.4│ Windows: 1/1 │ Mouse: Enabled │ Ctrl+Q: Exit║
+║ RetroTUI v0.3.6│ Windows: 1/1 │ Mouse: Enabled │ Ctrl+Q: Exit║
 ╚══════════════════════════════════════════════════════════════╝
 ```
 
@@ -43,15 +43,26 @@ python3 -m retrotui
 ## Calidad de desarrollo
 
 ```bash
-# Ejecuta validaciones de encoding + compile + tests
+# Ejecuta validaciones de encoding + compile + version sync + tests
 python tools/qa.py
+
+# Reporte opcional de cobertura por modulo (muestra modulos con menor cobertura)
+python tools/qa.py --module-coverage --module-coverage-top 10
+
+# Gate de cobertura total por modulo (umbral actual en CI)
+python tools/qa.py --module-coverage --module-coverage-top 10 --module-coverage-fail-under 100.0
 
 # Activa hook local de pre-commit para correr QA automaticamente
 git config core.hooksPath .githooks
 ```
 
 - CI corre en GitHub Actions para Linux y Windows (Python 3.9 y 3.12).
+- CI aplica `--module-coverage-fail-under 100.0` de forma gradual (solo `ubuntu-latest` + Python `3.12`).
+- Baseline QA actual: `299 tests` en verde y cobertura total por modulo `100.0%` (trace + AST).
 - Politica de formato de texto definida con `.editorconfig` y `.gitattributes`.
+- Politica de release/tagging en `RELEASE.md`.
+- Release CI disponible en `.github/workflows/release.yml` (tag `vX.Y.Z` o dispatch manual).
+- Reporte de cobertura por modulo disponible via `tools/report_module_coverage.py` (stdlib `trace`).
 
 ## Soporte de Mouse sin X11
 
@@ -153,26 +164,39 @@ README.md      — Este archivo
 - **Dialog** — Diálogos modales
 - **ActionResult/AppAction** — Contrato interno tipado para acciones
 - **Action Runner / Content Builders** — ejecución de acciones y contenido estático desacoplados del `core/app.py`
+- **Input Routers** — routing de mouse/teclado aislado en `retrotui/core/mouse_router.py` y `retrotui/core/key_router.py`
+- **Rendering Helpers** — render de desktop/status/taskbar/iconos aislado en `retrotui/core/rendering.py`
+- **Event Loop Helpers** — ciclo principal (`run`) aislado en `retrotui/core/event_loop.py`
+- **Terminal Bootstrap** — setup/cleanup de `curses` y mouse tracking en `retrotui/core/bootstrap.py`
 - **ThemeEngine** — Colores Win3.1 (256-color cuando disponible)
 
 ## Changelog
 
 Ver [CHANGELOG.md](CHANGELOG.md) para el historial completo de versiones.
 
-### Últimos cambios (v0.3.4)
+### Últimos cambios (v0.3.6)
 - **Release de mantenimiento** — sincronización de versión y metadata del proyecto
 - **Documentación/preview actualizados** y normalizados en UTF-8
+- **Core app simplificado** — `handle_mouse` y `handle_key` delegan en routers modulares
+- **Rendering simplificado** — métodos `draw_*` delegados en helper dedicado de `core/rendering.py`
+- **Loop simplificado** — `run()` delega en `core/event_loop.py`
+- **Bootstrap simplificado** — `__init__` y `cleanup` delegan setup de terminal/mouse
+- **Calidad incremental** — gate gradual de cobertura por modulo elevado a `100.0` en CI
 - Se mantienen los hitos de v0.3.x: modularización base, menús por ventana, Notepad y ASCII Video
 
 ## Roadmap
 
-- ~~**v0.1** — Escritorio, ventanas, menú, mouse, iconos~~ ✅
-- ~~**v0.2** — File Manager funcional con navegación~~ ✅
-- ~~**v0.3** — Editor de texto, resize, maximize/minimize~~ ✅
-- **v0.4** — Terminal embebida (vía pty)
-- **v0.5** — Temas (DOS/CGA, Win95, personalizado)
-- **v1.0** — Configuración persistente, plugins
+- ~~**v0.1** - Escritorio, ventanas, menu, mouse, iconos~~
+- ~~**v0.2** - File Manager funcional con navegacion~~
+- ~~**v0.3** - Editor de texto, resize, maximize/minimize~~
+- **v0.4** - Terminal embebida (via pty)
+- **v0.5** - Temas y configuracion
+- **v0.6** - Clipboard y comunicacion inter-app
+- **v0.7** - Apps utilitarias (log viewer, process manager, calculadora)
+- **v0.8** - File Manager avanzado (operaciones, dual-pane, previews)
+- **v0.9** - Media y hex editor
+- **v1.0** - Empaquetado, plugins y documentacion
 
 ## Licencia
-
 MIT
+
