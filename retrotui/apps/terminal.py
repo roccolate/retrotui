@@ -310,6 +310,8 @@ class TerminalWindow(Window):
 
     def _consume_output(self, text):
         """Apply terminal output stream to local scrollback buffer."""
+        prev_total = len(self._all_lines())
+        prev_offset = self.scrollback_offset
         if text:
             self.clear_selection()
         data = self._ansi_pending + (text or '')
@@ -371,6 +373,14 @@ class TerminalWindow(Window):
             idx += 1
 
         self._ansi_pending = data[idx:]
+        # Keep the same viewport while user is reviewing previous output.
+        if prev_offset > 0:
+            new_total = len(self._all_lines())
+            appended = max(0, new_total - prev_total)
+            if appended > 0:
+                _, text_rows = self._text_area_size()
+                max_offset = self._max_scrollback_offset(text_rows)
+                self.scrollback_offset = min(max_offset, prev_offset + appended)
 
     def _all_lines(self):
         """Return all lines including current editable line."""
@@ -633,6 +643,15 @@ class TerminalWindow(Window):
             self._copy_selection()
             return None
 
+        if key_code == getattr(curses, 'KEY_PPAGE', -1):
+            _, text_rows = self._text_area_size()
+            self.handle_scroll('up', max(1, text_rows - 1))
+            return None
+        if key_code == getattr(curses, 'KEY_NPAGE', -1):
+            _, text_rows = self._text_area_size()
+            self.handle_scroll('down', max(1, text_rows - 1))
+            return None
+
         if key_code == 22:
             self._forward_payload(paste_text())
             return None
@@ -656,7 +675,6 @@ class TerminalWindow(Window):
         bx, by, bw, bh = self.body_rect()
         text_cols, text_rows = max(1, bw - 1), max(1, bh - 1)
         if bx <= mx < bx + text_cols and by <= my < by + text_rows:
-            self.scrollback_offset = 0
             if bstate is not None:
                 has_button1 = bool(
                     bstate
