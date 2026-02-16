@@ -19,6 +19,8 @@ def _install_fake_curses():
     fake.KEY_PPAGE = 339
     fake.KEY_NPAGE = 338
     fake.KEY_BACKSPACE = 263
+    fake.KEY_IC = 331
+    fake.KEY_F6 = 270
     fake.A_BOLD = 1
     fake.error = Exception
     fake.color_pair = lambda value: value * 10
@@ -290,19 +292,28 @@ class FileManagerComponentTests(unittest.TestCase):
         finally:
             shutil.rmtree(root, ignore_errors=True)
 
-    def test_handle_key_ctrl_c_copies_selected_entry_path(self):
+    def test_handle_key_copy_shortcut_copies_selected_entry_path(self):
         win = self._make_window()
         win.window_menu.active = False
         win.entries = [self.fm_mod.FileEntry("demo.txt", False, "/tmp/demo.txt", 10)]
         win.selected_index = 0
         with mock.patch.object(self.fm_mod, "copy_text") as copy_text:
-            win.handle_key(3)
+            win.handle_key(self.curses.KEY_F6)
         copy_text.assert_called_once_with("/tmp/demo.txt")
 
-    def test_handle_key_ctrl_c_noop_without_entries(self):
+    def test_handle_key_copy_shortcut_noop_without_entries(self):
         win = self._make_window()
         win.window_menu.active = False
         win.entries = []
+        with mock.patch.object(self.fm_mod, "copy_text") as copy_text:
+            win.handle_key(self.curses.KEY_F6)
+        copy_text.assert_not_called()
+
+    def test_handle_key_ctrl_c_no_longer_triggers_copy(self):
+        win = self._make_window()
+        win.window_menu.active = False
+        win.entries = [self.fm_mod.FileEntry("demo.txt", False, "/tmp/demo.txt", 10)]
+        win.selected_index = 0
         with mock.patch.object(self.fm_mod, "copy_text") as copy_text:
             win.handle_key(3)
         copy_text.assert_not_called()

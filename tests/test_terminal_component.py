@@ -200,6 +200,14 @@ class TerminalComponentTests(unittest.TestCase):
         win._apply_csi("10", "f")
         self.assertEqual(win._cursor_col, 0)
 
+        win._line_chars = list("ABCDE")
+        win._cursor_col = 1
+        win._apply_csi("2", "P")
+        self.assertEqual("".join(win._line_chars), "ADE")
+
+        win._apply_csi("x", "P")
+        self.assertEqual("".join(win._line_chars), "AE")
+
     def test_consume_output_handles_partial_escape_osc_and_two_byte_sequences(self):
         win = self._make_window()
 
@@ -228,6 +236,12 @@ class TerminalComponentTests(unittest.TestCase):
 
         win._consume_output("\x1bcF")
         self.assertEqual("".join(win._line_chars), "ABCDEF")
+
+    def test_consume_output_applies_csi_delete_char_sequence(self):
+        win = self._make_window()
+        win._consume_output("\rABCD\x1b[2D\x1b[P")
+        self.assertEqual("".join(win._line_chars), "ABD")
+        self.assertEqual(win._cursor_col, 2)
 
     def test_ensure_session_supported_and_start_errors(self):
         win = self._make_window()
