@@ -1,47 +1,54 @@
-# Release Policy
+# Política de releases
 
-## Versioning
-- Follow SemVer: `MAJOR.MINOR.PATCH`.
-- Tag format: `vX.Y.Z` (example: `v0.6.0`).
-- Source of truth for runtime/package version:
-  - `pyproject.toml` -> `[project].version`
-  - `retrotui/core/app.py` -> `APP_VERSION`
+## Versionado
 
-## Pre-Release Checklist
-1. Update version in:
+- Seguir SemVer: `MAJOR.MINOR.PATCH`.
+- Formato de tag: `vX.Y.Z` (ejemplo: `v0.6.0`).
+- Fuente de verdad de la versión runtime/paquete:
+  - `pyproject.toml` → `[project].version`
+  - `retrotui/core/app.py` → `APP_VERSION`
+
+## Checklist pre-release
+
+1. Actualizar versión en:
    - `pyproject.toml`
    - `retrotui/core/app.py`
-2. Update release notes/docs:
+   - `retrotui/__init__.py`
+   - `setup.sh` (si aplica)
+2. Actualizar notas/docs:
    - `CHANGELOG.md`
-   - `README.md` (if user-visible changes)
-   - `ROADMAP.md` (if roadmap status changed)
-3. Run quality gate:
+   - `README.md` (si hay cambios visibles)
+   - `ROADMAP.md` (si cambia el estado)
+3. Correr el gate local:
    - `python tools/qa.py`
-4. Ensure CI is green for the release commit.
+4. Confirmar CI en verde para el commit de release.
 
-## Tagging and Push
-1. Commit release changes:
+## Tagging y push
+
+1. Commitear cambios de release:
    - `git add -A`
    - `git commit -m "release: vX.Y.Z"`
-2. Create annotated tag:
+2. Crear tag anotado:
    - `git tag -a vX.Y.Z -m "RetroTUI vX.Y.Z"`
-3. Push branch + tag:
+3. Subir branch y tag:
    - `git push`
    - `git push origin vX.Y.Z`
 
-## CI Release Workflow
-- Workflow file: `.github/workflows/release.yml`
+## Workflow de release en CI
+
+- Archivo: `.github/workflows/release.yml`
 - Triggers:
-  - `push` de tags `v*.*.*`
+  - push de tags `v*.*.*`
   - `workflow_dispatch` con input `tag`
 - Pipeline:
   1. Checkout del tag
   2. `python tools/qa.py`
   3. `python tools/check_release_tag.py --tag vX.Y.Z`
-  4. Build de distribuciones (`python -m build`)
+  4. Build de distribuciones (`python -m pip install build` y luego `python -m build`)
   5. Publicación de artifacts y GitHub Release
 
-## Rollback
-- If tag is wrong and not published:
+## Rollback (tags)
+
+- Si el tag es incorrecto y aún no fue publicado:
   - `git tag -d vX.Y.Z`
   - `git push origin :refs/tags/vX.Y.Z`
