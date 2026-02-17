@@ -247,6 +247,60 @@ class ImageViewerComponentTests(unittest.TestCase):
         action = win.handle_click(1, 1)
         self.assertEqual(action.payload, self.actions_mod.AppAction.CLOSE_WINDOW)
 
+    def test_missing_branches_for_coverage(self):
+        win = self._make_window()
+
+        # _update_title() sets default title when no filepath is open.
+        win.filepath = None
+        win._update_title()
+        self.assertEqual(win.title, "Image Viewer")
+
+        # _detect_backend() timg/catimg branches.
+        win2 = self._make_window()
+        with mock.patch.object(self.image_mod.shutil, "which", side_effect=[None, "/bin/timg"]):
+            self.assertEqual(win2._detect_backend(), "timg")
+
+        win3 = self._make_window()
+        with mock.patch.object(self.image_mod.shutil, "which", side_effect=[None, None, "/bin/catimg"]):
+            self.assertEqual(win3._detect_backend(), "catimg")
+
+        # _cached_render_lines() early return when no file is open.
+        self.assertTrue(any("No image opened" in line for line in win._cached_render_lines(10, 3)))
+
+        # iv_reload sets status depending on whether a file is open.
+        win.filepath = "/tmp/fake.png"
+        self.assertIsNone(win._execute_menu_action("iv_reload"))
+        self.assertEqual(win.status_message, "Reloaded.")
+
+        # draw() early returns for invisible or invalid body rect.
+        win.visible = False
+        with mock.patch.object(win, "draw_frame") as draw_frame:
+            win.draw(None)
+        draw_frame.assert_not_called()
+
+        win.visible = True
+        with (
+            mock.patch.object(win, "draw_frame", return_value=0),
+            mock.patch.object(win, "body_rect", return_value=(0, 0, 0, 0)),
+        ):
+            win.draw(None)
+
+        # handle_click() returns None when menu yields no action.
+        fake_menu = mock.Mock()
+        fake_menu.active = True
+        fake_menu.on_menu_bar.return_value = True
+        fake_menu.handle_click.return_value = None
+        win.window_menu = fake_menu
+        self.assertIsNone(win.handle_click(0, 0))
+
+        # handle_key() returns None when menu yields no action.
+        fake_menu.handle_key.return_value = None
+        self.assertIsNone(win.handle_key(ord("x")))
+
+        # handle_key() final fall-through returns None for unhandled keys.
+        win.window_menu.active = False
+        self.assertIsNone(win.handle_key(ord("x")))
+
 
 if __name__ == "__main__":
     unittest.main()

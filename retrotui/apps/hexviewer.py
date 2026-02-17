@@ -395,10 +395,7 @@ class HexViewerWindow(Window):
                     selected_rows = self._selected_row_bounds()
                     if selected_rows and selected_rows[0] <= row_idx < selected_rows[1]:
                         row_attr = theme_attr("file_selected") | curses.A_REVERSE | curses.A_BOLD
-                    if (
-                        self.cursor_offset is not None
-                        and row_offset <= self.cursor_offset < row_offset + len(row_bytes)
-                    ):
+                    if self.cursor_offset is not None and row_offset <= self.cursor_offset < row_offset + len(row_bytes):
                         row_attr = theme_attr("file_selected") | curses.A_BOLD
                     safe_addstr(stdscr, by + 1 + row, bx, line[:bw].ljust(bw), row_attr)
             else:

@@ -28,12 +28,9 @@ def _supports_constructor_kwarg(constructor, kwarg: str) -> bool:
     for param in params:
         if param.kind == inspect.Parameter.VAR_KEYWORD:
             return True
-        if (
-            param.name == kwarg
-            and param.kind in (
-                inspect.Parameter.POSITIONAL_OR_KEYWORD,
-                inspect.Parameter.KEYWORD_ONLY,
-            )
+        if param.name == kwarg and param.kind in (
+            inspect.Parameter.POSITIONAL_OR_KEYWORD,
+            inspect.Parameter.KEYWORD_ONLY,
         ):
             return True
     return False

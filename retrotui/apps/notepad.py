@@ -187,14 +187,9 @@ class NotepadWindow(Window):
             self.buffer[s_line] = first + last
             del self.buffer[s_line + 1:e_line + 1]
 
-        if not self.buffer:
-            self.buffer = ['']
-            self.cursor_line = 0
-            self.cursor_col = 0
-        else:
-            self.cursor_line = s_line
-            self.cursor_col = s_col
-            self._clamp_cursor()
+        self.cursor_line = s_line
+        self.cursor_col = s_col
+        self._clamp_cursor()
 
         self.modified = True
         self._invalidate_wrap()

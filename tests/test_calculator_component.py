@@ -81,6 +81,13 @@ class CalculatorComponentTests(unittest.TestCase):
             evaluate("name + 1")
         with self.assertRaises(ValueError):
             evaluate("1 << 2")
+        with self.assertRaises(ValueError):
+            evaluate("~1")
+
+    def test_evaluate_expression_formats_floats_and_normalizes_negative_zero(self):
+        evaluate = self.calc_mod.evaluate_expression
+        self.assertEqual(evaluate("1/2"), "0.5")
+        self.assertEqual(evaluate("-0.0"), "0")
 
     def test_set_expression_and_insert_delete_helpers(self):
         win = self._make_window()
@@ -100,6 +107,41 @@ class CalculatorComponentTests(unittest.TestCase):
         self.assertEqual(win.expression, "1245")
         self.assertEqual(win.cursor_pos, 2)
 
+    def test_insert_and_delete_guards_and_history_trim(self):
+        win = self._make_window()
+        win._set_expression("abc")
+        win.cursor_pos = 0
+
+        win._insert_text("")
+        self.assertEqual(win.expression, "abc")
+        self.assertEqual(win.cursor_pos, 0)
+
+        win._delete_backward()
+        self.assertEqual(win.expression, "abc")
+
+        win.cursor_pos = len(win.expression)
+        win._delete_forward()
+        self.assertEqual(win.expression, "abc")
+
+        win.history = [str(i) for i in range(win.MAX_HISTORY)]
+        win._append_history("overflow")
+        self.assertEqual(len(win.history), win.MAX_HISTORY)
+        self.assertEqual(win.history[-1], "overflow")
+
+    def test_ensure_cursor_visible_scrolls_left_and_right(self):
+        win = self._make_window()
+        win._set_expression("0123456789")
+
+        win.view_left = 5
+        win.cursor_pos = 2
+        win._ensure_cursor_visible(input_width=3)
+        self.assertEqual(win.view_left, 2)
+
+        win.view_left = 0
+        win.cursor_pos = 9
+        win._ensure_cursor_visible(input_width=3)
+        self.assertEqual(win.view_left, 7)
+
     def test_evaluate_current_success_and_error_history(self):
         win = self._make_window()
         win.expression = "2+3"
@@ -114,6 +156,13 @@ class CalculatorComponentTests(unittest.TestCase):
         win._evaluate_current()
         self.assertTrue(any("1/0 ! " in line for line in win.history))
 
+    def test_evaluate_current_is_noop_when_expression_is_blank(self):
+        win = self._make_window()
+        win.expression = "   "
+        win.cursor_pos = 3
+        win._evaluate_current()
+        self.assertEqual(win.history, [])
+
     def test_history_navigation_moves_expression(self):
         win = self._make_window()
         win.history = ["1+1 = 2", "2+2 = 4", "9/0 ! division by zero"]
@@ -126,6 +175,21 @@ class CalculatorComponentTests(unittest.TestCase):
         self.assertEqual(win.expression, "9/0")
         win._history_move(1)
         self.assertEqual(win.expression, "")
+
+    def test_history_move_guard_and_clamps_index(self):
+        win = self._make_window()
+        win._history_move(-1)
+        self.assertIsNone(win.history_index)
+
+        win.history = ["1+1 = 2"]
+        win.history_index = 0
+        win._history_move(-1)
+        self.assertEqual(win.history_index, 0)
+
+        entries = win._history_expr_only()
+        win.history_index = len(entries)
+        win._history_move(1)
+        self.assertEqual(win.history_index, len(entries))
 
     def test_handle_key_basic_editing_and_navigation(self):
         win = self._make_window()
@@ -142,6 +206,25 @@ class CalculatorComponentTests(unittest.TestCase):
         self.assertEqual(win.cursor_pos, 0)
         win.handle_key(self.curses.KEY_END)
         self.assertEqual(win.cursor_pos, len(win.expression))
+
+    def test_handle_key_right_delete_and_history_keys(self):
+        win = self._make_window()
+        win._set_expression("ab")
+        win.cursor_pos = 0
+
+        win.handle_key(self.curses.KEY_RIGHT)
+        self.assertEqual(win.cursor_pos, 1)
+
+        win.cursor_pos = 1
+        win.handle_key(self.curses.KEY_DC)
+        self.assertEqual(win.expression, "a")
+
+        win.history = ["2+2 = 4", "3+3 = 6"]
+        win._set_expression("")
+        win.handle_key(self.curses.KEY_UP)
+        self.assertTrue(win.expression)
+        win.handle_key(self.curses.KEY_DOWN)
+        self.assertIn(win.expression, ("", "3+3"))
 
     def test_handle_key_evaluate_clear_and_close_paths(self):
         win = self._make_window()
@@ -168,6 +251,38 @@ class CalculatorComponentTests(unittest.TestCase):
         close_result = win.handle_key(17)  # Ctrl+Q
         self.assertEqual(close_result.type, self.actions_mod.ActionType.EXECUTE)
         self.assertEqual(close_result.payload, self.actions_mod.AppAction.CLOSE_WINDOW)
+
+    def test_draw_returns_early_when_hidden_or_body_zero(self):
+        win = self._make_window()
+        win.visible = False
+        with mock.patch.object(self.calc_mod, "safe_addstr") as safe_addstr:
+            win.draw(None)
+        safe_addstr.assert_not_called()
+
+        win.visible = True
+        with (
+            mock.patch.object(win, "draw_frame", return_value=0),
+            mock.patch.object(win, "body_rect", return_value=(0, 0, 10, 0)),
+            mock.patch.object(self.calc_mod, "safe_addstr") as safe_addstr,
+        ):
+            win.draw(None)
+        safe_addstr.assert_not_called()
+
+    def test_draw_renders_cursor_character_when_in_bounds(self):
+        win = self._make_window()
+        win.expression = "abc"
+        win.cursor_pos = 1
+        win.view_left = 0
+
+        with (
+            mock.patch.object(win, "draw_frame", return_value=0),
+            mock.patch.object(self.calc_mod, "safe_addstr") as safe_addstr,
+            mock.patch.object(self.calc_mod, "theme_attr", return_value=0),
+        ):
+            win.draw(None)
+
+        rendered = [str(call.args[3]) for call in safe_addstr.call_args_list if len(call.args) >= 4]
+        self.assertIn("b", "".join(rendered))
 
     def test_calculator_starts_topmost_and_f9_toggles(self):
         win = self._make_window()

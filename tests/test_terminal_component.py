@@ -717,6 +717,161 @@ class TerminalComponentTests(unittest.TestCase):
         self.assertLessEqual(win.scrollback_offset, up_offset)
         self.assertEqual(fake_session.writes, [])
 
+    def test_line_selection_span_and_selected_text_edge_cases(self):
+        win = self._make_window()
+
+        win.clear_selection()
+        self.assertIsNone(win._line_selection_span(0, 10))
+
+        win.selection_anchor = (1, 0)
+        win.selection_cursor = (1, 1)
+        self.assertIsNone(win._line_selection_span(0, 10))
+
+        # Same-line selection clamped to empty line => None.
+        win.selection_anchor = (0, 1)
+        win.selection_cursor = (0, 2)
+        self.assertIsNone(win._line_selection_span(0, 0))
+
+        # Same-line selection valid span.
+        win.selection_anchor = (0, 2)
+        win.selection_cursor = (0, 5)
+        self.assertEqual(win._line_selection_span(0, 10), (2, 5))
+
+        # Multi-line selection: start/end rows can become empty after clamp.
+        win.selection_anchor = (0, 1)
+        win.selection_cursor = (2, 0)
+        self.assertIsNone(win._line_selection_span(0, 0))
+        self.assertIsNone(win._line_selection_span(2, 0))
+
+        # Middle line selection spans full row.
+        self.assertEqual(win._line_selection_span(1, 5), (0, 5))
+
+        # _selected_text single-line path.
+        win._scroll_lines = ["abc"]
+        win._line_chars = []
+        win.selection_anchor = (0, 1)
+        win.selection_cursor = (0, 3)
+        self.assertEqual(win._selected_text(), "bc")
+
+        # _selected_text multi-line path includes middle lines.
+        win._scroll_lines = ["line0", "line1", "line2"]
+        win._line_chars = list("line3")
+        win.selection_anchor = (0, 1)
+        win.selection_cursor = (3, 2)
+        self.assertIn("\nline1\n", win._selected_text())
+
+        # _selected_text guard when _all_lines is empty.
+        win.selection_anchor = (0, 0)
+        win.selection_cursor = (0, 1)
+        with mock.patch.object(win, "_all_lines", return_value=[]):
+            self.assertEqual(win._selected_text(), "")
+
+        # end_line < start_line guard (normally unreachable due to ordering).
+        win._scroll_lines = ["a", "b"]
+        win._line_chars = list("c")
+        win.selection_anchor = (0, 0)
+        win.selection_cursor = (0, 1)
+        with mock.patch.object(win, "_selection_bounds", return_value=((2, 0), (1, 0))):
+            self.assertEqual(win._selected_text(), "")
+
+    def test_cursor_from_screen_early_returns(self):
+        win = self._make_window()
+        self.assertIsNone(win._cursor_from_screen(0, 0))
+
+        with mock.patch.object(win, "_visible_slice", return_value=([], 0, 0)):
+            self.assertIsNone(win._cursor_from_screen(4, 5))
+
+    def test_draw_selection_continue_and_fill_branches(self):
+        win = self._make_window()
+
+        with mock.patch.object(self.terminal_mod, "safe_addstr") as safe_addstr:
+            win.selection_anchor = (10, 0)
+            win.selection_cursor = (11, 0)
+            win._draw_selection(
+                stdscr=None,
+                x=0,
+                y=0,
+                text_cols=10,
+                start_idx=0,
+                visible_lines=["abc", "def"],
+                body_attr=0,
+            )
+        safe_addstr.assert_not_called()
+
+        with mock.patch.object(self.terminal_mod, "safe_addstr") as safe_addstr:
+            win.selection_anchor = (0, 20)
+            win.selection_cursor = (0, 25)
+            win._draw_selection(None, 0, 0, text_cols=5, start_idx=0, visible_lines=["x" * 40], body_attr=0)
+        safe_addstr.assert_not_called()
+
+        with mock.patch.object(self.terminal_mod, "safe_addstr") as safe_addstr:
+            win.selection_anchor = (0, 0)
+            win.selection_cursor = (2, 1)
+            win._draw_selection(
+                stdscr=None,
+                x=0,
+                y=0,
+                text_cols=10,
+                start_idx=0,
+                visible_lines=["A", "", "B"],
+                body_attr=0,
+            )
+        ys = [call.args[1] for call in safe_addstr.call_args_list if len(call.args) >= 2]
+        self.assertNotIn(1, ys)
+
+        with (
+            mock.patch.object(win, "_line_selection_span", return_value=(5, 7)),
+            mock.patch.object(self.terminal_mod, "safe_addstr") as safe_addstr,
+        ):
+            win.selection_anchor = (0, 0)
+            win.selection_cursor = (0, 1)
+            win._draw_selection(None, 0, 0, text_cols=10, start_idx=0, visible_lines=["abc"], body_attr=0)
+        self.assertTrue(safe_addstr.called)
+
+    def test_execute_menu_copy_and_accept_drop_edge_cases(self):
+        win = self._make_window()
+
+        with mock.patch.object(win, "_copy_selection") as copy_selection:
+            self.assertIsNone(win._execute_menu_action(win.MENU_COPY))
+        copy_selection.assert_called_once_with()
+
+        with mock.patch.object(win, "_forward_payload") as forward_payload:
+            self.assertIsNone(win.accept_dropped_path(None))
+        forward_payload.assert_not_called()
+
+        with (
+            mock.patch.object(self.terminal_mod.shlex, "quote", return_value=""),
+            mock.patch.object(win, "_forward_payload") as forward_payload,
+        ):
+            self.assertIsNone(win.accept_dropped_path("/tmp/x.txt"))
+        forward_payload.assert_not_called()
+
+    def test_handle_click_and_mouse_drag_selection_clear_paths(self):
+        win = self._make_window()
+        win.window_menu = None
+
+        win.selection_anchor = (0, 0)
+        win.selection_cursor = (0, 1)
+        self.assertIsNone(win.handle_click(4, 5, bstate=0))
+        self.assertFalse(win.has_selection())
+
+        win.selection_anchor = (0, 0)
+        win.selection_cursor = (0, 1)
+        self.assertIsNone(win.handle_click(0, 0, bstate=self.curses.BUTTON1_CLICKED))
+        self.assertFalse(win.has_selection())
+
+        win._mouse_selecting = True
+        self.assertIsNone(win.handle_mouse_drag(4, 5, bstate=0))
+        self.assertFalse(win._mouse_selecting)
+
+        with mock.patch.object(win, "_cursor_from_screen", return_value=None):
+            self.assertIsNone(win.handle_mouse_drag(4, 5, bstate=self.curses.BUTTON1_PRESSED))
+
+        win.clear_selection()
+        with mock.patch.object(win, "_cursor_from_screen", return_value=(1, 2)):
+            self.assertIsNone(win.handle_mouse_drag(4, 5, bstate=self.curses.BUTTON1_PRESSED))
+        self.assertEqual(win.selection_anchor, (1, 2))
+
     def test_close_and_restart_reset_session_state(self):
         win = self._make_window()
         fake_session = _FakeSession()

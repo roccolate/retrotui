@@ -33,6 +33,12 @@ class EventLoopTests(unittest.TestCase):
         else:
             sys.modules.pop("curses", None)
 
+    def setUp(self):
+        # fake_curses is shared across tests; reset call history for isolation.
+        self.fake_curses.doupdate.reset_mock()
+        self.fake_curses.update_lines_cols.reset_mock()
+        self.fake_curses.getmouse.reset_mock()
+
     def _make_app(self):
         stdscr = types.SimpleNamespace(
             erase=mock.Mock(),
@@ -58,6 +64,14 @@ class EventLoopTests(unittest.TestCase):
             running=True,
         )
         return app
+
+    def test_draw_frame_calls_normalize_layers_when_present(self):
+        app = self._make_app()
+        app.normalize_window_layers = mock.Mock()
+
+        self.event_loop.draw_frame(app)
+
+        app.normalize_window_layers.assert_called_once_with()
 
     def test_draw_frame_renders_core_layers(self):
         app = self._make_app()

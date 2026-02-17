@@ -285,10 +285,8 @@ def handle_window_mouse(app, mx, my, bstate):
                 win.window_menu.active = False
 
         if win.contains(mx, my):
-            if (
-                bstate & curses.REPORT_MOUSE_POSITION
-                and bstate & curses.BUTTON1_PRESSED
-                and hasattr(win, "handle_mouse_drag")
+            if (bstate & curses.REPORT_MOUSE_POSITION) and (bstate & curses.BUTTON1_PRESSED) and hasattr(
+                win, "handle_mouse_drag"
             ):
                 drag_handler = getattr(win, "handle_mouse_drag", None)
                 if callable(drag_handler):

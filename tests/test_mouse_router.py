@@ -100,6 +100,84 @@ class MouseRouterTests(unittest.TestCase):
         base.update(overrides)
         return types.SimpleNamespace(**base)
 
+    def test_invoke_mouse_handler_signature_error_falls_back_to_two_args(self):
+        handler = mock.Mock(return_value="ok")
+        with mock.patch.object(self.mouse_router.inspect, "signature", side_effect=TypeError("no sig")):
+            out = self.mouse_router._invoke_mouse_handler(handler, 1, 2, 3)
+        self.assertEqual(out, "ok")
+        handler.assert_called_once_with(1, 2)
+
+    def test_find_drop_target_window_and_dispatch_drop_edge_cases(self):
+        app = self._make_app()
+
+        invisible = self._make_window(visible=False, contains=mock.Mock(return_value=True))
+        app.windows = [invisible]
+        self.assertIsNone(self.mouse_router._find_drop_target_window(app, 1, 1))
+
+        miss = self._make_window(visible=True, contains=mock.Mock(return_value=False))
+        app.windows = [miss]
+        self.assertIsNone(self.mouse_router._find_drop_target_window(app, 1, 1))
+
+        source = self._make_window(visible=True, contains=mock.Mock(return_value=True), open_path=mock.Mock())
+        app.windows = [source]
+        app.drag_source_window = source
+        self.assertIsNone(self.mouse_router._find_drop_target_window(app, 1, 1))
+
+        unsupported = self._make_window(visible=True, contains=mock.Mock(return_value=True))
+        app.windows = [unsupported]
+        app.drag_source_window = None
+        self.assertIsNone(self.mouse_router._find_drop_target_window(app, 1, 1))
+
+        target = self._make_window(open_path=mock.Mock(return_value=None))
+        self.mouse_router._dispatch_drop(app, None, {})
+        self.mouse_router._dispatch_drop(app, target, {"type": "other"})
+        self.mouse_router._dispatch_drop(app, target, {"type": "file_path"})
+
+    def test_handle_file_drag_drop_mouse_move_and_consumer_none_paths(self):
+        app = self._make_app()
+        payload = {"type": "file_path", "path": "/tmp/demo.txt"}
+
+        source = self._make_window()
+        target = self._make_window(contains=mock.Mock(return_value=True), open_path=mock.Mock(return_value=None))
+        app.windows = [source, target]
+        app.drag_payload = payload
+        app.drag_source_window = source
+
+        # move_drag updates drag target highlighting
+        handled = self.mouse_router.handle_file_drag_drop_mouse(
+            app, 10, 7, self.curses.REPORT_MOUSE_POSITION | self.curses.BUTTON1_PRESSED
+        )
+        self.assertTrue(handled)
+        self.assertIs(app.drag_target_window, target)
+
+        # Existing drag payload but not moving or stopping still consumes the event.
+        handled = self.mouse_router.handle_file_drag_drop_mouse(app, 10, 7, self.curses.REPORT_MOUSE_POSITION)
+        self.assertTrue(handled)
+
+        # No drag payload and not moving returns False.
+        app.drag_payload = None
+        app.drag_source_window = None
+        handled = self.mouse_router.handle_file_drag_drop_mouse(app, 10, 7, 0)
+        self.assertFalse(handled)
+
+        # Consumer returns None -> continue -> end returns False.
+        consumer = self._make_window(consume_pending_drag=mock.Mock(return_value=None))
+        app.windows = [consumer]
+        handled = self.mouse_router.handle_file_drag_drop_mouse(
+            app, 10, 7, self.curses.REPORT_MOUSE_POSITION | self.curses.BUTTON1_PRESSED
+        )
+        self.assertFalse(handled)
+
+    def test_handle_mouse_event_returns_after_file_drag_drop(self):
+        app = self._make_app()
+
+        with mock.patch.object(self.mouse_router, "handle_file_drag_drop_mouse", return_value=True):
+            self.mouse_router.handle_mouse_event(app, (0, 3, 3, 0, self.curses.BUTTON1_CLICKED))
+
+        app._handle_drag_resize_mouse.assert_not_called()
+        app._handle_global_menu_mouse.assert_not_called()
+        app._handle_window_mouse.assert_not_called()
+
     def test_handle_drag_resize_mouse_moves_dragging_window(self):
         app = self._make_app()
         win = types.SimpleNamespace(
