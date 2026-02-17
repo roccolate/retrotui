@@ -59,7 +59,7 @@ Todas las versiones notables de RetroTUI están documentadas aquí.
 
 ### Changed
 - README actualizado con comandos de QA y activacion de hooks locales.
-- ROADMAP/PROJECT_ANALYSIS actualizados para reflejar automatizacion de calidad.
+- ROADMAP/PROJECT actualizados para reflejar automatizacion de calidad.
 - CI extendido a matriz Linux + Windows (Python 3.9/3.12).
 - `RetroTUI.execute_action()` ahora delega en `execute_app_action()` para reducir acoplamiento del core.
 - `RetroTUI.handle_mouse()` y `RetroTUI.handle_key()` ahora delegan en routers dedicados, reduciendo tamano y complejidad de `retrotui/core/app.py`.
@@ -70,7 +70,7 @@ Todas las versiones notables de RetroTUI están documentadas aquí.
 - `tools/qa.py` agrega modo opcional de cobertura por modulo (`--module-coverage`, `--module-coverage-top`, `--module-coverage-fail-under`).
 - `tools/report_module_coverage.py` ahora normaliza rutas y mapea sufijos de paquete para reducir falsos negativos de cobertura en entornos Windows.
 - CI eleva el gate gradual de cobertura por modulo a `--module-coverage-fail-under 100.0` (solo `ubuntu-latest` + Python `3.12`).
-- Cobertura ampliada en rutas de core modularizado, menu/action runner/notepad/terminal/calculadora/apps utilitarias; suite actual en QA: 484 tests.
+- Cobertura ampliada en rutas de core modularizado, menu/action runner/notepad/terminal/calculadora/apps utilitarias; suite de tests ampliada.
 - Cobertura total por modulo actualizada a 100.0% (trace + AST).
 - `AppAction.TERMINAL` deja de abrir placeholder y ahora instancia `TerminalWindow` real.
 - `RetroTUI.set_active_window()` y `core/event_loop.py` ahora respetan `always_on_top` para mantener ventanas fijadas por encima del resto.
@@ -86,7 +86,7 @@ Todas las versiones notables de RetroTUI están documentadas aquí.
 - Mouse router/bootstrap ajustados para mejorar comportamiento en TTY (drag/resize y doble-click en iconos).
 - `AppAction.ASCII_VIDEO` ahora abre selector de ruta sin depender de File Manager.
 - `play_ascii_video()` ahora soporta subtitulos opcionales (`mpv --sub-file`, `mplayer -sub`) y usa rutas normalizadas.
-- Suite QA actualizada a 518 tests en verde.
+- Suite QA ampliada y en verde.
 
 ---
 
@@ -113,7 +113,7 @@ Todas las versiones notables de RetroTUI están documentadas aquí.
 - Bump de version del proyecto a `0.3.5` (`pyproject.toml`, runtime y script `setup.sh`).
 - Elevacion del gate gradual de cobertura por modulo en CI a `--module-coverage-fail-under 50.0`.
 - Cobertura por modulo elevada de 44.1% a 52.7% con nuevos tests de `retrotui.__main__`, `retrotui/core/content.py` y file I/O en apps.
-- Sincronizacion de README/ROADMAP/PROJECT/PROJECT_ANALYSIS/RELEASE con el nuevo baseline de release y calidad.
+- Sincronizacion de README/ROADMAP/PROJECT/RELEASE con el nuevo baseline de release y calidad.
 
 ---
 

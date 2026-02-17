@@ -1,300 +1,124 @@
-# RetroTUI — Entorno de Escritorio Retro para Consola Linux
+# RetroTUI - Guia tecnica
 
-## Resumen del Proyecto
+Este documento describe la arquitectura y las decisiones tecnicas del proyecto.
+Para instalacion/uso rapido, ver `README.md`.
 
-**RetroTUI** es un entorno de escritorio basado en texto (TUI) para Linux que emula la
-experiencia visual y funcional de DOS/Windows 3.1, diseñado para ejecutarse en una
-terminal Linux sin dependencia de X11 ni Wayland.
+## Mapa de documentacion
 
----
+- `README.md`: instalacion, ejecucion y controles.
+- `ROADMAP.md`: estado por versiones/hitos.
+- `CHANGELOG.md`: historial de cambios.
+- `RELEASE.md`: politica y checklist de releases.
+- `preview.html`: preview interactiva en navegador (no requiere curses).
 
-## 1. Soporte de Mouse sin X11
+## Objetivo y principios
 
-### ¿Es posible? — Sí, con dos mecanismos:
+- Experiencia tipo Windows 3.1 en terminal (TUI), sin X11/Wayland.
+- Preferir stdlib de Python; evitar dependencias Python externas.
+- Mantener el runtime simple y testeable: gran parte de la logica se valida con unit tests usando un `fake curses`.
 
-### 1.1 GPM (General Purpose Mouse)
+## Plataformas
 
-GPM es un daemon que provee soporte de mouse directamente en las consolas virtuales
-de Linux (tty1–tty6), sin necesidad de servidor gráfico.
+- Runtime: Linux (o WSL) con `curses`/ncurses disponible en Python.
+- Windows nativo: normalmente no existe el modulo `_curses`, por lo que RetroTUI no corre como app interactiva.
+  Aun asi, CI y la suite de tests corren en Windows usando un modulo `curses` falso en `tests/`.
 
-```
-┌─────────────────────────────────────────────┐
-│  Hardware Mouse                             │
-│       ↓                                     │
-│  /dev/input/mice (kernel driver)            │
-│       ↓                                     │
-│  gpm daemon (userspace)                     │
-│       ↓                                     │
-│  /dev/gpmctl (socket)                       │
-│       ↓                                     │
-│  ncurses/curses (librería)                  │
-│       ↓                                     │
-│  RetroTUI (aplicación)                      │
-└─────────────────────────────────────────────┘
-```
+Notas:
+- Algunas apps usan features especificas de Linux:
+  - Process Manager lee `/proc`.
+  - Mouse en TTY usa GPM (ver seccion "Mouse sin X11").
+- En emuladores de terminal (SSH/tmux/screen/etc) el mouse funciona via protocolo xterm.
 
-**Instalación en Ubuntu minimal:**
-```bash
-sudo apt install gpm
-sudo systemctl enable gpm
-sudo systemctl start gpm
-```
-
-**Protocolos soportados:** PS/2, USB (auto-detectado), serial.
-
-### 1.2 Protocolo xterm mouse tracking
-
-Cualquier emulador de terminal moderno (xterm, gnome-terminal, tmux, screen, SSH
-clients) soporta secuencias de escape para reportar eventos de mouse:
-
-- **X10 mode** — solo clicks
-- **Normal tracking (1000)** — clicks + release
-- **Button-event tracking (1002)** — clicks + drag
-- **Any-event tracking (1003)** — todo movimiento
-- **SGR extended (1006)** — coordenadas > 223 columnas
-
-Python `curses` y `ncurses` en C abstraen esto completamente vía `mousemask()`.
-
-### 1.3 Estrategia híbrida de RetroTUI
+## Estructura del repositorio
 
 ```
-if (running in TTY console):
-    use GPM via /dev/gpmctl → ncurses
-elif (running in terminal emulator):
-    use xterm mouse protocol → ncurses
+retrotui/            paquete principal
+  core/              event loop, routing de input, rendering, acciones, config
+  ui/                widgets base (Window, Dialog, Menu)
+  apps/              apps (file manager, notepad, terminal, etc)
+tests/               suite de unit tests (incluye fake curses)
+tools/               herramientas de QA y cobertura por modulo
+.github/workflows/    CI y release
+.githooks/            hook local opcional (pre-commit)
 ```
 
-Ambos caminos convergen en la misma API de `curses.getmouse()`, por lo que el
-código de la aplicación no necesita distinguirlos.
+## Arquitectura del runtime
 
----
+### Entry point y version
 
-## 2. Arquitectura del Sistema
+- `retrotui/__main__.py` es el entrypoint (`python -m retrotui` y script `retrotui`).
+  - Usa `curses.wrapper(...)` para asegurar setup/cleanup del terminal.
+  - `RETROTUI_DEBUG=1` habilita logging DEBUG.
+- La version se sincroniza entre:
+  - `pyproject.toml` -> `[project].version`
+  - `retrotui/core/app.py` -> `APP_VERSION`
+  - `retrotui/__init__.py` -> `__version__`
 
-```
-┌──────────────────────────────────────────────────────────┐
-│                    RetroTUI Shell                         │
-├──────────────────────────────────────────────────────────┤
-│  ┌──────────┐  ┌──────────┐  ┌────────────────────────┐ │
-│  │ Desktop  │  │ Window   │  │ Widget Toolkit         │ │
-│  │ Manager  │  │ Manager  │  │ (Button, Menu, Input,  │ │
-│  │          │  │ (z-order │  │  Dialog, FileList,     │ │
-│  │          │  │  focus)  │  │  ScrollBar, Icon)      │ │
-│  └──────────┘  └──────────┘  └────────────────────────┘ │
-├──────────────────────────────────────────────────────────┤
-│  ┌──────────────────────────────────────────────────────┐│
-│  │           Event Loop (mouse + keyboard)              ││
-│  └──────────────────────────────────────────────────────┘│
-├──────────────────────────────────────────────────────────┤
-│  ┌──────────────────────────────────────────────────────┐│
-│  │         Python curses / ncurses abstraction          ││
-│  └──────────────────────────────────────────────────────┘│
-├──────────────────────────────────────────────────────────┤
-│         Linux Console (TTY) + GPM  /  Terminal          │
-└──────────────────────────────────────────────────────────┘
-```
+### Core: `retrotui/core/`
 
-### Componentes principales:
+- `app.py`: clase `RetroTUI` (estado global, ventanas, menu global, dialogos, config, dispatch de acciones).
+- `event_loop.py`: loop principal (draw/input/resize) separado de `RetroTUI`.
+- `bootstrap.py`: configuracion/restauracion de `curses`, mouse y flow control.
+- `key_router.py` / `mouse_router.py`: routing de eventos a menu/dialog/ventana/escritorio.
+- `rendering.py`: helpers de render (desktop, iconos, taskbar, statusbar).
+- `actions.py`: `ActionType`, `ActionResult`, `AppAction`.
+- `action_runner.py`: ejecucion centralizada de acciones de apps.
+- `content.py`: builders de contenido estatico (welcome/help/about).
+- `config.py`: carga/guardado de `~/.config/retrotui/config.toml`.
+- `terminal_session.py`: sesion PTY (spawn/I-O/resize/seniales) usada por la terminal embebida.
 
-| Componente         | Responsabilidad                                         |
-|--------------------|---------------------------------------------------------|
-| `EventLoop`        | Captura teclado y mouse, despacha eventos               |
-| `WindowManager`    | Z-order, foco, mover/redimensionar ventanas             |
-| `DesktopManager`   | Fondo del escritorio, iconos, barra de tareas           |
-| `WidgetToolkit`    | Botones, menús, inputs, listas, scrollbars              |
-| `ThemeEngine`      | Colores y caracteres de borde (DOS vs Win3.1)           |
-| `AppLauncher`      | Ejecutar apps internas y programas externos             |
+### UI: `retrotui/ui/`
 
----
+- `window.py`: clase base `Window` (frame, botones, resize/maximize/minimize, z-order, scroll basico).
+- `dialog.py`: dialogos modales (`Dialog`, `InputDialog`, `ProgressDialog`).
+- `menu.py`: `MenuBar` unificado (global y por ventana) + wrappers `Menu`/`WindowMenu`.
 
-## 3. Requisitos del Sistema
+### Apps: `retrotui/apps/`
 
-### Mínimos:
-- Ubuntu Server / minimal (sin GUI)
-- Python 3.9+
-- ncurses (incluido en Python stdlib como `curses`)
-- Terminal con soporte de al menos 80x25 caracteres
-- GPM (para mouse en TTY) o emulador de terminal con xterm mouse
+- `filemanager.py`: file manager (modo dual-pane, operaciones, previews, progreso, undo a trash).
+- `notepad.py`: editor de texto.
+- `terminal.py`: terminal embebida (ANSI/VT100 basico + scrollback).
+- `calculator.py`: calculadora con evaluador seguro via `ast`.
+- `logviewer.py`: visor de logs con tail y busqueda.
+- `process_manager.py`: monitor de procesos via `/proc`.
+- `clock.py`: reloj/calendario con always-on-top y chime opcional.
+- `image_viewer.py`: visor de imagen con backends externos (`chafa`/`timg`/`catimg`).
+- `hexviewer.py`: visor hex read-only.
+- `settings.py`: preferencias con preview live y persistencia en config.
+- `trash.py`: papelera (vista acotada al trash del usuario; borrado permanente y vaciado).
 
-### Recomendados:
-- Terminal con soporte Unicode (UTF-8) para bordes decorativos
-- 256 colores o truecolor
-- Resolución de terminal 120x40 o superior
+## Mouse sin X11
 
-### Sin dependencias externas:
-- **NO** X11 / Xorg
-- **NO** Wayland
-- **NO** framebuffer gráfico
-- Solo Python stdlib (`curses`, `os`, `sys`, `time`, `locale`, `termios`)
+RetroTUI funciona con mouse en dos escenarios:
 
----
+1. Consola virtual Linux (tty1-tty6):
+   - Requiere GPM (General Purpose Mouse).
+   - GPM toma eventos desde `/dev/input/mice` y los expone via `/dev/gpmctl` para ncurses.
+2. Emulador de terminal:
+   - Usa el protocolo de xterm mouse tracking (secuencias de escape).
 
-## 4. Características del Prototipo (v0.1)
+El runtime no necesita distinguirlos: ambos caminos terminan en la misma API `curses.getmouse()`.
 
-- [x] Escritorio con patrón de fondo estilo Windows 3.1
-- [x] Barra de menú superior (≡ Menu | Clock)
-- [x] Ventanas con bordes dobles Unicode (╔═╗║╚═╝)
-- [x] Barra de título con botón de cerrar [×]
-- [x] Soporte de mouse: click para seleccionar, arrastrar ventanas
-- [x] Diálogos modales (About, Exit confirmation)
-- [x] Menú desplegable con opciones
-- [x] Iconos de escritorio clickeables
-- [x] Reloj en tiempo real
-- [x] Navegación completa por teclado (Tab, Enter, Escape, Alt+F4)
+## Configuracion persistente
 
-## 4.1 Características de v0.2 — File Manager
+- Archivo: `~/.config/retrotui/config.toml`
+- Campos (minimos):
+  - `theme`
+  - `show_hidden`
+  - `word_wrap_default`
 
-- [x] File Manager con navegación de directorios
-- [x] Clase FileManagerWindow con estado de directorio
-- [x] Navegación: click en carpeta para entrar, ".." para subir
-- [x] Selección con highlight (blanco sobre azul, estilo Win3.1)
-- [x] Teclado: ↑↓ selección, Enter abrir, Backspace padre, PgUp/PgDn, Home/End
-- [x] Toggle archivos ocultos (tecla H)
-- [x] Visor de archivos de texto (Notepad read-only)
-- [x] Detección de archivos binarios
-- [x] Auto-scroll para mantener selección visible
-- [x] Re-selección del directorio previo al navegar hacia arriba
-- [x] Sin límite artificial de entradas (dirs + archivos)
-- [x] Delegación de eventos mouse/teclado por ventana (handle_click/handle_key)
+La ventana Settings aplica cambios en vivo y persiste al confirmar (Save).
 
-## 4.2 Características de v0.3 — Editor de Texto, Resize, Maximize/Minimize
+## Calidad, CI y convenciones
 
-- [x] Editor de texto (NotepadWindow) con cursor y edición
-- [x] Word wrap toggle (Ctrl+W) con cache de líneas envueltas
-- [x] Abrir archivos desde File Manager en el editor (reemplaza visor read-only)
-- [x] Resize de ventanas: drag bordes inferior/derecho/esquinas
-- [x] Maximize/Minimize: botones [─][□][×] en title bar
-- [x] Taskbar para ventanas minimizadas (fila h-2)
-- [x] Doble-click en título = toggle maximize
-- [x] Refactorización: Window.draw() → draw_frame() + draw_body()
-- [x] Tab cycling salta ventanas minimizadas
-- [x] Status bar muestra ventanas visibles/total
-- [x] Notepad en menú File
+- Gate local y CI: `python tools/qa.py`
+  - Valida UTF-8 en archivos de texto del repo
+  - `compileall` para detectar errores de sintaxis
+  - sincronizacion de version (pyproject/app)
+  - suite de `unittest`
+  - opcional: cobertura por modulo via stdlib `trace` (`tools/report_module_coverage.py`)
+- CI: `.github/workflows/ci.yml` (matriz Linux/Windows; gate de cobertura por modulo en ubuntu + Python 3.12).
+- Convenciones de texto:
+  - `.editorconfig` y `.gitattributes` fuerzan UTF-8 y EOL LF.
+  - `.githooks/pre-commit` es opcional para correr QA antes de commitear.
 
-## 4.3 Características de v0.3.1 — Barras de Menú por Ventana
-
-- [x] Clase WindowMenu: dropdown menu system per-window
-- [x] FileManager: menú File (Open, Parent Dir, Close) + View (Hidden Files, Refresh)
-- [x] Notepad: menú File (New, Close) + View (Word Wrap)
-- [x] Indicador ≡ en title bar de ventanas con menú
-- [x] F10 abre menú de ventana activa (prioridad sobre global)
-- [x] Escape cierra menú de ventana primero, luego global
-- [x] Hover tracking y click-outside-close para dropdowns
-- [x] body_rect() auto-ajuste con window_menu
-
-## 4.4 Características de v0.3.2 — ASCII Video Player
-
-- [x] Reproductor ASCII de video usando mplayer + aalib (-vo aa)
-- [x] Icono "ASCII Vid" en escritorio y opción "ASCII Video" en menú File
-- [x] Detección automática de videos desde File Manager (.mp4, .mkv, .webm, etc.)
-- [x] Manejo de errores: mplayer no instalado, error de ejecución
-- [x] Restauración correcta de curses después de reproducción
-
-## 4.5 Características de v0.3.3 — Modularización y Hardening
-
-- [x] Refactor del monolito a paquete Python (`retrotui/core`, `retrotui/ui`, `retrotui/apps`)
-- [x] Contrato tipado de acciones (`ActionType` / `ActionResult`) en el dispatcher principal
-- [x] Unificación de menús (`Menu` + `WindowMenu`) en `MenuBar`
-- [x] Descomposición de `handle_mouse()` y `handle_key()` en helpers de routing
-- [x] Correcciones de guardado Save/Save As y errores de `InputDialog`
-- [x] Bootstrap de packaging con `pyproject.toml` y entrypoint `retrotui`
-- [x] Tests smoke iniciales para rutas no-curses (`tests/`)
-
-## 4.6 Características de v0.3.4 — Release de Mantenimiento
-
-- [x] Bump de versión global a `0.3.4` (runtime + packaging)
-- [x] Sincronización de versión visible en UI (welcome/status/about)
-- [x] Documentación y preview alineados con el estado actual del proyecto
-
-- [x] Pipeline de input migrado a `get_wch()` con normalizacion centralizada (`normalize_key_code`)
-- [x] Soporte consistente de entrada `str`/`int` en Dialog, Notepad y File Manager
-- [x] Notepad actualizado a lectura/escritura UTF-8 y tests para rutas de teclado Unicode
-- [x] Split de routing de input a modulos dedicados (`retrotui/core/mouse_router.py`, `retrotui/core/key_router.py`)
-- [x] Split del loop principal a `retrotui/core/event_loop.py` con `RetroTUI.run()` como wrapper
-- [x] Split de bootstrap de terminal/mouse a `retrotui/core/bootstrap.py`
-- [x] Cobertura unitaria directa para modulos core extraidos (`action_runner`, `key_router`, `mouse_router`, `rendering`, `event_loop`, `bootstrap`)
-- [x] Politica de release/tagging + check automatizado de version sync en QA
-- [x] Workflow de release automatizado en GitHub Actions (`.github/workflows/release.yml`) + validador de tag/version (`tools/check_release_tag.py`)
-- [x] Reporte de cobertura por modulo y soporte QA opcional (`tools/report_module_coverage.py`, `tools/qa.py --module-coverage`)
-- [x] Umbral de cobertura por modulo en CI (`--module-coverage-fail-under 70.0`) con adopcion gradual en `ubuntu-latest` + Python `3.12`
-
-## 4.7 Características de v0.3.5 — Debt Hardening Incremental
-
-- [x] Bump de versión global a `0.3.5` (runtime + packaging + setup script).
-- [x] Gate gradual de cobertura por modulo elevado en CI a `70.0` (lane `ubuntu-latest` + Python `3.12`).
-- [x] Baseline de calidad actualizado: `190 tests` en QA y cobertura total por modulo `78.4%`.
-- [x] Sincronización de documentación de release/deuda para reflejar el nuevo baseline de calidad.
-
-## 4.8 Caracteristicas de v0.6.0 - Version Sync
-
-- [x] Bump de version global a `0.6.0` (runtime + packaging + setup script).
-- [x] Sincronizacion de tests/documentacion para reflejar `v0.6.0`.
-- [x] Gate gradual de cobertura por modulo mantenido en CI a `100.0` (lane `ubuntu-latest` + Python `3.12`).
-- [x] Baseline de calidad actualizado: `374 tests` en QA y cobertura total por modulo `100.0%`.
-
-### Roadmap futuro:
-- [x] File Manager con navegación de directorios
-- [x] Editor de texto integrado
-- [x] Barras de menú por ventana
-- [x] ASCII Video Player
-- [x] Modularización base del proyecto
-- [ ] Terminal embebida
-- [ ] Temas configurables (CGA, EGA, VGA, Win3.1, Win95)
-- [ ] Task switcher (Alt+Tab)
-- [ ] Configuración persistente (`~/.config/retrotui/config.toml`)
-
----
-
-## 5. Paleta de Colores
-
-### Tema Windows 3.1:
-```
-Escritorio:       Teal (fondo) con patrón
-Barra de título:  Azul marino (activa) / Gris (inactiva)
-Texto título:     Blanco
-Fondo ventana:    Blanco
-Texto:            Negro
-Menú:             Blanco con texto negro
-Selección menú:   Azul marino con texto blanco
-Botones:          Gris claro con borde 3D
-Diálogos:         Gris claro
-```
-
----
-
-## 6. Controles de Teclado
-
-| Tecla         | Acción                          |
-|---------------|---------------------------------|
-| Tab           | Ciclar foco entre ventanas      |
-| Escape        | Cerrar menú / diálogo           |
-| Enter         | Activar botón / opción          |
-| Ctrl+Q        | Salir del entorno               |
-| Arrow keys    | Navegar menús                   |
-| F10           | Activar barra de menú           |
-
-### Controles del File Manager (v0.2):
-
-| Tecla         | Acción                          |
-|---------------|---------------------------------|
-| ↑ / ↓         | Mover selección                 |
-| Enter         | Abrir directorio / archivo      |
-| Backspace     | Ir al directorio padre          |
-| PgUp / PgDn   | Mover selección una página      |
-| Home / End    | Ir al inicio / final            |
-| H             | Toggle archivos ocultos         |
-| Click         | Seleccionar y abrir entrada     |
-
----
-
-## 7. Ejecución
-
-```bash
-# Instalar GPM (solo necesario en TTY, no en emulador de terminal)
-sudo apt install gpm
-sudo systemctl start gpm
-
-# Ejecutar
-cd retro-tui
-python3 -m retrotui
-```

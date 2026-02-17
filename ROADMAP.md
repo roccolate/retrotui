@@ -91,7 +91,7 @@ La release que hace RetroTUI usable como shell diario.
 - [x] Workflow de release automatizado en GitHub Actions (`.github/workflows/release.yml`) con validacion de tag/version y build de artifacts
 - [x] Reporte de cobertura por modulo con stdlib `trace` (`tools/report_module_coverage.py`) y opcion en QA
 - [x] Umbral de cobertura por modulo en CI elevado a `--module-coverage-fail-under 100.0` (lane gradual en `ubuntu-latest` + Python `3.12`)
-- [x] Baseline actual de calidad: `484 tests` en QA y cobertura total por modulo `100.0%`
+- [x] Baseline actual de calidad: suite de tests en verde y cobertura total por modulo `100.0%`
 
 ---
 ### v0.5 — Temas y Configuración

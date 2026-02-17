@@ -1,6 +1,6 @@
 # RetroTUI 🖥️
 
-**Entorno de escritorio retro estilo Windows 3.1 para la consola de Linux**
+**Entorno de escritorio retro estilo Windows 3.1 para la terminal (Linux / WSL)**
 
 ```
 ╔══════════════════════════════════════════════════════════════╗
@@ -20,275 +20,255 @@
 ╚══════════════════════════════════════════════════════════════╝
 ```
 
+## Estado del proyecto
+
+- Versión actual: `0.6.0` (tag: `v0.6.0`).
+- La rama `main` incluye trabajo posterior a la última release; el estado por hitos está en `ROADMAP.md`.
+
 ## Requisitos
 
-- **Ubuntu Server / Minimal** (sin GUI)
-- **Python 3.9+** (incluido en Ubuntu)
-- **Sin dependencias externas** — usa solo `curses` (stdlib)
+- Linux (o WSL) con `curses`/ncurses disponible en Python.
+- Python 3.9+.
+- Terminal de al menos 80x24.
+- Locale UTF-8 recomendado (si no, RetroTUI hace fallback a bordes ASCII).
+- Sin dependencias Python externas.
 
-## Instalación
+> Nota sobre Windows: en Python para Windows normalmente no existe el módulo `curses` (el runtime de RetroTUI es Linux/WSL).
+> Aun así, la suite de tests y `tools/qa.py` corren en Windows usando un `fake curses` para poder validar lógica no-interactiva.
+
+## Instalación y ejecución
 
 ```bash
-git clone <repo-url> retro-tui
-cd retro-tui
+git clone https://github.com/roccolate/RetroTUI.git
+cd RetroTUI
 
-# Para mouse en TTY (consola virtual, NO emulador de terminal):
-sudo apt install gpm
-sudo systemctl enable --now gpm
+# (opcional) setup para Ubuntu minimal (Python, ncurses y GPM si estás en TTY)
+bash setup.sh
 
-# Ejecutar:
+# Ejecutar
 python3 -m retrotui
 ```
 
-## Calidad de desarrollo
+Si lo instalas en editable:
 
 ```bash
-# Ejecuta validaciones de encoding + compile + version sync + tests
-python tools/qa.py
-
-# Reporte opcional de cobertura por modulo (muestra modulos con menor cobertura)
-python tools/qa.py --module-coverage --module-coverage-top 10
-
-# Gate de cobertura total por modulo (umbral actual en CI)
-python tools/qa.py --module-coverage --module-coverage-top 10 --module-coverage-fail-under 100.0
-
-# Activa hook local de pre-commit para correr QA automaticamente
-git config core.hooksPath .githooks
+python3 -m pip install -e .
+retrotui
 ```
 
-- CI corre en GitHub Actions para Linux y Windows (Python 3.9 y 3.12).
-- CI aplica `--module-coverage-fail-under 100.0` de forma gradual (solo `ubuntu-latest` + Python `3.12`).
-- Baseline QA actual: `484 tests` en verde y cobertura total por módulo `100.0%` (trace + AST).
-- Politica de formato de texto definida con `.editorconfig` y `.gitattributes`.
-- Politica de release/tagging en `RELEASE.md`.
-- Release CI disponible en `.github/workflows/release.yml` (tag `vX.Y.Z` o dispatch manual).
-- Reporte de cobertura por modulo disponible via `tools/report_module_coverage.py` (stdlib `trace`).
+## Mouse (sin X11)
 
-## Soporte de Mouse sin X11
+### Consola virtual (tty1–tty6)
 
-RetroTUI funciona con mouse en **dos escenarios**:
+Requiere **GPM**:
 
-### 1. Consola virtual (tty1–tty6)
-Requiere **GPM** (General Purpose Mouse):
 ```bash
 sudo apt install gpm
-sudo systemctl start gpm
+sudo systemctl enable --now gpm
 ```
-GPM intercepta eventos del mouse vía `/dev/input/mice` y los expone
-a ncurses vía `/dev/gpmctl`. Soporta USB, PS/2 y serial.
 
-### 2. Emulador de terminal (SSH, tmux, screen)
-Usa el **protocolo xterm mouse tracking** — secuencias de escape que
-los terminales modernos entienden nativamente. No requiere GPM.
+### Emulador de terminal (SSH, tmux, screen, etc.)
 
-Terminales compatibles: xterm, gnome-terminal, kitty, alacritty,
-Windows Terminal (SSH), iTerm2, tmux, screen.
+Usa el protocolo de **xterm mouse tracking**. No requiere `gpm`.
+
+## Extras opcionales (utilidades del sistema)
+
+- ASCII Video Player: `mpv` (preferido) o `mplayer` (fallback).
+- Image Viewer: `chafa` (preferido), `timg` o `catimg`.
+- Clipboard sync: `wl-copy/wl-paste`, `xclip` o `xsel` (si están disponibles).
 
 ## Controles
 
-### Teclado
-| Tecla      | Acción                     |
-|------------|----------------------------|
-| `Tab`      | Ciclar foco entre ventanas |
-| `Escape`   | Cerrar menú / diálogo      |
-| `Enter`    | Activar selección          |
-| `Ctrl+Q`   | Salir                      |
-| `F10`      | Abrir menú                 |
-| `↑ ↓ ← →`   | Navegar menús / scroll     |
-| `PgUp/PgDn`| Scroll contenido           |
-
-### File Manager
-| Tecla         | Accion                      |
-|---------------|-----------------------------|
-| `Up / Down`   | Mover seleccion             |
-| `Enter`       | Abrir directorio/archivo    |
-| `Backspace`   | Directorio padre            |
-| `PgUp/PgDn`   | Seleccion por pagina        |
-| `Home/End`    | Inicio / final de lista     |
-| `F5`          | Copiar item seleccionado    |
-| `F4`          | Mover item seleccionado     |
-| `F2`          | Renombrar item seleccionado |
-| `Delete`      | Eliminar item seleccionado  |
-| `F7`          | Crear carpeta               |
-| `F8`          | Crear archivo               |
-| `D`           | Toggle dual-pane (>= 92 col)|
-| `Tab`         | Cambiar panel activo (dual) |
-| `H`           | Toggle archivos ocultos     |
-| `F6 / Ins`    | Copiar ruta seleccionada    |
-
-### Notepad (Editor de Texto)
+### Global (teclado)
 | Tecla         | Acción                     |
 |---------------|----------------------------|
-| `↑ ↓ ← →`    | Mover cursor               |
-| `Home/End`    | Inicio / fin de línea      |
-| `PgUp/PgDn`  | Página arriba / abajo      |
-| `Backspace`   | Borrar atrás               |
-| `Delete`      | Borrar adelante            |
-| `Enter`       | Nueva línea                |
-| `F6` / `Ins`  | Copiar línea actual        |
-| `Ctrl+V`      | Pegar clipboard (multilínea) |
-| `Ctrl+W`      | Toggle word wrap           |
+| `Tab`         | Ciclar foco entre ventanas |
+| `Esc`         | Cerrar menú / diálogo      |
+| `Enter`       | Activar selección          |
+| `Ctrl+Q`      | Salir                      |
+| `F10`         | Abrir/cerrar menú          |
+| `Up/Down/Left/Right` | Navegar menús / scroll |
+| `PgUp/PgDn`   | Scroll contenido           |
+
+### File Manager
+| Tecla         | Acción                              |
+|---------------|-------------------------------------|
+| `Up / Down`   | Mover selección                     |
+| `Enter`       | Abrir directorio/archivo            |
+| `Backspace`   | Directorio padre                    |
+| `PgUp/PgDn`   | Selección por página                |
+| `Home/End`    | Inicio / final de lista             |
+| `F5`          | Copiar ítem seleccionado            |
+| `F4`          | Mover ítem seleccionado             |
+| `F2`          | Renombrar ítem seleccionado         |
+| `Delete`      | Eliminar ítem seleccionado          |
+| `F7`          | Crear carpeta                       |
+| `F8`          | Crear archivo                       |
+| `D`           | Toggle dual-pane (requiere >= 92 col) |
+| `Tab`         | Cambiar panel activo (modo dual)    |
+| `H`           | Toggle archivos ocultos             |
+| `F6 / Ins`    | Copiar ruta seleccionada            |
+
+### Notepad (editor de texto)
+| Tecla         | Acción                           |
+|---------------|----------------------------------|
+| `Up/Down/Left/Right` | Mover cursor             |
+| `Home/End`    | Inicio / fin de línea            |
+| `PgUp/PgDn`   | Página arriba / abajo            |
+| `Backspace`   | Borrar atrás                     |
+| `Delete`      | Borrar adelante                  |
+| `Enter`       | Nueva línea                      |
+| `F6` / `Ins`  | Copiar línea actual              |
+| `Ctrl+V`      | Pegar clipboard (multilínea)     |
+| `Ctrl+W`      | Toggle word wrap                 |
 
 ### Terminal embebida
-| Tecla         | Acción                        |
-|---------------|-------------------------------|
-| `F6`          | Interrumpir proceso (SIGINT)  |
-| `F7`          | Terminar proceso (SIGTERM)    |
-| `F8`          | Copiar seleccion              |
-| `Ctrl+V`      | Pegar texto del clipboard     |
-| `PgUp/PgDn`  | Scroll de scrollback          |
+| Tecla         | Acción                       |
+|---------------|------------------------------|
+| `F6`          | Interrumpir proceso (SIGINT) |
+| `F7`          | Terminar proceso (SIGTERM)   |
+| `F8`          | Copiar selección             |
+| `Ctrl+V`      | Pegar texto del clipboard    |
+| `PgUp/PgDn`   | Scroll de scrollback         |
 
 ### Calculadora
-| Tecla         | Acción                            |
-|---------------|-----------------------------------|
-| `Enter`       | Evaluar expresión                 |
-| `Up / Down`   | Navegar historial                 |
-| `Ctrl+V`      | Pegar expresión desde clipboard   |
-| `F6` / `Ins`  | Copiar último resultado           |
-| `F9`          | Toggle always-on-top              |
-| `Ctrl+L`      | Limpiar historial                 |
-| `Ctrl+Q`      | Cerrar calculadora                |
+| Tecla         | Acción                          |
+|---------------|---------------------------------|
+| `Enter`       | Evaluar expresión               |
+| `Up / Down`   | Navegar historial               |
+| `Ctrl+V`      | Pegar expresión desde clipboard |
+| `F6 / Ins`    | Copiar último resultado         |
+| `F9`          | Toggle always-on-top            |
+| `Ctrl+L`      | Limpiar historial               |
+| `Ctrl+Q`      | Cerrar calculadora              |
 
 ### Log Viewer
-| Tecla         | Acción                               |
-|---------------|--------------------------------------|
-| `F6 / Ins`    | Copiar seleccion                     |
-| `F`           | Toggle follow tail                   |
-| `Space`       | Congelar/reanudar autoscroll         |
-| `/`           | Buscar texto                         |
-| `n / N`       | Siguiente / anterior match           |
-| `O`           | Abrir ruta (dialogo)                 |
-| `R`           | Recargar archivo                     |
-| `Home/End`    | Ir al inicio/fin del buffer          |
-| `Q`           | Cerrar ventana                       |
+| Tecla         | Acción                       |
+|---------------|------------------------------|
+| `F6 / Ins`    | Copiar selección             |
+| `F`           | Toggle follow tail           |
+| `Space`       | Congelar/reanudar autoscroll |
+| `/`           | Buscar texto                 |
+| `n / N`       | Siguiente / anterior match   |
+| `O`           | Abrir ruta (diálogo)         |
+| `R`           | Recargar archivo             |
+| `Home/End`    | Ir al inicio/fin del buffer  |
+| `Q`           | Cerrar ventana               |
 
 ### Process Manager
-| Tecla         | Acción                               |
-|---------------|--------------------------------------|
-| `C`           | Ordenar por CPU                      |
-| `M`           | Ordenar por memoria                  |
-| `P`           | Ordenar por PID                      |
-| `K` / `Del`   | Solicitar kill con confirmacion      |
-| `F5`          | Refrescar lista                      |
-| `Up/Down`     | Mover seleccion                      |
-| `PgUp/PgDn`   | Navegar por pagina                   |
-| `Q`           | Cerrar ventana                       |
+| Tecla         | Acción                          |
+|---------------|---------------------------------|
+| `C`           | Ordenar por CPU                 |
+| `M`           | Ordenar por memoria             |
+| `P`           | Ordenar por PID                 |
+| `K` / `Del`   | Solicitar kill con confirmación |
+| `F5`          | Refrescar lista                 |
+| `Up/Down`     | Mover selección                 |
+| `PgUp/PgDn`   | Navegar por página              |
+| `Q`           | Cerrar ventana                  |
 
 ### Image Viewer
-| Tecla         | Acción                               |
-|---------------|--------------------------------------|
-| `+ / -`       | Zoom in / zoom out                   |
-| `0`           | Reset zoom (100%)                    |
-| `O`           | Abrir imagen por ruta (dialogo)      |
-| `R`           | Recargar render                      |
-| `Q`           | Cerrar ventana                       |
+| Tecla         | Acción                          |
+|---------------|---------------------------------|
+| `+ / -`       | Zoom in / zoom out              |
+| `0`           | Reset zoom (100%)               |
+| `O`           | Abrir imagen por ruta (diálogo) |
+| `R`           | Recargar render                 |
+| `Q`           | Cerrar ventana                  |
 
 ### Hex Viewer
-| Tecla         | Acción                               |
-|---------------|--------------------------------------|
-| `F6 / Ins`    | Copiar selección                     |
-| `Up/Down`     | Navegar por filas hex                |
-| `PgUp/PgDn`   | Navegar por pagina                   |
-| `Home/End`    | Ir al inicio / final                 |
-| `/`           | Buscar bytes/texto                   |
-| `N`           | Siguiente match                      |
-| `G`           | Ir a offset (decimal o 0xHEX)        |
-| `O`           | Abrir archivo por ruta (dialogo)     |
-| `Q`           | Cerrar ventana                       |
+| Tecla         | Acción                            |
+|---------------|-----------------------------------|
+| `F6 / Ins`    | Copiar selección                   |
+| `Up/Down`     | Navegar por filas hex              |
+| `PgUp/PgDn`   | Navegar por página                 |
+| `Home/End`    | Ir al inicio / final               |
+| `/`           | Buscar bytes/texto                 |
+| `N`           | Siguiente match                    |
+| `G`           | Ir a offset (decimal o 0xHEX)      |
+| `O`           | Abrir archivo por ruta (diálogo)   |
+| `Q`           | Cerrar ventana                     |
 
 ### Reloj / Calendario
-| Tecla         | Acción                               |
-|---------------|--------------------------------------|
-| `T`           | Toggle always-on-top                 |
-| `B`           | Toggle chime por hora                |
-| `S`           | Semana inicia en domingo/lunes       |
-| `Q`           | Cerrar widget                        |
+| Tecla         | Acción                         |
+|---------------|--------------------------------|
+| `T`           | Toggle always-on-top           |
+| `B`           | Toggle chime por hora          |
+| `S`           | Semana inicia en domingo/lunes |
+| `Q`           | Cerrar widget                  |
 
 ### ASCII Video Player (mpv / mplayer)
 | Tecla         | Acción                              |
 |---------------|-------------------------------------|
 | `q`           | Salir del video y volver a RetroTUI |
 | `Space`       | Pausa / reanudar                    |
-| `← / →`       | Seek atrás / adelante               |
+| `Left/Right`  | Seek atrás / adelante               |
 
 > Abre desde `File > ASCII Video` (diálogo de ruta y subtítulos opcionales). Usa `mpv --vo=tct` (color, preferido) o `mplayer -vo caca/aa` (fallback).
+
+### Settings
+| Tecla         | Acción                             |
+|---------------|------------------------------------|
+| `Up/Down`     | Mover selección                    |
+| `Left/Right`  | Cambiar tema / alternar toggles    |
+| `Enter/Space` | Activar opción (preview / Save / Cancel) |
+
+### Trash
+| Tecla         | Acción                             |
+|---------------|------------------------------------|
+| `Enter`       | Abrir directorio/archivo           |
+| `Del`         | Eliminar permanentemente           |
+| `E`           | Vaciar papelera                    |
+| `R` / `F5`    | Refrescar                          |
+| `Q`           | Cerrar ventana                     |
 
 ### Ventanas
 | Acción             | Resultado                    |
 |--------------------|------------------------------|
 | Drag título        | Mover ventana                |
 | Drag borde/esquina | Redimensionar ventana        |
-| Click `[─]`       | Minimizar a taskbar          |
-| Click `[□]`       | Maximizar / restaurar        |
-| Click `[×]`       | Cerrar ventana               |
+| Click `[─]`        | Minimizar a taskbar          |
+| Click `[□]`        | Maximizar / restaurar        |
+| Click `[×]`        | Cerrar ventana               |
 | Doble-click título | Toggle maximizar             |
 | Click en taskbar   | Restaurar ventana minimizada |
 
 ### Mouse
-| Acción        | Resultado                |
-|---------------|--------------------------|
-| Click         | Seleccionar / activar    |
-| Doble-click icono | Abrir aplicación     |
-| Scroll wheel  | Scroll contenido         |
+| Acción            | Resultado             |
+|------------------|-----------------------|
+| Click            | Seleccionar / activar |
+| Doble-click icono| Abrir aplicación      |
+| Scroll wheel     | Scroll contenido      |
 
-## Arquitectura
+## Desarrollo
 
+```bash
+# Validaciones de encoding + compile + version sync + tests
+python tools/qa.py
+
+# Reporte opcional de cobertura por módulo (muestra los módulos con menor cobertura)
+python tools/qa.py --module-coverage --module-coverage-top 10
+
+# Gate de cobertura total por módulo (umbral actual en CI)
+python tools/qa.py --module-coverage --module-coverage-top 10 --module-coverage-fail-under 100.0
+
+# Activa hook local de pre-commit para correr QA automáticamente
+git config core.hooksPath .githooks
 ```
-retrotui/      — Paquete principal (core/ui/apps)
-preview.html   — Preview interactiva en browser
-PROJECT.md     — Documentación técnica del proyecto
-README.md      — Este archivo
-```
 
-### Componentes internos:
-- **RetroTUI** — Clase principal, event loop
-- **Window** — Ventanas con resize, maximize, minimize, z-order
-- **NotepadWindow** — Editor de texto con word wrap (v0.3)
-- **FileManagerWindow** — File Manager interactivo con navegación (v0.2)
-- **TerminalWindow / TerminalSession** — Terminal embebida PTY con parser ANSI básico, forwarding de input y scrollback
-- **CalculatorWindow** — Calculadora segura con evaluador `ast`, historial y modo always-on-top
-- **LogViewerWindow** — visor de logs con tail, busqueda y highlighting por severidad
-- **ProcessManagerWindow** — lista de procesos live desde `/proc`, sort y kill con confirmacion
-- **ClockCalendarWindow** — widget de hora/fecha/calendario con chime opcional
-- **ImageViewerWindow** — visor de imagenes con backend `chafa`/`timg`/`catimg` y zoom
-- **HexViewerWindow** — visor hexadecimal read-only con busqueda y go-to-offset
-- **FileEntry** — Entrada de archivo/directorio con metadata
-- **MenuBar** — Menús globales y por ventana (unificados)
-- **Dialog** — Diálogos modales
-- **ActionResult/AppAction** — Contrato interno tipado para acciones
-- **Action Runner / Content Builders** — ejecución de acciones y contenido estático desacoplados del `core/app.py`
-- **Input Routers** — routing de mouse/teclado aislado en `retrotui/core/mouse_router.py` y `retrotui/core/key_router.py`
-- **Rendering Helpers** — render de desktop/status/taskbar/iconos aislado en `retrotui/core/rendering.py`
-- **Event Loop Helpers** — ciclo principal (`run`) aislado en `retrotui/core/event_loop.py`
-- **Terminal Bootstrap** — setup/cleanup de `curses` y mouse tracking en `retrotui/core/bootstrap.py`
-- **Clipboard Core** — clipboard interno compartido con sync opcional a `wl-copy/wl-paste`, `xclip` y `xsel`
-- **ThemeEngine** — temas retro (`win31`, `dos_cga`, `win95`, `hacker`, `amiga`)
+- CI corre en GitHub Actions para Linux y Windows (Python 3.9 y 3.12): `.github/workflows/ci.yml`.
+- El gate de cobertura por módulo (stdlib `trace`) se ejecuta en `ubuntu-latest` + Python `3.12`.
+- Política de formato de texto (UTF-8 + LF) definida con `.editorconfig` y `.gitattributes`.
+- Reporte de cobertura por módulo: `tools/report_module_coverage.py`.
 
-## Changelog
+## Documentación
 
-Ver [CHANGELOG.md](CHANGELOG.md) para el historial completo de versiones.
-
-### Últimos cambios (v0.6.0)
-- **Release v0.6.0** — versión sincronizada en runtime, package y setup.
-- **Clipboard base inter-app** — copy con `F6`/`Ins` en Notepad y File Manager; paste con `Ctrl+V`.
-- **Apps utilitarias v0.7** — Log Viewer (tail/busqueda/highlighting/freeze), Process Manager (/proc + sort + kill confirm), Calculadora, y Clock/Calendar (always-on-top + chime).
-- **Media/Hex v0.9 (avance)** — image viewer + hex viewer read-only + video player mejorado (diálogo, subtítulos y overlay).
-- **TTY/mouse** — fixes para drag/resize en consola y fallback robusto de doble-click en iconos de escritorio.
-- **Calidad** — baseline actual: `518 tests`.
-- **Encoding/UI** — normalización de `retrotui/constants.py` para eliminar mojibake en bordes/iconos.
-
-## Roadmap
-
-- ~~**v0.1** - Escritorio, ventanas, menu, mouse, iconos~~
-- ~~**v0.2** - File Manager funcional con navegacion~~
-- ~~**v0.3** - Editor de texto, resize, maximize/minimize~~
-- ~~**v0.4** - Terminal embebida (via pty)~~
-- **v0.5** - Temas y configuracion (en progreso: motor de temas y settings listos)
-- **v0.6** - Clipboard y comunicacion inter-app (clipboard + drag and drop base listos)
-- **v0.7** - Apps utilitarias (log viewer, process manager, calculadora y clock/calendar listos)
-- **v0.8** - File Manager avanzado (en progreso: dual-pane, previews (texto/imagen), info, bookmarks, undo y progreso de operaciones largas listos)
-- **v0.9** - Media y hex editor (en progreso: image viewer + hex viewer + video player mejorado listos)
-- **v1.0** - Empaquetado, plugins y documentacion
+- `ROADMAP.md`: roadmap y estado por versiones.
+- `CHANGELOG.md`: historial de cambios.
+- `PROJECT.md`: guía técnica y arquitectura.
+- `RELEASE.md`: política y checklist de releases.
+- `preview.html`: preview interactiva en navegador.
 
 ## Licencia
+
 MIT
