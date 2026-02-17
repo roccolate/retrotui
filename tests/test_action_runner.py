@@ -393,6 +393,14 @@ class ActionRunnerTests(unittest.TestCase):
         spawned = app._spawn_window.call_args.args[0]
         self.assertTrue(spawned.wrap_default)
 
+    def test_supports_constructor_kwarg_handles_varkw_and_bad_signatures(self):
+        class _VarKw:
+            def __init__(self, **_kwargs):
+                pass
+
+        self.assertTrue(self.action_runner._supports_constructor_kwarg(_VarKw, "anything"))
+        self.assertFalse(self.action_runner._supports_constructor_kwarg(object(), "anything"))
+
     def test_execute_terminal_spawns_terminal_window_with_offset(self):
         app = self._make_app()
         logger = mock.Mock()

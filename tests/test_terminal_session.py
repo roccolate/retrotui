@@ -238,6 +238,14 @@ class TerminalSessionTests(unittest.TestCase):
         kill.assert_not_called()
 
         with (
+            mock.patch.object(self.mod.os, "tcgetpgrp", return_value=987, create=True),
+            mock.patch.object(self.mod.os, "killpg", side_effect=OSError("bad"), create=True),
+            mock.patch.object(self.mod.os, "kill") as kill,
+        ):
+            self.assertTrue(session.send_signal(signal.SIGTERM))
+        kill.assert_called_once_with(4321, signal.SIGTERM)
+
+        with (
             mock.patch.object(self.mod.os, "tcgetpgrp", side_effect=OSError("bad"), create=True),
             mock.patch.object(self.mod.os, "killpg", side_effect=OSError("bad"), create=True),
             mock.patch.object(self.mod.os, "kill") as kill,

@@ -88,6 +88,59 @@ class ClockComponentTests(unittest.TestCase):
 
         self.curses.beep.assert_called_once_with()
 
+    def test_missing_branches_for_coverage(self):
+        win = self._make_window()
+        win.chime_enabled = True
+
+        # Minute != 0 short-circuits.
+        now = datetime(2026, 2, 16, 10, 15, 0)
+        self.curses.beep.reset_mock()
+        win._maybe_chime(now)
+        self.curses.beep.assert_not_called()
+
+        # Beeper exception is swallowed.
+        win._last_chime_hour = None
+        old_side_effect = self.curses.beep.side_effect
+        try:
+            self.curses.beep.side_effect = RuntimeError("boom")
+            now = datetime(2026, 2, 16, 11, 0, 0)
+            win._maybe_chime(now)
+        finally:
+            self.curses.beep.side_effect = old_side_effect
+
+        # Unknown menu action falls back to None.
+        self.assertIsNone(win._execute_menu_action("unknown"))
+
+        # draw() returns early when invisible.
+        win.visible = False
+        with (
+            mock.patch.object(win, "draw_frame") as draw_frame,
+            mock.patch.object(self.clock_mod, "safe_addstr") as safe_addstr,
+        ):
+            win.draw(None)
+        draw_frame.assert_not_called()
+        safe_addstr.assert_not_called()
+
+        # draw() returns early on invalid body rect.
+        win.visible = True
+        with (
+            mock.patch.object(win, "draw_frame", return_value=0),
+            mock.patch.object(win, "body_rect", return_value=(0, 0, 0, 0)),
+        ):
+            win.draw(None)
+
+        # handle_click() returns None when menu yields no action.
+        fake_menu = mock.Mock()
+        fake_menu.active = True
+        fake_menu.on_menu_bar.return_value = True
+        fake_menu.handle_click.return_value = None
+        win.window_menu = fake_menu
+        self.assertIsNone(win.handle_click(0, 0))
+
+        # handle_key() returns None when menu yields no action.
+        fake_menu.handle_key.return_value = None
+        self.assertIsNone(win.handle_key(ord("x")))
+
     def test_draw_renders_clock_calendar_and_status(self):
         win = self._make_window()
         fixed_now = datetime(2026, 2, 16, 10, 15, 30)
@@ -117,6 +170,49 @@ class ClockComponentTests(unittest.TestCase):
         win.week_starts_sunday = True
         sunday_lines = win._month_lines(now)
         self.assertTrue(any(line.strip().startswith("Su Mo") for line in sunday_lines))
+
+    def test_execute_menu_action_and_menu_delegation(self):
+        win = self._make_window()
+
+        # _execute_menu_action toggles flags and returns close action for clk_close
+        self.assertTrue(win.always_on_top)
+        win._execute_menu_action("clk_top")
+        self.assertFalse(win.always_on_top)
+
+        self.assertFalse(win.chime_enabled)
+        win._execute_menu_action("clk_chime")
+        self.assertTrue(win.chime_enabled)
+
+        self.assertFalse(win.week_starts_sunday)
+        win._execute_menu_action("clk_week")
+        self.assertTrue(win.week_starts_sunday)
+
+        result = win._execute_menu_action("clk_close")
+        self.assertEqual(result.type, self.actions_mod.ActionType.EXECUTE)
+        self.assertEqual(result.payload, self.actions_mod.AppAction.CLOSE_WINDOW)
+
+    def test_handle_key_and_click_delegate_to_window_menu(self):
+        win = self._make_window()
+
+        # Replace window_menu with a fake that tracks calls
+        fake_menu = mock.Mock()
+        fake_menu.active = True
+        fake_menu.handle_key.return_value = "clk_top"
+        win.window_menu = fake_menu
+
+        # When menu is active, handle_key should delegate
+        win.always_on_top = True
+        win.handle_key(ord("x"))
+        fake_menu.handle_key.assert_called()
+
+        # handle_click should delegate when on_menu_bar returns True
+        fake_menu.on_menu_bar.return_value = True
+        fake_menu.handle_click.return_value = "clk_chime"
+        win.chime_enabled = False
+        result = win.handle_click(0, 0)
+        # _execute_menu_action returns None for toggle actions; state should change
+        self.assertIsNone(result)
+        self.assertTrue(win.chime_enabled)
 
 
 if __name__ == "__main__":

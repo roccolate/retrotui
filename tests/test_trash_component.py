@@ -127,13 +127,16 @@ class TrashComponentTests(unittest.TestCase):
         try:
             target = root / "gone.txt"
             target.write_text("bye", encoding="utf-8")
+            (root / "keep.txt").write_text("stay", encoding="utf-8")
             win = self._make_window(root)
             for idx, entry in enumerate(win.entries):
                 if entry.name == "gone.txt":
                     win.selected_index = idx
                     break
 
-            self.assertIsNone(win.delete_selected())
+            with mock.patch.object(win, "_ensure_visible") as ensure_visible:
+                self.assertIsNone(win.delete_selected())
+                ensure_visible.assert_called_once_with()
             self.assertFalse(target.exists())
 
             win.entries = []
