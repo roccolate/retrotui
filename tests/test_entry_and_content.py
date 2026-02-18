@@ -183,24 +183,24 @@ class StaticModuleContentTests(unittest.TestCase):
         app_version = match.group(1)
 
         self.assertEqual(package.__version__, app_version)
-        self.assertEqual(package.__version__, "0.6.0")
+        self.assertEqual(package.__version__, "0.9.0")
 
     def test_content_builders_include_expected_sections(self):
         with mock.patch.dict(sys.modules, {"curses": _fake_curses_module()}):
             sys.modules.pop("retrotui.utils", None)
             sys.modules.pop("retrotui.core.content", None)
             content = importlib.import_module("retrotui.core.content")
-        welcome = content.build_welcome_content("0.6.0")
+        welcome = content.build_welcome_content("0.9.0")
         help_text = content.build_help_message()
         settings = content.build_settings_content()
 
         with mock.patch.object(content, "get_system_info", return_value=["OS: test", "CPU: test"]):
-            about = content.build_about_message("0.6.0")
+            about = content.build_about_message("0.9.0")
 
-        self.assertTrue(any("v0.6.0" in line for line in welcome))
+        self.assertTrue(any("v0.9.0" in line for line in welcome))
         self.assertIn("Ctrl+Q", help_text)
         self.assertTrue(any("Theme:" in line for line in settings))
-        self.assertIn("RetroTUI v0.6.0", about)
+        self.assertIn("RetroTUI v0.9.0", about)
         self.assertIn("OS: test", about)
 
 
