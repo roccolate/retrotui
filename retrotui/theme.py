@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 import curses
+from typing import Optional
 
 from .constants import (
     C_BUTTON,
@@ -94,8 +95,8 @@ class Theme:
     label: str
     desktop_pattern: str
     pairs_base: dict[str, tuple[int, int]]
-    pairs_256: dict[str, tuple[int, int]] | None = None
-    custom_colors: dict[int, tuple[int, int, int]] | None = None
+    pairs_256: Optional[dict[str, tuple[int, int]]] = None
+    custom_colors: Optional[dict[int, tuple[int, int, int]]] = None
 
 
 THEMES = {
@@ -229,7 +230,7 @@ def list_themes():
     return [THEMES[key] for key in order]
 
 
-def get_theme(theme_key: str | None) -> Theme:
+def get_theme(theme_key: Optional[str]) -> Theme:
     """Resolve theme by key with fallback to default."""
     if not theme_key:
         return THEMES[DEFAULT_THEME]
