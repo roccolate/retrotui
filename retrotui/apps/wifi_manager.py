@@ -25,14 +25,19 @@ class WifiManagerWindow(Window):
             if result.returncode != 0:
                 return
             for line in result.stdout.splitlines():
-                parts = line.split(":")
+                # nmcli -t uses ':' separators but SSID may be empty; be defensive
+                parts = line.split(":" )
                 if not parts:
                     continue
-                ssid = parts[0]
-                signal = parts[1] if len(parts) > 1 else "0"
-                sec = parts[2] if len(parts) > 2 else ""
-                inuse = parts[3] if len(parts) > 3 else ""
-                self.networks.append({"ssid": ssid, "signal": signal, "sec": sec, "inuse": inuse})
+                ssid = parts[0].strip()
+                signal = parts[1].strip() if len(parts) > 1 and parts[1] else "0"
+                sec = parts[2].strip() if len(parts) > 2 else ""
+                inuse = parts[3].strip() if len(parts) > 3 else ""
+                # collapse empty SSIDs to a placeholder
+                display_ssid = ssid or "<hidden>"
+                self.networks.append({"ssid": display_ssid, "signal": signal, "sec": sec, "inuse": inuse})
+            # sort so in-use appears first
+            self.networks.sort(key=lambda n: (0 if n.get('inuse') else 1, -int(n.get('signal') or 0)))
         except OSError:
             self.nmcli = None
 
@@ -66,4 +71,14 @@ class WifiManagerWindow(Window):
             subprocess.run([self.nmcli, "dev", "wifi", "connect", net.get('ssid')], check=False)
         except OSError:
             pass
+        return None
+
+    def handle_key(self, key):
+        # 'r' to refresh network list
+        if getattr(key, '__int__', None) and int(key) == ord('r'):
+            try:
+                self.refresh()
+            except Exception:
+                pass
+            return None
         return None

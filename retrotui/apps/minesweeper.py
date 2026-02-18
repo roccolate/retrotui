@@ -50,18 +50,27 @@ class MinesweeperWindow(Window):
                 self._grid[r][c] = count
 
     def _reveal_cell(self, r, c):
+        # Iterative flood-fill to avoid deep recursion and duplicate work.
         if self.game_over or self.revealed[r][c] or self.flagged[r][c]:
             return
-        self.revealed[r][c] = True
-        if self._grid[r][c] == -1:
-            self.game_over = True
-            return
-        if self._grid[r][c] == 0:
-            for dr in (-1, 0, 1):
-                for dc in (-1, 0, 1):
-                    rr, cc = r + dr, c + dc
-                    if 0 <= rr < self.rows and 0 <= cc < self.cols and not self.revealed[rr][cc]:
-                        self._reveal_cell(rr, cc)
+        stack = [(r, c)]
+        while stack:
+            rr, cc = stack.pop()
+            if self.revealed[rr][cc] or self.flagged[rr][cc]:
+                continue
+            self.revealed[rr][cc] = True
+            if self._grid[rr][cc] == -1:
+                self.game_over = True
+                return
+            if self._grid[rr][cc] == 0:
+                for dr in (-1, 0, 1):
+                    for dc in (-1, 0, 1):
+                        nr, nc = rr + dr, cc + dc
+                        if 0 <= nr < self.rows and 0 <= nc < self.cols and not self.revealed[nr][nc]:
+                            stack.append((nr, nc))
+        # After revealing, check victory condition (unless game over)
+        if not self.game_over:
+            self._check_victory()
 
     def toggle_flag(self, r, c):
         if self.game_over or self.revealed[r][c]:
@@ -85,24 +94,45 @@ class MinesweeperWindow(Window):
         self.title = f"{self.base_title}  ⏱ {self.elapsed}s"
         body_attr = self.draw_frame(stdscr)
         bx, by, bw, bh = self.body_rect()
-        # Draw grid within body
+        # Per-cell draw to support colored numbers and chording visuals
+        num_role_map = {
+            1: 'file_directory',
+            2: 'file_selected',
+            3: 'menu_selected',
+            4: 'button',
+            5: 'button_selected',
+            6: 'status',
+            7: 'icon',
+            8: 'icon_selected',
+        }
         for r in range(self.rows):
-            line = ''
             for c in range(self.cols):
+                x = bx + c * 2
+                y = by + r
+                attr = body_attr
                 if self.flagged[r][c]:
                     ch = '🚩'
+                    attr |= curses.A_BOLD
                 elif not self.revealed[r][c]:
                     ch = '█'
                 else:
                     v = self._grid[r][c]
                     if v == -1:
                         ch = '💣'
+                        attr |= curses.A_BOLD
                     elif v == 0:
                         ch = ' '
                     else:
                         ch = str(v)
-                line += ch + ' '
-            safe_addstr(stdscr, by + r, bx, line[:bw], body_attr)
+                        # Apply a number-based color role when available
+                        role = num_role_map.get(v)
+                        try:
+                            if role:
+                                attr |= theme_attr(role)
+                        except Exception:
+                            pass
+                        attr |= curses.A_BOLD
+                safe_addstr(stdscr, y, x, ch, attr)
 
     def handle_click(self, mx, my, bstate=None):
         # Map click to grid cell
@@ -117,7 +147,25 @@ class MinesweeperWindow(Window):
         if bstate and getattr(bstate, 'right', False):
             self.toggle_flag(row, col)
         else:
-            self._reveal_cell(row, col)
+            # If clicking a revealed number, perform chording: reveal neighbors
+            if self.revealed[row][col] and self._grid[row][col] > 0:
+                need = self._grid[row][col]
+                flags = 0
+                neighbors = []
+                for dr in (-1, 0, 1):
+                    for dc in (-1, 0, 1):
+                        nr, nc = row + dr, col + dc
+                        if 0 <= nr < self.rows and 0 <= nc < self.cols:
+                            if self.flagged[nr][nc]:
+                                flags += 1
+                            elif not self.revealed[nr][nc]:
+                                neighbors.append((nr, nc))
+                if flags >= need:
+                    for nr, nc in neighbors:
+                        self._reveal_cell(nr, nc)
+            else:
+                self._reveal_cell(row, col)
+
             if self.game_over:
                 # reveal all
                 for r in range(self.rows):
@@ -125,4 +173,20 @@ class MinesweeperWindow(Window):
                         self.revealed[r][c] = True
             else:
                 self._check_victory()
+        return None
+
+    def handle_key(self, key):
+        # 'r' to restart the game
+        if getattr(key, '__int__', None) and int(key) == ord('r'):
+            # reset grids
+            self._grid = [[0 for _ in range(self.cols)] for _ in range(self.rows)]
+            self.revealed = [[False for _ in range(self.cols)] for _ in range(self.rows)]
+            self.flagged = [[False for _ in range(self.cols)] for _ in range(self.rows)]
+            self._place_bombs()
+            self._compute_numbers()
+            self.start_time = None
+            self.elapsed = 0
+            self.game_over = False
+            self.victory = False
+            return None
         return None
