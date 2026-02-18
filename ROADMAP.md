@@ -278,6 +278,35 @@ Extensibilidad para la comunidad. Branch: `feature/plugins`
 **Documentación**
 - [ ] Guía de desarrollo de plugins
 
+**Ideas de plugins (comunidad / contribuidores)**
+
+*Productividad:*
+- [ ] 📝 Todo List — Tareas con prioridades, fechas, checkboxes
+- [ ] 🍅 Pomodoro Timer — Temporizador 25/5 con bell y historial
+- [ ] 📌 Sticky Notes — Post-its en el escritorio que persisten entre sesiones
+- [ ] 📇 Contacts / Cardfile — Mini CRM: nombre, teléfono, email, notas
+- [ ] 📰 RSS Reader — Leer feeds RSS/Atom en ventana retro
+
+*Sistema:*
+- [ ] 💾 Disk Usage — Visualización de uso de disco estilo `ncdu`
+- [ ] 📊 System Monitor — Dashboard: CPU, RAM, disco, uptime, temperatura
+- [ ] 🌐 Network Monitor — Ancho de banda, conexiones activas, ping
+- [ ] ⚙️ Service Manager — Start/stop/restart servicios `systemd`
+- [ ] 🕐 Cron Editor — Editar crontab con interfaz visual
+
+*Entretenimiento:*
+- [ ] 🥠 Fortune Cookie — Frase aleatoria al abrir (como `fortune`)
+- [ ] 🐠 ASCII Aquarium — Pecera animada como screensaver/widget
+- [ ] 🧬 Conway's Game of Life — Autómata celular interactivo
+- [ ] 🌤️ Weather Widget — Clima actual vía `wttr.in`
+- [ ] 🟢 Matrix Rain — Efecto Matrix como screensaver
+
+*Desarrollo:*
+- [ ] 🔀 Git Status — Branch, commits recientes, diff viewer
+- [ ] 📄 JSON Viewer — Explorar archivos JSON con tree collapsible
+- [ ] 🐳 Docker Manager — Listar contenedores, start/stop, ver logs
+- [ ] 🗄️ DB Browser — Explorar tablas SQLite con interfaz visual
+
 ---
 
 ### v0.9.4 — Creative & System
@@ -301,6 +330,42 @@ Apps creativas, multimedia y configuración avanzada. Branch: `feature/creative`
 
 ---
 
+### v0.9.5 — Menú Inicio & Temas Avanzados
+
+La experiencia de escritorio completa. Branch: `feature/start-menu`
+
+**Menú Inicio**
+- [ ] 🪟 Start Menu estilo Windows — Botón "Start" en taskbar, menú desplegable con apps, submenús
+- [ ] 🍎 Dock estilo Mac — Barra inferior con iconos, animación bounce, auto-hide
+- [ ] TUI App Launcher — Detectar apps TUI instaladas (`claude`, `nvim`, `mc`, `htop`) y lanzarlas en ventana
+
+**Temas avanzados**
+- [ ] 🌙 Tema Luna (Windows XP) — Colores azul/verde/plateado, bordes redondeados (`╭╮╰╯`), botones con gradiente
+- [ ] Tema macOS Aqua — Aspecto tipo macOS clásico
+- [ ] Tema personalizable — Editor de temas en vivo desde Settings
+
+**App Manager**
+- [ ] Gestor de apps de RetroTUI: listar, habilitar/deshabilitar, configurar, ver info
+
+---
+
+### v0.9.6 — DOS Mode 🐭
+
+MS-DOS con mouse en RetroTUI. Branch: `feature/dos-mode`
+
+**DOS Shell**
+- [ ] Modo pantalla completa estilo MS-DOS 6.22 con prompt `C:\>`
+- [ ] Mouse habilitado con cursor block `█`
+- [ ] Menu bar tipo DOS (`Alt` activa menú superior)
+
+**DOSBox Integration**
+- [ ] DOSBox embebido en ventana RetroTUI vía PTY
+- [ ] Mouse passthrough RetroTUI → DOSBox
+- [ ] Lanzar apps DOS clásicas: StarOffice 3.1, WordPerfect, Lotus 1-2-3, Turbo Pascal
+- [ ] Juegos DOS: DOOM, Duke Nukem, Commander Keen
+
+---
+
 ### v1.0.0 — Release Formal
 
 Calidad de release. Publicación y empaquetado.
@@ -316,23 +381,46 @@ Calidad de release. Publicación y empaquetado.
 
 ---
 
+## Visión a largo plazo
+
+### v2.0 — RetroTUI como Login Shell
+
+RetroTUI reemplaza bash como shell de login. Al encender el PC, aparece el escritorio.
+
+- [ ] Auto-start como login shell (`/etc/shells` + `chsh`)
+- [ ] Login screen con usuario/password estilo Win 3.1
+- [ ] Gestión de sesiones de usuario
+- [ ] Notificaciones del sistema (batería, updates, errores)
+- [ ] System tray con widgets (reloj, WiFi, volumen, batería)
+
+### v3.0 — RetroTUI OS
+
+Distribución Linux mínima que bootea directo al escritorio RetroTUI.
+
+- [ ] ISO booteable: Alpine/Void Linux + Python + RetroTUI
+- [ ] Setup wizard de instalación
+- [ ] Gestión de paquetes integrada
+- [ ] Drivers y hardware auto-detectado
+- [ ] Target: Raspberry Pi, laptops viejas, thin clients
+
+---
+
 ## Ideas Futuras (Backlog)
 
-Estas ideas no tienen versión asignada y se considerarán después de v1.0:
+Estas ideas no tienen versión asignada y se considerarán según prioridad:
 
-| Idea | Descripción |
-|------|-------------|
-| Web Browser | Wrapper `w3m`/`lynx`, HTML→texto en ventana |
-| SSH File Manager | Navegar servidores remotos vía SFTP/paramiko |
-| Music Player | Wrapper `mpv --no-video` o `cmus` |
-| Cliente IRC/Chat | Cliente IRC integrado estilo retro |
-| Cliente Email | Lector IMAP básico (read-only) con estética Win 3.1 |
-| Screensaver | Starfield, flying toasters o maze después de idle |
-| Escritorios múltiples | Cambio de desktops virtuales (Ctrl+Left/Right) |
-| Temas comunitarios | Repositorio de temas de la comunidad |
-| Scripting/macros | Sistema de scripting para automatización |
-| Pipe integration | Pipar stdout de comandos de terminal a Notepad o Log Viewer |
-| App Manager | Gestor de apps instaladas / plugins |
+| Categoría | Idea | Descripción |
+|-----------|------|-------------|
+| Apps | Web Browser | Wrapper `w3m`/`lynx`, HTML→texto en ventana |
+| Apps | Music Player | Wrapper `mpv --no-video` o `cmus` |
+| Apps | SSH File Manager | Navegar servidores remotos vía SFTP/paramiko |
+| Apps | Cliente IRC/Chat | Chat retro integrado |
+| Apps | Cliente Email | Lector IMAP read-only estilo Win 3.1 |
+| UX | Screensaver | Starfield, flying toasters, maze después de idle |
+| UX | Escritorios múltiples | Cambio de desktops virtuales (Ctrl+Left/Right) |
+| UX | Temas comunitarios | Repositorio de temas de la comunidad |
+| Sistema | Scripting/macros | Automatización de acciones |
+| Sistema | Pipe integration | stdout de terminal → Notepad o Log Viewer |
 
 ---
 
