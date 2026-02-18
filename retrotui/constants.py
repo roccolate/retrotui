@@ -3,7 +3,6 @@
 import curses
 
 from .core.actions import AppAction
-
 # Box drawing characters (Unicode).
 BOX_TL = "\u2554"
 BOX_TR = "\u2557"
@@ -81,6 +80,16 @@ ICONS = [
         "action": AppAction.ABOUT,
         "art": ["\u256d\u2500\u2500\u256e", "\u2502 ?\u2502", "\u2570\u2500\u2500\u256f"],
     },
+    {
+        "label": "Mines",
+        "action": AppAction.MINESWEEPER if hasattr(AppAction, 'MINESWEEPER') else AppAction.CALCULATOR,
+        "art": ["\u250c\u2500\u2500\u2510", "\u2502\u2692\u2692\u2502", "\u2514\u2500\u2500\u2518"],
+    },
+    {"label": "Solitaire", "action": AppAction.SOLITAIRE if hasattr(AppAction, 'SOLITAIRE') else AppAction.CALCULATOR, "art": ["+--+", "|<>|", "+--+"]},
+    {"label": "Snake", "action": AppAction.SNAKE if hasattr(AppAction, 'SNAKE') else AppAction.CALCULATOR, "art": ["+--+", "|~~|", "+--+"]},
+    {"label": "Chars", "action": AppAction.CHARMAP if hasattr(AppAction, 'CHARMAP') else AppAction.NOTEPAD, "art": ["+--+", "|¤ |", "+--+"]},
+    {"label": "Clip", "action": AppAction.CLIPBOARD if hasattr(AppAction, 'CLIPBOARD') else AppAction.NOTEPAD, "art": ["+--+", "|Cb|", "+--+"]},
+    {"label": "WiFi", "action": AppAction.WIFI_MANAGER if hasattr(AppAction, 'WIFI_MANAGER') else AppAction.SETTINGS, "art": ["+--+", "|Wi|", "+--+"]},
 ]
 
 # Fallback ASCII icons for non-Unicode terminals.
@@ -97,6 +106,12 @@ ICONS_ASCII = [
     {"label": "Trash", "action": AppAction.TRASH_BIN, "art": ["+--+", "|TR|", "+--+"]},
     {"label": "Settings", "action": AppAction.SETTINGS, "art": ["+--+", "|**|", "+--+"]},
     {"label": "About", "action": AppAction.ABOUT, "art": ["+--+", "| ?|", "+--+"]},
+    {"label": "Mines", "action": AppAction.MINESWEEPER if hasattr(AppAction, 'MINESWEEPER') else AppAction.CALCULATOR, "art": ["+--+", "|MM|", "+--+"]},
+    {"label": "Solitaire", "action": AppAction.SOLITAIRE if hasattr(AppAction, 'SOLITAIRE') else AppAction.CALCULATOR, "art": ["+--+", "|<>|", "+--+"]},
+    {"label": "Snake", "action": AppAction.SNAKE if hasattr(AppAction, 'SNAKE') else AppAction.CALCULATOR, "art": ["+--+", "|~~|", "+--+"]},
+    {"label": "Chars", "action": AppAction.CHARMAP if hasattr(AppAction, 'CHARMAP') else AppAction.NOTEPAD, "art": ["+--+", "|¤ |", "+--+"]},
+    {"label": "Clip", "action": AppAction.CLIPBOARD if hasattr(AppAction, 'CLIPBOARD') else AppAction.NOTEPAD, "art": ["+--+", "|Cb|", "+--+"]},
+    {"label": "WiFi", "action": AppAction.WIFI_MANAGER if hasattr(AppAction, 'WIFI_MANAGER') else AppAction.SETTINGS, "art": ["+--+", "|Wi|", "+--+"]},
 ]
 
 VIDEO_EXTENSIONS = {
