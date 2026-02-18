@@ -2,16 +2,9 @@ import sys
 import types
 import unittest
 
-# fake curses constants
-import curses
-# ensure expected constants exist on the curses module used by the app
-setattr(curses, 'KEY_PPAGE', 339)
-setattr(curses, 'KEY_NPAGE', 338)
-setattr(curses, 'KEY_UP', 259)
-setattr(curses, 'KEY_DOWN', 258)
-setattr(curses, 'KEY_HOME', 262)
-setattr(curses, 'KEY_END', 360)
-setattr(curses, 'KEY_DC', 330)
+from _support import make_fake_curses
+
+sys.modules['curses'] = make_fake_curses()
 
 from retrotui.apps.process_manager import ProcessManagerWindow, ProcessRow
 

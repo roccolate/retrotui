@@ -5,7 +5,7 @@ import shutil
 import unittest
 from unittest import mock
 
-from tests._support import make_fake_curses
+from _support import make_fake_curses
 
 # ensure a consistent fake curses implementation
 _prev = sys.modules.get('curses')
