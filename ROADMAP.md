@@ -30,9 +30,7 @@
 
 ---
 
-## Versiones Planificadas
-
-### v0.4 — Terminal Embebida & Refactor Interno
+### v0.4 — Terminal Embebida & Refactor Interno ✅
 
 La release que hace RetroTUI usable como shell diario.
 
@@ -94,7 +92,7 @@ La release que hace RetroTUI usable como shell diario.
 - [x] Baseline actual de calidad: suite de tests en verde y cobertura total por modulo `100.0%`
 
 ---
-### v0.5 — Temas y Configuración
+### v0.5 — Temas y Configuración ✅
 
 Personalidad y persistencia.
 
@@ -122,7 +120,7 @@ Personalidad y persistencia.
 
 ---
 
-### v0.6 - Clipboard y Comunicacion Inter-App
+### v0.6 - Clipboard y Comunicacion Inter-App ✅
 
 Hacer que las apps se sientan como un entorno integrado.
 
@@ -144,7 +142,7 @@ Hacer que las apps se sientan como un entorno integrado.
 
 ---
 
-### v0.7 — Aplicaciones Utilitarias
+### v0.7 — Aplicaciones Utilitarias ✅
 
 Las apps que hacen que la gente quiera quedarse en RetroTUI.
 Estado: checklist completado en codigo; pendiente empaquetado/release formal.
@@ -176,7 +174,7 @@ Estado: checklist completado en codigo; pendiente empaquetado/release formal.
 
 ---
 
-### v0.8 — File Manager Avanzado
+### v0.8 — File Manager Avanzado ✅
 
 Hacer el file manager competitivo con Midnight Commander.
 
@@ -203,9 +201,7 @@ Hacer el file manager competitivo con Midnight Commander.
 
 ---
 
-### v0.9 — Media y Hex
-
-Extender lo que se puede hacer sin salir del escritorio.
+### v0.9 — Media y Hex ✅
 
 **Image Viewer**
 - [x] Abrir PNG/JPEG/GIF desde File Manager
@@ -226,25 +222,36 @@ Extender lo que se puede hacer sin salir del escritorio.
 
 ---
 
-### v1.0 — Empaquetado, Plugins y Documentación
+## Versiones Planificadas
+
+### v1.0 — Empaquetado y Documentación
 
 Calidad de release.
 
 **Empaquetado**
 - [x] `pyproject.toml` con entry point de consola (comando `retrotui`)
 - [ ] Publicación en PyPI para `pip install retrotui`
-- [ ] Paquete `.deb` para Ubuntu/Debian
-- [ ] Paquete AUR para Arch
-- [ ] Opción auto-start: agregar a `.bash_profile` como reemplazo de login shell
+- [ ] Metadata completa: classifiers, keywords, URLs, LICENSE
 
 **Modularización**
 - [x] Separar monolito base en paquete Python:
   - `retrotui/core/` — event loop, window manager
   - `retrotui/apps/` — filemanager, notepad
   - `retrotui/ui/` — ventanas, menús y diálogos
-- [ ] Completar separación adicional en `widgets/` reutilizables y `themes/` dedicados
+- [ ] Split de `filemanager.py` en package `filemanager/` (window, operations, preview)
 - [x] Cada app principal como módulo autocontenido
 - [x] API interna limpia para comunicación window manager ↔ app (`ActionResult` / `AppAction`)
+
+**Documentación**
+- [ ] README bilingüe (EN + ES) con badges, features y screenshots
+- [ ] ARCHITECTURE.md (evolución de PROJECT.md)
+- [ ] CONTRIBUTING.md con convenciones y guía de desarrollo
+
+---
+
+### v1.1+ — Plugins, Paquetes Nativos y Extras
+
+Planificado post-v1.0.
 
 **Sistema de Plugins**
 - [ ] Directorio `~/.config/retrotui/plugins/`
@@ -253,10 +260,18 @@ Calidad de release.
 - [ ] Auto-discovery y carga al iniciar
 - [ ] Plugin de ejemplo como template
 
-**Documentación**
-- [ ] README en inglés + español
+**Paquetes Nativos**
+- [ ] Paquete `.deb` para Ubuntu/Debian
+- [ ] Paquete AUR para Arch
+- [ ] Opción auto-start: agregar a `.bash_profile` como reemplazo de login shell
+
+**Extras de Configuración**
+- [ ] Restaurar sesión: recordar ventanas abiertas, posiciones, archivos abiertos
+- [ ] Detección de primera ejecución con wizard de bienvenida
+- [ ] Completar separación adicional en `widgets/` reutilizables y `themes/` dedicados
+
+**Documentación Adicional**
 - [ ] Guía de desarrollo de plugins
-- [ ] Documento de arquitectura
 - [ ] Man page (`man retrotui`)
 
 ---
@@ -279,4 +294,4 @@ Estas ideas no tienen versión asignada y se considerarán después de v1.0:
 
 ---
 
-*Última actualización: 16 de febrero de 2026*
+*Última actualización: 18 de febrero de 2026*
