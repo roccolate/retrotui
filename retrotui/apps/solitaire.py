@@ -114,8 +114,51 @@ class SolitaireWindow(Window):
             if self._auto_move_sequence_to_column():
                 moved += 1
                 continue
+            # As a more aggressive heuristic, attempt moving single face-up cards
+            # onto other columns (not to foundations) when legal — this can free
+            # lower-rank cards and enable further foundation moves.
+            if self._try_move_single_to_column():
+                moved += 1
+                continue
             break
         return moved
+
+    def _try_move_single_to_column(self) -> bool:
+        """Try moving any single face-up top card (not sequences) to another
+        column if it fits. Returns True if a move was made."""
+        for src_idx, col in enumerate(self.columns):
+            if not col:
+                continue
+            top_card, up = col[-1]
+            if not up:
+                continue
+            # try placing this single card onto another column top
+            for tgt_idx, tgt_col in enumerate(self.columns):
+                if tgt_idx == src_idx:
+                    continue
+                if tgt_col:
+                    tgt_top, tgt_up = tgt_col[-1]
+                    if not tgt_up:
+                        continue
+                    if self._can_place_sequence_on(tgt_top, top_card):
+                        # move the single card
+                        self.columns[tgt_idx].append((top_card, True))
+                        del self.columns[src_idx][-1:]
+                        # reveal new top of source
+                        if self.columns[src_idx]:
+                            c, _ = self.columns[src_idx][-1]
+                            self.columns[src_idx][-1] = (c, True)
+                        return True
+                else:
+                    # empty target column: only allow King
+                    if self._rank_value(top_card) == 13:
+                        self.columns[tgt_idx].append((top_card, True))
+                        del self.columns[src_idx][-1:]
+                        if self.columns[src_idx]:
+                            c, _ = self.columns[src_idx][-1]
+                            self.columns[src_idx][-1] = (c, True)
+                        return True
+        return False
 
     def _is_red(self, suit: str) -> bool:
         return suit in ("H", "D")
