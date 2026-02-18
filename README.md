@@ -269,6 +269,19 @@ git config core.hooksPath .githooks
 - `RELEASE.md`: política y checklist de releases.
 - `preview.html`: preview interactiva en navegador.
 
+## New apps and icons
+
+This release adds several small, self-contained applications (desktop icons and menu entries) useful for demos and utility workflows:
+
+- `Minesweeper` — classic minesweeper game with safe-first-click placement and headless-friendly UI for tests.
+- `Solitaire` — Klondike-like solitaire with auto-move/drain heuristics and optional auto-complete trigger.
+- `Snake` — simple time-driven snake game with pause/resume support and legacy-compatible step behavior.
+- `Charmap` — character map utility for browsing and inserting Unicode glyphs.
+- `Clipboard Viewer` — read-only viewer for the system clipboard (supports common backends, falls back gracefully).
+- `WiFi Manager` — lightweight scanner UI that uses `nmcli` when available and degrades safely when not present.
+
+The icons for these apps are registered with the desktop layer and available in the main application menu.
+
 ## Licencia
 
 MIT
