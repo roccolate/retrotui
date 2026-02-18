@@ -80,6 +80,7 @@ class RetroTUI:
         self.theme = get_theme(self.theme_name)
         self.default_show_hidden = bool(self.config.show_hidden)
         self.default_word_wrap = bool(self.config.word_wrap_default)
+        self.default_sunday_first = bool(self.config.sunday_first)
         self.drag_payload = None
         self.drag_source_window = None
         self.drag_target_window = None
@@ -108,12 +109,14 @@ class RetroTUI:
         self.theme_name = self.theme.key
         init_colors(self.theme)
 
-    def apply_preferences(self, *, show_hidden=None, word_wrap_default=None, apply_to_open_windows=False):
+    def apply_preferences(self, *, show_hidden=None, word_wrap_default=None, sunday_first=None, apply_to_open_windows=False):
         """Apply runtime preferences used by app windows and defaults."""
         if show_hidden is not None:
             self.default_show_hidden = bool(show_hidden)
         if word_wrap_default is not None:
             self.default_word_wrap = bool(word_wrap_default)
+        if sunday_first is not None:
+            self.default_sunday_first = bool(sunday_first)
 
         if not apply_to_open_windows:
             return
@@ -134,10 +137,17 @@ class RetroTUI:
 
     def persist_config(self):
         """Persist current runtime preferences to ~/.config/retrotui/config.toml."""
+        # Sync back clock preferences from any open Clock window
+        from ..apps.clock import ClockCalendarWindow
+        for win in self.windows:
+            if isinstance(win, ClockCalendarWindow):
+                self.default_sunday_first = win.week_starts_sunday
+                break
         self.config = AppConfig(
             theme=self.theme_name,
             show_hidden=self.default_show_hidden,
             word_wrap_default=self.default_word_wrap,
+            sunday_first=self.default_sunday_first,
         )
         return save_config(self.config)
 

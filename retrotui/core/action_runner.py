@@ -125,7 +125,9 @@ def execute_app_action(app, action, logger, *, version: str) -> None:
 
     if action == AppAction.CLOCK_CALENDAR:
         offset_x, offset_y = app._next_window_offset(30, 6)
-        app._spawn_window(ClockCalendarWindow(offset_x, offset_y, 34, 14))
+        win = ClockCalendarWindow(offset_x, offset_y, 34, 14)
+        win.week_starts_sunday = getattr(app, 'default_sunday_first', False)
+        app._spawn_window(win)
         return
 
     if action == AppAction.NEW_WINDOW:

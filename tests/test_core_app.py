@@ -847,6 +847,7 @@ class CoreAppTests(unittest.TestCase):
         app.theme_name = "amiga"
         app.default_show_hidden = True
         app.default_word_wrap = False
+        app.default_sunday_first = True
 
         with mock.patch.object(self.app_mod, "save_config", return_value="/tmp/config.toml") as save_config:
             result = app.persist_config()
@@ -856,6 +857,7 @@ class CoreAppTests(unittest.TestCase):
         self.assertEqual(app.config.theme, "amiga")
         self.assertTrue(app.config.show_hidden)
         self.assertFalse(app.config.word_wrap_default)
+        self.assertTrue(app.config.sunday_first)
 
     def test_open_file_viewer_video_error_opens_dialog(self):
         app = self._make_app()
