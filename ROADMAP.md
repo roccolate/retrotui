@@ -2,7 +2,7 @@
 
 **Objetivo:** Un entorno de escritorio estilo Windows 3.1 completamente funcional para la terminal Linux. Sin X11. Sin Wayland. Solo curses, una TTY y vibes.
 
-**Estado actual:** v0.9.0 estable — funcionalidad completa hasta v0.9 (febrero 2026)
+**Estado actual:** v0.9.0 estable — roadmap definido hasta v1.0 (febrero 2026)
 
 ---
 
@@ -224,21 +224,16 @@ Hacer el file manager competitivo con Midnight Commander.
 
 ## Versiones Planificadas
 
-### v1.0 — Empaquetado y Documentación
+### v0.9.1 — Foundation
 
-Calidad de release.
+Refactor, documentación y mejoras de UX fundamentales.
 
-**Empaquetado**
-- [x] `pyproject.toml` con entry point de consola (comando `retrotui`)
-- [ ] Publicación en PyPI para `pip install retrotui`
-- [ ] Metadata completa: classifiers, keywords, URLs, LICENSE
-
-**Modularización**
+**Refactor**
 - [x] Separar monolito base en paquete Python:
   - `retrotui/core/` — event loop, window manager
   - `retrotui/apps/` — filemanager, notepad
   - `retrotui/ui/` — ventanas, menús y diálogos
-- [ ] Split de `filemanager.py` en package `filemanager/` (window, operations, preview)
+- [ ] Split de `filemanager.py` (1289 líneas) en package `filemanager/` (window, operations, preview)
 - [x] Cada app principal como módulo autocontenido
 - [x] API interna limpia para comunicación window manager ↔ app (`ActionResult` / `AppAction`)
 
@@ -247,32 +242,77 @@ Calidad de release.
 - [ ] ARCHITECTURE.md (evolución de PROJECT.md)
 - [ ] CONTRIBUTING.md con convenciones y guía de desarrollo
 
+**UX**
+- [ ] Context menu (clic derecho) — en File Manager, Desktop y Notepad
+- [ ] Iconos de escritorio móviles — drag & drop, guardar posiciones en config
+
 ---
 
-### v1.1+ — Plugins, Paquetes Nativos y Extras
+### v0.9.2 — Games & Classic Apps
 
-Planificado post-v1.0.
+Los clásicos que hacen que la gente se quede. Branch: `feature/ux-games`
 
-**Sistema de Plugins**
-- [ ] Directorio `~/.config/retrotui/plugins/`
-- [ ] Manifiesto de plugin (nombre, versión, icono, entradas de menú)
-- [ ] Clase base `RetroApp` que plugins subclassean
-- [ ] Auto-discovery y carga al iniciar
+**Juegos clásicos Win 3.1**
+- [ ] 🃏 Solitaire — Klondike con cartas ASCII, drag con mouse
+- [ ] 💣 Minesweeper — Grid clásico, flags, timer
+- [ ] 🐍 Snake — Bonus retro
+
+**Apps utilitarias**
+- [ ] 🔤 Character Map — Selector de caracteres Unicode, copiar al clipboard
+- [ ] 📋 Clipboard Viewer — Ver contenido del clipboard interno
+- [ ] 📻 WiFi Manager — Wrapper `nmcli`, listar redes, conectar/desconectar
+
+---
+
+### v0.9.3 — Plugin System
+
+Extensibilidad para la comunidad. Branch: `feature/plugins`
+
+**Core**
+- [ ] Plugin loader — scan `~/.config/retrotui/plugins/`
+- [ ] Manifiesto `plugin.toml` (nombre, versión, icono, menú)
+- [ ] Clase base `RetroApp` (wrapper ergonómico sobre Window)
+- [ ] Auto-discovery y registro dinámico en desktop/menú
 - [ ] Plugin de ejemplo como template
 
-**Paquetes Nativos**
-- [ ] Paquete `.deb` para Ubuntu/Debian
-- [ ] Paquete AUR para Arch
-- [ ] Opción auto-start: agregar a `.bash_profile` como reemplazo de login shell
+**Documentación**
+- [ ] Guía de desarrollo de plugins
 
-**Extras de Configuración**
+---
+
+### v0.9.4 — Creative & System
+
+Apps creativas, multimedia y configuración avanzada. Branch: `feature/creative`
+
+**Apps creativas**
+- [ ] 🎨 Paintbrush — Editor de ASCII art (brush, line, rect, fill, text)
+- [ ] 📊 RetroOffice — Visor/editor de CSV/TSV estilo VisiCalc
+- [ ] 🖥️ Wallpaper — ASCII art o imagen (chafa) como fondo de escritorio
+
+**Sistema**
+- [ ] 🔊 Sonido — Terminal bell para feedback UI + efectos vía `aplay`/`paplay`
+- [ ] 🎮 Emuladores — Wrapper DOSBox/mgba (lanzar desde File Manager)
+- [ ] 🍓 Raspi Config — Editor visual para `raspi-config`
+
+**Configuración**
 - [ ] Restaurar sesión: recordar ventanas abiertas, posiciones, archivos abiertos
 - [ ] Detección de primera ejecución con wizard de bienvenida
-- [ ] Completar separación adicional en `widgets/` reutilizables y `themes/` dedicados
+- [ ] Completar separación adicional en `widgets/` reutilizables
 
-**Documentación Adicional**
-- [ ] Guía de desarrollo de plugins
+---
+
+### v1.0.0 — Release Formal
+
+Calidad de release. Publicación y empaquetado.
+
+**Empaquetado**
+- [x] `pyproject.toml` con entry point de consola (comando `retrotui`)
+- [ ] Publicación en PyPI para `pip install retrotui`
+- [ ] Metadata completa: classifiers, keywords, URLs, LICENSE
+- [ ] Paquete `.deb` para Ubuntu/Debian
+- [ ] Paquete AUR para Arch
 - [ ] Man page (`man retrotui`)
+- [ ] Opción auto-start: agregar a `.bash_profile` como reemplazo de login shell
 
 ---
 
@@ -282,15 +322,17 @@ Estas ideas no tienen versión asignada y se considerarán después de v1.0:
 
 | Idea | Descripción |
 |------|-------------|
+| Web Browser | Wrapper `w3m`/`lynx`, HTML→texto en ventana |
 | SSH File Manager | Navegar servidores remotos vía SFTP/paramiko |
+| Music Player | Wrapper `mpv --no-video` o `cmus` |
 | Cliente IRC/Chat | Cliente IRC integrado estilo retro |
 | Cliente Email | Lector IMAP básico (read-only) con estética Win 3.1 |
 | Screensaver | Starfield, flying toasters o maze después de idle |
-| Sonido | Beeps vía PC speaker/terminal bell para feedback de UI |
 | Escritorios múltiples | Cambio de desktops virtuales (Ctrl+Left/Right) |
 | Temas comunitarios | Repositorio de temas de la comunidad |
 | Scripting/macros | Sistema de scripting para automatización |
 | Pipe integration | Pipar stdout de comandos de terminal a Notepad o Log Viewer |
+| App Manager | Gestor de apps instaladas / plugins |
 
 ---
 
