@@ -2,9 +2,10 @@
 
 [![CI](https://github.com/roccolate/RetroTUI/actions/workflows/ci.yml/badge.svg)](https://github.com/roccolate/RetroTUI/actions/workflows/ci.yml)
 [![Release](https://github.com/roccolate/RetroTUI/actions/workflows/release.yml/badge.svg)](https://github.com/roccolate/RetroTUI/actions/workflows/release.yml)
+[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/I2I1WKMLQ)
 
 **Entorno de escritorio retro estilo Windows 3.1 para la terminal (Linux / WSL)**
-[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/I2I1WKMLQ)
+
 ```
 ╔══════════════════════════════════════════════════════════════╗
 ║ ≡ File   Edit   Help                            12:30:45   ║
