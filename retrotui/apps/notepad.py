@@ -455,6 +455,7 @@ class NotepadWindow(Window):
             self.view_left = 0
             self._invalidate_wrap()
             self._ensure_cursor_visible()
+            return ActionResult(ActionType.UPDATE_CONFIG, {'word_wrap_default': self.wrap_mode})
         elif action == AppAction.NP_OPEN:
             return ActionResult(ActionType.REQUEST_OPEN_PATH)
         elif action == AppAction.NP_SAVE:
@@ -730,16 +731,41 @@ class NotepadWindow(Window):
         self._mouse_selecting = True
         return None
 
-    def get_context_menu_items(self, mx=None, my=None, bstate=None):
-        """Return context menu items for right-click inside notepad body."""
-        return [
-            ('Copy', None),
-            ('Paste', None),
-            ('Select All', None),
-            ('-------------', None),
-            ('Save', AppAction.NP_SAVE),
-            ('Save As...', AppAction.NP_SAVE_AS),
+    def handle_right_click(self, mx, my, bstate):
+        """Handle right-click: show context menu."""
+        bx, by, bw, bh = self.body_rect()
+        if not (bx <= mx < bx + bw and by <= my < by + bh):
+             return False
+
+        # Move cursor to click position if not already selecting
+        # For simple notepad, let's always move cursor to click position
+        self._set_cursor_from_screen(mx, my)
+        self._ensure_cursor_visible()
+            
+        # Actions for context menu
+        # We use lambdas or AppActions where possible
+        items = [
+            {'label': 'Cut Line', 'action': self._cut_current_line},
+            {'label': 'Copy Line', 'action': lambda: copy_text(self.buffer[self.cursor_line]) if self.buffer else None},
+            {'label': 'Paste', 'action': lambda: self._insert_text(paste_text())},
+            {'label': 'Select All', 'action': lambda: self.handle_key(1)}, # Ctrl+A
+            {'separator': True},
+            {'label': 'Save', 'action': AppAction.NP_SAVE},
+            {'label': 'Save As...', 'action': AppAction.NP_SAVE_AS},
+            {'separator': True},
+            {'label': 'Word Wrap', 'action': AppAction.NP_TOGGLE_WRAP},
+            {'label': 'Close', 'action': AppAction.NP_CLOSE},
         ]
+        if self.has_selection():
+             # Update Copy/Cut to work on selection if it exists
+             items[0] = {'label': 'Cut Selection', 'action': lambda: (copy_text(self._selected_text()), self._delete_selection())}
+             items[1] = {'label': 'Copy Selection', 'action': lambda: copy_text(self._selected_text())}
+
+        return items
+
+    def get_context_menu_items(self, mx=None, my=None, bstate=None):
+        """Deprecated."""
+        return []
 
     def scroll_up(self):
         """Scroll viewport up (for scroll wheel)."""

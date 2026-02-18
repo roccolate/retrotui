@@ -124,6 +124,17 @@ def execute_app_action(app, action, logger, *, version: str) -> None:
         return
 
     if action == AppAction.CLOCK_CALENDAR:
+        # Toggle existing clock instance if any
+        existing = next((w for w in app.windows if isinstance(w, ClockCalendarWindow)), None)
+        if existing:
+            if existing.visible and existing.active:
+                app.close_window(existing)
+            else:
+                existing.visible = True
+                existing.minimized = False
+                app.set_active_window(existing)
+            return
+
         offset_x, offset_y = app._next_window_offset(30, 6)
         kwargs = {}
         if _supports_constructor_kwarg(ClockCalendarWindow, 'week_starts_sunday'):

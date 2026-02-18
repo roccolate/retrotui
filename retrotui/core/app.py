@@ -73,6 +73,7 @@ class RetroTUI:
         self.running = True
         self.windows = []
         self.menu = Menu()
+        self.context_menu = None
         self.dialog = None
         self.selected_icon = -1
         self.use_unicode = check_unicode_support()
@@ -84,6 +85,7 @@ class RetroTUI:
         self.default_show_hidden = bool(self.config.show_hidden)
         self.default_word_wrap = bool(self.config.word_wrap_default)
         self.default_sunday_first = bool(self.config.sunday_first)
+        self.show_welcome = bool(self.config.show_welcome)
         self.drag_payload = None
         self.drag_source_window = None
         self.drag_target_window = None
@@ -97,16 +99,29 @@ class RetroTUI:
 
         disable_flow_control()
         self.click_flags, self.stop_drag_flags, self.scroll_down_mask = enable_mouse_support()
+        self.button1_pressed = False  # Track physical button state for TTY drags
 
         init_colors(self.theme)
 
-        # Create a welcome window
-        h, w = stdscr.getmaxyx()
-        welcome_content = build_welcome_content(APP_VERSION)
-        win = Window('Welcome to RetroTUI', w // 2 - 25, h // 2 - 10, 50, 20,
-                      content=welcome_content)
-        win.active = True
-        self.windows.append(win)
+        # Create a welcome window if enabled
+        if self.show_welcome:
+            h, w = stdscr.getmaxyx()
+            welcome_content = build_welcome_content(APP_VERSION)
+            win = Window('Welcome to RetroTUI', w // 2 - 25, h // 2 - 10, 52, 22,
+                          content=welcome_content)
+            
+            # Custom handler to process "Don't show again"
+            def _welcome_handle_key(key):
+                if getattr(curses, "KEY_F9", -1) == key or key == "KEY_F9":
+                    self.show_welcome = False
+                    self.persist_config()
+                    self.close_window(win)
+                    return ActionResult(ActionType.REFRESH)
+                return Window.handle_key(win, key)
+
+            win.handle_key = _welcome_handle_key
+            win.active = True
+            self.windows.append(win)
         # load persisted icon positions (if any)
         try:
             self._load_icon_positions()
@@ -159,6 +174,7 @@ class RetroTUI:
             show_hidden=self.default_show_hidden,
             word_wrap_default=self.default_word_wrap,
             sunday_first=self.default_sunday_first,
+            show_welcome=self.show_welcome,
         )
         path = save_config(self.config)
         try:
@@ -230,8 +246,13 @@ class RetroTUI:
         cfg_path.parent.mkdir(parents=True, exist_ok=True)
         cfg_path.write_text('\n'.join(out_lines) + '\n', encoding='utf-8', newline='\n')
 
-    def _handle_right_click(self, mx, my, bstate):
+    def handle_right_click(self, mx, my, bstate):
         """Dispatch right-clicks to windows or desktop. Return True if handled."""
+        # Check if right-click is on an existing context menu (unlikely but safe)
+        if self.context_menu and self.context_menu.active:
+            # Let the menu handle it or close? Usually clicking outside closes it.
+            pass
+
         # Try windows first (topmost)
         for win in reversed(self.windows):
             if not getattr(win, 'visible', False):
@@ -239,17 +260,29 @@ class RetroTUI:
             contains = getattr(win, 'contains', None)
             if not callable(contains) or not contains(mx, my):
                 continue
+            
+            # Convert screen coordinates to window-relative for the handler
+            # But handle_right_click usually expects screen coords in RetroTUI pattern?
+            # Let's pass screen coords and let window decide.
             handler = getattr(win, 'handle_right_click', None)
             if callable(handler):
                 try:
                     res = _invoke_mouse_handler(handler, mx, my, bstate)
                 except Exception:
                     res = None
-                self._dispatch_window_result(res, win)
-                return True
+                
+                # If window handled it (returned True or ActionResult), we stop.
+                if isinstance(res, list):
+                     from ..ui.context_menu import ContextMenu
+                     self.context_menu = ContextMenu(self.theme)
+                     self.context_menu.show(mx, my, res)
+                     return True
+                
+                if res:
+                    self._dispatch_window_result(res, win)
+                    return True
 
         # Desktop hook
-        # Desktop handler: show a desktop-level context menu
         try:
             return bool(self._handle_desktop_right_click(mx, my, bstate))
         except Exception:
@@ -257,37 +290,34 @@ class RetroTUI:
 
     def _handle_desktop_right_click(self, mx, my, bstate):
         """Open a desktop context menu or icon-specific menu at (mx,my)."""
-        # If clicked on an icon, we could dispatch icon-specific actions later.
         icon_idx = self.get_icon_at(mx, my)
         from ..ui.context_menu import ContextMenu
 
         if icon_idx >= 0:
-            # Simple icon menu: open the icon action or other ops
+            # Icon menu
+            # Select the icon first
+            self.selected_icon = icon_idx
+            
             items = [
-                ('Open', self.icons[icon_idx].get('action')),
-                ('Open with...', None),
-                ('-------------', None),
-                ('Copy', None),
-                ('Move', None),
-                ('Rename', None),
-                ('Delete', AppAction.TRASH_BIN),
-                ('-------------', None),
-                ('Properties', None),
+                {'label': 'Open', 'action': self.icons[icon_idx].get('action')},
+                {'separator': True},
+                {'label': 'Properties', 'action': None}, # Placeholder
             ]
         else:
+            # Desktop menu
             items = [
-                ('New Terminal', AppAction.TERMINAL),
-                ('New Notepad', AppAction.NOTEPAD),
-                ('-------------', None),
-                ('Change Theme', AppAction.SETTINGS),
-                ('Settings', AppAction.SETTINGS),
-                ('-------------', None),
-                ('About RetroTUI', AppAction.ABOUT),
+                {'label': 'New Terminal', 'action': AppAction.TERMINAL},
+                {'label': 'New Notepad', 'action': AppAction.NOTEPAD},
+                {'separator': True},
+                {'label': 'Theme', 'action': AppAction.SETTINGS},
+                {'label': 'Settings', 'action': AppAction.SETTINGS},
+                {'separator': True},
+                {'label': 'About', 'action': AppAction.ABOUT},
+                {'label': 'Exit', 'action': AppAction.EXIT},
             ]
 
-        self.context_menu = ContextMenu(items)
-        # open slightly offset so pointer isn't on top of first item
-        self.context_menu.open_at(mx, my)
+        self.context_menu = ContextMenu(self.theme)
+        self.context_menu.show(mx, my, items)
         return True
 
     def _validate_terminal_size(self):
@@ -336,16 +366,36 @@ class RetroTUI:
         """Draw the bottom status bar."""
         return draw_statusbar(self, APP_VERSION)
 
-    def get_icon_at(self, mx, my):
-        """Return icon index at mouse position, or -1."""
+    def get_icon_screen_pos(self, index):
+        """Return (x, y) for icon at index, checking persisted positions then default grid."""
+        if not (0 <= index < len(self.icons)):
+             return (0, 0)
+        
+        KEY_LABEL = self.icons[index].get('label')
+        if KEY_LABEL in self.icon_positions:
+            return self.icon_positions[KEY_LABEL]
+            
+        # Default vertical layout
         start_x = 3
         start_y = 3
-        spacing_y = 5  # Must match draw_icons
+        spacing_y = 5
+        return (start_x, start_y + index * spacing_y)
 
-        for i in range(len(self.icons)):
-            iy = start_y + i * spacing_y
-            icon_w = len(self.icons[i]['art'][0])
-            if iy <= my <= iy + 3 and start_x <= mx <= start_x + icon_w - 1:
+    def get_icon_at(self, mx, my):
+        """Return icon index at mouse position, or -1."""
+        for i, icon in enumerate(self.icons):
+            x, y = self.get_icon_screen_pos(i)
+            # Dimensions from draw_icons: 3x4 art? 
+            # Actually standard ascii art is usually 3-4 lines high.
+            # Let's assume a bounding box. 
+            # In draw_icons (rendering.py), it usually takes ~5 lines height (art+label) and some width.
+            # Let's approximate 8 width x 4 height based on standard ascii icons.
+            # Or better, check the actual art width.
+            art = icon.get('art', [])
+            w = max(len(line) for line in art) if art else 8
+            h = len(art) + 1 # +1 for label
+            
+            if y <= my < y + h and x <= mx < x + w:
                 return i
         return -1
 
@@ -889,6 +939,12 @@ class RetroTUI:
         if result.type == ActionType.ERROR:
             message = result.payload or 'Unknown error.'
             self.dialog = Dialog('Error', str(message), ['OK'], width=50)
+            return
+
+        if result.type == ActionType.UPDATE_CONFIG:
+            payload = result.payload or {}
+            self.apply_preferences(**payload, apply_to_open_windows=False)
+            self.persist_config()
             return
 
         LOGGER.debug('Unhandled ActionResult type: %s', result.type)

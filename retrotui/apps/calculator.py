@@ -71,8 +71,17 @@ class CalculatorWindow(Window):
     KEY_INSERT = getattr(curses, "KEY_IC", -1)
     MAX_HISTORY = 200
 
+    BUTTONS = [
+        ["7", "8", "9", "/"],
+        ["4", "5", "6", "*"],
+        ["1", "2", "3", "-"],
+        ["0", ".", "=", "+"],
+        ["(", ")", "C", "AC"],
+    ]
+
     def __init__(self, x, y, w, h):
-        super().__init__("Calculator", x, y, max(40, w), max(12, h), content=[], resizable=False)
+        # Increased default height to fit buttons
+        super().__init__("Calculator", x, y, max(32, w), max(18, h), content=[], resizable=False)
         self.always_on_top = True
         self.expression = ""
         self.cursor_pos = 0
@@ -156,9 +165,30 @@ class CalculatorWindow(Window):
             self._set_expression("")
         else:
             self._set_expression(entries[self.history_index])
+    
+    def _button_rect(self, row_idx, col_idx):
+        """Get (x, y, w, h) for a button based on grid position."""
+        bx, by, bw, bh = self.body_rect()
+        # Input takes 1 row, History takes remaining top space
+        # Buttons take bottom 5 rows * 2 (height) ?
+        # Let's say buttons are at the bottom.
+        
+        btn_rows = len(self.BUTTONS)
+        btn_height = 1 # Single line height
+        padding_y = 1
+        
+        start_y = by + bh - (btn_rows * (btn_height + padding_y)) - 2 # 2 for status bar and margin
+        start_x = bx + 2
+        
+        btn_width = 5
+        spacing_x = 2
+        
+        y = start_y + row_idx * (btn_height + padding_y)
+        x = start_x + col_idx * (btn_width + spacing_x)
+        return x, y, btn_width, btn_height
 
     def draw(self, stdscr):
-        """Draw input row, history area and status line."""
+        """Draw input row, history area, buttons and status line."""
         if not self.visible:
             return
 
@@ -170,6 +200,7 @@ class CalculatorWindow(Window):
         for row in range(bh):
             safe_addstr(stdscr, by + row, bx, " " * bw, body_attr)
 
+        # Draw Input
         label = "Expr> "
         input_x = bx + len(label)
         input_w = max(1, bw - len(label))
@@ -186,29 +217,64 @@ class CalculatorWindow(Window):
                 char = self.expression[self.cursor_pos]
             safe_addstr(stdscr, by, cursor_x, char, body_attr | curses.A_REVERSE)
 
+        # Draw History (above buttons)
+        btn_area_height = len(self.BUTTONS) * 2 + 1
         history_top = by + 2
-        history_rows = max(0, bh - 3)
+        history_rows = max(0, bh - 3 - btn_area_height) 
         visible_history = self.history[-history_rows:] if history_rows else []
         for i, line in enumerate(visible_history):
             safe_addstr(stdscr, history_top + i, bx, line[:bw].ljust(bw), body_attr)
 
+        # Draw Buttons
+        btn_attr = theme_attr("button")
+        for r, row_keys in enumerate(self.BUTTONS):
+            for c, key in enumerate(row_keys):
+                x, y, w, h = self._button_rect(r, c)
+                if y < by or y >= by + bh: continue
+                
+                # Draw button box
+                safe_addstr(stdscr, y, x, f"[{key:^3}]", btn_attr)
+
+        # Status Bar
         topmost_state = "ON" if self.always_on_top else "OFF"
         status = (
-            "Enter=Eval  Up/Down=History  Ctrl+V=Paste  "
-            f"F6=Copy  F9=Top:{topmost_state}  Ctrl+L=Clear"
+            f"F9=Top:{topmost_state}  Ctrl+L=Clear"
         )
         safe_addstr(stdscr, by + bh - 1, bx, status[:bw].ljust(bw), theme_attr("status"))
 
     def handle_click(self, mx, my, bstate=None):
         _ = bstate
-        bx, by, bw, _ = self.body_rect()
-        if my != by or not (bx <= mx < bx + bw):
+        bx, by, bw, bh = self.body_rect()
+        if not (bx <= mx < bx + bw and by <= my < by + bh):
             return None
-        prefix = len("Expr> ")
-        input_w = max(1, bw - prefix)
-        col = max(0, min(input_w, mx - (bx + prefix)))
-        self.cursor_pos = min(len(self.expression), self.view_left + col)
+
+        # Check buttons
+        for r, row_keys in enumerate(self.BUTTONS):
+            for c, key in enumerate(row_keys):
+                x, y, w, h = self._button_rect(r, c)
+                if y == my and x <= mx < x + w:
+                    self._handle_button_press(key)
+                    return ActionResult(ActionType.SKIP, None) # Consumed
+
+        # Check Input line
+        if my == by:
+            prefix = len("Expr> ")
+            input_w = max(1, bw - prefix)
+            col = max(0, min(input_w, mx - (bx + prefix)))
+            self.cursor_pos = min(len(self.expression), self.view_left + col)
+            return None
+            
         return None
+
+    def _handle_button_press(self, key):
+        if key == "C":
+            self._delete_backward()
+        elif key == "AC":
+            self._set_expression("")
+        elif key == "=":
+            self._evaluate_current()
+        else:
+            self._insert_text(key)
 
     def handle_key(self, key):
         key_code = normalize_key_code(key)
@@ -263,3 +329,4 @@ class CalculatorWindow(Window):
         input_w = max(1, bw - len("Expr> "))
         self._ensure_cursor_visible(input_w)
         return None
+
