@@ -53,7 +53,7 @@ class ProcessManagerMoreTests(unittest.TestCase):
         self.win = self.ProcessManagerWindow(0, 0, 80, 20)
 
     def test_read_mem_defaults_on_error(self):
-        with mock.patch.object(self.ProcessManagerWindow, "_read_first_line", side_effect=OSError()):
+        with mock.patch("builtins.open", side_effect=OSError()):
             self.assertEqual(self.ProcessManagerWindow._read_mem_total_kb(), 1)
             self.assertEqual(self.ProcessManagerWindow._read_mem_available_kb(), 0)
 
