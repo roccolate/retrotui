@@ -25,14 +25,17 @@ class WifiManagerWindow(Window):
             if result.returncode != 0:
                 return
             for line in result.stdout.splitlines():
-                # nmcli -t uses ':' separators but SSID may be empty; be defensive
-                parts = line.split(":" )
+                # nmcli -t uses ':' separators but SSID may contain colons; limit splits
+                parts = line.split(":", 3)
                 if not parts:
                     continue
                 ssid = parts[0].strip()
                 signal = parts[1].strip() if len(parts) > 1 and parts[1] else "0"
                 sec = parts[2].strip() if len(parts) > 2 else ""
                 inuse = parts[3].strip() if len(parts) > 3 else ""
+                # unquote SSID if nmcli wraps it
+                if ssid.startswith('"') and ssid.endswith('"'):
+                    ssid = ssid[1:-1]
                 # collapse empty SSIDs to a placeholder
                 display_ssid = ssid or "<hidden>"
                 self.networks.append({"ssid": display_ssid, "signal": signal, "sec": sec, "inuse": inuse})
@@ -80,5 +83,9 @@ class WifiManagerWindow(Window):
                 self.refresh()
             except Exception:
                 pass
+            return None
+        # 'c' clear cached list
+        if getattr(key, '__int__', None) and int(key) == ord('c'):
+            self.networks = []
             return None
         return None
