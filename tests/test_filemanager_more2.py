@@ -124,7 +124,7 @@ class FileManagerMoreTests(unittest.TestCase):
             p2 = self.win._next_trash_path(src)
             self.assertNotEqual(p1, p2)
         finally:
-            fm.FileManagerWindow._trash_base_dir = original
+            fm.FileManagerWindow._trash_base_dir = staticmethod(original)
             shutil.rmtree(td)
 
 
