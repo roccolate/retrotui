@@ -56,7 +56,7 @@ from .bootstrap import (
 
 LOGGER = logging.getLogger(__name__)
 
-APP_VERSION = '0.6.0'
+APP_VERSION = '0.9.0'
 
 class RetroTUI:
     """Main application class."""
