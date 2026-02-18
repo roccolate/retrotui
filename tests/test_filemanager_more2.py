@@ -5,7 +5,7 @@ import shutil
 import types
 import unittest
 
-from tests._support import make_fake_curses
+from _support import make_fake_curses
 
 # Install shared fake curses module for tests
 _prev = sys.modules.get('curses')

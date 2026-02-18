@@ -5,7 +5,7 @@ import subprocess
 import shutil
 import unittest
 from types import SimpleNamespace
-from tests._support import make_fake_curses
+from _support import make_fake_curses
 
 sys.modules['curses'] = make_fake_curses()
 import curses

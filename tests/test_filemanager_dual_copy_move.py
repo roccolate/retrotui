@@ -2,7 +2,7 @@ import os
 import sys
 import shutil
 import tempfile
-from tests._support import make_fake_curses
+from _support import make_fake_curses
 import unittest
 
 sys.modules['curses'] = make_fake_curses()

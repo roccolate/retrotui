@@ -4,7 +4,7 @@ import tempfile
 import shutil
 import unittest
 from unittest import mock
-from tests._support import make_fake_curses
+from _support import make_fake_curses
 
 _prev = sys.modules.get('curses')
 sys.modules['curses'] = make_fake_curses()

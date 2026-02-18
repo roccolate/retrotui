@@ -3,7 +3,7 @@ import sys
 import types
 import tempfile
 import unittest
-from tests._support import make_fake_curses
+from _support import make_fake_curses
 
 sys.modules['curses'] = make_fake_curses()
 

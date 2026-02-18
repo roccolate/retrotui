@@ -5,7 +5,7 @@ import subprocess
 import types
 import sys
 import unittest
-from tests._support import make_fake_curses
+from _support import make_fake_curses
 
 # ensure complete fake curses API used across the test-suite
 sys.modules['curses'] = make_fake_curses()
