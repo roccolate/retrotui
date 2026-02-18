@@ -422,6 +422,9 @@ class ProcessManagerWindow(Window):
         if not (bx <= mx < bx + bw and by + 1 <= my < by + bh - 2):
             return None
 
+
+            return None
+
         row_index = self.scroll_offset + (my - (by + 1))
         if 0 <= row_index < len(self.rows):
             self.selected_index = row_index
