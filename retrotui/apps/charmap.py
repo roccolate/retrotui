@@ -27,8 +27,9 @@ class CharacterMapWindow(Window):
             return
         body_attr = self.draw_frame(stdscr)
         bx, by, bw, bh = self.body_rect()
-        per_line = max(8, bw // 2)
+        per_line = max(4, bw // 2)
         per_page = max(1, (bh) * per_line)
+        total_pages = (len(self.chars) + per_page - 1) // per_page
         start = self.page * per_page
         for row_idx in range(bh):
             line_chars = self.chars[start + row_idx * per_line: start + (row_idx + 1) * per_line]
@@ -36,18 +37,20 @@ class CharacterMapWindow(Window):
                 break
             line = ' '.join(line_chars)
             safe_addstr(stdscr, by + row_idx, bx, line[:bw], body_attr)
-        # page indicator
-        safe_addstr(stdscr, by + bh - 1, bx + max(0, bw - 12), f"Page {self.page+1}", body_attr)
+        # page indicator (current/total)
+        safe_addstr(stdscr, by + bh - 1, bx + max(0, bw - 16), f"Page {self.page+1}/{max(1,total_pages)}", body_attr)
 
     def handle_click(self, mx, my, bstate=None):
         bx, by, bw, bh = self.body_rect()
         if not (by <= my < by + bh):
             return None
-        # Map click to index simplistically: column based
+        # Map click to grid index using column and row
         rel_y = my - by
-        per_line = max(8, bw // 2)
+        rel_x = mx - bx
+        per_line = max(4, bw // 2)
         per_page = max(1, (bh) * per_line)
-        idx = self.page * per_page + rel_y * per_line
+        col = rel_x // 2
+        idx = self.page * per_page + rel_y * per_line + col
         if 0 <= idx < len(self.chars):
             ch = self.chars[idx]
             info = {
@@ -69,6 +72,14 @@ class CharacterMapWindow(Window):
                 except Exception:
                     pass
             return None
+        # simple page navigation: 'n'next, 'p'prev
+        if getattr(key, '__int__', None):
+            ik = int(key)
+            if ik == ord('n'):
+                self.page += 1
+            elif ik == ord('p') and self.page > 0:
+                self.page -= 1
+        # arrow keys already handled below
         # page navigation
         if getattr(key, '__int__', None):
             ik = int(key)
@@ -76,4 +87,16 @@ class CharacterMapWindow(Window):
                 self.page += 1
             elif ik == curses.KEY_LEFT and self.page > 0:
                 self.page -= 1
+        # clamp page bounds
+        try:
+            _, _, bw, bh = self.body_rect()
+            per_line = max(4, bw // 2)
+            per_page = max(1, (bh) * per_line)
+            total_pages = (len(self.chars) + per_page - 1) // per_page
+            if self.page < 0:
+                self.page = 0
+            if self.page >= total_pages:
+                self.page = max(0, total_pages - 1)
+        except Exception:
+            pass
         return None
