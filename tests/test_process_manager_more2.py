@@ -98,7 +98,7 @@ class ProcessManagerMoreTests(unittest.TestCase):
             self.assertGreaterEqual(row.mem_percent, 0.0)
             self.assertEqual(row.pid, pid)
         finally:
-            ProcessManagerWindow._read_first_line = orig
+            ProcessManagerWindow._read_first_line = staticmethod(orig)
 
     def test_request_and_kill_process_behavior(self):
         # no selection

@@ -26,7 +26,7 @@ class ProcessManagerRemainingTests(unittest.TestCase):
         try:
             self.assertEqual(ProcessManagerWindow._read_total_jiffies(), 0)
         finally:
-            ProcessManagerWindow._read_first_line = orig
+            ProcessManagerWindow._read_first_line = staticmethod(orig)
 
     def test_read_command_fallbacks(self):
         # Ensure that when cmdline open fails, comm is used via _read_first_line
@@ -50,7 +50,7 @@ class ProcessManagerRemainingTests(unittest.TestCase):
                 else:
                     __builtins__.open = builtins_open
         finally:
-            ProcessManagerWindow._read_first_line = orig_first
+            ProcessManagerWindow._read_first_line = staticmethod(orig_first)
 
     def test_read_process_row_parsing_and_cpu_mem(self):
         win = ProcessManagerWindow(0, 0, 80, 24)
@@ -77,7 +77,7 @@ class ProcessManagerRemainingTests(unittest.TestCase):
             self.assertEqual(row.pid, pid)
             self.assertGreaterEqual(row.mem_percent, 0.0)
         finally:
-            ProcessManagerWindow._read_first_line = orig
+            ProcessManagerWindow._read_first_line = staticmethod(orig)
 
     def test_refresh_processes_proc_error(self):
         win = ProcessManagerWindow(0, 0, 80, 24)
