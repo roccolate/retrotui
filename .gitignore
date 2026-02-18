@@ -14,5 +14,11 @@ Thumbs.db
 # Local test scratch files
 tests/_tmp_*
 
+# Probe/scratch artifacts
+_probe_root/
+_write_probe_root.txt
+tests/_probe_*
+tests/_mkdir_py_*
+
 # Tool caches
 .pytest_cache/
