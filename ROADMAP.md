@@ -2,7 +2,7 @@
 
 **Objetivo:** Un entorno de escritorio estilo Windows 3.1 completamente funcional para la terminal Linux. Sin X11. Sin Wayland. Solo curses, una TTY y vibes.
 
-**Estado actual:** v0.6.0 estable + v0.7 utilitarias implementadas en rama principal (febrero 2026)
+**Estado actual:** v0.9.0 estable — funcionalidad completa hasta v0.9 (febrero 2026)
 
 ---
 
