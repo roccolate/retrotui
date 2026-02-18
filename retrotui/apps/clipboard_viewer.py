@@ -7,6 +7,10 @@ from typing import List
 from ..ui.window import Window
 from ..utils import safe_addstr, theme_attr
 from ..core.clipboard import paste_text, copy_text, clear_clipboard
+try:
+    import pyperclip
+except Exception:
+    pyperclip = None
 
 
 class ClipboardViewerWindow(Window):
@@ -40,6 +44,11 @@ class ClipboardViewerWindow(Window):
         idx = my - by
         if 0 <= idx < len(self.history):
             copy_text(self.history[idx])
+            if pyperclip:
+                try:
+                    pyperclip.copy(self.history[idx])
+                except Exception:
+                    pass
         return None
 
     def handle_key(self, key):
@@ -47,4 +56,11 @@ class ClipboardViewerWindow(Window):
         if getattr(key, '__int__', None) and int(key) == ord('c'):
             clear_clipboard()
             self.history = []
+        # 'y' yank top history to system clipboard if available
+        if getattr(key, '__int__', None) and int(key) == ord('y') and self.history:
+            if pyperclip:
+                try:
+                    pyperclip.copy(self.history[0])
+                except Exception:
+                    pass
         return None
