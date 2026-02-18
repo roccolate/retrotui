@@ -2,7 +2,7 @@
 
 **Objetivo:** Un entorno de escritorio estilo Windows 3.1 completamente funcional para la terminal Linux. Sin X11. Sin Wayland. Solo curses, una TTY y vibes.
 
-**Estado actual:** v0.9.0 estable — funcionalidad completa hasta v0.9 (febrero 2026)
+**Estado actual:** v0.9.0 estable — roadmap definido hasta v1.0 (febrero 2026)
 
 ---
 
@@ -30,9 +30,7 @@
 
 ---
 
-## Versiones Planificadas
-
-### v0.4 — Terminal Embebida & Refactor Interno
+### v0.4 — Terminal Embebida & Refactor Interno ✅
 
 La release que hace RetroTUI usable como shell diario.
 
@@ -94,7 +92,7 @@ La release que hace RetroTUI usable como shell diario.
 - [x] Baseline actual de calidad: suite de tests en verde y cobertura total por modulo `100.0%`
 
 ---
-### v0.5 — Temas y Configuración
+### v0.5 — Temas y Configuración ✅
 
 Personalidad y persistencia.
 
@@ -122,7 +120,7 @@ Personalidad y persistencia.
 
 ---
 
-### v0.6 - Clipboard y Comunicacion Inter-App
+### v0.6 - Clipboard y Comunicacion Inter-App ✅
 
 Hacer que las apps se sientan como un entorno integrado.
 
@@ -144,7 +142,7 @@ Hacer que las apps se sientan como un entorno integrado.
 
 ---
 
-### v0.7 — Aplicaciones Utilitarias
+### v0.7 — Aplicaciones Utilitarias ✅
 
 Las apps que hacen que la gente quiera quedarse en RetroTUI.
 Estado: checklist completado en codigo; pendiente empaquetado/release formal.
@@ -176,7 +174,7 @@ Estado: checklist completado en codigo; pendiente empaquetado/release formal.
 
 ---
 
-### v0.8 — File Manager Avanzado
+### v0.8 — File Manager Avanzado ✅
 
 Hacer el file manager competitivo con Midnight Commander.
 
@@ -203,9 +201,7 @@ Hacer el file manager competitivo con Midnight Commander.
 
 ---
 
-### v0.9 — Media y Hex
-
-Extender lo que se puede hacer sin salir del escritorio.
+### v0.9 — Media y Hex ✅
 
 **Image Viewer**
 - [x] Abrir PNG/JPEG/GIF desde File Manager
@@ -226,57 +222,207 @@ Extender lo que se puede hacer sin salir del escritorio.
 
 ---
 
-### v1.0 — Empaquetado, Plugins y Documentación
+## Versiones Planificadas
 
-Calidad de release.
+### v0.9.1 — Foundation
 
-**Empaquetado**
-- [x] `pyproject.toml` con entry point de consola (comando `retrotui`)
-- [ ] Publicación en PyPI para `pip install retrotui`
-- [ ] Paquete `.deb` para Ubuntu/Debian
-- [ ] Paquete AUR para Arch
-- [ ] Opción auto-start: agregar a `.bash_profile` como reemplazo de login shell
+Refactor, documentación y mejoras de UX fundamentales.
 
-**Modularización**
+**Refactor**
 - [x] Separar monolito base en paquete Python:
   - `retrotui/core/` — event loop, window manager
   - `retrotui/apps/` — filemanager, notepad
   - `retrotui/ui/` — ventanas, menús y diálogos
-- [ ] Completar separación adicional en `widgets/` reutilizables y `themes/` dedicados
+- [ ] Split de `filemanager.py` (1289 líneas) en package `filemanager/` (window, operations, preview)
 - [x] Cada app principal como módulo autocontenido
 - [x] API interna limpia para comunicación window manager ↔ app (`ActionResult` / `AppAction`)
 
-**Sistema de Plugins**
-- [ ] Directorio `~/.config/retrotui/plugins/`
-- [ ] Manifiesto de plugin (nombre, versión, icono, entradas de menú)
-- [ ] Clase base `RetroApp` que plugins subclassean
-- [ ] Auto-discovery y carga al iniciar
+**Documentación**
+- [ ] README bilingüe (EN + ES) con badges, features y screenshots
+- [ ] ARCHITECTURE.md (evolución de PROJECT.md)
+- [ ] CONTRIBUTING.md con convenciones y guía de desarrollo
+
+**UX**
+- [ ] Context menu (clic derecho) — en File Manager, Desktop y Notepad
+- [ ] Iconos de escritorio móviles — drag & drop, guardar posiciones en config
+
+---
+
+### v0.9.2 — Games & Classic Apps
+
+Los clásicos que hacen que la gente se quede. Branch: `feature/ux-games`
+
+**Juegos clásicos Win 3.1**
+- [ ] 🃏 Solitaire — Klondike con cartas ASCII, drag con mouse
+- [ ] 💣 Minesweeper — Grid clásico, flags, timer
+- [ ] 🐍 Snake — Bonus retro
+
+**Apps utilitarias**
+- [ ] 🔤 Character Map — Selector de caracteres Unicode, copiar al clipboard
+- [ ] 📋 Clipboard Viewer — Ver contenido del clipboard interno
+- [ ] 📻 WiFi Manager — Wrapper `nmcli`, listar redes, conectar/desconectar
+- [ ] 📖 Markdown Viewer — Renderizar `.md` con formato (headers, bold, listas, code blocks, tablas)
+
+---
+
+### v0.9.3 — Plugin System
+
+Extensibilidad para la comunidad. Branch: `feature/plugins`
+
+**Core**
+- [ ] Plugin loader — scan `~/.config/retrotui/plugins/`
+- [ ] Manifiesto `plugin.toml` (nombre, versión, icono, menú)
+- [ ] Clase base `RetroApp` (wrapper ergonómico sobre Window)
+- [ ] Auto-discovery y registro dinámico en desktop/menú
 - [ ] Plugin de ejemplo como template
 
 **Documentación**
-- [ ] README en inglés + español
 - [ ] Guía de desarrollo de plugins
-- [ ] Documento de arquitectura
+
+**Ideas de plugins (comunidad / contribuidores)**
+
+*Productividad:*
+- [ ] 📝 Todo List — Tareas con prioridades, fechas, checkboxes
+- [ ] 🍅 Pomodoro Timer — Temporizador 25/5 con bell y historial
+- [ ] 📌 Sticky Notes — Post-its en el escritorio que persisten entre sesiones
+- [ ] 📇 Contacts / Cardfile — Mini CRM: nombre, teléfono, email, notas
+- [ ] 📰 RSS Reader — Leer feeds RSS/Atom en ventana retro
+
+*Sistema:*
+- [ ] 💾 Disk Usage — Visualización de uso de disco estilo `ncdu`
+- [ ] 📊 System Monitor — Dashboard: CPU, RAM, disco, uptime, temperatura
+- [ ] 🌐 Network Monitor — Ancho de banda, conexiones activas, ping
+- [ ] ⚙️ Service Manager — Start/stop/restart servicios `systemd`
+- [ ] 🕐 Cron Editor — Editar crontab con interfaz visual
+
+*Entretenimiento:*
+- [ ] 🥠 Fortune Cookie — Frase aleatoria al abrir (como `fortune`)
+- [ ] 🐠 ASCII Aquarium — Pecera animada como screensaver/widget
+- [ ] 🧬 Conway's Game of Life — Autómata celular interactivo
+- [ ] 🌤️ Weather Widget — Clima actual vía `wttr.in`
+- [ ] 🟢 Matrix Rain — Efecto Matrix como screensaver
+
+*Desarrollo:*
+- [ ] 🔀 Git Status — Branch, commits recientes, diff viewer
+- [ ] 📄 JSON Viewer — Explorar archivos JSON con tree collapsible
+- [ ] 🐳 Docker Manager — Listar contenedores, start/stop, ver logs
+- [ ] 🗄️ DB Browser — Explorar tablas SQLite con interfaz visual
+
+---
+
+### v0.9.4 — Creative & System
+
+Apps creativas, multimedia y configuración avanzada. Branch: `feature/creative`
+
+**Apps creativas**
+- [ ] 🎨 Paintbrush — Editor de ASCII art (brush, line, rect, fill, text)
+- [ ] 📊 RetroOffice — Visor/editor de CSV/TSV estilo VisiCalc
+- [ ] 🖥️ Wallpaper — ASCII art o imagen (chafa) como fondo de escritorio
+
+**Sistema**
+- [ ] 🔊 Sonido — Terminal bell para feedback UI + efectos vía `aplay`/`paplay`
+- [ ] 🎮 Emuladores — Wrapper DOSBox/mgba (lanzar desde File Manager)
+- [ ] 🍓 Raspi Config — Editor visual para `raspi-config`
+
+**Configuración**
+- [ ] Restaurar sesión: recordar ventanas abiertas, posiciones, archivos abiertos
+- [ ] Detección de primera ejecución con wizard de bienvenida
+- [ ] Completar separación adicional en `widgets/` reutilizables
+
+---
+
+### v0.9.5 — Menú Inicio & Temas Avanzados
+
+La experiencia de escritorio completa. Branch: `feature/start-menu`
+
+**Menú Inicio**
+- [ ] 🪟 Start Menu estilo Windows — Botón "Start" en taskbar, menú desplegable con apps, submenús
+- [ ] 🍎 Dock estilo Mac — Barra inferior con iconos, animación bounce, auto-hide
+- [ ] TUI App Launcher — Detectar apps TUI instaladas (`claude`, `nvim`, `mc`, `htop`) y lanzarlas en ventana
+
+**Temas avanzados**
+- [ ] 🌙 Tema Luna (Windows XP) — Colores azul/verde/plateado, bordes redondeados (`╭╮╰╯`), botones con gradiente
+- [ ] Tema macOS Aqua — Aspecto tipo macOS clásico
+- [ ] Tema personalizable — Editor de temas en vivo desde Settings
+
+**App Manager**
+- [ ] Gestor de apps de RetroTUI: listar, habilitar/deshabilitar, configurar, ver info
+
+---
+
+### v0.9.6 — DOS Mode 🐭
+
+MS-DOS con mouse en RetroTUI. Branch: `feature/dos-mode`
+
+**DOS Shell**
+- [ ] Modo pantalla completa estilo MS-DOS 6.22 con prompt `C:\>`
+- [ ] Mouse habilitado con cursor block `█`
+- [ ] Menu bar tipo DOS (`Alt` activa menú superior)
+
+**DOSBox Integration**
+- [ ] DOSBox embebido en ventana RetroTUI vía PTY
+- [ ] Mouse passthrough RetroTUI → DOSBox
+- [ ] Lanzar apps DOS clásicas: StarOffice 3.1, WordPerfect, Lotus 1-2-3, Turbo Pascal
+- [ ] Juegos DOS: DOOM, Duke Nukem, Commander Keen
+
+---
+
+### v1.0.0 — Release Formal
+
+Calidad de release. Publicación y empaquetado.
+
+**Empaquetado**
+- [x] `pyproject.toml` con entry point de consola (comando `retrotui`)
+- [ ] Publicación en PyPI para `pip install retrotui`
+- [ ] Metadata completa: classifiers, keywords, URLs, LICENSE
+- [ ] Paquete `.deb` para Ubuntu/Debian
+- [ ] Paquete AUR para Arch
 - [ ] Man page (`man retrotui`)
+- [ ] Opción auto-start: agregar a `.bash_profile` como reemplazo de login shell
+
+---
+
+## Visión a largo plazo
+
+### v2.0 — RetroTUI como Login Shell
+
+RetroTUI reemplaza bash como shell de login. Al encender el PC, aparece el escritorio.
+
+- [ ] Auto-start como login shell (`/etc/shells` + `chsh`)
+- [ ] Login screen con usuario/password estilo Win 3.1
+- [ ] Gestión de sesiones de usuario
+- [ ] Notificaciones del sistema (batería, updates, errores)
+- [ ] System tray con widgets (reloj, WiFi, volumen, batería)
+
+### v3.0 — RetroTUI OS
+
+Distribución Linux mínima que bootea directo al escritorio RetroTUI.
+
+- [ ] ISO booteable: Alpine/Void Linux + Python + RetroTUI
+- [ ] Setup wizard de instalación
+- [ ] Gestión de paquetes integrada
+- [ ] Drivers y hardware auto-detectado
+- [ ] Target: Raspberry Pi, laptops viejas, thin clients
 
 ---
 
 ## Ideas Futuras (Backlog)
 
-Estas ideas no tienen versión asignada y se considerarán después de v1.0:
+Estas ideas no tienen versión asignada y se considerarán según prioridad:
 
-| Idea | Descripción |
-|------|-------------|
-| SSH File Manager | Navegar servidores remotos vía SFTP/paramiko |
-| Cliente IRC/Chat | Cliente IRC integrado estilo retro |
-| Cliente Email | Lector IMAP básico (read-only) con estética Win 3.1 |
-| Screensaver | Starfield, flying toasters o maze después de idle |
-| Sonido | Beeps vía PC speaker/terminal bell para feedback de UI |
-| Escritorios múltiples | Cambio de desktops virtuales (Ctrl+Left/Right) |
-| Temas comunitarios | Repositorio de temas de la comunidad |
-| Scripting/macros | Sistema de scripting para automatización |
-| Pipe integration | Pipar stdout de comandos de terminal a Notepad o Log Viewer |
+| Categoría | Idea | Descripción |
+|-----------|------|-------------|
+| Apps | Web Browser | Wrapper `w3m`/`lynx`, HTML→texto en ventana |
+| Apps | Music Player | Wrapper `mpv --no-video` o `cmus` |
+| Apps | SSH File Manager | Navegar servidores remotos vía SFTP/paramiko |
+| Apps | Cliente IRC/Chat | Chat retro integrado |
+| Apps | Cliente Email | Lector IMAP read-only estilo Win 3.1 |
+| UX | Screensaver | Starfield, flying toasters, maze después de idle |
+| UX | Escritorios múltiples | Cambio de desktops virtuales (Ctrl+Left/Right) |
+| UX | Temas comunitarios | Repositorio de temas de la comunidad |
+| Sistema | Scripting/macros | Automatización de acciones |
+| Sistema | Pipe integration | stdout de terminal → Notepad o Log Viewer |
 
 ---
 
-*Última actualización: 16 de febrero de 2026*
+*Última actualización: 18 de febrero de 2026*
