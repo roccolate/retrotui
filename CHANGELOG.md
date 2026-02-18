@@ -4,7 +4,7 @@ Todas las versiones notables de RetroTUI están documentadas aquí.
 
 ---
 
-## [Unreleased]
+## [v0.9.0] - 2026-02-17
 
 ### Added
 - Script `tools/qa.py` para chequeos locales de UTF-8, compilacion y tests.

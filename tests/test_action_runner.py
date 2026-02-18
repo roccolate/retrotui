@@ -333,7 +333,7 @@ class ActionRunnerTests(unittest.TestCase):
                 app,
                 self.actions_mod.AppAction.FILE_MANAGER,
                 logger,
-                version="0.6.0",
+                version="0.9.0",
             )
 
         spawned = app._spawn_window.call_args.args[0]
@@ -353,7 +353,7 @@ class ActionRunnerTests(unittest.TestCase):
                     app,
                     self.actions_mod.AppAction.FILE_MANAGER,
                     logger,
-                    version="0.6.0",
+                    version="0.9.0",
                 )
 
     def test_execute_notepad_spawns_window_with_offset(self):
@@ -387,7 +387,7 @@ class ActionRunnerTests(unittest.TestCase):
                 app,
                 self.actions_mod.AppAction.NOTEPAD,
                 logger,
-                version="0.6.0",
+                version="0.9.0",
             )
 
         spawned = app._spawn_window.call_args.args[0]
@@ -429,7 +429,7 @@ class ActionRunnerTests(unittest.TestCase):
                 app,
                 self.actions_mod.AppAction.IMAGE_VIEWER,
                 logger,
-                version="0.6.0",
+                version="0.9.0",
             )
 
         app._next_window_offset.assert_called_once_with(14, 3)
@@ -446,7 +446,7 @@ class ActionRunnerTests(unittest.TestCase):
                 app,
                 self.actions_mod.AppAction.TRASH_BIN,
                 logger,
-                version="0.6.0",
+                version="0.9.0",
             )
 
         app._next_window_offset.assert_called_once_with(15, 4)
@@ -497,7 +497,7 @@ class ActionRunnerTests(unittest.TestCase):
                 app,
                 self.actions_mod.AppAction.LOG_VIEWER,
                 logger,
-                version="0.6.0",
+                version="0.9.0",
             )
 
         app._next_window_offset.assert_called_once_with(16, 4)
@@ -516,7 +516,7 @@ class ActionRunnerTests(unittest.TestCase):
                 app,
                 self.actions_mod.AppAction.PROCESS_MANAGER,
                 logger,
-                version="0.6.0",
+                version="0.9.0",
             )
 
         app._next_window_offset.assert_called_once_with(14, 3)
@@ -535,7 +535,7 @@ class ActionRunnerTests(unittest.TestCase):
                 app,
                 self.actions_mod.AppAction.CLOCK_CALENDAR,
                 logger,
-                version="0.6.0",
+                version="0.9.0",
             )
 
         app._next_window_offset.assert_called_once_with(30, 6)
