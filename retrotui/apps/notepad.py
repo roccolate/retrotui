@@ -730,6 +730,17 @@ class NotepadWindow(Window):
         self._mouse_selecting = True
         return None
 
+    def get_context_menu_items(self, mx=None, my=None, bstate=None):
+        """Return context menu items for right-click inside notepad body."""
+        return [
+            ('Copy', None),
+            ('Paste', None),
+            ('Select All', None),
+            ('-------------', None),
+            ('Save', AppAction.NP_SAVE),
+            ('Save As...', AppAction.NP_SAVE_AS),
+        ]
+
     def scroll_up(self):
         """Scroll viewport up (for scroll wheel)."""
         if self.view_top > 0:

@@ -1,5 +1,8 @@
 # RetroTUI 🖥️
 
+[![CI](https://github.com/roccolate/RetroTUI/actions/workflows/ci.yml/badge.svg)](https://github.com/roccolate/RetroTUI/actions/workflows/ci.yml)
+[![Release](https://github.com/roccolate/RetroTUI/actions/workflows/release.yml/badge.svg)](https://github.com/roccolate/RetroTUI/actions/workflows/release.yml)
+
 **Entorno de escritorio retro estilo Windows 3.1 para la terminal (Linux / WSL)**
 
 ```
@@ -16,13 +19,13 @@
 ║░░ 💻 ░░░░║  📄 config.json           512B      ║░░░░░░░░░░║
 ║░Terminal░╚══════════════════════════════════════╝░░░░░░░░░░║
 ║░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░║
-║ RetroTUI v0.6.0│ Windows: 1/1 │ Mouse: Enabled │ Ctrl+Q: Exit║
+║ RetroTUI v0.9.0│ Windows: 1/1 │ Mouse: Enabled │ Ctrl+Q: Exit║
 ╚══════════════════════════════════════════════════════════════╝
 ```
 
 ## Estado del proyecto
 
-- Versión actual: `0.6.0` (tag: `v0.6.0`).
+- Versión actual: `0.9.0` (tag: `v0.9.0`).
 - La rama `main` incluye trabajo posterior a la última release; el estado por hitos está en `ROADMAP.md`.
 
 ## Requisitos

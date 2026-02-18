@@ -35,6 +35,11 @@ def draw_frame(app):
     if app.dialog:
         app.dialog.draw(app.stdscr)
 
+    # Context menu (if any) should be drawn on top of menus but under modal dialogs
+    ctx = getattr(app, 'context_menu', None)
+    if ctx and getattr(ctx, 'is_open', None) and ctx.is_open():
+        ctx.draw(app.stdscr)
+
     app.stdscr.noutrefresh()
     curses.doupdate()
 

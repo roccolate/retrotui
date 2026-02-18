@@ -26,12 +26,15 @@ from .actions import ActionResult, ActionType, AppAction
 from .action_runner import execute_app_action
 from .content import build_welcome_content
 from .mouse_router import (
+    _invoke_mouse_handler,
     handle_drag_resize_mouse,
     handle_global_menu_mouse,
     handle_window_mouse,
     handle_desktop_mouse,
     handle_mouse_event,
 )
+from pathlib import Path
+from .config import default_config_path
 from .key_router import (
     normalize_app_key,
     handle_menu_hotkeys,
@@ -80,9 +83,12 @@ class RetroTUI:
         self.theme = get_theme(self.theme_name)
         self.default_show_hidden = bool(self.config.show_hidden)
         self.default_word_wrap = bool(self.config.word_wrap_default)
+        self.default_sunday_first = bool(self.config.sunday_first)
         self.drag_payload = None
         self.drag_source_window = None
         self.drag_target_window = None
+        # Movable desktop icon positions: mapping icon_key -> (x, y)
+        self.icon_positions = {}
         self._background_operation = None
 
         # Setup terminal
@@ -101,6 +107,12 @@ class RetroTUI:
                       content=welcome_content)
         win.active = True
         self.windows.append(win)
+        # load persisted icon positions (if any)
+        try:
+            self._load_icon_positions()
+        except Exception:
+            # don't fail startup on parse errors
+            LOGGER.debug('failed to load icon positions', exc_info=True)
 
     def apply_theme(self, theme_name):
         """Apply a theme immediately to current runtime."""
@@ -108,12 +120,14 @@ class RetroTUI:
         self.theme_name = self.theme.key
         init_colors(self.theme)
 
-    def apply_preferences(self, *, show_hidden=None, word_wrap_default=None, apply_to_open_windows=False):
+    def apply_preferences(self, *, show_hidden=None, word_wrap_default=None, sunday_first=None, apply_to_open_windows=False):
         """Apply runtime preferences used by app windows and defaults."""
         if show_hidden is not None:
             self.default_show_hidden = bool(show_hidden)
         if word_wrap_default is not None:
             self.default_word_wrap = bool(word_wrap_default)
+        if sunday_first is not None:
+            self.default_sunday_first = bool(sunday_first)
 
         if not apply_to_open_windows:
             return
@@ -134,12 +148,147 @@ class RetroTUI:
 
     def persist_config(self):
         """Persist current runtime preferences to ~/.config/retrotui/config.toml."""
+        # Sync back clock preferences from any open Clock window
+        from ..apps.clock import ClockCalendarWindow
+        for win in self.windows:
+            if isinstance(win, ClockCalendarWindow):
+                self.default_sunday_first = win.week_starts_sunday
+                break
         self.config = AppConfig(
             theme=self.theme_name,
             show_hidden=self.default_show_hidden,
             word_wrap_default=self.default_word_wrap,
+            sunday_first=self.default_sunday_first,
         )
-        return save_config(self.config)
+        path = save_config(self.config)
+        try:
+            self._save_icon_positions(path)
+        except Exception:
+            LOGGER.debug('failed to save icon positions', exc_info=True)
+        return path
+
+    def _load_icon_positions(self):
+        """Load icon positions from config TOML under [icons]."""
+        cfg_path = default_config_path()
+        if not Path(cfg_path).exists():
+            return {}
+        text = Path(cfg_path).read_text(encoding='utf-8')
+        section = None
+        icons = {}
+        for raw in text.splitlines():
+            line = raw.split('#', 1)[0].strip()
+            if not line:
+                continue
+            if line.startswith('[') and line.endswith(']'):
+                section = line[1:-1].strip()
+                continue
+            if section != 'icons':
+                continue
+            if '=' not in line:
+                continue
+            key, val = line.split('=', 1)
+            key = key.strip()
+            val = val.strip().strip('"').strip("'")
+            try:
+                x_str, y_str = val.split(',')
+                icons[key] = (int(x_str.strip()), int(y_str.strip()))
+            except Exception:
+                continue
+        self.icon_positions = icons
+        return icons
+
+    def _save_icon_positions(self, cfg_path=None):
+        """Save icon positions into the config TOML under [icons], preserving other sections."""
+        cfg_path = Path(cfg_path) if cfg_path is not None else Path(default_config_path())
+        existing = ''
+        if cfg_path.exists():
+            existing = cfg_path.read_text(encoding='utf-8')
+
+        # Remove any existing [icons] section
+        lines = existing.splitlines()
+        out_lines = []
+        skip = False
+        for raw in lines:
+            line = raw.strip()
+            if line.startswith('[') and line.endswith(']'):
+                sect = line[1:-1].strip()
+                if sect == 'icons':
+                    skip = True
+                    continue
+                else:
+                    skip = False
+            if skip:
+                continue
+            out_lines.append(raw)
+
+        # Append icons section
+        out_lines.append('')
+        out_lines.append('[icons]')
+        for name, (x, y) in sorted(self.icon_positions.items()):
+            out_lines.append(f'{name} = "{x},{y}"')
+
+        cfg_path.parent.mkdir(parents=True, exist_ok=True)
+        cfg_path.write_text('\n'.join(out_lines) + '\n', encoding='utf-8', newline='\n')
+
+    def _handle_right_click(self, mx, my, bstate):
+        """Dispatch right-clicks to windows or desktop. Return True if handled."""
+        # Try windows first (topmost)
+        for win in reversed(self.windows):
+            if not getattr(win, 'visible', False):
+                continue
+            contains = getattr(win, 'contains', None)
+            if not callable(contains) or not contains(mx, my):
+                continue
+            handler = getattr(win, 'handle_right_click', None)
+            if callable(handler):
+                try:
+                    res = _invoke_mouse_handler(handler, mx, my, bstate)
+                except Exception:
+                    res = None
+                self._dispatch_window_result(res, win)
+                return True
+
+        # Desktop hook
+        # Desktop handler: show a desktop-level context menu
+        try:
+            return bool(self._handle_desktop_right_click(mx, my, bstate))
+        except Exception:
+            return False
+
+    def _handle_desktop_right_click(self, mx, my, bstate):
+        """Open a desktop context menu or icon-specific menu at (mx,my)."""
+        # If clicked on an icon, we could dispatch icon-specific actions later.
+        icon_idx = self.get_icon_at(mx, my)
+        from ..ui.context_menu import ContextMenu
+
+        if icon_idx >= 0:
+            # Simple icon menu: open the icon action or other ops
+            items = [
+                ('Open', self.icons[icon_idx].get('action')),
+                ('Open with...', None),
+                ('-------------', None),
+                ('Copy', None),
+                ('Move', None),
+                ('Rename', None),
+                ('Delete', AppAction.TRASH_BIN),
+                ('-------------', None),
+                ('Properties', None),
+            ]
+        else:
+            items = [
+                ('New Terminal', AppAction.TERMINAL),
+                ('New Notepad', AppAction.NOTEPAD),
+                ('-------------', None),
+                ('Change Theme', AppAction.SETTINGS),
+                ('Settings', AppAction.SETTINGS),
+                ('-------------', None),
+                ('About RetroTUI', AppAction.ABOUT),
+            ]
+
+        self.context_menu = ContextMenu(items)
+        # open slightly offset so pointer isn't on top of first item
+        self.context_menu.open_at(mx, my)
+        return True
 
     def _validate_terminal_size(self):
         """Fail fast when terminal is too small for the base desktop layout."""

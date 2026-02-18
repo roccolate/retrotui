@@ -309,8 +309,11 @@ class ProcessManagerWindow(Window):
         return None
 
     def _set_sort(self, key):
-        self.sort_key = key
-        self.sort_reverse = key != "pid"
+        if self.sort_key == key:
+            self.sort_reverse = not self.sort_reverse
+        else:
+            self.sort_key = key
+            self.sort_reverse = key != "pid"
         self.refresh_processes(force=True)
 
     def _execute_menu_action(self, action):
@@ -346,7 +349,20 @@ class ProcessManagerWindow(Window):
         for row in range(bh):
             safe_addstr(stdscr, by + row, bx, " " * bw, body_attr)
 
-        header = f"{'PID':>6} {'CPU%':>6} {'MEM%':>6} COMMAND"
+        arrow = '▼' if self.sort_reverse else '▲'
+        pid_h = f"{'PID':>6}"
+        cpu_h = f"{'CPU%':>6}"
+        mem_h = f"{'MEM%':>6}"
+        cmd_h = 'COMMAND'
+        if self.sort_key == 'pid':
+            pid_h = f"{'PID':>5}{arrow}"
+        elif self.sort_key == 'cpu':
+            cpu_h = f"{'CPU%':>5}{arrow}"
+        elif self.sort_key == 'mem':
+            mem_h = f"{'MEM%':>5}{arrow}"
+        elif self.sort_key == 'cmd':
+            cmd_h = f'COMMAND{arrow}'
+        header = f"{pid_h} {cpu_h} {mem_h} {cmd_h}"
         safe_addstr(stdscr, by, bx, header[:bw].ljust(bw), theme_attr("menubar"))
 
         view_rows = self._visible_rows()
@@ -389,7 +405,24 @@ class ProcessManagerWindow(Window):
                 return None
 
         bx, by, bw, bh = self.body_rect()
+
+        # Header row click — sort by column
+        if my == by and bx <= mx < bx + bw:
+            col = mx - bx
+            if col < 7:
+                self._set_sort('pid')
+            elif col < 14:
+                self._set_sort('cpu')
+            elif col < 21:
+                self._set_sort('mem')
+            else:
+                self._set_sort('cmd')
+            return None
+
         if not (bx <= mx < bx + bw and by + 1 <= my < by + bh - 2):
+            return None
+
+
             return None
 
         row_index = self.scroll_offset + (my - (by + 1))

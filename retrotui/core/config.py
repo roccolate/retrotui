@@ -20,6 +20,7 @@ class AppConfig:
     theme: str = DEFAULT_THEME
     show_hidden: bool = False
     word_wrap_default: bool = False
+    sunday_first: bool = False
 
 
 def default_config_path() -> Path:
@@ -101,10 +102,12 @@ def _normalize_config(raw: dict) -> AppConfig:
 
     show_hidden = _coerce_bool(ui.get("show_hidden"), default=False)
     word_wrap_default = _coerce_bool(ui.get("word_wrap_default"), default=False)
+    sunday_first = _coerce_bool(ui.get("sunday_first"), default=False)
     return AppConfig(
         theme=theme,
         show_hidden=show_hidden,
         word_wrap_default=word_wrap_default,
+        sunday_first=sunday_first,
     )
 
 
@@ -126,6 +129,7 @@ def serialize_config(config: AppConfig) -> str:
         f'theme = "{config.theme}"\n'
         f"show_hidden = {'true' if config.show_hidden else 'false'}\n"
         f"word_wrap_default = {'true' if config.word_wrap_default else 'false'}\n"
+        f"sunday_first = {'true' if config.sunday_first else 'false'}\n"
     )
 
 

@@ -1107,6 +1107,23 @@ class FileManagerWindow(Window):
             return ActionResult(ActionType.EXECUTE, AppAction.CLOSE_WINDOW)
         return None
 
+    def get_context_menu_items(self, mx=None, my=None, bstate=None):
+        """Return context menu items for right-click inside file manager body.
+
+        Items are (label, action) tuples where action may be an AppAction.
+        """
+        return [
+            ('Open', AppAction.FM_OPEN),
+            ('Open with...', None),
+            ('-------------', None),
+            ('Copy', AppAction.FM_COPY),
+            ('Move', AppAction.FM_MOVE),
+            ('Rename', AppAction.FM_RENAME),
+            ('Delete', AppAction.FM_DELETE),
+            ('-------------', None),
+            ('Properties', None),
+        ]
+
     def handle_click(self, mx, my, bstate=None):
         """Handle a click within the window body. Single-click selects; double-click opens."""
         # Window menu intercept
