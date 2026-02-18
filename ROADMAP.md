@@ -261,6 +261,7 @@ Los clásicos que hacen que la gente se quede. Branch: `feature/ux-games`
 - [ ] 🔤 Character Map — Selector de caracteres Unicode, copiar al clipboard
 - [ ] 📋 Clipboard Viewer — Ver contenido del clipboard interno
 - [ ] 📻 WiFi Manager — Wrapper `nmcli`, listar redes, conectar/desconectar
+- [ ] 📖 Markdown Viewer — Renderizar `.md` con formato (headers, bold, listas, code blocks, tablas)
 
 ---
 
