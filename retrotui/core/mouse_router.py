@@ -342,6 +342,22 @@ def handle_mouse_event(app, event):
     except (TypeError, ValueError):
         return
 
+    # Detect right-click (BUTTON3) and consult app-level handler if present.
+    button3_flags = (
+        getattr(curses, 'BUTTON3_PRESSED', 0)
+        | getattr(curses, 'BUTTON3_CLICKED', 0)
+        | getattr(curses, 'BUTTON3_RELEASED', 0)
+    )
+    if bstate & button3_flags:
+        handler = getattr(app, '_handle_right_click', None)
+        if callable(handler):
+            try:
+                handled = handler(mx, my, bstate)
+            except Exception:
+                handled = False
+            if handled:
+                return
+
     if app._handle_dialog_mouse(mx, my, bstate):
         return
 
