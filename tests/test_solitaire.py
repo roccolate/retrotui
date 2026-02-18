@@ -48,3 +48,17 @@ class SolitaireTests(unittest.TestCase):
         self.assertIsNotNone(win.selected)
         win.handle_click(2, 2)
         self.assertIsNone(win.selected)
+
+    def test_auto_move_drain_behavior(self):
+        # Create a contrived small position: put an Ace in waste and ensure it moves
+        win = self.mod.SolitaireWindow(0, 0, 60, 20)
+        # empty foundations and stock/waste
+        win.foundations = [[] for _ in range(4)]
+        win.waste = ['AS']
+        # run drain
+        moved = win._drain_auto_moves()
+        self.assertGreaterEqual(moved, 1)
+        # waste should be empty and foundation should contain the Ace
+        self.assertEqual(win.waste, [])
+        found_any = any(f and f[-1] == 'AS' for f in win.foundations)
+        self.assertTrue(found_any)

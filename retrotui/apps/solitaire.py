@@ -101,6 +101,22 @@ class SolitaireWindow(Window):
                     return True
         return False
 
+    def _drain_auto_moves(self) -> int:
+        """Repeatedly attempt auto-moves to foundations until none are possible.
+        Returns the number of moves performed."""
+        moved = 0
+        while True:
+            # Prefer single-card moves from waste and columns to foundations
+            if self._auto_move_to_foundation():
+                moved += 1
+                continue
+            # Try moving sequences between columns to free more single-card moves
+            if self._auto_move_sequence_to_column():
+                moved += 1
+                continue
+            break
+        return moved
+
     def _is_red(self, suit: str) -> bool:
         return suit in ("H", "D")
 
@@ -184,16 +200,10 @@ class SolitaireWindow(Window):
             self.selected = (mx, my)
             # detect double-click on same spot -> try auto-move to foundation
             if self._last_click == (mx, my):
-                moved = self._auto_move_to_foundation()
+                moved = self._drain_auto_moves()
                 if moved:
-                    self.moves += 1
+                    self.moves += moved
                     self.selected = None
-                else:
-                    # try moving face-up sequences between columns
-                    moved_seq = self._auto_move_sequence_to_column()
-                    if moved_seq:
-                        self.moves += 1
-                        self.selected = None
         else:
             # normal second click: deselect
             self.selected = None
@@ -221,4 +231,9 @@ class SolitaireWindow(Window):
                 if self.waste:
                     self.stock = list(reversed(self.waste))
                     self.waste = []
+        # 'a' to auto-move all possible cards to foundations
+        if getattr(key, '__int__', None) and int(key) == ord('a'):
+            moved = self._drain_auto_moves()
+            if moved:
+                self.moves += moved
         return None
