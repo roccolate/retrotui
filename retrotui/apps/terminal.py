@@ -8,13 +8,14 @@ from ..constants import C_SCROLLBAR, C_STATUS
 from ..core.actions import ActionResult, ActionType, AppAction
 from ..core.clipboard import copy_text, paste_text
 from ..core.terminal_session import TerminalSession
+from ..core.ansi import AnsiStateMachine
 from ..ui.menu import WindowMenu
 from ..ui.window import Window
 from ..utils import normalize_key_code, safe_addstr, theme_attr
 
 
 class TerminalWindow(Window):
-    """PTY-backed terminal window with basic ANSI parsing and scrollback."""
+    """PTY-backed terminal window with ANSI color support and scrollback."""
 
     DEFAULT_SCROLLBACK = 2000
     MENU_CLEAR = 'term_clear'
@@ -32,12 +33,15 @@ class TerminalWindow(Window):
 
         self._session = None
         self._session_error = None
-        self._ansi_pending = ''
+        
+        self.ansi = AnsiStateMachine()
 
-        self._scroll_lines = []
-        self._line_chars = []
+        # Buffer storage: list of list of (char, attr) tuples
+        self._scroll_lines = [] 
+        self._line_cells = [] 
         self._cursor_col = 0
         self.scrollback_offset = 0
+        
         self.selection_anchor = None  # (line_idx, col)
         self.selection_cursor = None  # (line_idx, col)
         self._mouse_selecting = False
@@ -108,6 +112,10 @@ class TerminalWindow(Window):
 
         return (0, line_len)
 
+    def _get_line_text(self, line_cells):
+        """Helper to convert cell list to plain string."""
+        return ''.join(c[0] for c in line_cells)
+
     def _selected_text(self):
         """Return selected text as plain string."""
         bounds = self._selection_bounds()
@@ -124,16 +132,16 @@ class TerminalWindow(Window):
             return ''
 
         if start_line == end_line:
-            line = lines[start_line]
-            return line[max(0, start_col):max(0, end_col)]
+            line_str = self._get_line_text(lines[start_line])
+            return line_str[max(0, start_col):max(0, end_col)]
 
         chunks = []
-        first = lines[start_line]
-        chunks.append(first[max(0, start_col):])
+        first_str = self._get_line_text(lines[start_line])
+        chunks.append(first_str[max(0, start_col):])
         for idx in range(start_line + 1, end_line):
-            chunks.append(lines[idx])
-        last = lines[end_line]
-        chunks.append(last[:max(0, end_col)])
+            chunks.append(self._get_line_text(lines[idx]))
+        last_str = self._get_line_text(lines[end_line])
+        chunks.append(last_str[:max(0, end_col)])
         return '\n'.join(chunks)
 
     def _cursor_from_screen(self, mx, my):
@@ -149,15 +157,17 @@ class TerminalWindow(Window):
 
         row = my - by
         line_idx = max(0, min(total_lines - 1, start_idx + row))
-        line = self._all_lines()[line_idx] if line_idx < len(self._all_lines()) else ''
-        col = max(0, min(len(line), mx - bx))
+        all_lines = self._all_lines()
+        line_cells = all_lines[line_idx] if line_idx < len(all_lines) else []
+        col = max(0, min(len(line_cells), mx - bx))
         return (line_idx, col)
 
     def _copy_selection(self):
         """Copy selection to shared clipboard (or current line fallback)."""
         text = self._selected_text()
         if not text:
-            text = ''.join(self._line_chars)
+            # Fallback copy current line text
+            text = self._get_line_text(self._line_cells)
         if text:
             copy_text(text)
 
@@ -184,74 +194,24 @@ class TerminalWindow(Window):
 
         self._session = session
 
-    def _strip_ansi(self, text):
-        """Strip ANSI/VT100 escape sequences and keep partial sequences buffered."""
-        data = self._ansi_pending + (text or '')
-        out = []
-        idx = 0
-        data_len = len(data)
+    # OLD _strip_ansi removed, replaced by self.ansi usage
 
-        while idx < data_len:
-            ch = data[idx]
-            if ch != '\x1b':
-                out.append(ch)
-                idx += 1
-                continue
-
-            if idx + 1 >= data_len:
-                break
-
-            marker = data[idx + 1]
-
-            # CSI sequence: ESC [ ... final-byte
-            if marker == '[':
-                end = idx + 2
-                while end < data_len and not ('@' <= data[end] <= '~'):
-                    end += 1
-                if end >= data_len:
-                    break
-                idx = end + 1
-                continue
-
-            # OSC sequence: ESC ] ... BEL or ESC \
-            if marker == ']':
-                end = idx + 2
-                found = False
-                while end < data_len:
-                    if data[end] == '\x07':
-                        end += 1
-                        found = True
-                        break
-                    if data[end] == '\x1b' and end + 1 < data_len and data[end + 1] == '\\':
-                        end += 2
-                        found = True
-                        break
-                    end += 1
-                if not found:
-                    break
-                idx = end
-                continue
-
-            # Two-byte escape sequence.
-            idx += 2
-
-        self._ansi_pending = data[idx:]
-        return ''.join(out)
-
-    def _write_char(self, ch):
-        """Write one printable character at the current terminal cursor column."""
-        if self._cursor_col < len(self._line_chars):
-            self._line_chars[self._cursor_col] = ch
+    def _write_char(self, ch, attr):
+        """Write one character with attribute at current cursor."""
+        if self._cursor_col < len(self._line_cells):
+            self._line_cells[self._cursor_col] = (ch, attr)
         else:
-            while len(self._line_chars) < self._cursor_col:
-                self._line_chars.append(' ')
-            self._line_chars.append(ch)
+            # Pad with spaces if cursor jumped ahead
+            while len(self._line_cells) < self._cursor_col:
+                self._line_cells.append((' ', 0))
+            self._line_cells.append((ch, attr))
         self._cursor_col += 1
 
     def _append_newline(self):
-        """Commit current line to scrollback and move cursor to next line."""
-        self._scroll_lines.append(''.join(self._line_chars))
-        self._line_chars = []
+        """Commit current line to scrollback."""
+        # We store the list of cells directly
+        self._scroll_lines.append(list(self._line_cells))
+        self._line_cells = []
         self._cursor_col = 0
         overflow = len(self._scroll_lines) - self.max_scrollback
         if overflow > 0:
@@ -259,32 +219,39 @@ class TerminalWindow(Window):
 
     def _erase_line(self, mode):
         """Apply CSI K (erase in line) mode."""
-        if mode == 2:
-            self._line_chars = []
+        # Use default attr (0) for erased cells? Or current ansi attr?
+        # Usually erase uses current background color.
+        fill_attr = self.ansi.attr
+        
+        if mode == 2: # Clear entire line
+            self._line_cells = []
             self._cursor_col = 0
             return
 
-        if mode == 1:
-            end = min(len(self._line_chars), self._cursor_col + 1)
+        if mode == 1: # Clear from beginning to cursor
+            end = min(len(self._line_cells), self._cursor_col + 1)
             for i in range(end):
-                self._line_chars[i] = ' '
+                self._line_cells[i] = (' ', fill_attr)
             return
 
         # mode 0 (default): erase from cursor to end
-        if self._cursor_col < len(self._line_chars):
-            del self._line_chars[self._cursor_col:]
+        if self._cursor_col < len(self._line_cells):
+            # Truncate or fill with spaces?
+            # Standard terminals fill with spaces (and background color).
+            # If we just truncate, we lose background color extending to right.
+            # For simplicity in this TUI, truncating is cleaner for implementation 
+            # unless we implement fixed-width line buffers.
+            # Let's truncate for now to avoid management hell.
+            del self._line_cells[self._cursor_col:]
 
     def _apply_csi(self, params, final):
-        """Handle the subset of CSI controls needed for shell line editing."""
-        parts = params.split(';') if params else []
-
+        """Handle CSI controls for layout (attributes handled by AnsiStateMachine)."""
+        # params is a list of ints
+        
         def _num(index, default):
-            if index >= len(parts):
+            if index >= len(params):
                 return default
-            token = parts[index]
-            if not token or not token.isdigit():
-                return default
-            return int(token)
+            return params[index]
 
         if final == 'D':  # Cursor left
             self._cursor_col = max(0, self._cursor_col - max(1, _num(0, 1)))
@@ -295,8 +262,15 @@ class TerminalWindow(Window):
         if final == 'G':  # Cursor horizontal absolute (1-based)
             self._cursor_col = max(0, _num(0, 1) - 1)
             return
-        if final in ('H', 'f'):  # Cursor position (row;col), we only track column
-            col = _num(1, 1) if len(parts) > 1 else 1
+        if final in ('H', 'f'):  # Cursor position (row;col) - we only support column
+            # We are single-line editable, row moves usually ignored or just clear?
+            # Implies we handle full screen addressable terminal?
+            # Our simple terminal is a rolling logger + single line edit mostly.
+            # But "real" programs use H to move around.
+            # Since we only render `_scroll_lines` (history) + `_line_cells` (current),
+            # we can't easily support moving UP into history to edit it.
+            # We treat H as setting column only for the current line.
+            col = _num(1, 1)
             self._cursor_col = max(0, col - 1)
             return
         if final == 'K':  # Erase in line
@@ -304,110 +278,97 @@ class TerminalWindow(Window):
             return
         if final == 'P':  # Delete character(s) at cursor
             count = max(1, _num(0, 1))
-            if self._cursor_col < len(self._line_chars):
-                del self._line_chars[self._cursor_col:self._cursor_col + count]
+            if self._cursor_col < len(self._line_cells):
+                del self._line_cells[self._cursor_col:self._cursor_col + count]
             return
+        if final == 'J': # Erase in display
+            # 2J = clear screen. `clear` command uses this.
+            mode = _num(0, 0)
+            if mode == 2:
+                self._scroll_lines = []
+                self._line_cells = []
+                self._cursor_col = 0
+                self.scrollback_offset = 0
 
     def _consume_output(self, text):
-        """Apply terminal output stream to local scrollback buffer."""
+        """Feed text to ANSI state machine and update buffer."""
+        if not text:
+            return
+        
         prev_total = len(self._all_lines())
         prev_offset = self.scrollback_offset
-        if text:
-            self.clear_selection()
-        data = self._ansi_pending + (text or '')
-        self._ansi_pending = ''
-        idx = 0
-        data_len = len(data)
-
-        while idx < data_len:
-            ch = data[idx]
-            if ch == '\x1b':
-                if idx + 1 >= data_len:
-                    break
-
-                marker = data[idx + 1]
-                if marker == '[':
-                    end = idx + 2
-                    while end < data_len and not ('@' <= data[end] <= '~'):
-                        end += 1
-                    if end >= data_len:
-                        break
-                    self._apply_csi(data[idx + 2:end], data[end])
-                    idx = end + 1
-                    continue
-
-                if marker == ']':
-                    end = idx + 2
-                    found = False
-                    while end < data_len:
-                        if data[end] == '\x07':
-                            end += 1
-                            found = True
-                            break
-                        if data[end] == '\x1b' and end + 1 < data_len and data[end + 1] == '\\':
-                            end += 2
-                            found = True
-                            break
-                        end += 1
-                    if not found:
-                        break
-                    idx = end
-                    continue
-
-                # Two-byte escape sequence: ignore.
-                idx += 2
-                continue
-
-            if ch == '\n':
-                self._append_newline()
-            elif ch == '\r':
-                self._cursor_col = 0
-            elif ch == '\b':
-                self._cursor_col = max(0, self._cursor_col - 1)
-            elif ch == '\t':
-                spaces = 4 - (self._cursor_col % 4)
-                for _ in range(spaces):
-                    self._write_char(' ')
-            elif ch >= ' ' and ch != '\x7f':
-                self._write_char(ch)
-            idx += 1
-
-        self._ansi_pending = data[idx:]
-        # Keep the same viewport while user is reviewing previous output.
+        # if text: self.clear_selection() # Optional: clear selection on output? 
+        # Standard terminals usually don't clear selection on output, only on input.
+        
+        for kind, data, attr in self.ansi.parse_chunk(text):
+            if kind == 'TEXT':
+                self._write_char(data, attr)
+            elif kind == 'CONTROL':
+                if data == '\n':
+                    self._append_newline()
+                elif data == '\r':
+                    self._cursor_col = 0
+                elif data == '\b':
+                    self._cursor_col = max(0, self._cursor_col - 1)
+                elif data == '\t':
+                    spaces = 4 - (self._cursor_col % 4)
+                    current_attr = self.ansi.attr
+                    for _ in range(spaces):
+                        self._write_char(' ', current_attr)
+            elif kind == 'CSI':
+                # data is final char, attr is params list
+                self._apply_csi(attr, data)
+        
+        # Smart scrolling: if we were at the bottom, stay at the bottom.
+        # If we were scrolled up, try to maintain relative position?
+        # Actually standard behavior: if at bottom, autoscroll. If up, stay put.
+        # "at bottom" means scrollback_offset == 0.
+        
         if prev_offset > 0:
+            # We were looking at history.
             new_total = len(self._all_lines())
             appended = max(0, new_total - prev_total)
             if appended > 0:
+                # To keep viewing the same lines, we must increase offset?
+                # scrollback_offset is "lines back from end".
+                # If we add N lines to end, and want to show same lines,
+                # we must increase offset by N.
                 _, text_rows = self._text_area_size()
                 max_offset = self._max_scrollback_offset(text_rows)
                 self.scrollback_offset = min(max_offset, prev_offset + appended)
 
     def _all_lines(self):
-        """Return all lines including current editable line."""
-        return self._scroll_lines + [''.join(self._line_chars)]
+        """Return all lines including current editable line (as lists of cells)."""
+        # _scroll_lines is list of lists
+        # _line_cells is list
+        return self._scroll_lines + [list(self._line_cells)]
 
     def _max_scrollback_offset(self, text_rows):
-        """Maximum scrollback offset based on current buffer length."""
         return max(0, len(self._all_lines()) - max(1, text_rows))
 
     def _visible_slice(self, text_rows):
-        """Return (visible_lines, start_index, total_lines)."""
         text_rows = max(1, text_rows)
         lines = self._all_lines()
         total = len(lines)
         max_offset = max(0, total - text_rows)
+        
         if self.scrollback_offset > max_offset:
             self.scrollback_offset = max_offset
+            
         start = max(0, total - text_rows - self.scrollback_offset)
         return lines[start:start + text_rows], start, total
 
     @staticmethod
-    def _fit_line(text, width):
-        """Clip/pad one text line to exact width in terminal cells."""
-        return text[:width].ljust(width)
+    def _fit_line(line_cells, width):
+        """Clip/pad one cell list to exact width."""
+        # Returns list of (char, attr)
+        # Pad with (space, 0)
+        clipped = line_cells[:width]
+        if len(clipped) < width:
+            clipped.extend([(' ', 0)] * (width - len(clipped)))
+        return clipped
 
     def _draw_scrollback_bar(self, stdscr, x, y, rows, start_idx, total_lines):
-        """Draw a one-column scrollbar for scrollback position."""
         if total_lines <= rows or rows <= 1:
             return
         thumb_pos = int(start_idx / max(1, total_lines - rows) * (rows - 1))
@@ -416,7 +377,6 @@ class TerminalWindow(Window):
             safe_addstr(stdscr, y + i, x, ch, theme_attr('scrollbar'))
 
     def _draw_live_cursor(self, stdscr, x, y, text_cols, text_rows, start_idx, total_lines, body_attr):
-        """Draw a visual cursor on the current editable line when in LIVE mode."""
         if not self.active or self.scrollback_offset != 0:
             return
         if total_lines <= 0:
@@ -431,22 +391,32 @@ class TerminalWindow(Window):
         if col >= text_cols:
             col = text_cols - 1
 
-        line_text = ''.join(self._line_chars)
-        ch = line_text[col] if col < len(line_text) else ' '
+        # Retrieve char at cursor
+        current_cells = self._line_cells
+        if col < len(current_cells):
+            ch, attr = current_cells[col]
+        else:
+            ch, attr = ' ', 0
+
+        # Combine attributes: cell attr | window body attr | reverse for cursor
+        # Note: if cell has its own attr (color), use it. 
+        # If cell attr is 0, use body_attr.
+        effective_attr = attr if attr else body_attr
+        
         if ch == ' ':
-            # Some terminals do not show reverse-video spaces clearly.
-            safe_addstr(stdscr, row, x + col, '_', body_attr | curses.A_BOLD)
+            safe_addstr(stdscr, row, x + col, '_', effective_attr | curses.A_BOLD)
             return
 
-        safe_addstr(stdscr, row, x + col, ch, body_attr | curses.A_REVERSE | curses.A_BOLD)
+        safe_addstr(stdscr, row, x + col, ch, effective_attr | curses.A_REVERSE | curses.A_BOLD)
 
     def _draw_selection(self, stdscr, x, y, text_cols, start_idx, visible_lines, body_attr):
-        """Draw reverse-video overlay for selected text in visible slice."""
+        """Draw reverse-video overlay for selected text."""
+        # visible_lines is list of cell-lists
         if not self.has_selection():
             return
-        for row, line in enumerate(visible_lines):
+        for row, line_cells in enumerate(visible_lines):
             line_idx = start_idx + row
-            span = self._line_selection_span(line_idx, len(line))
+            span = self._line_selection_span(line_idx, len(line_cells))
             if not span:
                 continue
             start, end = span
@@ -456,10 +426,15 @@ class TerminalWindow(Window):
             end = min(max(start, end), text_cols)
             if end <= start:
                 continue
-            segment = line[start:end]
-            if not segment:
-                segment = ' ' * (end - start)
-            safe_addstr(stdscr, y + row, x + start, segment, body_attr | curses.A_REVERSE | curses.A_BOLD)
+            
+            # For selection, we just invert the range
+            for col in range(start, end):
+                if col < len(line_cells):
+                    ch, attr = line_cells[col]
+                else:
+                    ch, attr = ' ', 0
+                effective_attr = attr if attr else body_attr
+                safe_addstr(stdscr, y + row, x + col, ch, effective_attr | curses.A_REVERSE | curses.A_BOLD)
 
     def draw(self, stdscr):
         """Draw terminal body, live output, scrollback and status line."""
@@ -470,6 +445,7 @@ class TerminalWindow(Window):
         bx, by, bw, bh = self.body_rect()
         text_cols, text_rows = max(1, bw - 1), max(1, bh - 1)
 
+        # Clear background
         for row in range(bh):
             safe_addstr(stdscr, by + row, bx, ' ' * bw, body_attr)
 
@@ -480,12 +456,20 @@ class TerminalWindow(Window):
             if chunk:
                 self._consume_output(chunk)
             self._session.poll_exit()
-        elif self._session_error and not self._scroll_lines and not self._line_chars:
+        elif self._session_error and not self._scroll_lines and not self._line_cells:
             self._consume_output(self._session_error + '\n')
 
         visible, start_idx, total_lines = self._visible_slice(text_rows)
-        for i, line in enumerate(visible):
-            safe_addstr(stdscr, by + i, bx, self._fit_line(line, text_cols), body_attr)
+        
+        # Render visible lines
+        # visible is list of lists of (char, attr)
+        for i, line_cells in enumerate(visible):
+            # Fit line to width
+            fitted = self._fit_line(line_cells, text_cols)
+            for j, (ch, attr) in enumerate(fitted):
+                # Use cell attribute if present, else body_attr
+                # Also ensure we don't crash on weird attributes
+                safe_addstr(stdscr, by + i, bx + j, ch, attr if attr else body_attr)
 
         self._draw_selection(stdscr, bx, by, text_cols, start_idx, visible, body_attr)
         self._draw_live_cursor(stdscr, bx, by, text_cols, text_rows, start_idx, total_lines, body_attr)
@@ -546,7 +530,7 @@ class TerminalWindow(Window):
         """Execute terminal window menu action."""
         if action == self.MENU_CLEAR:
             self._scroll_lines = []
-            self._line_chars = []
+            self._line_cells = []
             self._cursor_col = 0
             self.scrollback_offset = 0
             self.clear_selection()
@@ -703,6 +687,26 @@ class TerminalWindow(Window):
             self.clear_selection()
         return None
 
+    def handle_right_click(self, mx, my, bstate):
+        """Show context menu on right click."""
+        bx, by, bw, bh = self.body_rect()
+        if not (bx <= mx < bx + bw and by <= my < by + bh):
+            return False
+
+        items = []
+        if self.has_selection():
+            items.append({'label': 'Copy Selection', 'action': self.MENU_COPY})
+
+        items.append({'label': 'Paste', 'action': lambda: self._forward_payload(paste_text())})
+        items.append({'separator': True})
+        items.append({'label': 'Clear Scrollback', 'action': self.MENU_CLEAR})
+        items.append({'label': 'Restart Shell', 'action': self.MENU_RESTART})
+        items.append({'separator': True})
+        items.append({'label': 'Properties', 'action': None})
+        items.append({'label': 'Close', 'action': AppAction.CLOSE_WINDOW})
+        
+        return items
+
     def handle_mouse_drag(self, mx, my, bstate):
         """Extend selection while primary mouse button is pressed."""
         if not (bstate & getattr(curses, 'BUTTON1_PRESSED', 0)):
@@ -731,9 +735,9 @@ class TerminalWindow(Window):
         """Reset scrollback state and start a fresh shell session lazily."""
         self.close()
         self._session_error = None
-        self._ansi_pending = ''
+        self.ansi = AnsiStateMachine() # Reset ansi state
         self._scroll_lines = []
-        self._line_chars = []
+        self._line_cells = []
         self._cursor_col = 0
         self.scrollback_offset = 0
 

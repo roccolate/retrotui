@@ -57,6 +57,36 @@ def dispatch_input(app, key):
     if key is None:
         return
 
+    # Handle context menu input first (modal behavior)
+    ctx = getattr(app, 'context_menu', None)
+    if ctx and getattr(ctx, 'is_open', None) and ctx.is_open():
+        if isinstance(key, int) and key == curses.KEY_MOUSE:
+            try:
+                event = curses.getmouse()
+                # If click is outside, context menu closes and returns None,
+                # then we might want to process the click on the underlying window?
+                # For now, let context menu consume the click if it handles it.
+                _, mx, my, _, bstate = event
+                action = ctx.handle_click(mx, my)
+                if action:
+                    app.execute_action(action)
+                    return
+                # If context menu closed but no action, it means we clicked outside.
+                # We should allow the app to process this click (e.g. select another window)
+                # But we must be careful not to re-process the click that opened the menu?
+                # Actually, handle_click returns None and closes menu if outside.
+                # So we let execution continue to app.handle_mouse(event) below IF menu closed.
+                if ctx.is_open():
+                     return
+            except curses.error:
+                pass
+        else:
+            # Keyboard input to context menu
+            action = ctx.handle_input(key)
+            if action:
+                app.execute_action(action)
+            return
+
     if isinstance(key, int) and key == curses.KEY_MOUSE:
         try:
             event = curses.getmouse()

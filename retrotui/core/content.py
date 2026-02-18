@@ -8,7 +8,7 @@ def build_welcome_content(version: str) -> list[str]:
     return [
         "",
         " +--------------------------------------+",
-        f" |      Welcome to RetroTUI v{version:<6} |",
+        f" |        Welcome to RetroTUI v{version:<6}   |",
         " |                                      |",
         " |  A Windows 3.1 style desktop         |",
         " |  environment for the Linux console.  |",
@@ -20,6 +20,7 @@ def build_welcome_content(version: str) -> list[str]:
         " |  - Text editor + file manager        |",
         " |                                      |",
         " |  Use mouse or keyboard to navigate.  |",
+        " |  Press F9 to hide this forever.      |",
         " |  Press Ctrl+Q to exit.               |",
         " +--------------------------------------+",
         "",

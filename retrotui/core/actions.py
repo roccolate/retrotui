@@ -24,6 +24,8 @@ class ActionType(str, Enum):
     REQUEST_KILL_CONFIRM = "request_kill_confirm"
     SAVE_ERROR = "save_error"
     ERROR = "error"
+    UPDATE_CONFIG = "update_config"
+    REFRESH = "refresh"
 
 
 class AppAction(str, Enum):

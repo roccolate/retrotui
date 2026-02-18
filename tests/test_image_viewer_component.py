@@ -86,7 +86,7 @@ class ImageViewerComponentTests(unittest.TestCase):
         self.addCleanup(lambda: os.path.exists(wrong) and os.unlink(wrong))
         not_image = win.open_path(wrong)
         self.assertEqual(not_image.type, self.actions_mod.ActionType.ERROR)
-        self.assertIn("Not an image", not_image.payload)
+        self.assertIn("Not a supported media file", not_image.payload)
 
         image = self._temp_file(".png")
         self.addCleanup(lambda: os.path.exists(image) and os.unlink(image))
@@ -172,7 +172,7 @@ class ImageViewerComponentTests(unittest.TestCase):
         image = self._temp_file(".png")
         self.addCleanup(lambda: os.path.exists(image) and os.unlink(image))
         win = self._make_window(image)
-        win.body_rect = mock.Mock(return_value=(2, 3, 30, 6))
+        win.body_rect = mock.Mock(return_value=(2, 3, 80, 6))
         win.status_message = "Loaded"
 
         class _Dummy:
@@ -217,7 +217,7 @@ class ImageViewerComponentTests(unittest.TestCase):
             self.actions_mod.ActionType.REQUEST_OPEN_PATH,
         )
         self.assertIsNone(win._execute_menu_action("iv_reload"))
-        self.assertIn("No image opened", win.status_message)
+        self.assertIn("No media opened.", win.status_message)
         self.assertIsNone(win._execute_menu_action("iv_zoom_in"))
         self.assertIsNone(win._execute_menu_action("iv_zoom_out"))
         self.assertIsNone(win._execute_menu_action("iv_zoom_reset"))
@@ -253,7 +253,7 @@ class ImageViewerComponentTests(unittest.TestCase):
         # _update_title() sets default title when no filepath is open.
         win.filepath = None
         win._update_title()
-        self.assertEqual(win.title, "Image Viewer")
+        self.assertEqual(win.title, "Media Viewer")
 
         # _detect_backend() timg/catimg branches.
         win2 = self._make_window()
@@ -265,7 +265,7 @@ class ImageViewerComponentTests(unittest.TestCase):
             self.assertEqual(win3._detect_backend(), "catimg")
 
         # _cached_render_lines() early return when no file is open.
-        self.assertTrue(any("No image opened" in line for line in win._cached_render_lines(10, 3)))
+        self.assertTrue(any("No media opened." in line for line in win._cached_render_lines(10, 3)))
 
         # iv_reload sets status depending on whether a file is open.
         win.filepath = "/tmp/fake.png"

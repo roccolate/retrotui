@@ -1,70 +1,75 @@
+
 import sys
 import unittest
-from unittest import mock
+from unittest.mock import MagicMock, patch
 
-from _support import make_fake_curses
+# Mock curses before importing retrotui.ui.context_menu
+mock_curses = MagicMock()
+mock_curses.KEY_UP = 259
+mock_curses.KEY_DOWN = 258
+mock_curses.KEY_ENTER = 10
+mock_curses.error = Exception
+with patch.dict(sys.modules, {'curses': mock_curses}):
+    from retrotui.ui.context_menu import ContextMenu
 
-# ensure a consistent fake curses implementation
-_prev = sys.modules.get('curses')
-sys.modules['curses'] = make_fake_curses()
+from retrotui.core.actions import AppAction
 
-from retrotui.ui.context_menu import ContextMenu
+class TestContextMenu(unittest.TestCase):
+    def setUp(self):
+        self.theme = MagicMock()
+        self.menu = ContextMenu(self.theme)
 
+    def test_show_sets_active_and_position(self):
+        items = [{'label': 'Test', 'action': AppAction.EXIT}]
+        self.menu.show(10, 5, items)
+        self.assertTrue(self.menu.is_open())
+        self.assertEqual(self.menu.x, 10)
+        self.assertEqual(self.menu.y, 5)
+        self.assertEqual(self.menu.items, items)
 
-class FakeStdScr:
-    def __init__(self):
-        self.calls = []
+    def test_hide_resets_state(self):
+        self.menu.show(10, 5, [])
+        self.menu.hide()
+        self.assertFalse(self.menu.is_open())
+        self.assertEqual(self.menu.items, [])
 
-    def getmaxyx(self):
-        return (24, 80)
+    def test_handle_click_inside_activates_action(self):
+        items = [{'label': 'Item 1', 'action': AppAction.EXIT}]
+        self.menu.show(10, 5, items)
+        
+        # Click on Item 1 (y = 5 (border) + 1 (item)) = 6
+        action = self.menu.handle_click(11, 6)
+        self.assertEqual(action, AppAction.EXIT)
+        self.assertFalse(self.menu.is_open())
 
-    def addnstr(self, y, x, text, max_len, attr=None):
-        self.calls.append((y, x, text[:max_len], attr))
+    def test_handle_click_outside_closes_menu(self):
+        self.menu.show(10, 5, [{'label': 'Test'}])
+        action = self.menu.handle_click(0, 0)
+        self.assertIsNone(action)
+        self.assertFalse(self.menu.is_open())
 
-    def addstr(self, y, x, text, attr=None):
-        self.addnstr(y, x, text, len(text), attr)
-
-
-class ContextMenuTests(unittest.TestCase):
-    def test_draw_and_escape_closes(self):
-        std = FakeStdScr()
-        items = [('One', 'a1'), ('---', None), ('Two', 'a2')]
-        cm = ContextMenu(items)
-        cm.open_at(5, 3)
-
-        # patch safe_addstr to route to our fake std
-        with mock.patch('retrotui.ui.context_menu.safe_addstr') as fake_sa:
-            fake_sa.side_effect = lambda s, y, x, t, a=None: std.addstr(y, x, t, a)
-            cm.draw(std)
-
-        # ensure drawing happened
-        self.assertTrue(any('One' in c[2] for c in std.calls))
-
-        # escape should close
-        res = cm.handle_key(27)
-        self.assertIsNone(res)
-        self.assertFalse(cm.is_open())
-
-    def test_click_outside_closes(self):
-        std = FakeStdScr()
-        items = [('Open', 'o'), ('Delete', 'd')]
-        cm = ContextMenu(items)
-        cm.open_at(2, 2)
-
-        # click outside
-        res = cm.handle_click(0, 0)
-        self.assertIsNone(res)
-        self.assertFalse(cm.is_open())
-
-    def test_click_inside_selects_item(self):
-        items = [('A', 'a'), ('B', 'b')]
-        cm = ContextMenu(items)
-        cm.open_at(10, 5)
-
-        # click on second item (y = open_y + 1 + index)
-        res = cm.handle_click(11, 5 + 1 + 1)
-        self.assertEqual(res, 'b')
-
+    def test_keyboard_navigation(self):
+        items = [
+            {'label': '1', 'action': 'ACT1'},
+            {'label': '2', 'action': 'ACT2'}
+        ]
+        self.menu.show(0, 0, items)
+        
+        # Default select 0
+        self.assertEqual(self.menu.selected_index, 0)
+        
+        # Down -> 1
+        self.menu.handle_input(258) # KEY_DOWN
+        self.assertEqual(self.menu.selected_index, 1)
+        
+        # Down -> loop to 0
+        self.menu.handle_input(258)
+        self.assertEqual(self.menu.selected_index, 0)
+        
+        # Enter -> return action 0
+        action = self.menu.handle_input(10)
+        self.assertEqual(action, 'ACT1')
+        self.assertFalse(self.menu.is_open())
 
 if __name__ == '__main__':
     unittest.main()

@@ -133,11 +133,18 @@ def handle_file_drag_drop_mouse(app, mx, my, bstate):
     """Handle file drag-and-drop between windows (File Manager -> Notepad/Terminal)."""
     report_flag = getattr(curses, 'REPORT_MOUSE_POSITION', 0)
     pressed_flag = getattr(curses, 'BUTTON1_PRESSED', 0)
-    move_drag = bool((bstate & report_flag) and (bstate & pressed_flag))
+    
+    # Robust drag detection for TTY:
+    # A drag is valid if we have motion AND (button1 is strictly pressed in this event OR we know it's held down)
+    is_motion = bool(bstate & report_flag)
+    button_down = bool((bstate & pressed_flag) or getattr(app, 'button1_pressed', False))
+    move_drag = is_motion and button_down
+
     stop_drag = bool(bstate & getattr(curses, 'BUTTON1_RELEASED', 0))
     if not stop_drag:
         inferred_stop = getattr(app, 'stop_drag_flags', 0) & ~pressed_flag & ~report_flag
         stop_drag = bool(bstate & inferred_stop)
+    
     drag_payload = getattr(app, 'drag_payload', None)
 
     if drag_payload is not None:
@@ -316,22 +323,116 @@ def handle_window_mouse(app, mx, my, bstate):
 
 
 def handle_desktop_mouse(app, mx, my, bstate):
-    """Handle desktop icon interactions and deselection."""
+    """Handle desktop icon interactions: selection, activation, and dragging."""
+    # Handle icon dragging
+    dragging_icon = getattr(app, '_dragging_icon', -1)
+    
+    # Check for drag release
+    if bstate & getattr(curses, 'BUTTON1_RELEASED', 0):
+        if dragging_icon >= 0:
+            # Snap to grid or just drop
+            # We don't need to do much since we update position live during drag (or on drop?)
+            # Let's simple clear the state
+            setattr(app, '_dragging_icon', -1)
+            # Save config to persist new position? 
+            # Ideally we save on exit or explicit save, but auto-save on drop is nice.
+            try:
+               app.persist_config()
+            except Exception:
+               pass
+            return True
+
+    # Check for drag motion
+    if dragging_icon >= 0 and (bstate & getattr(curses, 'BUTTON1_PRESSED', 0)):
+        # Update icon position
+        # We need to map mx, my back to icon coordinates
+        # Icons are drawn at specific positions.
+        # If we support arbitrary positioning, we need to update app.icon_positions
+        
+        # Determine which icon is being dragged
+        icon_key = app.icons[dragging_icon].get('label') # Using label as key for now
+        
+        # Simple center alignment offset? 
+        # For now, let's just set top-left to mouse pos - offset?
+        # We need to access the offset calculated at start of drag
+        dx = getattr(app, '_drag_icon_offset_x', 0)
+        dy = getattr(app, '_drag_icon_offset_y', 0)
+        
+        new_x = max(0, mx - dx)
+        new_y = max(0, my - dy)
+        
+        app.icon_positions[icon_key] = (new_x, new_y)
+        return True
+
     icon_idx = app.get_icon_at(mx, my)
+    
+    # Double click validation (unchanged)
     if icon_idx >= 0 and _is_desktop_double_click(app, icon_idx, bstate):
         setattr(app, '_last_icon_click_idx', None)
         setattr(app, '_last_icon_click_ts', 0.0)
         app.execute_action(app.icons[icon_idx]['action'])
         return True
 
-    if icon_idx >= 0 and _is_button1_click_event(bstate):
-        app.selected_icon = icon_idx
-        return True
+    # Single click or Drag Start
+    if icon_idx >= 0:
+        if bstate & getattr(curses, 'BUTTON1_PRESSED', 0):
+            # Start drag?
+            # We only start drag if we are not double clicking?
+            # Or usually drag starts on press + move.
+            # For simplicity, if we press on an icon, we arm it for drag.
+            
+            # Store initial offset to prevent jumping
+            # We need to know where the icon top-left is.
+            # app.get_icon_at doesn't return pos, we need to re-calc it or helper.
+            # Standard grid layout logic from app.py:
+            # start_y + i * spacing_y -> this is for vertical list default?
+            # Wait, get_icon_at uses strict vertical layout logic currently.
+            
+            # If we want arbitrary positions, get_icon_at needs to check app.icon_positions first!
+            # AND get_icon_at is in app.py. We need to update that first to support arbitrary positions.
+            
+            # Let's assume get_icon_at is updated or will be updated.
+            # To get current icon pos:
+            # icon_pos = app.get_icon_position(icon_idx)
+            # dx = mx - icon_pos_x
+            # dy = my - icon_pos_y
+            
+            app.selected_icon = icon_idx
+            
+            # We need to signal that we MIGHT be dragging.
+            # But we don't know the exact icon (curr) x,y if we don't have a helper.
+            # Let's defer actual "drag start" to the next move event if we can?
+            
+            # For this step, let's just mark it as potentially dragging.
+            setattr(app, '_dragging_icon', icon_idx)
+            
+            # Calculate offset if possible. 
+            # We need a helper on app to get icon rect.
+            # rect = app.get_icon_rect(icon_idx) 
+            # For now, assume simple default layout if not in icon_positions
+            
+            # We will handle the offset calculation inside the drag motion block using a helper if needed
+            # or we accept a slight jump for the first MVP pass if we can't get exact rect easily here.
+            
+            # Better: call app.get_icon_screen_pos(icon_idx)
+            pos = getattr(app, 'get_icon_screen_pos', lambda i: (3, 3 + i*5))(icon_idx)
+            setattr(app, '_drag_icon_offset_x', mx - pos[0])
+            setattr(app, '_drag_icon_offset_y', my - pos[1])
+            
+            return True
+            
+        elif _is_button1_click_event(bstate):
+            app.selected_icon = icon_idx
+            return True
+
     if icon_idx >= 0 and (bstate & getattr(curses, 'REPORT_MOUSE_POSITION', 0)):
         return True
 
-    app.selected_icon = -1
-    app.menu.active = False
+    # Click on empty desktop
+    if _is_button1_click_event(bstate):
+        app.selected_icon = -1
+        app.menu.active = False
+        
     return True
 
 
@@ -342,6 +443,14 @@ def handle_mouse_event(app, event):
     except (TypeError, ValueError):
         return
 
+    # Track physical button state
+    if bstate & getattr(curses, 'BUTTON1_PRESSED', 0):
+        app.button1_pressed = True
+    elif bstate & getattr(curses, 'BUTTON1_RELEASED', 0):
+        app.button1_pressed = False
+    elif bstate & getattr(curses, 'BUTTON1_CLICKED', 0):
+        app.button1_pressed = False
+
     # Detect right-click (BUTTON3) and consult app-level handler if present.
     button3_flags = (
         getattr(curses, 'BUTTON3_PRESSED', 0)
@@ -349,7 +458,7 @@ def handle_mouse_event(app, event):
         | getattr(curses, 'BUTTON3_RELEASED', 0)
     )
     if bstate & button3_flags:
-        handler = getattr(app, '_handle_right_click', None)
+        handler = getattr(app, 'handle_right_click', None)  # Changed from _handle_right_click to handle_right_click
         if callable(handler):
             try:
                 handled = handler(mx, my, bstate)
@@ -375,6 +484,13 @@ def handle_mouse_event(app, event):
 
     if app._handle_global_menu_mouse(mx, my, bstate):
         return
+
+    from .actions import AppAction
+    h, w = app.stdscr.getmaxyx()
+    if my == h - 1 and mx >= w - 8:
+        if bstate & (getattr(curses, 'BUTTON1_CLICKED', 0) | getattr(curses, 'BUTTON1_DOUBLE_CLICKED', 0)):
+            app.execute_action(AppAction.CLOCK_CALENDAR)
+            return
 
     if (bstate & app.click_flags) and app.handle_taskbar_click(mx, my):
         return

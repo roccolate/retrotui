@@ -1,123 +1,148 @@
-"""
-ContextMenu component.
 
-Simple position-based context menu compatible with the existing `Menu` style.
-"""
-from __future__ import annotations
+"""Context Menu UI component."""
 
 import curses
+from ..core.actions import AppAction
+from .menu import Menu
 
-from ..constants import SB_H
-from ..utils import draw_box, safe_addstr, theme_attr
 
+class ContextMenu(Menu):
+    """
+    A context menu that appears at a specific (x, y) location.
+    inherits from Menu to reuse drawing and navigation logic.
+    """
 
-class ContextMenu:
-    def __init__(self, items: list[tuple[str, object]]):
-        """Items is a list of (label, action) where action may be None for a separator."""
-        self.items = items or []
+    def __init__(self, theme):
+        super().__init__()
+        self.theme = theme
         self.x = 0
         self.y = 0
-        self.w = 0
-        self.h = 0
-        self.opened = False
-        self.selected = 0
+        self.items = []  # List of dicts: {'label': str, 'action': AppAction, 'separator': bool}
+        self.selected_index = 0
+        self.active = False
+        self._width = 20
 
-    def open_at(self, x: int, y: int) -> None:
+    def show(self, x, y, items):
+        """Open the context menu at x, y with the given items."""
         self.x = x
         self.y = y
-        max_label = max((len(label) for label, _ in self.items), default=0)
-        self.w = max_label + 2
-        self.h = len(self.items) + 2
-        # move selection to first selectable
-        self.selected = self._first_selectable()
-        self.opened = True
+        self.items = items
+        self.selected_index = 0
+        self.active = True
+        
+        # Calculate width based on longest item
+        max_len = 0
+        for item in self.items:
+            if item.get('separator'):
+                continue
+            label = item.get('label', '')
+            if len(label) > max_len:
+                max_len = len(label)
+        self._width = max_len + 4  # padding
 
-    def close(self) -> None:
-        self.opened = False
+        # Ensure menu doesn't go off-screen (requires layout info, will handle in draw/app)
+        
+    def hide(self):
+        """Close the context menu."""
+        self.active = False
+        self.items = []
 
-    def is_open(self) -> bool:
-        return self.opened
+    def is_open(self):
+        return self.active
 
-    def _first_selectable(self) -> int:
-        for i, (_, action) in enumerate(self.items):
-            if action is not None:
-                return i
-        return 0
-
-    def draw(self, stdscr) -> None:
-        if not self.opened:
-            return
-
-        x = self.x
-        y = self.y
-        w = self.w
-        h = self.h
-
-        item_attr = theme_attr("menu_item")
-        sel_attr = theme_attr("menu_selected")
-
-        draw_box(stdscr, y, x - 1, h, w + 2, item_attr, double=False)
-
-        for i, (label, action) in enumerate(self.items):
-            attr = sel_attr if i == self.selected else item_attr
-            if action is None:
-                safe_addstr(stdscr, y + 1 + i, x, SB_H * w, item_attr)
-            else:
-                safe_addstr(stdscr, y + 1 + i, x, f' {label.ljust(w - 2)} ', attr)
-
-    def get_rect(self) -> tuple[int, int, int, int] | None:
-        if not self.opened:
-            return None
-        return (self.x - 1, self.y, self.w + 2, self.h)
-
-    def hit_test(self, mx: int, my: int) -> bool:
-        rect = self.get_rect()
-        if rect is None:
-            return False
-        rx, ry, rw, rh = rect
-        return rx <= mx < rx + rw and ry <= my < ry + rh
-
-    def handle_click(self, mx: int, my: int):
-        if not self.opened:
-            return None
-        if not self.hit_test(mx, my):
-            self.close()
-            return None
-
-        # inside menu
-        idx = my - (self.y + 1)
-        if 0 <= idx < len(self.items):
-            label, action = self.items[idx]
-            if action is not None:
-                self.close()
-                return action
-        return None
-
-    def handle_key(self, key: int):
-        if not self.opened:
+    def handle_input(self, key):
+        """Handle keyboard input for the context menu."""
+        if not self.active:
             return None
 
         if key == curses.KEY_UP:
-            self._move(-1)
+            self.selected_index = (self.selected_index - 1) % len(self.items)
+            # Skip separators
+            while self.items[self.selected_index].get('separator'):
+                self.selected_index = (self.selected_index - 1) % len(self.items)
             return None
+
         if key == curses.KEY_DOWN:
-            self._move(1)
+            self.selected_index = (self.selected_index + 1) % len(self.items)
+            # Skip separators
+            while self.items[self.selected_index].get('separator'):
+                self.selected_index = (self.selected_index + 1) % len(self.items)
             return None
+
         if key in (curses.KEY_ENTER, 10, 13):
-            label, action = self.items[self.selected]
-            if action is not None:
-                self.close()
-                return action
+            item = self.items[self.selected_index]
+            self.hide()
+            return item.get('action')
+
+        if key == 27:  # ESC
+            self.hide()
             return None
-        if key == 27:  # Escape
-            self.close()
-            return None
+
         return None
 
-    def _move(self, delta: int) -> None:
-        if not self.items:
+    def handle_click(self, mx, my):
+        """Handle mouse click on the context menu."""
+        if not self.active:
+            return None
+
+        # Check if click is inside menu bounds
+        if self.x <= mx < self.x + self._width and self.y <= my < self.y + len(self.items) + 2:
+            # Calculate clicked item index (account for border)
+            idx = my - self.y - 1
+            if 0 <= idx < len(self.items):
+                item = self.items[idx]
+                if not item.get('separator'):
+                    self.hide()
+                    return item.get('action')
+        else:
+            # Click outside closes menu
+            self.hide()
+        
+        return None
+
+    def draw(self, stdscr):
+        """Render the context menu."""
+        if not self.active:
             return
-        for _ in range(len(self.items)):
-            self.selected = (self.selected + delta) % len(self.items)
-            if self.items[self.selected][1] is not None:
-                return
+
+        # Ensure we don't draw off-screen
+        h, w = stdscr.getmaxyx()
+        draw_x = min(self.x, w - self._width)
+        draw_y = min(self.y, h - len(self.items) - 2)
+
+        # Draw border and background
+        try:
+            # Shadow
+            # stdscr.attron(self.theme.shadow_attr)
+            # for i in range(len(self.items) + 2):
+            #    stdscr.addstr(draw_y + 1 + i, draw_x + 2, " " * self._width)
+            # stdscr.attroff(self.theme.shadow_attr)
+
+            stdscr.attron(self.theme.window_menu_attr)
+            
+            # Top border
+            stdscr.addstr(draw_y, draw_x, "┌" + "─" * (self._width - 2) + "┐")
+            
+            for i, item in enumerate(self.items):
+                row_y = draw_y + 1 + i
+                if item.get('separator'):
+                    stdscr.addstr(row_y, draw_x, "├" + "─" * (self._width - 2) + "┤")
+                else:
+                    label = f" {item['label']}".ljust(self._width - 2)
+                    if i == self.selected_index:
+                        stdscr.attron(self.theme.menu_selected_attr)
+                        stdscr.addstr(row_y, draw_x + 1, label)
+                        stdscr.attroff(self.theme.menu_selected_attr)
+                        # Draw borders with normal attr
+                        stdscr.attron(self.theme.window_menu_attr)
+                        stdscr.addch(row_y, draw_x, "│")
+                        stdscr.addch(row_y, draw_x + self._width - 1, "│")
+                    else:
+                        stdscr.addstr(row_y, draw_x, "│" + label + "│")
+
+            # Bottom border
+            stdscr.addstr(draw_y + len(self.items) + 1, draw_x, "└" + "─" * (self._width - 2) + "┘")
+
+            stdscr.attroff(self.theme.window_menu_attr)
+        except curses.error:
+            pass

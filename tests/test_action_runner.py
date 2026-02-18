@@ -214,6 +214,7 @@ class ActionRunnerTests(unittest.TestCase):
             _next_window_offset=mock.Mock(return_value=(12, 7)),
             _spawn_window=mock.Mock(),
             show_video_open_dialog=mock.Mock(),
+            windows=[],
         )
 
     def test_execute_exit_action_opens_confirmation_dialog(self):

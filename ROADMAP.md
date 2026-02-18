@@ -233,18 +233,18 @@ Refactor, documentación y mejoras de UX fundamentales.
   - `retrotui/core/` — event loop, window manager
   - `retrotui/apps/` — filemanager, notepad
   - `retrotui/ui/` — ventanas, menús y diálogos
-- [ ] Split de `filemanager.py` (1289 líneas) en package `filemanager/` (window, operations, preview)
+- [x] Split de `filemanager.py` (1289 líneas) en package `filemanager/` (window, operations, preview)
 - [x] Cada app principal como módulo autocontenido
 - [x] API interna limpia para comunicación window manager ↔ app (`ActionResult` / `AppAction`)
 
 **Documentación**
-- [ ] README bilingüe (EN + ES) con badges, features y screenshots
-- [ ] ARCHITECTURE.md (evolución de PROJECT.md)
-- [ ] CONTRIBUTING.md con convenciones y guía de desarrollo
+- [x] README bilingüe (EN + ES) con badges, features y screenshots
+- [x] ARCHITECTURE.md (evolución de PROJECT.md)
+- [x] CONTRIBUTING.md con convenciones y guía de desarrollo
 
 **UX**
-- [ ] Context menu (clic derecho) — en File Manager, Desktop y Notepad
-- [ ] Iconos de escritorio móviles — drag & drop, guardar posiciones en config
+- [x] Context menu (clic derecho) — en File Manager, Desktop y Notepad
+- [x] Iconos de escritorio móviles — drag & drop, guardar posiciones en config
 
 ---
 

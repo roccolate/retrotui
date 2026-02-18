@@ -27,20 +27,20 @@ def draw_desktop(app):
 def draw_icons(app):
     """Draw desktop icons (3x4 art + label)."""
     h, _ = app.stdscr.getmaxyx()
-    start_x = 3
-    start_y = 3
-    spacing_y = 5  # 3 lines art + 1 label + 1 gap
-
     for idx, icon in enumerate(app.icons):
-        y = start_y + idx * spacing_y
+        # Use dynamic position helper
+        x, y = app.get_icon_screen_pos(idx)
+        
+        # Clip if off-screen (y)
         if y + 3 >= h - 1:
-            break
+            continue
+            
         is_selected = idx == app.selected_icon
         attr = theme_attr("icon_selected" if is_selected else "icon") | curses.A_BOLD
         for row, line in enumerate(icon['art']):
-            safe_addstr(app.stdscr, y + row, start_x, line, attr)
+            safe_addstr(app.stdscr, y + row, x, line, attr)
         label = icon['label'].center(len(icon['art'][0]))
-        safe_addstr(app.stdscr, y + 3, start_x, label, attr)
+        safe_addstr(app.stdscr, y + 3, x, label, attr)
 
 
 def draw_taskbar(app):
@@ -67,6 +67,19 @@ def draw_statusbar(app, version):
     h, w = app.stdscr.getmaxyx()
     attr = theme_attr("status")
     visible = sum(1 for win in app.windows if win.visible)
-    total = len(app.windows)
-    status = f' RetroTUI v{version} | Windows: {visible}/{total} | Mouse: Enabled | Ctrl+Q: Exit'
-    safe_addstr(app.stdscr, h - 1, 0, status.ljust(w - 1), attr)
+    from datetime import datetime
+    now_str = datetime.now().strftime('%H:%M')
+    
+    # Left part
+    left_status = f' RetroTUI v{version} | Windows: {visible}/{total} | Mouse: Enabled'
+    
+    # Draw background
+    safe_addstr(app.stdscr, h - 1, 0, ' ' * (w - 1), attr)
+    
+    # Draw left text
+    safe_addstr(app.stdscr, h - 1, 0, left_status, attr)
+    
+    # Draw right clock
+    clock_len = len(now_str) + 2
+    if w > len(left_status) + clock_len:
+         safe_addstr(app.stdscr, h - 1, w - clock_len, now_str, attr | curses.A_BOLD)

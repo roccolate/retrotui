@@ -4,89 +4,41 @@ Todas las versiones notables de RetroTUI están documentadas aquí.
 
 ---
 
-## [v0.9.0] - 2026-02-17
+## [v0.9.1] - 2026-02-18
 
 ### Added
-- Script `tools/qa.py` para chequeos locales de UTF-8, compilacion y tests.
-- Workflow `.github/workflows/ci.yml` para ejecutar QA en push/pull request.
-- Hook local `.githooks/pre-commit` para correr QA antes de commitear.
-- Tests `tests/test_core_app.py` para rutas criticas del dispatcher y hotkeys en `retrotui/core/app.py`.
-- Archivos `.editorconfig` y `.gitattributes` para fijar UTF-8 y EOL consistentes.
-- Módulos `retrotui/core/action_runner.py` y `retrotui/core/content.py` para separar responsabilidades de `retrotui/core/app.py`.
-- Modulos `retrotui/core/mouse_router.py` y `retrotui/core/key_router.py` para desacoplar routing de input del core principal.
-- Modulo `retrotui/core/rendering.py` para concentrar render del desktop/taskbar/statusbar/iconos.
-- Modulo `retrotui/core/event_loop.py` para encapsular ciclo principal de draw/input/resize.
-- Modulo `retrotui/core/bootstrap.py` para centralizar setup/cleanup de terminal y mouse.
-- Tests unitarios `tests/test_bootstrap.py` y `tests/test_event_loop.py` para validar modulos extraidos del core.
-- Tests unitarios `tests/test_key_router.py`, `tests/test_mouse_router.py` y `tests/test_rendering.py` para cobertura directa de routing/render modular.
-- Tests unitarios `tests/test_action_runner.py` para validar ejecucion de `AppAction` en `core/action_runner.py`.
-- Tests de file I/O edge cases en `tests/test_windows_logic.py` para `NotepadWindow._load_file()` y `FileManagerWindow._rebuild_content()`.
-- Documento `RELEASE.md` con politica de versionado, checklist y tagging.
-- Workflow `.github/workflows/release.yml` para automatizar release por tag/dispatch con build de artifacts.
-- Script `tools/check_release_tag.py` para validar coherencia tag/version en release.
-- Tests `tests/test_release_tag_tool.py` para validar el checker de tag de release.
-- Script `tools/report_module_coverage.py` para reporte de cobertura por modulo (stdlib `trace` + AST).
-- Tests `tests/test_module_coverage_tool.py` para validar utilidades del reporte de cobertura.
-- Tests `tests/test_notepad_component.py` para cubrir rutas internas de wrap/cursor/draw/menu en Notepad.
-- Modulo `retrotui/core/terminal_session.py` con base PTY (spawn, lectura no bloqueante, resize y cierre) para iniciar v0.4.
-- Tests `tests/test_terminal_session.py` para validar el contrato de `TerminalSession` en rutas exito/error.
-- Modulo `retrotui/apps/terminal.py` con `TerminalWindow` embebida (sesion PTY, parser ANSI/VT100 basico, forwarding de teclas y scrollback).
-- Tests `tests/test_terminal_component.py` para validar render/input/scroll/menu/ciclo de vida de la terminal embebida.
-- Modulo `retrotui/core/clipboard.py` con clipboard interno y sync opcional con `wl-copy/wl-paste`, `xclip` y `xsel`.
-- Tests `tests/test_clipboard_core.py` para cubrir el contrato del clipboard (deteccion backend, copy/paste y fallbacks).
-- Modulo `retrotui/theme.py` con `Theme` dataclass, roles semanticos y 5 temas built-in (`win31`, `dos_cga`, `win95`, `hacker`, `amiga`).
-- Modulo `retrotui/core/config.py` para cargar/guardar `~/.config/retrotui/config.toml`.
-- Modulo `retrotui/apps/settings.py` con ventana de Settings funcional (radio de tema, toggles, preview live, Save/Cancel).
-- Tests `tests/test_theme_and_config.py` y `tests/test_settings_component.py` para cubrir v0.5.
-- Drag and drop base entre apps: File Manager -> Notepad (abrir archivo) y File Manager -> Terminal (pegar ruta).
-- Highlight visual de ventanas target durante operaciones de drag and drop.
-- File Manager v0.8 base: panel lateral de preview/info, bookmarks por slots (1..4) con defaults y asignacion rapida.
-- Undo de borrado en File Manager moviendo elementos a trash local (`~/.local/share/Trash/files`).
-- Modo dual-pane en File Manager (dos paneles, `Tab` para foco interno y `F5/F4` para copiar/mover entre paneles).
-- Preview de imagen en File Manager usando backend externo (`chafa` o `timg`) cuando disponible.
-- Dialogo modal de progreso para operaciones largas de File Manager (copy/move/delete) con ejecucion en background y spinner de estado.
-- Modulo `retrotui/apps/calculator.py` con evaluador seguro (`ast`), historial de expresiones, copy/paste de resultados y modo always-on-top.
-- Tests `tests/test_calculator_component.py` para validar evaluacion, historial, input/cursor, clipboard y rendering de calculadora.
-- Modulo `retrotui/apps/logviewer.py` con tail mode, highlighting por severidad, busqueda estilo vim y freeze/reanudar scroll.
-- Modulo `retrotui/apps/process_manager.py` con monitoreo live de `/proc`, sort por CPU/MEM/PID y kill con confirmacion.
-- Modulo `retrotui/apps/clock.py` con reloj, calendario ASCII, always-on-top y chime opcional.
-- Tests `tests/test_logviewer_component.py`, `tests/test_process_manager_component.py` y `tests/test_clock_component.py`.
-- Modulos `retrotui/apps/image_viewer.py` y `retrotui/apps/hexviewer.py` para iniciar v0.9.
-- Tests `tests/test_image_viewer_component.py` y `tests/test_hexviewer_component.py`.
-- Flujo de apertura de video desde menu: dialogo de ruta + dialogo opcional de subtitulos.
-- Overlay inicial de controles de playback para backend `mpv` (`Space`, `Left/Right`, `q`).
-- Tests de video extendidos para validar argumentos de subtitulos y fallback por backend.
+- **Core Engine**:
+    - Modular architecture: `core/`, `ui/`, `apps/` split from monolito.
+    - `EventLoop` & `Bootstrap` modules for robust main loop and terminal setup.
+    - `InputRouter` (Mouse/Key) to decouple event handling from main app logic.
+    - `Rendering` module to centralize desktop/taskbar drawing.
+- **Terminal Emulation**:
+    - Embedded `TerminalWindow` with PTY support, ANSI parsing, and scrollback.
+    - Theme integration: ANSI colors 0-7 now respect the active theme's background.
+- **User Experience**:
+    - **Context Menus**: Right-click support in Desktop, Notepad, File Manager, and Terminal.
+    - **Movable Icons**: Drag & Drop desktop icons with persistence in `config.toml`.
+    - **Global Clipboard**: Internal clipboard with sync to system (`wl-copy`/`xclip`).
+    - **Drag & Drop**: Files to Notepad (open) or Terminal (paste path).
+- **New Apps**:
+    - `Settings`: Theme selector (Win3.1, Dos, Win95, Hacker, Amiga), live preview.
+    - `Calculator`: Safe evaluator with history.
+    - `Process Manager`: Live process list (htop-lite) with kill and sort.
+    - `Log Viewer`: Tail-f mode, highlighting, vim-style search.
+    - `Clock`: Digital clock + ASCII calendar with toggle.
+    - `Hex Viewer`: Binary file inspection.
+- **Quality & Dev**:
+    - CI/CD pipeline with GitHub Actions (Linux/Windows).
+    - 100% Module Coverage policy.
+    - Type-safe action system (`AppAction` enum).
 
 ### Changed
-- README actualizado con comandos de QA y activacion de hooks locales.
-- ROADMAP/PROJECT actualizados para reflejar automatizacion de calidad.
-- CI extendido a matriz Linux + Windows (Python 3.9/3.12).
-- `RetroTUI.execute_action()` ahora delega en `execute_app_action()` para reducir acoplamiento del core.
-- `RetroTUI.handle_mouse()` y `RetroTUI.handle_key()` ahora delegan en routers dedicados, reduciendo tamano y complejidad de `retrotui/core/app.py`.
-- `RetroTUI.draw_desktop()`, `draw_icons()`, `draw_taskbar()` y `draw_statusbar()` delegan en funciones de render dedicadas.
-- `RetroTUI.run()` ahora delega en `run_app_loop()` para separar loop principal del core.
-- `RetroTUI.__init__()`/`cleanup()` ahora delegan setup y restauracion de terminal a `core/bootstrap.py`.
-- `tools/qa.py` incluye verificacion de version sincronizada (`pyproject.toml` vs `retrotui/core/app.py`).
-- `tools/qa.py` agrega modo opcional de cobertura por modulo (`--module-coverage`, `--module-coverage-top`, `--module-coverage-fail-under`).
-- `tools/report_module_coverage.py` ahora normaliza rutas y mapea sufijos de paquete para reducir falsos negativos de cobertura en entornos Windows.
-- CI eleva el gate gradual de cobertura por modulo a `--module-coverage-fail-under 100.0` (solo `ubuntu-latest` + Python `3.12`).
-- Cobertura ampliada en rutas de core modularizado, menu/action runner/notepad/terminal/calculadora/apps utilitarias; suite de tests ampliada.
-- Cobertura total por modulo actualizada a 100.0% (trace + AST).
-- `AppAction.TERMINAL` deja de abrir placeholder y ahora instancia `TerminalWindow` real.
-- `RetroTUI.set_active_window()` y `core/event_loop.py` ahora respetan `always_on_top` para mantener ventanas fijadas por encima del resto.
-- `init_colors()` ahora consume el tema activo y aplica colores por roles semanticos.
-- Todo el render de UI ahora consume keys de tema via helper (`desktop`, `window_title`, `status`, etc.) en lugar de color pairs crudos.
-- `FileManagerWindow` y `NotepadWindow` ahora respetan defaults persistidos (`show_hidden`, `word_wrap_default`).
-- Atajos de clipboard ajustados para evitar conflicto con `Ctrl+C`: copy en Notepad/File Manager via `F6`/`Insert`, paste en Notepad/Terminal via `Ctrl+V`.
-- Notepad ahora soporta pegado multilinea en cursor y File Manager copia ruta completa de la entrada seleccionada.
-- `retrotui/constants.py` fue normalizado para eliminar mojibake en bordes/iconos Unicode y estabilizar rendering de layout.
-- `AppAction` y `ActionType` se ampliaron para incluir utilitarias v0.7 y confirmacion de kill (`REQUEST_KILL_CONFIRM`).
-- `open_file_viewer()` ahora enruta archivos `.log/.out/.err` a `LogViewerWindow`.
-- `open_file_viewer()` ahora enruta imagenes a `ImageViewerWindow` y binarios a `HexViewerWindow`.
-- Mouse router/bootstrap ajustados para mejorar comportamiento en TTY (drag/resize y doble-click en iconos).
-- `AppAction.ASCII_VIDEO` ahora abre selector de ruta sin depender de File Manager.
-- `play_ascii_video()` ahora soporta subtitulos opcionales (`mpv --sub-file`, `mplayer -sub`) y usa rutas normalizadas.
-- Suite QA ampliada y en verde.
+- **Performance**:
+    - Rendering optimizations (only draw dirty regions/windows).
+    - Reduced input latency via normalized key handling.
+- **Consistency**:
+    - Unified menu system (`MenuBar`) for global and window-local menus.
+    - Standardized keyboard shortcuts across all apps.
 
 ---
 
