@@ -83,6 +83,11 @@ class AppAction(str, Enum):
     CLIPBOARD = "clipboard"
     WIFI_MANAGER = "wifi_manager"
 
+    # Snake specific
+    SNAKE_NEW = "snake_new"
+    SNAKE_TOGGLE_WRAP = "snake_toggle_wrap"
+    SNAKE_PAUSE = "snake_pause"
+
 
 @dataclass(frozen=True)
 class ActionResult:
