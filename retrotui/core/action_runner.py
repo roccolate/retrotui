@@ -56,11 +56,11 @@ def execute_app_action(app, action, logger, *, version: str) -> None:
         return
 
     if action == AppAction.FILE_MANAGER:
-        offset_x, offset_y = app._next_window_offset(15, 3)
+        offset_x, offset_y = app._next_window_offset(8, 3)
         kwargs = {}
         if _supports_constructor_kwarg(FileManagerWindow, 'show_hidden_default'):
             kwargs['show_hidden_default'] = getattr(app, 'default_show_hidden', False)
-        win = FileManagerWindow(offset_x, offset_y, 58, 22, **kwargs)
+        win = FileManagerWindow(offset_x, offset_y, 70, 24, **kwargs)
         app._spawn_window(win)
         return
 

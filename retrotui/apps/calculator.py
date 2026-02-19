@@ -81,7 +81,7 @@ class CalculatorWindow(Window):
 
     def __init__(self, x, y, w, h):
         # Increased default height to fit buttons
-        super().__init__("Calculator", x, y, max(32, w), max(18, h), content=[], resizable=False)
+        super().__init__("Calculator", x, y, max(30, w), max(18, h), content=[], resizable=False)
         self.always_on_top = True
         self.expression = ""
         self.cursor_pos = 0

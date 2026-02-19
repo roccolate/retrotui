@@ -27,6 +27,7 @@ def run():
     """Run RetroTUI and return process exit code."""
     try:
         curses.wrapper(main)
+        print('\033c', end='')
         return 0
     except KeyboardInterrupt:
         return 130
