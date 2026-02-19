@@ -651,6 +651,8 @@ class FileManagerWindow(Window):
             for i in range(bh):
                 if i < len(lines):
                      safe_addstr(stdscr, by + i, prev_x, lines[i][:prev_w], theme_attr('window_body'))
+                else:
+                     safe_addstr(stdscr, by + i, prev_x, ' ' * prev_w, theme_attr('window_body'))
 
     def _draw_dual_pane(self, stdscr, border_attr):
         bx, by, bw, bh = self.body_rect()
@@ -693,11 +695,12 @@ class FileManagerWindow(Window):
         display_h = h - self._header_lines()
         
         for k in range(display_h):
+             line_y = y + self._header_lines() + k
              idx = scroll + k
              if idx >= len(items):
-                 break
+                 safe_addstr(stdscr, line_y, x, ' ' * w, theme_attr('window_body'))
+                 continue
              
-             line_y = y + self._header_lines() + k
              line_str = _fit_text_to_cells(items[idx], w)
              
              attr = theme_attr('window_body')
