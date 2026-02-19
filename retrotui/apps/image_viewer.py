@@ -218,7 +218,7 @@ class ImageViewerWindow(Window):
         else:
              self.status_message = "Playback finished."
 
-    def _execute_menu_action(self, action):
+    def execute_action(self, action):
         if action == "iv_open":
             return ActionResult(ActionType.REQUEST_OPEN_PATH)
         if action == "iv_reload":
@@ -290,7 +290,7 @@ class ImageViewerWindow(Window):
             if self.window_menu.on_menu_bar(mx, my, self.x, self.y, self.w) or self.window_menu.active:
                 action = self.window_menu.handle_click(mx, my, self.x, self.y, self.w)
                 if action:
-                    return self._execute_menu_action(action)
+                    return self.execute_action(action)
         return None
 
     def handle_key(self, key):
@@ -300,7 +300,7 @@ class ImageViewerWindow(Window):
         if self.window_menu and self.window_menu.active:
             action = self.window_menu.handle_key(key_code)
             if action:
-                return self._execute_menu_action(action)
+                return self.execute_action(action)
             return None
 
         if key_code in (ord("q"), ord("Q")):
@@ -308,7 +308,7 @@ class ImageViewerWindow(Window):
         if key_code in (ord("o"), ord("O")):
             return ActionResult(ActionType.REQUEST_OPEN_PATH)
         if key_code in (ord("r"), ord("R")):
-            return self._execute_menu_action("iv_reload")
+            return self.execute_action("iv_reload")
         if key_code in (ord("+"), ord("=")):
             self._set_zoom(1)
             return None

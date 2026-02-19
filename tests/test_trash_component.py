@@ -196,22 +196,22 @@ class TrashComponentTests(unittest.TestCase):
         finally:
             shutil.rmtree(root, ignore_errors=True)
 
-    def test_execute_menu_action_and_key_shortcuts(self):
+    def test_execute_action_and_key_shortcuts(self):
         root = _make_tmp_dir("actions")
         try:
             win = self._make_window(root)
 
             with mock.patch.object(win, "empty_trash", return_value="emptied"):
-                self.assertEqual(win._execute_menu_action("trash_empty"), "emptied")
+                self.assertEqual(win.execute_action("trash_empty"), "emptied")
 
-            close = win._execute_menu_action("trash_close")
+            close = win.execute_action("trash_close")
             self.assertEqual(close.type, self.actions_mod.ActionType.EXECUTE)
             self.assertEqual(close.payload, self.actions_mod.AppAction.CLOSE_WINDOW)
 
             with mock.patch.object(
-                self.fm_mod.FileManagerWindow, "_execute_menu_action", return_value="super-result"
+                self.fm_mod.FileManagerWindow, "execute_action", return_value="super-result"
             ):
-                self.assertEqual(win._execute_menu_action("unknown"), "super-result")
+                self.assertEqual(win.execute_action("unknown"), "super-result")
 
             with mock.patch.object(win, "empty_trash", return_value="from-key"):
                 self.assertEqual(win.handle_key(ord("E")), "from-key")

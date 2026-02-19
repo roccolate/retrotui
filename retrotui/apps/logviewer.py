@@ -346,7 +346,7 @@ class LogViewerWindow(Window):
             self.search_index = (self.search_index + direction) % size
         self._scroll_to_line(self.search_matches[self.search_index])
 
-    def _execute_menu_action(self, action):
+    def execute_action(self, action):
         if action == "lv_open":
             return ActionResult(ActionType.REQUEST_OPEN_PATH)
         if action == "lv_reload":
@@ -478,7 +478,7 @@ class LogViewerWindow(Window):
             if self.window_menu.on_menu_bar(mx, my, self.x, self.y, self.w) or self.window_menu.active:
                 action = self.window_menu.handle_click(mx, my, self.x, self.y, self.w)
                 if action:
-                    return self._execute_menu_action(action)
+                    return self.execute_action(action)
                 return None
 
         cursor_pos = self._cursor_from_screen(mx, my)
@@ -556,7 +556,7 @@ class LogViewerWindow(Window):
         if self.window_menu and self.window_menu.active:
             action = self.window_menu.handle_key(key_code)
             if action:
-                return self._execute_menu_action(action)
+                return self.execute_action(action)
             return None
 
         if self.search_input_mode:

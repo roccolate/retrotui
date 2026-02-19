@@ -211,16 +211,17 @@ class Window:
             sep_y = self.y + 2
             safe_addstr(stdscr, sep_y, self.x, '╟' + '─' * (self.w - 2) + '╢', border_attr)
 
-        return body_attr
-
-    def draw_body(self, stdscr, body_attr):
-        """Draw window body: background, content lines, scrollbar."""
+        # Fill body background
         bx, by, bw, bh = self.body_rect()
-        
-        # Fill background
         for i in range(bh):
             safe_addstr(stdscr, by + i, bx, ' ' * bw, body_attr)
 
+        return body_attr
+
+    def draw_body(self, stdscr, body_attr):
+        """Draw window body: content lines, scrollbar."""
+        bx, by, bw, bh = self.body_rect()
+        
         # Draw content
         for i in range(bh):
             idx = self.scroll_offset + i

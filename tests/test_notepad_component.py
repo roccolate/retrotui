@@ -166,7 +166,7 @@ class NotepadComponentTests(unittest.TestCase):
         rendered_text = [call.args[3] for call in safe_addstr.call_args_list if len(call.args) >= 4]
         self.assertTrue(any("Ln " in str(text) for text in rendered_text))
 
-    def test_execute_menu_action_branches(self):
+    def test_execute_action_branches(self):
         win = self._make_window()
         win.wrap_mode = False
         win.view_left = 4
@@ -174,12 +174,12 @@ class NotepadComponentTests(unittest.TestCase):
             return_value=self.actions_mod.ActionResult(self.actions_mod.ActionType.SAVE_ERROR, "err")
         )
 
-        toggle = win._execute_menu_action(self.actions_mod.AppAction.NP_TOGGLE_WRAP)
-        open_result = win._execute_menu_action(self.actions_mod.AppAction.NP_OPEN)
-        save = win._execute_menu_action(self.actions_mod.AppAction.NP_SAVE)
-        save_as = win._execute_menu_action(self.actions_mod.AppAction.NP_SAVE_AS)
-        new_win = win._execute_menu_action(self.actions_mod.AppAction.NP_NEW)
-        close = win._execute_menu_action(self.actions_mod.AppAction.NP_CLOSE)
+        toggle = win.execute_action(self.actions_mod.AppAction.NP_TOGGLE_WRAP)
+        open_result = win.execute_action(self.actions_mod.AppAction.NP_OPEN)
+        save = win.execute_action(self.actions_mod.AppAction.NP_SAVE)
+        save_as = win.execute_action(self.actions_mod.AppAction.NP_SAVE_AS)
+        new_win = win.execute_action(self.actions_mod.AppAction.NP_NEW)
+        close = win.execute_action(self.actions_mod.AppAction.NP_CLOSE)
 
         self.assertEqual(toggle.type, self.actions_mod.ActionType.UPDATE_CONFIG)
         self.assertTrue(win.wrap_mode)

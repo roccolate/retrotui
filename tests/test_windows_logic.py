@@ -334,7 +334,7 @@ class WindowLogicTests(unittest.TestCase):
 
             win.selected_index = dir_idx
             dir_result = win.activate_selected()
-            self.assertIsNone(dir_result)
+            self.assertEqual(dir_result.type, self.actions_mod.ActionType.REFRESH)
             self.assertEqual(pathlib.Path(win.current_path), folder.resolve())
         finally:
             shutil.rmtree(root, ignore_errors=True)

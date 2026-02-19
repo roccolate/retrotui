@@ -47,7 +47,7 @@ class ClockCalendarWindow(Window):
             except Exception:
                 pass
 
-    def _execute_menu_action(self, action):
+    def execute_action(self, action):
         if action == "clk_top":
             self.always_on_top = not self.always_on_top
             return None
@@ -109,7 +109,7 @@ class ClockCalendarWindow(Window):
             if self.window_menu.on_menu_bar(mx, my, self.x, self.y, self.w) or self.window_menu.active:
                 action = self.window_menu.handle_click(mx, my, self.x, self.y, self.w)
                 if action:
-                    return self._execute_menu_action(action)
+                    return self.execute_action(action)
         return None
 
     def handle_key(self, key):
@@ -119,7 +119,7 @@ class ClockCalendarWindow(Window):
         if self.window_menu and self.window_menu.active:
             action = self.window_menu.handle_key(key_code)
             if action:
-                return self._execute_menu_action(action)
+                return self.execute_action(action)
             return None
 
         if key_code in (ord("t"), ord("T")):
