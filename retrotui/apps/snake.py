@@ -195,8 +195,8 @@ class SnakeWindow(Window):
         return None
 
     def handle_click(self, mx, my, bstate=None):
-        if self.window_menu.on_menu_bar(mx, my):
-            res = self.window_menu.handle_click(mx, my)
+        if self.window_menu.on_menu_bar(mx, my, self.x, self.y, self.w):
+            res = self.window_menu.handle_click(mx, my, self.x, self.y, self.w)
             if res:
                 return self.execute_action(res)
-        return super().handle_click(mx, my, bstate)
+        return super().handle_click(mx, my)
