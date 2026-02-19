@@ -4,6 +4,8 @@ import curses
 import inspect
 import time
 
+from .drag_drop import DragDropManager
+
 
 def _invoke_mouse_handler(handler, mx, my, bstate):
     """Call mouse handlers with backward-compatible signature support."""
@@ -130,12 +132,16 @@ def _is_desktop_double_click(app, icon_idx, bstate):
 
 
 def handle_file_drag_drop_mouse(app, mx, my, bstate):
-    """Handle file drag-and-drop between windows (File Manager -> Notepad/Terminal)."""
+    """Handle file drag-and-drop between windows."""
+    mgr = getattr(app, 'drag_drop', None)
+    if mgr is not None:
+        return mgr.handle_mouse(mx, my, bstate)
+
+    # Fallback for callers that do not carry a DragDropManager (e.g. tests
+    # that pass a plain SimpleNamespace as app).
     report_flag = getattr(curses, 'REPORT_MOUSE_POSITION', 0)
     pressed_flag = getattr(curses, 'BUTTON1_PRESSED', 0)
-    
-    # Robust drag detection for TTY:
-    # A drag is valid if we have motion AND (button1 is strictly pressed in this event OR we know it's held down)
+
     is_motion = bool(bstate & report_flag)
     button_down = bool((bstate & pressed_flag) or getattr(app, 'button1_pressed', False))
     move_drag = is_motion and button_down
@@ -144,7 +150,7 @@ def handle_file_drag_drop_mouse(app, mx, my, bstate):
     if not stop_drag:
         inferred_stop = getattr(app, 'stop_drag_flags', 0) & ~pressed_flag & ~report_flag
         stop_drag = bool(bstate & inferred_stop)
-    
+
     drag_payload = getattr(app, 'drag_payload', None)
 
     if drag_payload is not None:
