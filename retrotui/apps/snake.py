@@ -166,6 +166,10 @@ class SnakeWindow(Window):
             if self.game_over:
                 char = "X"
             safe_addstr(stdscr, by + r, bx + c, char, snake_attr)
+            
+        # Draw window menu dropdown on top
+        if self.window_menu:
+            self.window_menu.draw_dropdown(stdscr, self.x, self.y, self.w)
 
     def handle_key(self, key):
         if self.window_menu.active:
