@@ -105,18 +105,19 @@ class SolitaireWindow(Window):
         """Repeatedly attempt auto-moves to foundations until none are possible.
         Returns the number of moves performed."""
         moved = 0
-        while True:
-            # Prefer single-card moves from waste and columns to foundations
+        # Prevent infinite loops in case of cyclical column moves
+        for _ in range(500):
+            # Prefer single-card moves from waste and columns to foundations (irreversible)
             if self._auto_move_to_foundation():
                 moved += 1
                 continue
-            # Try moving sequences between columns to free more single-card moves
+                
+            # Try moving sequences or single cards between columns BUT ONLY if it
+            # reveals a new card (progress). Moving cards between valid spots 
+            # without revealing anything is cyclical.
             if self._auto_move_sequence_to_column():
                 moved += 1
                 continue
-            # As a more aggressive heuristic, attempt moving single face-up cards
-            # onto other columns (not to foundations) when legal — this can free
-            # lower-rank cards and enable further foundation moves.
             if self._try_move_single_to_column():
                 moved += 1
                 continue
@@ -124,11 +125,16 @@ class SolitaireWindow(Window):
         return moved
 
     def _try_move_single_to_column(self) -> bool:
-        """Try moving any single face-up top card (not sequences) to another
-        column if it fits. Returns True if a move was made."""
+        """Try moving any single face-up top card to another column if it fits
+        AND it reveals a new card in the source column."""
         for src_idx, col in enumerate(self.columns):
             if not col:
                 continue
+            # Check if this move reveals something. If not, don't auto-move it 
+            # (prevents cycles). We only care if the card below is face-down.
+            if len(col) < 2 or col[-2][1]: # second to last card is face-up or doesn't exist
+                 continue
+
             top_card, up = col[-1]
             if not up:
                 continue
@@ -144,7 +150,7 @@ class SolitaireWindow(Window):
                         # move the single card
                         self.columns[tgt_idx].append((top_card, True))
                         del self.columns[src_idx][-1:]
-                        # reveal new top of source
+                        # reveal new top of source (guaranteed to be face-down by our check above)
                         if self.columns[src_idx]:
                             c, _ = self.columns[src_idx][-1]
                             self.columns[src_idx][-1] = (c, True)
@@ -174,7 +180,7 @@ class SolitaireWindow(Window):
         return t_color != s_color and self._rank_value(target_card) == self._rank_value(seq_card) + 1
 
     def _auto_move_sequence_to_column(self) -> bool:
-        # Try moving any face-up sequence to another column where it fits
+        """Try moving any face-up sequence to another column if it reveals a new card."""
         for src_idx, col in enumerate(self.columns):
             if not col:
                 continue
@@ -186,6 +192,11 @@ class SolitaireWindow(Window):
                     break
             if first_up is None:
                 continue
+            
+            # Progress check: only move if it reveals a face-down card
+            if first_up == 0: # already top of column, no face-down card to reveal
+                continue
+
             seq = col[first_up:]
             seq_first_card = seq[0][0]
             # try each target column
