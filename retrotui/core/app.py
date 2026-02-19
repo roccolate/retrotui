@@ -24,7 +24,9 @@ from ..apps.hexviewer import HexViewerWindow
 from .config import AppConfig, load_config, save_config
 from .actions import ActionResult, ActionType, AppAction
 from .action_runner import execute_app_action
+from .drag_drop import DragDropManager
 from .file_operations import FileOperationManager
+from .icon_manager import IconPositionManager
 from .content import build_welcome_content
 from .mouse_router import (
     _invoke_mouse_handler,
@@ -69,6 +71,19 @@ class RetroTUI:
     LONG_FILE_OPERATION_BYTES = 8 * 1024 * 1024
     BACKGROUND_OPERATION_JOIN_TIMEOUT = 5.0
 
+    # Dispatch table for _dispatch_window_result: ActionType -> method name
+    # Methods are called as self.<method>(source_win) for entries requiring source_win
+    _RESULT_DISPATCH = {
+        ActionType.REQUEST_SAVE_AS: 'show_save_as_dialog',
+        ActionType.REQUEST_OPEN_PATH: 'show_open_dialog',
+        ActionType.REQUEST_RENAME_ENTRY: 'show_rename_dialog',
+        ActionType.REQUEST_DELETE_CONFIRM: 'show_delete_confirm_dialog',
+        ActionType.REQUEST_COPY_ENTRY: 'show_copy_dialog',
+        ActionType.REQUEST_MOVE_ENTRY: 'show_move_dialog',
+        ActionType.REQUEST_NEW_DIR: 'show_new_dir_dialog',
+        ActionType.REQUEST_NEW_FILE: 'show_new_file_dialog',
+    }
+
     @property
     def file_ops(self):
         """Return the FileOperationManager, creating it lazily when needed."""
@@ -81,6 +96,54 @@ class RetroTUI:
     @file_ops.setter
     def file_ops(self, value):
         self._file_ops = value
+
+    @property
+    def icon_positions(self):
+        try:
+            return self._icon_mgr.positions
+        except AttributeError:
+            self._icon_mgr = IconPositionManager(self)
+            return self._icon_mgr.positions
+
+    @icon_positions.setter
+    def icon_positions(self, value):
+        try:
+            self._icon_mgr.positions = value
+        except AttributeError:
+            self._icon_mgr = IconPositionManager(self)
+            self._icon_mgr.positions = value
+
+    def _ensure_drag_drop(self):
+        """Lazily create DragDropManager when accessed before __init__ completes."""
+        try:
+            return self.drag_drop
+        except AttributeError:
+            self.drag_drop = DragDropManager(self)
+            return self.drag_drop
+
+    @property
+    def drag_payload(self):
+        return self._ensure_drag_drop().payload
+
+    @drag_payload.setter
+    def drag_payload(self, value):
+        self._ensure_drag_drop().payload = value
+
+    @property
+    def drag_source_window(self):
+        return self._ensure_drag_drop().source_window
+
+    @drag_source_window.setter
+    def drag_source_window(self, value):
+        self._ensure_drag_drop().source_window = value
+
+    @property
+    def drag_target_window(self):
+        return self._ensure_drag_drop().target_window
+
+    @drag_target_window.setter
+    def drag_target_window(self, value):
+        self._ensure_drag_drop().target_window = value
 
     def __init__(self, stdscr):
         self.stdscr = stdscr
@@ -100,11 +163,9 @@ class RetroTUI:
         self.default_word_wrap = bool(self.config.word_wrap_default)
         self.default_sunday_first = bool(self.config.sunday_first)
         self.show_welcome = bool(self.config.show_welcome)
-        self.drag_payload = None
-        self.drag_source_window = None
-        self.drag_target_window = None
+        self.drag_drop = DragDropManager(self)
         # Movable desktop icon positions: mapping icon_key -> (x, y)
-        self.icon_positions = {}
+        self._icon_mgr = IconPositionManager(self)
         self._background_operation = None
         self._file_ops = FileOperationManager(self)
 
@@ -199,67 +260,13 @@ class RetroTUI:
         return path
 
     def _load_icon_positions(self):
-        """Load icon positions from config TOML under [icons]."""
-        cfg_path = default_config_path()
-        if not Path(cfg_path).exists():
-            return {}
-        text = Path(cfg_path).read_text(encoding='utf-8')
-        section = None
-        icons = {}
-        for raw in text.splitlines():
-            line = raw.split('#', 1)[0].strip()
-            if not line:
-                continue
-            if line.startswith('[') and line.endswith(']'):
-                section = line[1:-1].strip()
-                continue
-            if section != 'icons':
-                continue
-            if '=' not in line:
-                continue
-            key, val = line.split('=', 1)
-            key = key.strip()
-            val = val.strip().strip('"').strip("'")
-            try:
-                x_str, y_str = val.split(',')
-                icons[key] = (int(x_str.strip()), int(y_str.strip()))
-            except Exception:
-                continue
-        self.icon_positions = icons
-        return icons
+        from .config import default_config_path
+        return self._icon_mgr.load(default_config_path())
 
     def _save_icon_positions(self, cfg_path=None):
-        """Save icon positions into the config TOML under [icons], preserving other sections."""
-        cfg_path = Path(cfg_path) if cfg_path is not None else Path(default_config_path())
-        existing = ''
-        if cfg_path.exists():
-            existing = cfg_path.read_text(encoding='utf-8')
-
-        # Remove any existing [icons] section
-        lines = existing.splitlines()
-        out_lines = []
-        skip = False
-        for raw in lines:
-            line = raw.strip()
-            if line.startswith('[') and line.endswith(']'):
-                sect = line[1:-1].strip()
-                if sect == 'icons':
-                    skip = True
-                    continue
-                else:
-                    skip = False
-            if skip:
-                continue
-            out_lines.append(raw)
-
-        # Append icons section
-        out_lines.append('')
-        out_lines.append('[icons]')
-        for name, (x, y) in sorted(self.icon_positions.items()):
-            out_lines.append(f'{name} = "{x},{y}"')
-
-        cfg_path.parent.mkdir(parents=True, exist_ok=True)
-        cfg_path.write_text('\n'.join(out_lines) + '\n', encoding='utf-8', newline='\n')
+        from .config import default_config_path
+        path = cfg_path if cfg_path is not None else default_config_path()
+        self._icon_mgr.save(path)
 
     def handle_right_click(self, mx, my, bstate):
         """Dispatch right-clicks to windows or desktop. Return True if handled."""
@@ -383,36 +390,11 @@ class RetroTUI:
 
     def get_icon_screen_pos(self, index):
         """Return (x, y) for icon at index, checking persisted positions then default grid."""
-        if not (0 <= index < len(self.icons)):
-             return (0, 0)
-        
-        KEY_LABEL = self.icons[index].get('label')
-        if KEY_LABEL in self.icon_positions:
-            return self.icon_positions[KEY_LABEL]
-            
-        # Default vertical layout
-        start_x = 3
-        start_y = 3
-        spacing_y = 5
-        return (start_x, start_y + index * spacing_y)
+        return self._icon_mgr.get_screen_pos(index)
 
     def get_icon_at(self, mx, my):
         """Return icon index at mouse position, or -1."""
-        for i, icon in enumerate(self.icons):
-            x, y = self.get_icon_screen_pos(i)
-            # Dimensions from draw_icons: 3x4 art? 
-            # Actually standard ascii art is usually 3-4 lines high.
-            # Let's assume a bounding box. 
-            # In draw_icons (rendering.py), it usually takes ~5 lines height (art+label) and some width.
-            # Let's approximate 8 width x 4 height based on standard ascii icons.
-            # Or better, check the actual art width.
-            art = icon.get('art', [])
-            w = max(len(line) for line in art) if art else 8
-            h = len(art) + 1 # +1 for label
-            
-            if y <= my < y + h and x <= mx < x + w:
-                return i
-        return -1
+        return self._icon_mgr.get_icon_at(mx, my)
 
     def set_active_window(self, win):
         """Set a window as active (bring to front)."""
@@ -689,6 +671,13 @@ class RetroTUI:
 
         LOGGER.debug('Dispatching window result: type=%s payload=%r', result.type, result.payload)
 
+        # Simple dialog dispatches (require source_win)
+        method_name = self._RESULT_DISPATCH.get(result.type)
+        if method_name is not None:
+            if source_win:
+                getattr(self, method_name)(source_win)
+            return
+
         if result.type == ActionType.OPEN_FILE and result.payload:
             self.open_file_viewer(result.payload)
             return
@@ -699,30 +688,6 @@ class RetroTUI:
                 self.close_window(source_win)
             elif exec_action:
                 self.execute_action(exec_action)
-            return
-
-        if result.type == ActionType.REQUEST_SAVE_AS and source_win:
-            self.show_save_as_dialog(source_win)
-            return
-
-        if result.type == ActionType.REQUEST_OPEN_PATH and source_win:
-            self.show_open_dialog(source_win)
-            return
-
-        if result.type == ActionType.REQUEST_RENAME_ENTRY and source_win:
-            self.show_rename_dialog(source_win)
-            return
-
-        if result.type == ActionType.REQUEST_DELETE_CONFIRM and source_win:
-            self.show_delete_confirm_dialog(source_win)
-            return
-
-        if result.type == ActionType.REQUEST_COPY_ENTRY and source_win:
-            self.show_copy_dialog(source_win)
-            return
-
-        if result.type == ActionType.REQUEST_MOVE_ENTRY and source_win:
-            self.show_move_dialog(source_win)
             return
 
         if result.type in (
@@ -758,14 +723,6 @@ class RetroTUI:
             )
             if op_result is not None:
                 self._dispatch_window_result(op_result, source_win)
-            return
-
-        if result.type == ActionType.REQUEST_NEW_DIR and source_win:
-            self.show_new_dir_dialog(source_win)
-            return
-
-        if result.type == ActionType.REQUEST_NEW_FILE and source_win:
-            self.show_new_file_dialog(source_win)
             return
 
         if result.type == ActionType.REQUEST_KILL_CONFIRM and source_win:
