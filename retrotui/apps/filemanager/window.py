@@ -29,6 +29,21 @@ class FileManagerWindow(Window):
     PREVIEW_MIN_WIDTH = 64
     IMAGE_EXTENSIONS = IMAGE_EXTENSIONS
 
+    _MENU_ACTION_MAP = {
+        AppAction.FM_OPEN: 'activate_selected',
+        AppAction.FM_COPY: lambda self: ActionResult(ActionType.REQUEST_COPY_ENTRY),
+        AppAction.FM_MOVE: lambda self: ActionResult(ActionType.REQUEST_MOVE_ENTRY),
+        AppAction.FM_RENAME: lambda self: ActionResult(ActionType.REQUEST_RENAME_ENTRY),
+        AppAction.FM_DELETE: lambda self: ActionResult(ActionType.REQUEST_DELETE_CONFIRM),
+        AppAction.FM_NEW_DIR: lambda self: ActionResult(ActionType.REQUEST_NEW_DIR),
+        AppAction.FM_NEW_FILE: lambda self: ActionResult(ActionType.REQUEST_NEW_FILE),
+        AppAction.FM_UNDO_DELETE: 'undo_delete',
+        AppAction.FM_REFRESH: '_action_refresh',
+        AppAction.FM_TOGGLE_HIDDEN: 'toggle_hidden',
+        AppAction.FM_PARENT: '_action_parent',
+        AppAction.FM_CLOSE: lambda self: ActionResult(ActionType.EXECUTE, AppAction.CLOSE_WINDOW),
+    }
+
     def __init__(self, x, y, w, h, start_path=None, show_hidden_default=False):
         super().__init__('File Manager', x, y, w, h, content=[])
         self.current_path = os.path.realpath(start_path or os.path.expanduser('~'))
@@ -833,6 +848,99 @@ class FileManagerWindow(Window):
 
         return items
 
+    def _handle_pane_navigation(self, key):
+        """Handle arrow/page/home/end navigation for the active pane."""
+        if self.active_pane == 1:
+            entries = self.secondary_entries
+            selected = self.secondary_selected_index
+            scroll = self.secondary_scroll_offset
+        else:
+            entries = self.entries
+            selected = self.selected_index
+            scroll = self.scroll_offset
+
+        count = len(entries)
+        if count == 0:
+            return None
+
+        new_selected = selected
+        new_scroll = scroll
+
+        if key == curses.KEY_UP:
+            if selected > 0:
+                new_selected = selected - 1
+                if new_selected < scroll:
+                    new_scroll = new_selected
+        elif key == curses.KEY_DOWN:
+            if selected < count - 1:
+                new_selected = selected + 1
+                display_h = self.h - self._header_lines() - 1
+                if new_selected >= scroll + display_h:
+                    new_scroll = scroll + 1
+        elif key == curses.KEY_PPAGE:
+            new_selected = max(0, selected - 10)
+            new_scroll = max(0, scroll - 10)
+        elif key == curses.KEY_NPAGE:
+            new_selected = min(count - 1, selected + 10)
+            new_scroll = min(max(0, count - 1), scroll + 10)
+        elif key == curses.KEY_HOME:
+            new_selected = 0
+            new_scroll = 0
+        elif key == curses.KEY_END:
+            new_selected = count - 1
+            new_scroll = max(0, count - 10)
+        else:
+            return None  # Not a navigation key
+
+        # Write back to the appropriate pane
+        if self.active_pane == 1:
+            self.secondary_selected_index = new_selected
+            self.secondary_scroll_offset = new_scroll
+        else:
+            self.selected_index = new_selected
+            self.scroll_offset = new_scroll
+
+        return ActionResult(ActionType.REFRESH)
+
+    def _handle_letter_shortcut(self, norm_key):
+        """Handle single-letter keyboard shortcuts."""
+        _LETTER_ACTIONS = {
+            ord('h'): AppAction.FM_TOGGLE_HIDDEN,
+            ord('H'): AppAction.FM_TOGGLE_HIDDEN,
+            ord('u'): AppAction.FM_UNDO_DELETE,
+            ord('U'): AppAction.FM_UNDO_DELETE,
+        }
+        action = _LETTER_ACTIONS.get(norm_key)
+        if action is not None:
+            return self._execute_menu_action(action)
+        if norm_key in (ord('d'), ord('D')):
+            return self.toggle_dual_pane()
+        return None
+
+    def _handle_fkey(self, key):
+        """Handle function key shortcuts. Returns ActionResult or None."""
+        if key == self.KEY_F5:
+            if self.dual_pane_enabled:
+                return self._dual_copy_move_between_panes(move=False)
+            return self._execute_menu_action(AppAction.FM_COPY)
+        if key == self.KEY_F4:
+            if self.dual_pane_enabled:
+                return self._dual_copy_move_between_panes(move=True)
+            return self._execute_menu_action(AppAction.FM_MOVE)
+        # Simple F-key -> action mapping
+        _simple_fkeys = {
+            self.KEY_F2: AppAction.FM_RENAME,
+            self.KEY_F6: AppAction.FM_MOVE,
+            self.KEY_F7: AppAction.FM_NEW_DIR,
+            self.KEY_F8: AppAction.FM_NEW_FILE,
+        }
+        action = _simple_fkeys.get(key)
+        if action is not None:
+            return self._execute_menu_action(action)
+        if key == self.KEY_INSERT:
+            return ActionResult(ActionType.EXECUTE, AppAction.FM_TOGGLE_SELECT)
+        return None
+
     def handle_key(self, key):
         key_code = normalize_key_code(key)
 
@@ -843,144 +951,51 @@ class FileManagerWindow(Window):
                 return self._execute_menu_action(action)
             return None
 
-        if self.active_pane == 1:
-            count = len(self.secondary_entries)
-            if key == curses.KEY_UP:
-                if self.secondary_selected_index > 0:
-                    self.secondary_selected_index -= 1
-                    if self.secondary_selected_index < self.secondary_scroll_offset:
-                        self.secondary_scroll_offset = self.secondary_selected_index
-                return ActionResult(ActionType.REFRESH)
-            elif key == curses.KEY_DOWN:
-                if self.secondary_selected_index < count - 1:
-                    self.secondary_selected_index += 1
-                    display_h = self.h - self._header_lines() - 1
-                    if self.secondary_selected_index >= self.secondary_scroll_offset + display_h:
-                        self.secondary_scroll_offset += 1
-                return ActionResult(ActionType.REFRESH)
-            elif key == curses.KEY_PPAGE:
-                self.secondary_selected_index = max(0, self.secondary_selected_index - 10)
-                self.secondary_scroll_offset = max(0, self.secondary_scroll_offset - 10)
-                return ActionResult(ActionType.REFRESH)
-            elif key == curses.KEY_NPAGE:
-                self.secondary_selected_index = min(count - 1, self.secondary_selected_index + 10)
-                self.secondary_scroll_offset = min(max(0, count - 1), self.secondary_scroll_offset + 10)
-                return ActionResult(ActionType.REFRESH)
-            elif key == curses.KEY_HOME:
-                self.secondary_selected_index = 0
-                self.secondary_scroll_offset = 0
-                return ActionResult(ActionType.REFRESH)
-            elif key == curses.KEY_END:
-                self.secondary_selected_index = count - 1
-                self.secondary_scroll_offset = max(0, count - 10)
-                return ActionResult(ActionType.REFRESH)
-    
-        # Logic for main pane (Pane 0)
-        if self.active_pane == 0:
-             count = len(self.entries)
-             if key == curses.KEY_UP:
-                 if self.selected_index > 0:
-                     self.selected_index -= 1
-                     if self.selected_index < self.scroll_offset:
-                         self.scroll_offset = self.selected_index
-                 return ActionResult(ActionType.REFRESH)
-             elif key == curses.KEY_DOWN:
-                 if self.selected_index < count - 1:
-                     self.selected_index += 1
-                     display_h = self.h - self._header_lines() - 1
-                     if self.selected_index >= self.scroll_offset + display_h:
-                         self.scroll_offset += 1
-                 return ActionResult(ActionType.REFRESH)
-             elif key == curses.KEY_PPAGE:
-                 self.selected_index = max(0, self.selected_index - 10)
-                 self.scroll_offset = max(0, self.scroll_offset - 10)
-                 return ActionResult(ActionType.REFRESH)
-             elif key == curses.KEY_NPAGE:
-                 self.selected_index = min(count - 1, self.selected_index + 10)
-                 self.scroll_offset = min(max(0, count - 1), self.scroll_offset + 10)
-                 return ActionResult(ActionType.REFRESH)
-             elif key == curses.KEY_HOME:
-                 self.selected_index = 0
-                 self.scroll_offset = 0
-                 return ActionResult(ActionType.REFRESH)
-             elif key == curses.KEY_END:
-                 self.selected_index = count - 1
-                 self.scroll_offset = max(0, count - 10)
-                 return ActionResult(ActionType.REFRESH)
+        # Navigation keys (unified for both panes)
+        nav_result = self._handle_pane_navigation(key)
+        if nav_result is not None:
+            return nav_result
 
         # Shared keys and actions
         if key == 10: # Enter
             return self.activate_selected()
         elif key == 9: # Tab
             return self.handle_tab_key()
-        
-        if key == self.KEY_F5:
-            if self.dual_pane_enabled:
-                 return self._dual_copy_move_between_panes(move=False)
-            return self._execute_menu_action(AppAction.FM_COPY)
-        elif key == self.KEY_F4:
-            if self.dual_pane_enabled:
-                 return self._dual_copy_move_between_panes(move=True)
-            return self._execute_menu_action(AppAction.FM_MOVE)
-        elif key == self.KEY_F2: return self._execute_menu_action(AppAction.FM_RENAME)
-        elif key == self.KEY_F6: return self._execute_menu_action(AppAction.FM_MOVE)
-        elif key == self.KEY_F7: return self._execute_menu_action(AppAction.FM_NEW_DIR)
-        elif key == self.KEY_F8: return self._execute_menu_action(AppAction.FM_NEW_FILE)
-        elif key == self.KEY_INSERT: return ActionResult(ActionType.EXECUTE, AppAction.FM_TOGGLE_SELECT)
+
+        fkey_result = self._handle_fkey(key)
+        if fkey_result is not None:
+            return fkey_result
 
         norm_key = normalize_key_code(key)
-        
+
         # Shortcuts for specific letters (case-insensitive via ASCII values)
-        if norm_key in (ord('h'), ord('H')): return self._execute_menu_action(AppAction.FM_TOGGLE_HIDDEN)
-        if norm_key in (ord('d'), ord('D')): return self.toggle_dual_pane()
-        if norm_key in (ord('u'), ord('U')): return self._execute_menu_action(AppAction.FM_UNDO_DELETE)
-        
+        letter_result = self._handle_letter_shortcut(norm_key)
+        if letter_result is not None:
+            return letter_result
+
         # Backspace handling
         if norm_key in (127, 8):
             self.navigate_parent()
             return ActionResult(ActionType.REFRESH)
-        
-        # Redundant check for F-keys if they come as ints matching normalize_key_code
-        if norm_key == self.KEY_F5:
-             if self.dual_pane_enabled:
-                  return self._dual_copy_move_between_panes(move=False)
-             return self._execute_menu_action(AppAction.FM_COPY)
-        if norm_key == self.KEY_F4:
-             if self.dual_pane_enabled:
-                  return self._dual_copy_move_between_panes(move=True)
-             return self._execute_menu_action(AppAction.FM_MOVE)
-             
+
         return super().handle_key(key)
 
+    def _action_refresh(self):
+        self._rebuild_content()
+        return ActionResult(ActionType.REFRESH)
+
+    def _action_parent(self):
+        self.navigate_parent()
+        return ActionResult(ActionType.REFRESH)
+
     def _execute_menu_action(self, action):
-        """Execute a window menu action."""
-        if action == AppAction.FM_OPEN:
-            return self.activate_selected()
-        elif action == AppAction.FM_COPY:
-            return ActionResult(ActionType.REQUEST_COPY_ENTRY)
-        elif action == AppAction.FM_MOVE:
-            return ActionResult(ActionType.REQUEST_MOVE_ENTRY)
-        elif action == AppAction.FM_RENAME:
-            return ActionResult(ActionType.REQUEST_RENAME_ENTRY)
-        elif action == AppAction.FM_DELETE:
-            return ActionResult(ActionType.REQUEST_DELETE_CONFIRM)
-        elif action == AppAction.FM_NEW_DIR:
-             return ActionResult(ActionType.REQUEST_NEW_DIR)
-        elif action == AppAction.FM_NEW_FILE:
-             return ActionResult(ActionType.REQUEST_NEW_FILE)
-        elif action == AppAction.FM_UNDO_DELETE:
-             return self.undo_delete()
-        elif action == AppAction.FM_REFRESH:
-             self._rebuild_content()
-             return ActionResult(ActionType.REFRESH)
-        elif action == AppAction.FM_TOGGLE_HIDDEN:
-             return self.toggle_hidden()
-        elif action == AppAction.FM_PARENT:
-             self.navigate_parent()
-             return ActionResult(ActionType.REFRESH)
-        elif action == AppAction.FM_CLOSE:
-             return ActionResult(ActionType.EXECUTE, AppAction.CLOSE_WINDOW)
-        return None
+        """Execute a window menu action via dispatch table."""
+        handler = self._MENU_ACTION_MAP.get(action)
+        if handler is None:
+            return None
+        if isinstance(handler, str):
+            return getattr(self, handler)()
+        return handler(self)
 
     def handle_tab_key(self):
         """Handle Tab key for pane switching (active window hook)."""
