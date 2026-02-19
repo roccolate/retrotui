@@ -380,17 +380,12 @@ class NotepadWindow(Window):
                 if span is not None:
                     span_start = max(span[0], start_col)
                     span_end = min(span[1], start_col + len(text))
-                    for abs_col in range(span_start, span_end):
-                        local_col = abs_col - start_col
-                        if 0 <= local_col < bw - 1:
-                            ch = text[local_col] if local_col < len(text) else ' '
-                            safe_addstr(
-                                stdscr,
-                                by + i,
-                                bx + local_col,
-                                ch,
-                                body_attr | curses.A_REVERSE,
-                            )
+                    span = (span_start, span_end)
+                self._draw_selection_span(
+                    stdscr, by + i, bx, bw,
+                    self.buffer[buf_line], start_col, span,
+                    body_attr | curses.A_REVERSE,
+                )
                 # Draw cursor
                 global_row = self.view_top + i
                 if global_row == cursor_wrap_row:
@@ -411,16 +406,12 @@ class NotepadWindow(Window):
                 if span is not None:
                     span_start = max(span[0], self.view_left)
                     span_end = min(span[1], self.view_left + col_w)
-                    for abs_col in range(span_start, span_end):
-                        cx_sel = abs_col - self.view_left
-                        ch_sel = line[abs_col] if abs_col < len(line) else ' '
-                        safe_addstr(
-                            stdscr,
-                            by + i,
-                            bx + cx_sel,
-                            ch_sel,
-                            body_attr | curses.A_REVERSE,
-                        )
+                    span = (span_start, span_end)
+                self._draw_selection_span(
+                    stdscr, by + i, bx, bw,
+                    line, self.view_left, span,
+                    body_attr | curses.A_REVERSE,
+                )
                 # Draw cursor
                 if buf_idx == self.cursor_line:
                     cx = self.cursor_col - self.view_left
@@ -447,6 +438,17 @@ class NotepadWindow(Window):
         # Window menu dropdown (on top of body content)
         if self.window_menu:
             self.window_menu.draw_dropdown(stdscr, self.x, self.y, self.w)
+
+    def _draw_selection_span(self, stdscr, screen_y, body_x, body_w, line_text, start_col, span, sel_attr):
+        """Draw selection highlight characters for a span on one screen line."""
+        if span is None:
+            return
+        sel_start, sel_end = span
+        for abs_col in range(sel_start, sel_end):
+            local_col = abs_col - start_col
+            if 0 <= local_col < body_w - 1:
+                ch = line_text[abs_col] if abs_col < len(line_text) else ' '
+                safe_addstr(stdscr, screen_y, body_x + local_col, ch, sel_attr)
 
     def _execute_menu_action(self, action):
         """Execute a window menu action. Returns signal or None."""
