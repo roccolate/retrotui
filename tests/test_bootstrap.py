@@ -41,6 +41,9 @@ class BootstrapTests(unittest.TestCase):
         cls.fake_termios = _install_fake_termios()
         sys.modules["curses"] = cls.fake_curses
         sys.modules["termios"] = cls.fake_termios
+        # On Windows, we also need to mock win_termios because bootstrap.py imports it
+        sys.modules["retrotui.core.win_termios"] = cls.fake_termios
+        
         sys.modules.pop("retrotui.core.bootstrap", None)
         cls.bootstrap = importlib.import_module("retrotui.core.bootstrap")
 
@@ -55,6 +58,7 @@ class BootstrapTests(unittest.TestCase):
             sys.modules["termios"] = cls._prev_termios
         else:
             sys.modules.pop("termios", None)
+        sys.modules.pop("retrotui.core.win_termios", None)
 
     def test_configure_terminal_applies_curses_setup(self):
         stdscr = types.SimpleNamespace(

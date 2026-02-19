@@ -2,7 +2,13 @@
 
 import curses
 import sys
-import termios
+import os
+
+# Platform-aware termios import
+if os.name == 'nt':
+    from . import win_termios as termios
+else:
+    import termios
 
 
 def configure_terminal(stdscr, timeout_ms=500):
