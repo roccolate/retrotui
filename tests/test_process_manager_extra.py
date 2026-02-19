@@ -120,7 +120,7 @@ class ProcessManagerExtraTests(unittest.TestCase):
             out = self.win.kill_process({"pid": 999, "signal": 15})
         self.assertEqual(out.type, self.ActionType.ERROR)
 
-    def test_execute_menu_action_sort_and_close(self):
+    def test_execute_action_sort_and_close(self):
         calls = {"count": 0}
 
         def track_refresh(force=False):
@@ -128,18 +128,18 @@ class ProcessManagerExtraTests(unittest.TestCase):
 
         self.win.refresh_processes = track_refresh
 
-        self.win._execute_menu_action("pm_sort_cpu")
+        self.win.execute_action("pm_sort_cpu")
         self.assertEqual(self.win.sort_key, "cpu")
 
-        self.win._execute_menu_action("pm_sort_pid")
+        self.win.execute_action("pm_sort_pid")
         self.assertEqual(self.win.sort_key, "pid")
 
         self.win.rows = [self.ProcessRow(pid=111, cpu_percent=0.0, mem_percent=0.0, command="c", total_ticks=0)]
         self.win.selected_index = 0
-        res = self.win._execute_menu_action("pm_kill")
+        res = self.win.execute_action("pm_kill")
         self.assertEqual(res.type, self.ActionType.REQUEST_KILL_CONFIRM)
 
-        res_close = self.win._execute_menu_action("pm_close")
+        res_close = self.win.execute_action("pm_close")
         self.assertEqual(res_close.type, self.ActionType.EXECUTE)
 
 

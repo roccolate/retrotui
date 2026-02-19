@@ -4,6 +4,7 @@ File Manager Window UI.
 import os
 import curses
 import shutil
+import time
 from ...ui.window import Window
 from ...ui.menu import WindowMenu
 from ...core.actions import ActionResult, ActionType, AppAction
@@ -113,6 +114,8 @@ class FileManagerWindow(Window):
         self.secondary_selected_index = 0
         self.secondary_scroll_offset = 0
         self.secondary_error_message = None
+        self.last_click_time = 0
+        self.last_click_index = -1
         self._rebuild_content()
         if self.dual_pane_enabled:
             self._rebuild_secondary_content()
@@ -390,13 +393,13 @@ class FileManagerWindow(Window):
                 self.navigate_parent()
             else:
                 self._secondary_navigate_parent()
-            return None
+            return ActionResult(ActionType.REFRESH)
         if entry.is_dir:
             if self.active_pane == 0:
                 self.navigate_to(entry.full_path)
             else:
                 self._secondary_navigate_to(entry.full_path)
-            return None
+            return ActionResult(ActionType.REFRESH)
         
         return ActionResult(ActionType.OPEN_FILE, entry.full_path)
 
@@ -684,7 +687,7 @@ class FileManagerWindow(Window):
             lines = self._preview_lines(bh, max_cols=prev_w)
             for i in range(bh):
                 if i < len(lines):
-                     safe_addstr(stdscr, by + i, prev_x, lines[i][:prev_w].ljust(prev_w), theme_attr('window_body'))
+                     safe_addstr(stdscr, by + i, prev_x, _fit_text_to_cells(lines[i], prev_w), theme_attr('window_body'))
                 else:
                      safe_addstr(stdscr, by + i, prev_x, ' ' * prev_w, theme_attr('window_body'))
 
@@ -735,7 +738,7 @@ class FileManagerWindow(Window):
         
         sep_line = content[1] if len(content) > 1 else ''
         dir_attr = theme_attr('file_directory')
-        safe_addstr(stdscr, y + 1, x, sep_line[:w], dir_attr)
+        safe_addstr(stdscr, y + 1, x, _fit_text_to_cells(sep_line, w), dir_attr)
 
         if error_msg:
              safe_addstr(stdscr, y + 2, x + 2, f'Error: {error_msg}'[:w-2], theme_attr('window_body'))
@@ -781,7 +784,7 @@ class FileManagerWindow(Window):
              if self.window_menu.on_menu_bar(mx, my, self.x, self.y, self.w) or self.window_menu.active:
                  action = self.window_menu.handle_click(mx, my, self.x, self.y, self.w)
                  if action:
-                     return self._execute_menu_action(action)
+                     return self.execute_action(action)
                  return None
 
         bx, by, bw, bh = self.body_rect()
@@ -802,14 +805,31 @@ class FileManagerWindow(Window):
              
         list_idx = row - self._header_lines()
         
+        now = time.time()
+        is_double = False
+        
         if clicked_pane == 1:
              new_sel = self.secondary_scroll_offset + list_idx
              if 0 <= new_sel < len(self.secondary_entries):
+                 click_id = 10000 + new_sel
+                 if click_id == self.last_click_index and (now - self.last_click_time < 0.5):
+                     is_double = True
+                 self.last_click_time = now
+                 self.last_click_index = click_id
+                 
                  self.secondary_selected_index = new_sel
+                 if is_double:
+                     return self.activate_selected()
                  return ActionResult(ActionType.REFRESH)
         else:
              new_sel = self.scroll_offset + list_idx
              if 0 <= new_sel < len(self.entries):
+                 click_id = new_sel
+                 if click_id == self.last_click_index and (now - self.last_click_time < 0.5):
+                     is_double = True
+                 self.last_click_time = now
+                 self.last_click_index = click_id
+                 
                  self.selected_index = new_sel
                  
                  # Check for drag start
@@ -819,6 +839,8 @@ class FileManagerWindow(Window):
                      if payload:
                          self._set_pending_drag(payload, mx, my)
                          
+                 if is_double:
+                     return self.activate_selected()
                  return ActionResult(ActionType.REFRESH)
         
         return None
@@ -935,7 +957,7 @@ class FileManagerWindow(Window):
         }
         action = _LETTER_ACTIONS.get(norm_key)
         if action is not None:
-            return self._execute_menu_action(action)
+            return self.execute_action(action)
         if norm_key in (ord('d'), ord('D')):
             return self.toggle_dual_pane()
         return None
@@ -945,11 +967,11 @@ class FileManagerWindow(Window):
         if key == self.KEY_F5:
             if self.dual_pane_enabled:
                 return self._dual_copy_move_between_panes(move=False)
-            return self._execute_menu_action(AppAction.FM_COPY)
+            return self.execute_action(AppAction.FM_COPY)
         if key == self.KEY_F4:
             if self.dual_pane_enabled:
                 return self._dual_copy_move_between_panes(move=True)
-            return self._execute_menu_action(AppAction.FM_MOVE)
+            return self.execute_action(AppAction.FM_MOVE)
         # Simple F-key -> action mapping
         _simple_fkeys = {
             self.KEY_F2: AppAction.FM_RENAME,
@@ -959,7 +981,7 @@ class FileManagerWindow(Window):
         }
         action = _simple_fkeys.get(key)
         if action is not None:
-            return self._execute_menu_action(action)
+            return self.execute_action(action)
         if key == self.KEY_INSERT:
             return ActionResult(ActionType.EXECUTE, AppAction.FM_TOGGLE_SELECT)
         return None
@@ -967,11 +989,12 @@ class FileManagerWindow(Window):
     def handle_key(self, key):
         key_code = normalize_key_code(key)
 
+
         # Window menu keyboard handling
         if self.window_menu and self.window_menu.active:
             action = self.window_menu.handle_key(key_code)
             if action:
-                return self._execute_menu_action(action)
+                return self.execute_action(action)
             return None
 
         # Navigation keys (unified for both panes)
@@ -1011,7 +1034,7 @@ class FileManagerWindow(Window):
         self.navigate_parent()
         return ActionResult(ActionType.REFRESH)
 
-    def _execute_menu_action(self, action):
+    def execute_action(self, action):
         """Execute a window menu action via dispatch table."""
         handler = self._MENU_ACTION_MAP.get(action)
         if handler is None:

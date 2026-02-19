@@ -239,12 +239,12 @@ class HexViewerComponentTests(unittest.TestCase):
         copy_text.assert_called_once()
 
         win.filepath = None
-        self.assertIsNone(win._execute_menu_action("hx_reload"))
+        self.assertIsNone(win.execute_action("hx_reload"))
         self.assertIn("No file opened", win.status_message)
 
         win = self._make_window(path)
         with mock.patch.object(win, "_copy_selection") as copy_selection:
-            self.assertIsNone(win._execute_menu_action("hx_copy"))
+            self.assertIsNone(win.execute_action("hx_copy"))
         copy_selection.assert_called_once_with()
 
         # Menu active but no action branch.
@@ -362,17 +362,17 @@ class HexViewerComponentTests(unittest.TestCase):
         win.body_rect = mock.Mock(return_value=(1, 1, 80, 10))
 
         self.assertEqual(
-            win._execute_menu_action("hx_open").type,
+            win.execute_action("hx_open").type,
             self.actions_mod.ActionType.REQUEST_OPEN_PATH,
         )
-        self.assertIsNone(win._execute_menu_action("hx_reload"))
-        self.assertIsNone(win._execute_menu_action("hx_search"))
+        self.assertIsNone(win.execute_action("hx_reload"))
+        self.assertIsNone(win.execute_action("hx_search"))
         self.assertEqual(win.prompt_mode, "search")
-        self.assertIsNone(win._execute_menu_action("hx_goto"))
+        self.assertIsNone(win.execute_action("hx_goto"))
         self.assertEqual(win.prompt_mode, "goto")
-        self.assertIsNone(win._execute_menu_action("hx_next"))
-        self.assertIsNone(win._execute_menu_action("unknown"))
-        close = win._execute_menu_action("hx_close")
+        self.assertIsNone(win.execute_action("hx_next"))
+        self.assertIsNone(win.execute_action("unknown"))
+        close = win.execute_action("hx_close")
         self.assertEqual(close.type, self.actions_mod.ActionType.EXECUTE)
 
         # Prompt key flow: write, backspace, enter, escape.

@@ -338,7 +338,7 @@ class HexViewerWindow(Window):
         self._goto_offset(found)
         self.status_message = f"Found at 0x{found:X}"
 
-    def _execute_menu_action(self, action):
+    def execute_action(self, action):
         if action == "hx_open":
             return ActionResult(ActionType.REQUEST_OPEN_PATH)
         if action == "hx_reload":
@@ -420,7 +420,7 @@ class HexViewerWindow(Window):
             if self.window_menu.on_menu_bar(mx, my, self.x, self.y, self.w) or self.window_menu.active:
                 action = self.window_menu.handle_click(mx, my, self.x, self.y, self.w)
                 if action:
-                    return self._execute_menu_action(action)
+                    return self.execute_action(action)
         row_idx = self._row_from_screen(mx, my)
         if row_idx is None:
             if bstate is not None and (
@@ -492,7 +492,7 @@ class HexViewerWindow(Window):
         if self.window_menu and self.window_menu.active:
             action = self.window_menu.handle_key(key_code)
             if action:
-                return self._execute_menu_action(action)
+                return self.execute_action(action)
             return None
 
         if self.prompt_mode:

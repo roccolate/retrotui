@@ -511,7 +511,7 @@ class TerminalComponentTests(unittest.TestCase):
         self.assertIsNone(win._key_to_input("\x00", None))
         self.assertIsNone(win._key_to_input(None, 500))
 
-    def test_execute_menu_action_paths(self):
+    def test_execute_action_paths(self):
         win = self._make_window()
         # Mock scroll lines with cell lists
         win._scroll_lines = [[('l', 0), ('i', 0), ('n', 0), ('e', 0)]]
@@ -519,33 +519,33 @@ class TerminalComponentTests(unittest.TestCase):
         win._cursor_col = 4
         win.scrollback_offset = 9
 
-        self.assertIsNone(win._execute_menu_action(win.MENU_CLEAR))
+        self.assertIsNone(win.execute_action(win.MENU_CLEAR))
         self.assertEqual(win._scroll_lines, [])
         self.assertEqual(win._line_cells, [])
         self.assertEqual(win._cursor_col, 0)
         self.assertEqual(win.scrollback_offset, 0)
 
         win._session = _FakeSession()
-        self.assertIsNone(win._execute_menu_action(win.MENU_INTERRUPT))
+        self.assertIsNone(win.execute_action(win.MENU_INTERRUPT))
         self.assertEqual(win._session.interrupt_calls, 1)
-        self.assertIsNone(win._execute_menu_action(win.MENU_TERMINATE))
+        self.assertIsNone(win.execute_action(win.MENU_TERMINATE))
         self.assertEqual(win._session.terminate_calls, 1)
 
         _FakeSession.interrupt_result = False
         _FakeSession.terminate_result = False
-        self.assertIsNone(win._execute_menu_action(win.MENU_INTERRUPT))
+        self.assertIsNone(win.execute_action(win.MENU_INTERRUPT))
         self.assertEqual(win._session.writes[-1], "\x03")
-        self.assertIsNone(win._execute_menu_action(win.MENU_TERMINATE))
+        self.assertIsNone(win.execute_action(win.MENU_TERMINATE))
         self.assertEqual(win._session.writes[-1], "\x03")
 
-        result = win._execute_menu_action(win.MENU_RESTART)
+        result = win.execute_action(win.MENU_RESTART)
         self.assertIsNone(result)
         self.assertIsNone(win._session)
 
-        close_result = win._execute_menu_action(self.actions_mod.AppAction.CLOSE_WINDOW)
+        close_result = win.execute_action(self.actions_mod.AppAction.CLOSE_WINDOW)
         self.assertEqual(close_result.type, self.actions_mod.ActionType.EXECUTE)
         self.assertEqual(close_result.payload, self.actions_mod.AppAction.CLOSE_WINDOW)
-        self.assertIsNone(win._execute_menu_action("unknown"))
+        self.assertIsNone(win.execute_action("unknown"))
 
     def test_handle_key_menu_and_forwarding_and_write_error(self):
         win = self._make_window()
@@ -874,7 +874,7 @@ class TerminalComponentTests(unittest.TestCase):
         win = self._make_window()
 
         with mock.patch.object(win, "_copy_selection") as copy_selection:
-            self.assertIsNone(win._execute_menu_action(win.MENU_COPY))
+            self.assertIsNone(win.execute_action(win.MENU_COPY))
         copy_selection.assert_called_once_with()
 
         with mock.patch.object(win, "_forward_payload") as forward_payload:

@@ -450,7 +450,7 @@ class NotepadWindow(Window):
                 ch = line_text[abs_col] if abs_col < len(line_text) else ' '
                 safe_addstr(stdscr, screen_y, body_x + local_col, ch, sel_attr)
 
-    def _execute_menu_action(self, action):
+    def execute_action(self, action):
         """Execute a window menu action. Returns signal or None."""
         if action == AppAction.NP_TOGGLE_WRAP:
             self.wrap_mode = not self.wrap_mode
@@ -480,7 +480,7 @@ class NotepadWindow(Window):
         if self.window_menu and self.window_menu.active:
             action = self.window_menu.handle_key(key_code)
             if action:
-                return self._execute_menu_action(action)
+                return self.execute_action(action)
             return None
 
         # Clear selection: Esc
@@ -686,7 +686,7 @@ class NotepadWindow(Window):
             if self.window_menu.on_menu_bar(mx, my, self.x, self.y, self.w) or self.window_menu.active:
                 action = self.window_menu.handle_click(mx, my, self.x, self.y, self.w)
                 if action:
-                    return self._execute_menu_action(action)
+                    return self.execute_action(action)
                 return None
 
         bx, by, bw, bh = self.body_rect()

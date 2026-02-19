@@ -305,38 +305,38 @@ class LogViewerExtraTests(unittest.TestCase):
             self.win._jump_search_match(1)
             scroll_to.assert_called_once()
 
-        # _execute_menu_action coverage for supported actions.
+        # execute_action coverage for supported actions.
         self.win.search_query = "abc"
         with mock.patch.object(self.win, "_reload_file", return_value="reloaded") as reload_file:
-            self.assertEqual(self.win._execute_menu_action("lv_reload"), "reloaded")
+            self.assertEqual(self.win.execute_action("lv_reload"), "reloaded")
             reload_file.assert_called_once()
 
         with mock.patch.object(self.win, "_scroll_to_bottom") as scroll_bottom:
             self.win.follow_mode = False
             self.win.freeze_scroll = False
-            self.assertIsNone(self.win._execute_menu_action("lv_follow"))
+            self.assertIsNone(self.win.execute_action("lv_follow"))
             scroll_bottom.assert_called_once()
 
         with mock.patch.object(self.win, "_copy_selection") as copy_sel:
-            self.assertIsNone(self.win._execute_menu_action("lv_copy"))
+            self.assertIsNone(self.win.execute_action("lv_copy"))
             copy_sel.assert_called_once()
 
-        self.assertIsNotNone(self.win._execute_menu_action("lv_open"))
-        self.assertIsNotNone(self.win._execute_menu_action("lv_close"))
+        self.assertIsNotNone(self.win.execute_action("lv_open"))
+        self.assertIsNotNone(self.win.execute_action("lv_close"))
 
-        self.assertIsNone(self.win._execute_menu_action("lv_freeze"))
+        self.assertIsNone(self.win.execute_action("lv_freeze"))
 
-        out = self.win._execute_menu_action("lv_search")
+        out = self.win.execute_action("lv_search")
         self.assertIsNone(out)
         self.assertTrue(self.win.search_input_mode)
         self.assertEqual(self.win.search_input, "abc")
 
         with mock.patch.object(self.win, "_jump_search_match") as jump:
-            self.assertIsNone(self.win._execute_menu_action("lv_next"))
-            self.assertIsNone(self.win._execute_menu_action("lv_prev"))
+            self.assertIsNone(self.win.execute_action("lv_next"))
+            self.assertIsNone(self.win.execute_action("lv_prev"))
             self.assertGreaterEqual(jump.call_count, 2)
 
-        self.assertIsNone(self.win._execute_menu_action("lv_unknown"))
+        self.assertIsNone(self.win.execute_action("lv_unknown"))
 
         # draw() early returns and status variants.
         with mock.patch.object(self.log_mod, "safe_addstr") as safe_addstr:
@@ -376,7 +376,7 @@ class LogViewerExtraTests(unittest.TestCase):
                 return self._action
 
         self.win.window_menu = DummyMenu("lv_open")
-        with mock.patch.object(self.win, "_execute_menu_action", return_value="ok") as exec_menu:
+        with mock.patch.object(self.win, "execute_action", return_value="ok") as exec_menu:
             self.assertEqual(self.win.handle_click(1, 1), "ok")
             exec_menu.assert_called_once()
 
@@ -445,7 +445,7 @@ class LogViewerExtraTests(unittest.TestCase):
                 return self._action
 
         self.win.window_menu = DummyKeyMenu("lv_open")
-        with mock.patch.object(self.win, "_execute_menu_action", return_value="menu") as exec_menu2:
+        with mock.patch.object(self.win, "execute_action", return_value="menu") as exec_menu2:
             self.assertEqual(self.win.handle_key(1), "menu")
             exec_menu2.assert_called_once()
 

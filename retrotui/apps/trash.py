@@ -126,13 +126,13 @@ class TrashWindow(FileManagerWindow):
         self._rebuild_content()
         return None
 
-    def _execute_menu_action(self, action):
+    def execute_action(self, action):
         """Execute trash-specific menu actions."""
         if action == "trash_empty":
             return self.empty_trash()
         if action == "trash_close":
             return ActionResult(ActionType.EXECUTE, AppAction.CLOSE_WINDOW)
-        return super()._execute_menu_action(action)
+        return super().execute_action(action)
 
     def handle_key(self, key):
         """Handle trash app shortcuts."""

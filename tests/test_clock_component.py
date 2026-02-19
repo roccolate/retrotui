@@ -109,7 +109,7 @@ class ClockComponentTests(unittest.TestCase):
             self.curses.beep.side_effect = old_side_effect
 
         # Unknown menu action falls back to None.
-        self.assertIsNone(win._execute_menu_action("unknown"))
+        self.assertIsNone(win.execute_action("unknown"))
 
         # draw() returns early when invisible.
         win.visible = False
@@ -171,23 +171,23 @@ class ClockComponentTests(unittest.TestCase):
         sunday_lines = win._month_lines(now)
         self.assertTrue(any(line.strip().startswith("Su Mo") for line in sunday_lines))
 
-    def test_execute_menu_action_and_menu_delegation(self):
+    def test_execute_action_and_menu_delegation(self):
         win = self._make_window()
 
-        # _execute_menu_action toggles flags and returns close action for clk_close
+        # execute_action toggles flags and returns close action for clk_close
         self.assertTrue(win.always_on_top)
-        win._execute_menu_action("clk_top")
+        win.execute_action("clk_top")
         self.assertFalse(win.always_on_top)
 
         self.assertFalse(win.chime_enabled)
-        win._execute_menu_action("clk_chime")
+        win.execute_action("clk_chime")
         self.assertTrue(win.chime_enabled)
 
         self.assertFalse(win.week_starts_sunday)
-        win._execute_menu_action("clk_week")
+        win.execute_action("clk_week")
         self.assertTrue(win.week_starts_sunday)
 
-        result = win._execute_menu_action("clk_close")
+        result = win.execute_action("clk_close")
         self.assertEqual(result.type, self.actions_mod.ActionType.EXECUTE)
         self.assertEqual(result.payload, self.actions_mod.AppAction.CLOSE_WINDOW)
 
@@ -210,7 +210,7 @@ class ClockComponentTests(unittest.TestCase):
         fake_menu.handle_click.return_value = "clk_chime"
         win.chime_enabled = False
         result = win.handle_click(0, 0)
-        # _execute_menu_action returns None for toggle actions; state should change
+        # execute_action returns None for toggle actions; state should change
         self.assertIsNone(result)
         self.assertTrue(win.chime_enabled)
 

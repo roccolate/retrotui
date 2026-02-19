@@ -316,7 +316,7 @@ class ProcessManagerWindow(Window):
             self.sort_reverse = key != "pid"
         self.refresh_processes(force=True)
 
-    def _execute_menu_action(self, action):
+    def execute_action(self, action):
         if action == "pm_sort_cpu":
             self._set_sort("cpu")
             return None
@@ -401,7 +401,7 @@ class ProcessManagerWindow(Window):
             if self.window_menu.on_menu_bar(mx, my, self.x, self.y, self.w) or self.window_menu.active:
                 action = self.window_menu.handle_click(mx, my, self.x, self.y, self.w)
                 if action:
-                    return self._execute_menu_action(action)
+                    return self.execute_action(action)
                 return None
 
         bx, by, bw, bh = self.body_rect()
@@ -440,7 +440,7 @@ class ProcessManagerWindow(Window):
         if self.window_menu and self.window_menu.active:
             action = self.window_menu.handle_key(key_code)
             if action:
-                return self._execute_menu_action(action)
+                return self.execute_action(action)
             return None
 
         if key_code == curses.KEY_UP:

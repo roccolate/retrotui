@@ -2,6 +2,7 @@
 Main RetroTUI Application Class.
 """
 import os
+import curses
 import logging
 import threading
 import time
@@ -468,6 +469,16 @@ class RetroTUI:
         """Execute a menu/icon action."""
         action = self._normalize_action(action)
         LOGGER.debug('execute_action: %s', action)
+
+        # 1. Try delegating to the active window first (for context menu / internal actions)
+        active_win = self.get_active_window()
+        if active_win and hasattr(active_win, 'execute_action'):
+            result = active_win.execute_action(action)
+            if result:
+                self._dispatch_window_result(result, active_win)
+                return
+
+        # 2. Fallback to global/app-level actions
         execute_app_action(self, action, LOGGER, version=APP_VERSION)
 
     def open_file_viewer(self, filepath):
@@ -667,6 +678,9 @@ class RetroTUI:
 
         if not isinstance(result, ActionResult):
             LOGGER.debug('Ignoring non-ActionResult return from window callback: %r', result)
+            return
+
+        if result.type == ActionType.REFRESH:
             return
 
         LOGGER.debug('Dispatching window result: type=%s payload=%r', result.type, result.payload)

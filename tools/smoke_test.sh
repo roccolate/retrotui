@@ -47,14 +47,67 @@ else fail "too small (min 80x24)"; fi
 echo -n "  Unicode rendering: ╔═╗║╚╝ ░▒▓ → "
 ok "check visually above"
 
+# Detect Python command
+# We search for a functional python interpreter in this order:
+# 1. python3 (standard on Linux/macOS)
+# 2. python (standard on Windows if added to PATH)
+# 3. Common Windows installation paths (for Git Bash where PATH might not be inherited perfectly)
+
+find_python() {
+    # Check standard commands first
+    for cmd in python3 python py; do
+        if command -v "$cmd" &>/dev/null; then
+            if "$cmd" --version &>/dev/null; then
+                echo "$cmd"
+                return 0
+            fi
+        fi
+    done
+
+    # Check common Windows paths (accessed via Git Bash /c/...)
+    # We look for the latest version first (sort -r)
+    for path in /c/Program\ Files/Python3*/python.exe /c/Python3*/python.exe; do
+        if [ -f "$path" ]; then
+             echo "$path"
+             return 0
+        fi
+    done
+
+    return 1
+}
+
+PYTHON_CMD=$(find_python)
+
 echo -n "  Python: "
-python3 --version 2>/dev/null && ok "found" || fail "python3 not found"
+if [ -n "$PYTHON_CMD" ]; then
+    VER=$($PYTHON_CMD --version 2>&1 | head -n 1)
+    ok "found ($VER at $PYTHON_CMD)"
+else
+    fail "python3/python not found (checked PATH and standard Windows locations)"
+    echo "    Host OS seems to be Windows. Ensure Python is installed and added to PATH."
+fi
 
 echo -n "  curses: "
-python3 -c "import curses; print('OK')" 2>/dev/null && ok "available" || fail "not available"
+if [ -n "$PYTHON_CMD" ]; then
+    if $PYTHON_CMD -c "import curses; print('OK')" 2>/dev/null | grep -q "OK"; then
+        ok "available"
+    else
+        fail "not available (install windows-curses with: pip install windows-curses)"
+    fi
+else
+    fail "skipped"
+fi
 
 echo -n "  retrotui: "
-python3 -c "import retrotui" 2>/dev/null && ok "importable" || warn "not installed (run from source)"
+if [ -n "$PYTHON_CMD" ]; then
+    if $PYTHON_CMD -c "import retrotui" 2>/dev/null; then
+        ok "importable"
+    else
+        warn "not installed (running from source?)"
+    fi
+else
+    fail "skipped"
+fi
 
 # ─── External tools ──────────────────────────────────────────
 echo ""
@@ -83,8 +136,8 @@ if [ "$1" = "--create-data" ]; then
     seq 1 500 | while read n; do echo "Line $n: $(head -c 20 /dev/urandom | base64)"; done > "$DATA_DIR/documents/long_file.txt"
 
     # Wide lines for horizontal scroll
-    python3 -c "print('A' * 300)" > "$DATA_DIR/documents/wide_lines.txt"
-    python3 -c "
+    $PYTHON_CMD -c "print('A' * 300)" > "$DATA_DIR/documents/wide_lines.txt"
+    $PYTHON_CMD -c "
 for i in range(50):
     print(f'Row {i:03d}: ' + ''.join(f'Col{j:02d} ' for j in range(40)))
 " >> "$DATA_DIR/documents/wide_lines.txt"
@@ -182,7 +235,7 @@ EOF
         convert -size 50x50 gradient:yellow-green "$DATA_DIR/images/gradient.png" 2>/dev/null && ok "gradient.png" || true
     else
         warn "ImageMagick not found — creating placeholder images with Python"
-        python3 -c "
+        (cd "$DATA_DIR/images" && $PYTHON_CMD -c "
 import struct, zlib
 def make_png(path, w, h, r, g, b):
     def chunk(ctype, data):
@@ -196,10 +249,10 @@ def make_png(path, w, h, r, g, b):
             chunk(b'IDAT', zlib.compress(raw)) +
             chunk(b'IEND', b''))
 for name, w, h, r, g, b in [('red_square.png',100,100,255,0,0),('blue_rect.png',200,100,0,0,255),('gradient.png',50,50,255,255,0)]:
-    with open('$DATA_DIR/images/' + name, 'wb') as f:
+    with open(name, 'wb') as f:
         f.write(make_png(f.name, w, h, r, g, b))
 print('Created PNG test images')
-" 2>/dev/null || warn "Could not create test images"
+") 2>/dev/null || warn "Could not create test images"
     fi
 
     # Directory structure for navigation testing
@@ -223,18 +276,19 @@ print('Created PNG test images')
     ln -sf "$DATA_DIR/deep" "$DATA_DIR/link_to_deep" 2>/dev/null || true
 
     # Read-only file
+    rm -f "$DATA_DIR/documents/readonly.txt"
     echo "read only content" > "$DATA_DIR/documents/readonly.txt"
     chmod 444 "$DATA_DIR/documents/readonly.txt" 2>/dev/null || true
 
     # Large text file
-    python3 -c "
+    (cd "$DATA_DIR/documents" && $PYTHON_CMD -c "
 import string, random
 random.seed(42)
-with open('$DATA_DIR/documents/large_10k_lines.txt', 'w') as f:
+with open('large_10k_lines.txt', 'w') as f:
     for i in range(10000):
         f.write(f'Line {i:05d}: {\".\".join(random.choices(string.ascii_lowercase, k=8))}\n')
 print('Created 10k line file')
-"
+")
 
     echo ""
     ok "Test data created at $DATA_DIR"

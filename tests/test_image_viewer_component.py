@@ -209,20 +209,20 @@ class ImageViewerComponentTests(unittest.TestCase):
         rendered = [str(call.args[3]) for call in safe_addstr.call_args_list if len(call.args) >= 4]
         self.assertTrue(any("backend:none" in text for text in rendered))
 
-    def test_execute_menu_action_key_and_click_paths(self):
+    def test_execute_action_key_and_click_paths(self):
         win = self._make_window()
 
         self.assertEqual(
-            win._execute_menu_action("iv_open").type,
+            win.execute_action("iv_open").type,
             self.actions_mod.ActionType.REQUEST_OPEN_PATH,
         )
-        self.assertIsNone(win._execute_menu_action("iv_reload"))
+        self.assertIsNone(win.execute_action("iv_reload"))
         self.assertIn("No media opened.", win.status_message)
-        self.assertIsNone(win._execute_menu_action("iv_zoom_in"))
-        self.assertIsNone(win._execute_menu_action("iv_zoom_out"))
-        self.assertIsNone(win._execute_menu_action("iv_zoom_reset"))
-        self.assertIsNone(win._execute_menu_action("unknown"))
-        close = win._execute_menu_action("iv_close")
+        self.assertIsNone(win.execute_action("iv_zoom_in"))
+        self.assertIsNone(win.execute_action("iv_zoom_out"))
+        self.assertIsNone(win.execute_action("iv_zoom_reset"))
+        self.assertIsNone(win.execute_action("unknown"))
+        close = win.execute_action("iv_close")
         self.assertEqual(close.payload, self.actions_mod.AppAction.CLOSE_WINDOW)
 
         # Key shortcuts
@@ -269,7 +269,7 @@ class ImageViewerComponentTests(unittest.TestCase):
 
         # iv_reload sets status depending on whether a file is open.
         win.filepath = "/tmp/fake.png"
-        self.assertIsNone(win._execute_menu_action("iv_reload"))
+        self.assertIsNone(win.execute_action("iv_reload"))
         self.assertEqual(win.status_message, "Reloaded.")
 
         # draw() early returns for invisible or invalid body rect.
