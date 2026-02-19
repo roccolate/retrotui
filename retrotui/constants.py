@@ -132,3 +132,18 @@ C_FM_SELECTED = 17
 C_FM_DIR = 18
 C_TASKBAR = 19
 C_ANSI_START = 50
+
+# Layout constants
+MENU_BAR_HEIGHT = 1          # Row 0 is the global menu bar
+BOTTOM_BARS_HEIGHT = 2       # Taskbar + status bar at bottom
+TASKBAR_TITLE_MAX_LEN = 15   # Max chars shown in taskbar buttons
+WIN_MIN_WIDTH = 20           # Minimum window width on resize
+WIN_MIN_HEIGHT = 8           # Minimum window height on resize
+WIN_SPAWN_SCREEN_MARGIN = 4  # Margin from screen edge for new windows
+ICON_ART_HEIGHT = 3          # Height of icon ASCII art in rows
+ICON_DEFAULT_START_X = 3     # Default icon grid X start
+ICON_DEFAULT_START_Y = 3     # Default icon grid Y start
+ICON_DEFAULT_SPACING_Y = 5   # Default icon grid vertical spacing
+DEFAULT_DOUBLE_CLICK_INTERVAL = 0.35  # Seconds for double-click detection
+CLOCK_CLICK_REGION_WIDTH = 8  # Width of clock area in status bar
+BINARY_DETECT_CHUNK_SIZE = 1024  # Bytes read to detect binary files

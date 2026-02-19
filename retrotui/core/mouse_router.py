@@ -5,6 +5,14 @@ import inspect
 import time
 
 from .drag_drop import DragDropManager
+from ..constants import (
+    DEFAULT_DOUBLE_CLICK_INTERVAL,
+    MENU_BAR_HEIGHT,
+    CLOCK_CLICK_REGION_WIDTH,
+    ICON_DEFAULT_START_X,
+    ICON_DEFAULT_START_Y,
+    ICON_DEFAULT_SPACING_Y,
+)
 
 
 def _invoke_mouse_handler(handler, mx, my, bstate):
@@ -124,7 +132,7 @@ def _is_desktop_double_click(app, icon_idx, bstate):
     now = time.monotonic()
     last_idx = getattr(app, '_last_icon_click_idx', None)
     last_ts = float(getattr(app, '_last_icon_click_ts', 0.0) or 0.0)
-    interval = float(getattr(app, 'double_click_interval', 0.35) or 0.35)
+    interval = float(getattr(app, 'double_click_interval', DEFAULT_DOUBLE_CLICK_INTERVAL) or DEFAULT_DOUBLE_CLICK_INTERVAL)
     is_double = (last_idx == icon_idx) and ((now - last_ts) <= interval)
     setattr(app, '_last_icon_click_idx', icon_idx)
     setattr(app, '_last_icon_click_ts', now)
@@ -201,7 +209,7 @@ def handle_drag_resize_mouse(app, mx, my, bstate):
                 new_x = mx - win.drag_offset_x
                 new_y = my - win.drag_offset_y
                 win.x = max(0, min(new_x, w - win.w))
-                win.y = max(1, min(new_y, h - win.h - 1))
+                win.y = max(MENU_BAR_HEIGHT, min(new_y, h - win.h - 1))
                 return True
         return True
 
@@ -421,7 +429,7 @@ def handle_desktop_mouse(app, mx, my, bstate):
             # or we accept a slight jump for the first MVP pass if we can't get exact rect easily here.
             
             # Better: call app.get_icon_screen_pos(icon_idx)
-            pos = getattr(app, 'get_icon_screen_pos', lambda i: (3, 3 + i*5))(icon_idx)
+            pos = getattr(app, 'get_icon_screen_pos', lambda i: (ICON_DEFAULT_START_X, ICON_DEFAULT_START_Y + i * ICON_DEFAULT_SPACING_Y))(icon_idx)
             setattr(app, '_drag_icon_offset_x', mx - pos[0])
             setattr(app, '_drag_icon_offset_y', my - pos[1])
             
@@ -493,7 +501,7 @@ def handle_mouse_event(app, event):
 
     from .actions import AppAction
     h, w = app.stdscr.getmaxyx()
-    if my == h - 1 and mx >= w - 8:
+    if my == h - 1 and mx >= w - CLOCK_CLICK_REGION_WIDTH:
         if bstate & (getattr(curses, 'BUTTON1_CLICKED', 0) | getattr(curses, 'BUTTON1_DOUBLE_CLICKED', 0)):
             app.execute_action(AppAction.CLOCK_CALENDAR)
             return

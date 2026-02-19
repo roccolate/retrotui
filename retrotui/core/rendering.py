@@ -9,6 +9,8 @@ from ..constants import (
     C_STATUS,
     C_TASKBAR,
     DESKTOP_PATTERN,
+    TASKBAR_TITLE_MAX_LEN,
+    ICON_ART_HEIGHT,
 )
 from ..utils import safe_addstr, theme_attr
 
@@ -32,15 +34,15 @@ def draw_icons(app):
         x, y = app.get_icon_screen_pos(idx)
         
         # Clip if off-screen (y)
-        if y + 3 >= h - 1:
+        if y + ICON_ART_HEIGHT >= h - 1:
             continue
-            
+
         is_selected = idx == app.selected_icon
         attr = theme_attr("icon_selected" if is_selected else "icon") | curses.A_BOLD
         for row, line in enumerate(icon['art']):
             safe_addstr(app.stdscr, y + row, x, line, attr)
         label = icon['label'].center(len(icon['art'][0]))
-        safe_addstr(app.stdscr, y + 3, x, label, attr)
+        safe_addstr(app.stdscr, y + ICON_ART_HEIGHT, x, label, attr)
 
 
 def draw_taskbar(app):
@@ -54,7 +56,7 @@ def draw_taskbar(app):
     safe_addstr(app.stdscr, taskbar_y, 0, ' ' * (w - 1), attr)
     x = 1
     for win in minimized:
-        label = win.title[:15]
+        label = win.title[:TASKBAR_TITLE_MAX_LEN]
         btn = f'[{label}]'
         if x + len(btn) >= w - 1:
             break

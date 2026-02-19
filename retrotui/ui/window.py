@@ -9,6 +9,10 @@ from ..constants import (
     C_WIN_INACTIVE,
     C_WIN_TITLE,
     C_WIN_TITLE_INV,
+    WIN_MIN_WIDTH,
+    WIN_MIN_HEIGHT,
+    MENU_BAR_HEIGHT,
+    BOTTOM_BARS_HEIGHT,
 )
 from ..utils import safe_addstr, draw_box, theme_attr
 from .menu import WindowMenu
@@ -105,9 +109,9 @@ class Window:
             self.restore_rect = (self.x, self.y, self.w, self.h)
             self.maximized = True
             self.x = 0
-            self.y = 1  # Below global menu
+            self.y = MENU_BAR_HEIGHT  # Below global menu
             self.w = term_w
-            self.h = term_h - 2  # Above taskbar
+            self.h = term_h - BOTTOM_BARS_HEIGHT  # Above taskbar
             # Force close menu on resize
             if self.window_menu:
                 self.window_menu.active = False
@@ -118,7 +122,7 @@ class Window:
             self.maximized = False
             # Clamp to screen just in case
             self.x = max(0, min(self.x, term_w - self.w))
-            self.y = max(1, min(self.y, term_h - self.h - 1))
+            self.y = max(MENU_BAR_HEIGHT, min(self.y, term_h - self.h - 1))
 
     def toggle_minimize(self):
         """Toggle between minimized and visible state."""
@@ -151,11 +155,11 @@ class Window:
         """Apply resize based on mouse position and active resize_edge."""
         if self.resize_edge == 'right' or self.resize_edge == 'corner':
             new_w = mx - self.x + 1
-            self.w = max(20, min(new_w, term_w - self.x))
+            self.w = max(WIN_MIN_WIDTH, min(new_w, term_w - self.x))
         
         if self.resize_edge == 'bottom' or self.resize_edge == 'corner':
             new_h = my - self.y + 1
-            self.h = max(8, min(new_h, term_h - self.y - 1))
+            self.h = max(WIN_MIN_HEIGHT, min(new_h, term_h - self.y - 1))
         
         if self.window_menu:
             self.window_menu.active = False

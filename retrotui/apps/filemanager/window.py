@@ -8,6 +8,7 @@ from ...ui.window import Window
 from ...ui.menu import WindowMenu
 from ...core.actions import ActionResult, ActionType, AppAction
 from ...utils import safe_addstr, check_unicode_support, theme_attr, normalize_key_code
+from ...constants import WIN_MIN_WIDTH, WIN_MIN_HEIGHT
 from .core import FileEntry, _fit_text_to_cells, _cell_width
 from .operations import (
     _trash_base_dir, perform_copy, perform_move, perform_delete, perform_undo,
@@ -28,6 +29,12 @@ class FileManagerWindow(Window):
     KEY_INSERT = getattr(curses, 'KEY_IC', -1)
     PREVIEW_MIN_WIDTH = 64
     IMAGE_EXTENSIONS = IMAGE_EXTENSIONS
+    DUAL_PANE_MIN_WIDTH = 92
+    PAGE_SCROLL_STEP = 10
+    PREVIEW_MAX_WIDTH = 36
+    PREVIEW_PANEL_MIN_WIDTH = 24
+    PANE_MIN_RENDER_WIDTH = 4
+    HEADER_SEP_MARGIN = 4
 
     _MENU_ACTION_MAP = {
         AppAction.FM_OPEN: 'activate_selected',
@@ -42,6 +49,15 @@ class FileManagerWindow(Window):
         AppAction.FM_TOGGLE_HIDDEN: 'toggle_hidden',
         AppAction.FM_PARENT: '_action_parent',
         AppAction.FM_CLOSE: lambda self: ActionResult(ActionType.EXECUTE, AppAction.CLOSE_WINDOW),
+        'fm_toggle_dual': 'toggle_dual_pane',
+        AppAction.FM_BOOKMARK_1: lambda self: self.navigate_bookmark(1),
+        AppAction.FM_BOOKMARK_2: lambda self: self.navigate_bookmark(2),
+        AppAction.FM_BOOKMARK_3: lambda self: self.navigate_bookmark(3),
+        AppAction.FM_BOOKMARK_4: lambda self: self.navigate_bookmark(4),
+        AppAction.FM_SET_BOOKMARK_1: lambda self: self.set_bookmark(1),
+        AppAction.FM_SET_BOOKMARK_2: lambda self: self.set_bookmark(2),
+        AppAction.FM_SET_BOOKMARK_3: lambda self: self.set_bookmark(3),
+        AppAction.FM_SET_BOOKMARK_4: lambda self: self.set_bookmark(4),
     }
 
     def __init__(self, x, y, w, h, start_path=None, show_hidden_default=False):
@@ -83,13 +99,13 @@ class FileManagerWindow(Window):
                 ('Set #4 (here)   $', AppAction.FM_SET_BOOKMARK_4),
             ],
         })
-        self.h = max(self.h, 8)
+        self.h = max(self.h, WIN_MIN_HEIGHT)
         self._pending_drag_payload = None
         self._pending_drag_origin = None
         self.bookmarks = get_default_bookmarks()
         self._last_trash_move = None
         self._preview_cache = {'key': None, 'lines': []}
-        self.dual_pane_enabled = self.w >= 92
+        self.dual_pane_enabled = self.w >= self.DUAL_PANE_MIN_WIDTH
         self.active_pane = 0
         self.secondary_path = self.current_path
         self.secondary_entries = []
@@ -104,7 +120,7 @@ class FileManagerWindow(Window):
     @staticmethod
     def _dual_pane_min_width():
         """Minimum window width needed to render two panes cleanly."""
-        return 92
+        return FileManagerWindow.DUAL_PANE_MIN_WIDTH
 
     def _dual_pane_available(self):
         """Return True when current window size supports dual-pane layout."""
@@ -180,9 +196,9 @@ class FileManagerWindow(Window):
         bx, _, bw, _ = self.body_rect()
         if bw < self.PREVIEW_MIN_WIDTH:
             return bw, None, None, 0
-        preview_w = min(36, max(24, bw // 3))
+        preview_w = min(self.PREVIEW_MAX_WIDTH, max(self.PREVIEW_PANEL_MIN_WIDTH, bw // 3))
         list_w = bw - preview_w - 1
-        if list_w < 20:
+        if list_w < WIN_MIN_WIDTH:
             return bw, None, None, 0
         separator_x = bx + list_w
         preview_x = separator_x + 1
@@ -229,7 +245,7 @@ class FileManagerWindow(Window):
         path_icon = '[P]'
         error_icon = '[!]'
         content.append(f' {path_icon} {path}')
-        content.append(' ' + '-' * (self.w - 4))
+        content.append(' ' + '-' * (self.w - self.HEADER_SEP_MARGIN))
 
         if path != os.path.sep and os.path.dirname(path) != path:
             entry = FileEntry('..', True, os.path.dirname(path), use_unicode=self.use_unicode)
@@ -647,6 +663,9 @@ class FileManagerWindow(Window):
         else:
             self._draw_single_pane(stdscr, border_attr)
 
+        if self.window_menu:
+            self.window_menu.draw_dropdown(stdscr, self.x, self.y, self.w)
+
 
 
     def _draw_single_pane(self, stdscr, border_attr):
@@ -691,8 +710,24 @@ class FileManagerWindow(Window):
             is_active=(self.active_pane == 1)
         )
 
+    def _entry_display_attr(self, entry_obj, is_selected, is_active_pane):
+        """Compute the curses display attribute for a file entry."""
+        if is_selected and is_active_pane and self.active:
+            return theme_attr('menu_selected')
+        if entry_obj is None:
+            return theme_attr('window_body')
+        if entry_obj.is_dir:
+            return theme_attr('file_directory')
+        if getattr(entry_obj, 'size', 0) > 0 and (entry_obj.size & 0x111):
+            try:
+                if os.access(entry_obj.full_path, os.X_OK):
+                    return theme_attr('window_body') | curses.A_BOLD
+            except Exception:
+                pass
+        return theme_attr('window_body')
+
     def _draw_pane_contents(self, stdscr, pane_id, x, y, w, h, content, scroll, selected, error_msg, is_active=True):
-        if w < 4: return
+        if w < self.PANE_MIN_RENDER_WIDTH: return
         
         bar_attr = theme_attr('window_title' if is_active and self.active else 'window_inactive')
         path_line = content[0] if content else ''
@@ -718,25 +753,13 @@ class FileManagerWindow(Window):
              
              line_str = _fit_text_to_cells(items[idx], w)
              
-             attr = theme_attr('window_body')
              is_sel = (idx == selected)
-             
+
              entries_src = self.entries if pane_id == 0 else self.secondary_entries
-             entry_obj = None
-             if 0 <= idx < len(entries_src):
-                 entry_obj = entries_src[idx]
-             
-             if is_sel and is_active and self.active:
-                 attr = theme_attr('menu_selected')
-             elif entry_obj:
-                 if entry_obj.is_dir:
-                     attr = theme_attr('file_directory')
-                 elif not entry_obj.is_dir and getattr(entry_obj, 'size', 0) > 0 and (entry_obj.size & 0x111):
-                     try:
-                        if os.access(entry_obj.full_path, os.X_OK):
-                            attr = theme_attr('window_body') | curses.A_BOLD
-                     except: pass
-             
+             entry_obj = entries_src[idx] if 0 <= idx < len(entries_src) else None
+
+             attr = self._entry_display_attr(entry_obj, is_sel, is_active)
+
              safe_addstr(stdscr, line_y, x, line_str, attr)
 
     def handle_scroll(self, direction, amount=3):
@@ -878,17 +901,17 @@ class FileManagerWindow(Window):
                 if new_selected >= scroll + display_h:
                     new_scroll = scroll + 1
         elif key == curses.KEY_PPAGE:
-            new_selected = max(0, selected - 10)
-            new_scroll = max(0, scroll - 10)
+            new_selected = max(0, selected - self.PAGE_SCROLL_STEP)
+            new_scroll = max(0, scroll - self.PAGE_SCROLL_STEP)
         elif key == curses.KEY_NPAGE:
-            new_selected = min(count - 1, selected + 10)
-            new_scroll = min(max(0, count - 1), scroll + 10)
+            new_selected = min(count - 1, selected + self.PAGE_SCROLL_STEP)
+            new_scroll = min(max(0, count - 1), scroll + self.PAGE_SCROLL_STEP)
         elif key == curses.KEY_HOME:
             new_selected = 0
             new_scroll = 0
         elif key == curses.KEY_END:
             new_selected = count - 1
-            new_scroll = max(0, count - 10)
+            new_scroll = max(0, count - self.PAGE_SCROLL_STEP)
         else:
             return None  # Not a navigation key
 

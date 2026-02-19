@@ -7,7 +7,7 @@ import threading
 import time
 
 from ..constants import (
-    ICONS, ICONS_ASCII
+    ICONS, ICONS_ASCII, TASKBAR_TITLE_MAX_LEN, BINARY_DETECT_CHUNK_SIZE,
 )
 from ..utils import (
     check_unicode_support, init_colors,
@@ -505,7 +505,7 @@ class RetroTUI:
         # Check if file seems to be binary
         try:
             with open(filepath, 'rb') as f:
-                chunk = f.read(1024)
+                chunk = f.read(BINARY_DETECT_CHUNK_SIZE)
                 if b'\x00' in chunk:
                     offset_x = 12 + len(self.windows) * 2
                     offset_y = 3 + len(self.windows)
@@ -800,7 +800,7 @@ class RetroTUI:
             return False
         x = 1
         for win in minimized:
-            label = win.title[:15]
+            label = win.title[:TASKBAR_TITLE_MAX_LEN]
             btn_w = len(label) + 2  # [label]
             if x <= mx < x + btn_w:
                 win.toggle_minimize()
