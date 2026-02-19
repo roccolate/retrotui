@@ -3,6 +3,7 @@
 
 import curses
 from ..core.actions import AppAction
+from ..utils import theme_attr
 from .menu import Menu
 
 
@@ -118,7 +119,7 @@ class ContextMenu(Menu):
             #    stdscr.addstr(draw_y + 1 + i, draw_x + 2, " " * self._width)
             # stdscr.attroff(self.theme.shadow_attr)
 
-            stdscr.attron(self.theme.window_menu_attr)
+            stdscr.attron(theme_attr('menu_item'))
             
             # Top border
             stdscr.addstr(draw_y, draw_x, "┌" + "─" * (self._width - 2) + "┐")
@@ -130,11 +131,11 @@ class ContextMenu(Menu):
                 else:
                     label = f" {item['label']}".ljust(self._width - 2)
                     if i == self.selected_index:
-                        stdscr.attron(self.theme.menu_selected_attr)
+                        stdscr.attron(theme_attr('menu_selected'))
                         stdscr.addstr(row_y, draw_x + 1, label)
-                        stdscr.attroff(self.theme.menu_selected_attr)
+                        stdscr.attroff(theme_attr('menu_selected'))
                         # Draw borders with normal attr
-                        stdscr.attron(self.theme.window_menu_attr)
+                        stdscr.attron(theme_attr('menu_item'))
                         stdscr.addch(row_y, draw_x, "│")
                         stdscr.addch(row_y, draw_x + self._width - 1, "│")
                     else:
@@ -143,6 +144,6 @@ class ContextMenu(Menu):
             # Bottom border
             stdscr.addstr(draw_y + len(self.items) + 1, draw_x, "└" + "─" * (self._width - 2) + "┘")
 
-            stdscr.attroff(self.theme.window_menu_attr)
+            stdscr.attroff(theme_attr('menu_item'))
         except curses.error:
             pass
