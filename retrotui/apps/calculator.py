@@ -254,7 +254,7 @@ class CalculatorWindow(Window):
                 x, y, w, h = self._button_rect(r, c)
                 if y == my and x <= mx < x + w:
                     self._handle_button_press(key)
-                    return ActionResult(ActionType.SKIP, None) # Consumed
+                    return ActionResult(ActionType.REFRESH, None) # Consumed
 
         # Check Input line
         if my == by:
