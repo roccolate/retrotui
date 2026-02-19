@@ -178,8 +178,7 @@ class WindowLogicTests(unittest.TestCase):
         win = self.filemanager_mod.FileManagerWindow(0, 0, 40, 12, start_path='.')
         
         action = win.handle_key('h')
-
-        self.assertEqual(action, self.actions_mod.AppAction.FM_TOGGLE_HIDDEN)
+        self.assertEqual(action.type, self.actions_mod.ActionType.REFRESH)
 
     def test_input_dialog_accepts_unicode_string_input(self):
         dialog = self.dialog_mod.InputDialog('Save As', 'Enter filename:', width=40)

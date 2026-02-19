@@ -57,7 +57,7 @@ class FileManagerMore4Tests(unittest.TestCase):
         self.assertEqual(self.win.bookmarks[1], os.path.realpath(self.td))
         # navigate to bookmark
         res = self.win.navigate_bookmark(1)
-        self.assertIsNone(res)
+        self.assertEqual(res.type, ActionType.REFRESH)
 
     def test_dual_copy_move_between_panes(self):
         self.win.w = 120  # enable dual
@@ -74,7 +74,7 @@ class FileManagerMore4Tests(unittest.TestCase):
         self.win.active_pane = 0
         self.win._select_entry_by_name('left.txt')
         res_copy = self.win._dual_copy_move_between_panes(move=False)
-        self.assertIsNone(res_copy)
+        self.assertEqual(res_copy.type, ActionType.REFRESH)
         self.assertTrue(os.path.exists(os.path.join(self.win.secondary_path, 'left.txt')))
 
     def test_handle_key_fkeys_and_tab(self):

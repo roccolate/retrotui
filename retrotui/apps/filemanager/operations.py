@@ -31,9 +31,10 @@ def _is_long_file_operation(entry, threshold_bytes):
     return int(size) >= threshold_bytes
 
 
-def next_trash_path(original_path):
+def next_trash_path(original_path, trash_dir=None):
     """Build a non-colliding destination path inside trash directory."""
-    trash_dir = _trash_base_dir()
+    if trash_dir is None:
+        trash_dir = _trash_base_dir()
     os.makedirs(trash_dir, exist_ok=True)
     base_name = os.path.basename(original_path.rstrip(os.sep)) or 'item'
     candidate = os.path.join(trash_dir, base_name)
@@ -48,22 +49,31 @@ def next_trash_path(original_path):
 
 def perform_copy(source_path, dest_path):
     """Copy file or directory."""
-    if os.path.isdir(source_path):
-        shutil.copytree(source_path, os.path.join(dest_path, os.path.basename(source_path)))
-    else:
-        shutil.copy2(source_path, dest_path)
-    return ActionResult(ActionType.refresh_file_manager)
+    try:
+        if os.path.isdir(source_path):
+            shutil.copytree(source_path, os.path.join(dest_path, os.path.basename(source_path)))
+        else:
+            shutil.copy2(source_path, dest_path)
+        return ActionResult(ActionType.REFRESH)
+    except (OSError, shutil.Error) as exc:
+        return ActionResult(ActionType.ERROR, str(exc))
 
 def perform_move(source_path, dest_path):
     """Move file or directory."""
-    shutil.move(source_path, dest_path)
-    return ActionResult(ActionType.refresh_file_manager)
+    try:
+        shutil.move(source_path, dest_path)
+        return ActionResult(ActionType.REFRESH)
+    except (OSError, shutil.Error) as exc:
+        return ActionResult(ActionType.ERROR, str(exc))
 
 def perform_delete(source_path):
     """Move file or directory to trash."""
-    trash_path = next_trash_path(source_path)
-    shutil.move(source_path, trash_path)
-    return trash_path
+    try:
+        trash_path = next_trash_path(source_path)
+        shutil.move(source_path, trash_path)
+        return trash_path
+    except (OSError, shutil.Error):
+        return None
 
 def perform_undo(last_trash_move):
     """Restore last trashed path back to its original location."""

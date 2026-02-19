@@ -71,7 +71,7 @@ def draw_statusbar(app, version):
     now_str = datetime.now().strftime('%H:%M')
     
     # Left part
-    left_status = f' RetroTUI v{version} | Windows: {visible}/{total} | Mouse: Enabled'
+    left_status = f' RetroTUI v{version} | Windows: {visible}/{len(app.windows)} | Mouse: Enabled'
     
     # Draw background
     safe_addstr(app.stdscr, h - 1, 0, ' ' * (w - 1), attr)

@@ -4,11 +4,13 @@ import shutil
 import sys
 import types
 import unittest
+from unittest import mock
 from _support import make_fake_curses
 
 sys.modules['curses'] = make_fake_curses()
 
 from retrotui.apps.filemanager import FileManagerWindow, FileEntry
+from retrotui.apps.filemanager import operations
 fake_curses = sys.modules['curses']
 
 
@@ -60,32 +62,42 @@ class FileManagerEdgeTests(unittest.TestCase):
         self.assertEqual(res, payload)
         self.assertIsNone(self.win._pending_drag_payload)
 
+
+
     def test_next_trash_path_collisions_and_undo_delete(self):
-        # ensure trash base inside tmp
-        self.win._trash_base_dir = staticmethod(lambda: os.path.join(self.base, 'trash'))
-        os.makedirs(self.win._trash_base_dir(), exist_ok=True)
-        src = os.path.join(self.base, 'todel.txt')
-        # create candidate collision
-        candidate = os.path.join(self.win._trash_base_dir(), 'todel.txt')
-        with open(candidate, 'w', encoding='utf-8') as f:
-            f.write('z')
-        alt = self.win._next_trash_path(src)
-        self.assertNotEqual(alt, candidate)
-
-        # delete_selected should move file into trash and set last move
-        self._select_by_name('todel.txt')
-        res = self.win.delete_selected()
-        self.assertIsNone(res)
-        self.assertIsNotNone(self.win._last_trash_move)
-        trash_path = self.win._last_trash_move['trash']
-        self.assertTrue(os.path.exists(trash_path))
-
-        # undo should restore
-        res = self.win.undo_last_delete()
-        self.assertIsNone(res)
-        self.assertTrue(os.path.exists(os.path.join(self.base, 'todel.txt')))
+        trash_dir = os.path.join(self.base, 'trash')
+        
+        # Patch operations._trash_base_dir
+        with mock.patch('retrotui.apps.filemanager.operations._trash_base_dir', return_value=trash_dir):
+            os.makedirs(trash_dir, exist_ok=True)
+            src = os.path.join(self.base, 'todel.txt')
+            # create candidate collision
+            candidate = os.path.join(trash_dir, 'todel.txt')
+            with open(candidate, 'w', encoding='utf-8') as f:
+                f.write('z')
+                
+            # Use operations.next_trash_path directly
+            alt = operations.next_trash_path(src)
+            self.assertNotEqual(alt, candidate)
+    
+            from retrotui.core.actions import ActionType
+    
+            # delete_selected should move file into trash and set last move
+            self._select_by_name('todel.txt')
+            res = self.win.delete_selected()
+            self.assertEqual(res.type, ActionType.REFRESH)
+            self.assertIsNotNone(self.win._last_trash_move)
+            trash_path = self.win._last_trash_move['trash']
+            self.assertTrue(os.path.exists(trash_path))
+    
+            # undo should restore
+            res = self.win.undo_delete()
+            self.assertEqual(res.type, ActionType.REFRESH)
+            self.assertTrue(os.path.exists(os.path.join(self.base, 'todel.txt')))
 
     def test_rename_selected_errors_and_success(self):
+        from retrotui.core.actions import ActionType
+        
         self._select_by_name('old.txt')
         # invalid name
         res = self.win.rename_selected('')
@@ -94,8 +106,16 @@ class FileManagerEdgeTests(unittest.TestCase):
         self.assertIsNotNone(res)
 
         # success
+        target = os.path.join(self.base, 'new.txt')
+        if os.path.exists(target):
+            try:
+                os.remove(target)
+            except: pass
+        self.assertFalse(os.path.exists(target), "Target new.txt already exists!")
+        
         res = self.win.rename_selected('new.txt')
-        self.assertIsNone(res)
+        ignore_msg = getattr(res, 'payload', '')
+        self.assertEqual(res.type, ActionType.REFRESH, f"Rename failed: {ignore_msg}")
         self.assertTrue(os.path.exists(os.path.join(self.base, 'new.txt')))
 
 

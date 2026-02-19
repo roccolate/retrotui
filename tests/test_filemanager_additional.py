@@ -21,6 +21,7 @@ from retrotui.core.actions import ActionType
 class FakeStdScr:
     def __init__(self):
         self.calls = []
+        self.stdscr = self
 
     def addnstr(self, y, x, text, max_len, attr=0):
         self.calls.append((y, x, text[:max_len], attr))
@@ -68,7 +69,7 @@ class FileManagerAdditionalTests(unittest.TestCase):
         std = FakeStdScr()
         content = ['a', 'b', 'c']
         # selection index within visible rows
-        self.win._draw_pane_contents(std, 0, 0, 3, 10, content, 0, 1, 0, 1)
+        self.win._draw_pane_contents(std, 0, 0, 0, 10, 5, content, 0, 1, 0, True)
         self.assertTrue(any(call[0] == 1 for call in std.calls))
 
     def test_set_and_navigate_bookmark(self):
@@ -81,9 +82,9 @@ class FileManagerAdditionalTests(unittest.TestCase):
         self.assertIsNotNone(res)
         # valid bookmark and navigate
         res = self.win.set_bookmark(1, path=self.base)
-        self.assertIsNone(res)
+        self.assertEqual(res.type, ActionType.REFRESH)
         res = self.win.navigate_bookmark(1)
-        self.assertIsNone(res)
+        self.assertEqual(res.type, ActionType.REFRESH)
 
     def test_delete_selected_handles_oserror(self):
         # pick an entry and monkeypatch shutil.move to raise

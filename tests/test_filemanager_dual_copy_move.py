@@ -8,6 +8,7 @@ import unittest
 sys.modules['curses'] = make_fake_curses()
 
 from retrotui.apps.filemanager import FileManagerWindow, FileEntry
+from retrotui.core.actions import ActionType
 
 
 class FileManagerDualCopyMoveTests(unittest.TestCase):
@@ -34,7 +35,7 @@ class FileManagerDualCopyMoveTests(unittest.TestCase):
                 break
         # perform copy
         res = self.win._dual_copy_move_between_panes(move=False)
-        self.assertIsNone(res)
+        self.assertEqual(res.type, ActionType.REFRESH)
         # file should exist on right
         self.assertTrue(os.path.exists(os.path.join(self.right.name, 'a.txt')))
 
@@ -46,7 +47,7 @@ class FileManagerDualCopyMoveTests(unittest.TestCase):
                 break
         # move
         res = self.win._dual_copy_move_between_panes(move=True)
-        self.assertIsNone(res)
+        self.assertEqual(res.type, ActionType.REFRESH)
         # original gone, moved to right
         self.assertFalse(os.path.exists(os.path.join(self.left.name, 'a.txt')))
         self.assertTrue(os.path.exists(os.path.join(self.right.name, 'a.txt')))

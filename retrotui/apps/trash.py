@@ -8,12 +8,16 @@ from ..core.actions import ActionResult, ActionType, AppAction
 from ..ui.menu import WindowMenu
 from ..utils import normalize_key_code
 from .filemanager import FileManagerWindow
+from .filemanager.operations import _trash_base_dir
 
 
 class TrashWindow(FileManagerWindow):
     """File-manager variant constrained to the user trash directory."""
 
     KEY_F5 = getattr(curses, "KEY_F5", -1)
+
+    def _trash_base_dir(self):
+        return _trash_base_dir()
 
     def __init__(self, x, y, w, h):
         trash_path = self._trash_base_dir()
@@ -37,6 +41,10 @@ class TrashWindow(FileManagerWindow):
             }
         )
         self._rebuild_content()
+
+    def _rebuild_content(self):
+        super()._rebuild_content()
+        self._update_title()
 
     def _trash_root(self):
         """Return normalized root path used by this trash view."""
