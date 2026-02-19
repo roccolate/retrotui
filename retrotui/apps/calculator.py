@@ -81,7 +81,7 @@ class CalculatorWindow(Window):
 
     def __init__(self, x, y, w, h):
         # Increased default height to fit buttons
-        super().__init__("Calculator", x, y, max(30, w), max(18, h), content=[], resizable=False)
+        super().__init__("Calculator", x, y, max(26, w), max(18, h), content=[], resizable=False)
         self.always_on_top = True
         self.expression = ""
         self.cursor_pos = 0
@@ -178,10 +178,10 @@ class CalculatorWindow(Window):
         padding_y = 1
         
         start_y = by + bh - (btn_rows * (btn_height + padding_y)) - 2 # 2 for status bar and margin
-        start_x = bx + 2
+        start_x = bx + 1
         
         btn_width = 5
-        spacing_x = 2
+        spacing_x = 1
         
         y = start_y + row_idx * (btn_height + padding_y)
         x = start_x + col_idx * (btn_width + spacing_x)
