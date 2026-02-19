@@ -12,6 +12,12 @@ from ..apps.process_manager import ProcessManagerWindow
 from ..apps.clock import ClockCalendarWindow
 from ..apps.image_viewer import ImageViewerWindow
 from ..apps.trash import TrashWindow
+from ..apps.minesweeper import MinesweeperWindow
+from ..apps.solitaire import SolitaireWindow
+from ..apps.snake import SnakeWindow
+from ..apps.charmap import CharacterMapWindow
+from ..apps.clipboard_viewer import ClipboardViewerWindow
+from ..apps.wifi_manager import WifiManagerWindow
 from ..ui.dialog import Dialog
 from ..ui.window import Window
 from .actions import AppAction
@@ -155,6 +161,36 @@ def execute_app_action(app, action, logger, *, version: str) -> None:
                 content=["", " New empty window", ""],
             )
         )
+        return
+
+    if action == AppAction.MINESWEEPER:
+        offset_x, offset_y = app._next_window_offset(18, 4)
+        app._spawn_window(MinesweeperWindow(offset_x, offset_y, 54, 20))
+        return
+
+    if action == AppAction.SOLITAIRE:
+        offset_x, offset_y = app._next_window_offset(20, 4)
+        app._spawn_window(SolitaireWindow(offset_x, offset_y, 70, 22))
+        return
+
+    if action == AppAction.SNAKE:
+        offset_x, offset_y = app._next_window_offset(22, 5)
+        app._spawn_window(SnakeWindow(offset_x, offset_y, 48, 20))
+        return
+
+    if action == AppAction.CHARMAP:
+        offset_x, offset_y = app._next_window_offset(26, 6)
+        app._spawn_window(CharacterMapWindow(offset_x, offset_y, 46, 18))
+        return
+
+    if action == AppAction.CLIPBOARD:
+        offset_x, offset_y = app._next_window_offset(24, 5)
+        app._spawn_window(ClipboardViewerWindow(offset_x, offset_y, 56, 18))
+        return
+
+    if action == AppAction.WIFI_MANAGER:
+        offset_x, offset_y = app._next_window_offset(22, 4)
+        app._spawn_window(WifiManagerWindow(offset_x, offset_y, 60, 18))
         return
 
     logger.warning("Unknown action received: %s", action)

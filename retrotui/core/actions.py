@@ -75,6 +75,14 @@ class AppAction(str, Enum):
     FM_SET_BOOKMARK_3 = "fm_set_bookmark_3"
     FM_SET_BOOKMARK_4 = "fm_set_bookmark_4"
 
+    # New app actions
+    MINESWEEPER = "minesweeper"
+    SOLITAIRE = "solitaire"
+    SNAKE = "snake"
+    CHARMAP = "charmap"
+    CLIPBOARD = "clipboard"
+    WIFI_MANAGER = "wifi_manager"
+
 
 @dataclass(frozen=True)
 class ActionResult:
