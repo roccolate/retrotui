@@ -186,14 +186,14 @@ class SnakeWindow(Window):
         if k == ord('q') or k == ord('Q'):
             return self.execute_action(AppAction.CLOSE_WINDOW)
 
-        # Movement keys
-        if key == curses.KEY_UP and self.direction != (1, 0):
+        # Movement keys (Arrows or WASD)
+        if (key == curses.KEY_UP or k == ord('w')) and self.direction != (1, 0):
             self.direction = (-1, 0)
-        elif key == curses.KEY_DOWN and self.direction != (-1, 0):
+        elif (key == curses.KEY_DOWN or k == ord('s')) and self.direction != (-1, 0):
             self.direction = (1, 0)
-        elif key == curses.KEY_LEFT and self.direction != (0, 1):
+        elif (key == curses.KEY_LEFT or k == ord('a')) and self.direction != (0, 1):
             self.direction = (0, -1)
-        elif key == curses.KEY_RIGHT and self.direction != (0, -1):
+        elif (key == curses.KEY_RIGHT or k == ord('d')) and self.direction != (0, -1):
             self.direction = (0, 1)
             
         return None
