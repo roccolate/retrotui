@@ -615,7 +615,7 @@ class FileManagerWindow(Window):
         res = set_bookmark(self.bookmarks, slot, path)
         return ActionResult(ActionType.REFRESH) if res is None else res
 
-    def draw(self, app):
+    def draw(self, stdscr):
         min_w = self._dual_pane_min_width()
         if self.dual_pane_enabled and self.w < min_w:
              self.dual_pane_enabled = False
@@ -625,68 +625,68 @@ class FileManagerWindow(Window):
         if self.active:
             border_attr = theme_attr('window_border')
 
-        self.draw_frame(app.stdscr)
+        self.draw_frame(stdscr)
 
         if self.dual_pane_enabled:
-            self._draw_dual_pane(app, border_attr)
+            self._draw_dual_pane(stdscr, border_attr)
         else:
-            self._draw_single_pane(app, border_attr)
+            self._draw_single_pane(stdscr, border_attr)
 
 
 
-    def _draw_single_pane(self, app, border_attr):
+    def _draw_single_pane(self, stdscr, border_attr):
         list_w, sep_x, prev_x, prev_w = self._panel_layout()
         bx, by, bw, bh = self.body_rect()
         
         if sep_x:
             for i in range(bh):
-                safe_addstr(app.stdscr, by + i, sep_x, '\u2502', border_attr)
-            safe_addstr(app.stdscr, by - 1, sep_x, '\u252c', border_attr)
-            safe_addstr(app.stdscr, by + bh, sep_x, '\u2534', border_attr)
+                safe_addstr(stdscr, by + i, sep_x, '\u2502', border_attr)
+            safe_addstr(stdscr, by - 1, sep_x, '\u252c', border_attr)
+            safe_addstr(stdscr, by + bh, sep_x, '\u2534', border_attr)
 
-        self._draw_pane_contents(app, 0, bx, by, list_w, bh, self.content, self.scroll_offset, self.selected_index, self.error_message)
+        self._draw_pane_contents(stdscr, 0, bx, by, list_w, bh, self.content, self.scroll_offset, self.selected_index, self.error_message)
 
         if prev_x:
             lines = self._preview_lines(bh, max_cols=prev_w)
             for i in range(bh):
                 if i < len(lines):
-                     safe_addstr(app.stdscr, by + i, prev_x, lines[i][:prev_w], theme_attr('window_body'))
+                     safe_addstr(stdscr, by + i, prev_x, lines[i][:prev_w], theme_attr('window_body'))
 
-    def _draw_dual_pane(self, app, border_attr):
+    def _draw_dual_pane(self, stdscr, border_attr):
         bx, by, bw, bh = self.body_rect()
         mid_x = bx + (bw // 2)
         pane1_w = mid_x - bx
         pane2_w = bw - pane1_w - 1
         
         for i in range(bh):
-            safe_addstr(app.stdscr, by + i, mid_x, '\u2502', border_attr)
-        safe_addstr(app.stdscr, by - 1, mid_x, '\u252c', border_attr)
-        safe_addstr(app.stdscr, by + bh, mid_x, '\u2534', border_attr)
+            safe_addstr(stdscr, by + i, mid_x, '\u2502', border_attr)
+        safe_addstr(stdscr, by - 1, mid_x, '\u252c', border_attr)
+        safe_addstr(stdscr, by + bh, mid_x, '\u2534', border_attr)
 
         self._draw_pane_contents(
-            app, 0, bx, by, pane1_w, bh, 
+            stdscr, 0, bx, by, pane1_w, bh, 
             self.content, self.scroll_offset, self.selected_index, self.error_message,
             is_active=(self.active_pane == 0)
         )
         self._draw_pane_contents(
-            app, 1, mid_x + 1, by, pane2_w, bh, 
+            stdscr, 1, mid_x + 1, by, pane2_w, bh, 
             self.secondary_content, self.secondary_scroll_offset, self.secondary_selected_index, self.secondary_error_message,
             is_active=(self.active_pane == 1)
         )
 
-    def _draw_pane_contents(self, app, pane_id, x, y, w, h, content, scroll, selected, error_msg, is_active=True):
+    def _draw_pane_contents(self, stdscr, pane_id, x, y, w, h, content, scroll, selected, error_msg, is_active=True):
         if w < 4: return
         
         bar_attr = theme_attr('window_title' if is_active and self.active else 'window_inactive')
         path_line = content[0] if content else ''
-        safe_addstr(app.stdscr, y, x, _fit_text_to_cells(path_line, w), bar_attr)
+        safe_addstr(stdscr, y, x, _fit_text_to_cells(path_line, w), bar_attr)
         
         sep_line = content[1] if len(content) > 1 else ''
         dir_attr = theme_attr('file_directory')
-        safe_addstr(app.stdscr, y + 1, x, sep_line[:w], dir_attr)
+        safe_addstr(stdscr, y + 1, x, sep_line[:w], dir_attr)
 
         if error_msg:
-             safe_addstr(app.stdscr, y + 2, x + 2, f'Error: {error_msg}'[:w-2], theme_attr('window_body'))
+             safe_addstr(stdscr, y + 2, x + 2, f'Error: {error_msg}'[:w-2], theme_attr('window_body'))
              return
 
         items = content[self._header_lines():]
@@ -719,7 +719,7 @@ class FileManagerWindow(Window):
                             attr = theme_attr('window_body') | curses.A_BOLD
                      except: pass
              
-             safe_addstr(app.stdscr, line_y, x, line_str, attr)
+             safe_addstr(stdscr, line_y, x, line_str, attr)
 
     def handle_scroll(self, direction, amount=3):
         if self.active_pane == 1:
