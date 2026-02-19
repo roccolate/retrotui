@@ -107,7 +107,7 @@ class RetroTUI:
         if self.show_welcome:
             h, w = stdscr.getmaxyx()
             welcome_content = build_welcome_content(APP_VERSION)
-            win = Window('Welcome to RetroTUI', w // 2 - 25, h // 2 - 10, 52, 22,
+            win = Window('Welcome to RetroTUI', w // 2 - 21, h // 2 - 10, 42, 22,
                           content=welcome_content)
             
             # Custom handler to process "Don't show again"

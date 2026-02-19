@@ -314,11 +314,11 @@ class ActionRunnerTests(unittest.TestCase):
                 version="0.3.4",
             )
 
-        app._next_window_offset.assert_called_once_with(15, 3)
+        app._next_window_offset.assert_called_once_with(8, 3)
         app._spawn_window.assert_called_once()
         spawned = app._spawn_window.call_args.args[0]
         self.assertEqual(spawned.kind, "fm")
-        self.assertEqual((spawned.x, spawned.y, spawned.w, spawned.h), (12, 7, 58, 22))
+        self.assertEqual((spawned.x, spawned.y, spawned.w, spawned.h), (12, 7, 70, 24))
 
     def test_execute_file_manager_passes_show_hidden_when_supported(self):
         app = self._make_app()
