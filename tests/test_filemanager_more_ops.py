@@ -42,7 +42,7 @@ class FileManagerMoreOpsTests(unittest.TestCase):
 
         # copy
         res = self.win._dual_copy_move_between_panes(move=False)
-        self.assertIsNone(res)
+        self.assertEqual(res.type, ActionType.REFRESH)
         self.assertTrue(os.path.exists(os.path.join(self.sec, name)))
 
         # move: create another file and move
@@ -57,7 +57,7 @@ class FileManagerMoreOpsTests(unittest.TestCase):
                 self.win.selected_index = i
                 break
         res = self.win._dual_copy_move_between_panes(move=True)
-        self.assertIsNone(res)
+        self.assertEqual(res.type, ActionType.REFRESH)
         self.assertTrue(os.path.exists(os.path.join(self.sec, 'moveme.txt')))
 
     def test_dual_copy_move_errors(self):
@@ -94,7 +94,7 @@ class FileManagerMoreOpsTests(unittest.TestCase):
                 break
         newname = 'renamed.txt'
         res = self.win.rename_selected(newname)
-        self.assertIsNone(res)
+        self.assertEqual(res.type, ActionType.REFRESH)
         self.assertTrue(any(e.name == newname for e in self.win.entries))
 
     def test_delete_and_undo_flow_and_oserror(self):
@@ -112,15 +112,15 @@ class FileManagerMoreOpsTests(unittest.TestCase):
 
         # normal delete
         res = self.win.delete_selected()
-        self.assertIsNone(res)
+        self.assertEqual(res.type, ActionType.REFRESH)
         # file moved to trash
         moved = self.win._last_trash_move
         self.assertIsNotNone(moved)
         self.assertFalse(os.path.exists(os.path.join(self.base, name)))
 
         # undo
-        res = self.win.undo_last_delete()
-        self.assertIsNone(res)
+        res = self.win.undo_delete()
+        self.assertEqual(res.type, ActionType.REFRESH)
         self.assertTrue(os.path.exists(os.path.join(self.base, name)))
 
         # simulate OSError on delete

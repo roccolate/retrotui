@@ -12,11 +12,13 @@ _prev = sys.modules.get('curses')
 sys.modules['curses'] = make_fake_curses()
 
 from retrotui.apps import filemanager as fm
+from retrotui.core.actions import ActionType
 
 
 class FakeStdScr:
     def __init__(self):
         self.calls = []
+        self.stdscr = self
 
     def getmaxyx(self):
         return (24, 80)
@@ -47,7 +49,7 @@ class FileManagerDrawOpsTests(unittest.TestCase):
 
             fake_sa.side_effect = call_safe
             # draw pane contents with selected index 2
-            fm.FileManagerWindow._draw_pane_contents(std, 0, 0, 3, 20, content, 0, 2, 0, 1)
+            self.win._draw_pane_contents(std, 0, 0, 3, 20, 10, content, 0, 2, '')
             # ensure selected line was drawn
             self.assertTrue(any('a.txt' in c[2] for c in std.calls))
 
@@ -112,8 +114,8 @@ class FileManagerDrawOpsTests(unittest.TestCase):
         self.win._rebuild_secondary_content()
         # perform move
         res = self.win._dual_copy_move_between_panes(move=True)
-        # should succeed (None)
-        self.assertIsNone(res)
+        # should succeed
+        self.assertEqual(res.type, ActionType.REFRESH)
         self.assertTrue(os.path.exists(os.path.join(sec, 'leftfile.txt')))
 
     def test_delete_selected_oserror(self):

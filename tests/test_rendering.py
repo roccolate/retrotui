@@ -68,6 +68,7 @@ class RenderingTests(unittest.TestCase):
                 {"art": ["[]"], "label": "A"},
                 {"art": ["[]"], "label": "B"},
             ],
+            get_icon_screen_pos=lambda idx: (3, 3 + idx * 5),
         )
         selected_attr = self.curses.color_pair(self.rendering.C_ICON_SEL) | self.curses.A_BOLD
         normal_attr = self.curses.color_pair(self.rendering.C_ICON) | self.curses.A_BOLD
@@ -94,6 +95,7 @@ class RenderingTests(unittest.TestCase):
             stdscr=stdscr,
             selected_icon=-1,
             icons=[{"art": ["[]"], "label": "A"}],
+            get_icon_screen_pos=lambda idx: (3, 3),
         )
 
         with mock.patch.object(self.rendering, "safe_addstr") as safe_addstr:
@@ -157,10 +159,11 @@ class RenderingTests(unittest.TestCase):
         with mock.patch.object(self.rendering, "safe_addstr") as safe_addstr:
             self.rendering.draw_statusbar(app, "0.3.4")
 
-        safe_addstr.assert_called_once()
-        status_text = safe_addstr.call_args.args[3]
-        self.assertIn("v0.3.4", status_text)
-        self.assertIn("Windows: 1/2", status_text)
+        self.assertGreaterEqual(safe_addstr.call_count, 1)
+        # Find the call that contains the status text
+        all_text = "".join(str(call.args[3]) for call in safe_addstr.call_args_list if len(call.args) > 3)
+        self.assertIn("v0.3.4", all_text)
+        self.assertIn("Windows: 1/2", all_text)
 
 
 if __name__ == "__main__":

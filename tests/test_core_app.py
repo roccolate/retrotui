@@ -156,6 +156,8 @@ class CoreAppTests(unittest.TestCase):
         app.scroll_down_mask = getattr(self.curses, "BUTTON5_PRESSED", 0x200000)
         app.selected_icon = -1
         app.icons = [{"action": self.actions_mod.AppAction.ABOUT, "art": ["[]"], "label": "About"}]
+        app.show_welcome = True
+        app.icon_positions = {}
         return app
 
     def test_init_configures_terminal_and_creates_welcome_window(self):

@@ -98,7 +98,7 @@ class FileManagerPreviewOpsTests(unittest.TestCase):
         # select existing file and attempt copy to an existing destination
         # select first regular file
         for i, e in enumerate(self.win.entries):
-            if not e.is_dir and e.name != '..':
+            if e.name == 'text.txt':
                 self.win.selected_index = i
                 break
         # destination is same directory and same name -> exists

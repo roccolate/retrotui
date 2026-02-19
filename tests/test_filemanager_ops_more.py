@@ -8,6 +8,7 @@ import unittest
 sys.modules['curses'] = make_fake_curses()
 
 from retrotui.apps.filemanager import FileManagerWindow
+from retrotui.core.actions import ActionType
 
 
 class FileManagerOpsMoreTests(unittest.TestCase):
@@ -20,13 +21,15 @@ class FileManagerOpsMoreTests(unittest.TestCase):
             f.write('x')
         self.win = FileManagerWindow(0, 0, 80, 24, start_path=self.left.name)
 
+    from retrotui.core.actions import ActionType
+
     def test_create_directory_and_file_and_select(self):
         res = self.win.create_directory('newdir')
-        self.assertIsNone(res)
+        self.assertEqual(res.type, ActionType.REFRESH)
         self.assertTrue(os.path.isdir(os.path.join(self.left.name, 'newdir')))
 
         res = self.win.create_file('newfile.txt')
-        self.assertIsNone(res)
+        self.assertEqual(res.type, ActionType.REFRESH)
         self.assertTrue(os.path.exists(os.path.join(self.left.name, 'newfile.txt')))
 
     def test_copy_and_move_selected_success(self):
@@ -37,7 +40,7 @@ class FileManagerOpsMoreTests(unittest.TestCase):
                 break
         # copy to right dir
         res = self.win.copy_selected(self.right.name)
-        self.assertIsNone(res)
+        self.assertEqual(res.type, ActionType.REFRESH)
         self.assertTrue(os.path.exists(os.path.join(self.right.name, 'foo.txt')))
 
         # move back to left under new name

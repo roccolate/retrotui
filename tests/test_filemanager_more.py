@@ -69,7 +69,8 @@ class FileManagerMoreTests(unittest.TestCase):
         self.assertTrue(self.win.dual_pane_enabled)
 
         # Toggle off.
-        self.assertIsNone(self.win.toggle_dual_pane())
+        res = self.win.toggle_dual_pane()
+        self.assertEqual(res.type, self.ActionType.REFRESH)
         self.assertFalse(self.win.dual_pane_enabled)
 
         # Small width cannot enable.
@@ -157,7 +158,8 @@ class FileManagerMoreTests(unittest.TestCase):
 
         destdir = os.path.join(self.tmpdir.name, "dest")
         os.mkdir(destdir)
-        self.assertIsNone(self.win.copy_selected(destdir))
+        res = self.win.copy_selected(destdir)
+        self.assertEqual(res.type, self.ActionType.REFRESH)
         self.assertTrue(os.path.exists(os.path.join(destdir, fname)))
 
         dest2 = os.path.join(self.tmpdir.name, "dest2")
@@ -167,7 +169,8 @@ class FileManagerMoreTests(unittest.TestCase):
         self.assertIsNotNone(idx2)
         self.win.selected_index = idx2
 
-        self.assertIsNone(self.win.move_selected(dest2))
+        res2 = self.win.move_selected(dest2)
+        self.assertEqual(res2.type, self.ActionType.REFRESH)
         self.assertTrue(os.path.exists(os.path.join(dest2, fname)))
 
 

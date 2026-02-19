@@ -134,7 +134,7 @@ class FileManagerExtraTests(unittest.TestCase):
         self.win._last_trash_move = {"source": src, "trash": candidate}
 
         out = self.win.undo_last_delete()
-        self.assertIsNone(out)
+        self.assertEqual(out.type, self.ActionType.REFRESH)
         self.assertTrue(os.path.exists(src))
         self.assertFalse(os.path.exists(candidate))
 
@@ -151,11 +151,11 @@ class FileManagerExtraTests(unittest.TestCase):
         self.assertEqual(err.type, self.ActionType.ERROR)
 
         out = self.win.create_directory("newdir")
-        self.assertIsNone(out)
+        self.assertEqual(out.type, self.ActionType.REFRESH)
         self.assertTrue(os.path.isdir(os.path.join(self.tmpdir.name, "newdir")))
 
         out2 = self.win.create_file("newfile.txt")
-        self.assertIsNone(out2)
+        self.assertEqual(out2.type, self.ActionType.REFRESH)
         self.assertTrue(os.path.isfile(os.path.join(self.tmpdir.name, "newfile.txt")))
 
     def test_copy_move_rename_delete_errors_without_selection(self):

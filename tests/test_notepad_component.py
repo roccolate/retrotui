@@ -181,7 +181,7 @@ class NotepadComponentTests(unittest.TestCase):
         new_win = win._execute_menu_action(self.actions_mod.AppAction.NP_NEW)
         close = win._execute_menu_action(self.actions_mod.AppAction.NP_CLOSE)
 
-        self.assertIsNone(toggle)
+        self.assertEqual(toggle.type, self.actions_mod.ActionType.UPDATE_CONFIG)
         self.assertTrue(win.wrap_mode)
         self.assertEqual(win.view_left, 0)
         self.assertEqual(open_result.type, self.actions_mod.ActionType.REQUEST_OPEN_PATH)

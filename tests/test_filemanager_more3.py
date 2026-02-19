@@ -28,13 +28,13 @@ class FileManagerMore3Tests(unittest.TestCase):
     def test_create_file_and_rename_and_delete_and_undo(self):
         # create file
         err = self.win.create_file('a.txt')
-        self.assertIsNone(err)
+        self.assertEqual(err.type, ActionType.REFRESH)
         self.assertTrue(any(e.name == 'a.txt' for e in self.win.entries))
 
         # select and rename
         self.win._select_entry_by_name('a.txt')
         res = self.win.rename_selected('b.txt')
-        self.assertIsNone(res)
+        self.assertEqual(res.type, ActionType.REFRESH)
         self.assertTrue(any(e.name == 'b.txt' for e in self.win.entries))
 
         # attempt rename to existing
@@ -46,19 +46,19 @@ class FileManagerMore3Tests(unittest.TestCase):
         # ensure selection is b.txt
         self.win._select_entry_by_name('b.txt')
         delres = self.win.delete_selected()
-        self.assertIsNone(delres)
+        self.assertEqual(delres.type, ActionType.REFRESH)
         self.assertIsNotNone(self.win._last_trash_move)
 
         # undo delete
         ures = self.win.undo_last_delete()
-        self.assertIsNone(ures)
+        self.assertEqual(ures.type, ActionType.REFRESH)
         # file should be back
         self.assertTrue(any(e.name == 'b.txt' for e in self.win.entries))
 
     def test_create_directory_and_errors(self):
         # create dir
         res = self.win.create_directory('dir1')
-        self.assertIsNone(res)
+        self.assertEqual(res.type, ActionType.REFRESH)
         # duplicate
         res2 = self.win.create_directory('dir1')
         self.assertIsNotNone(res2)
@@ -115,7 +115,7 @@ class FileManagerMore3Tests(unittest.TestCase):
         self.win.w = 100
         was = self.win.dual_pane_enabled
         res = self.win.toggle_dual_pane()
-        self.assertIsNone(res)
+        self.assertEqual(res.type, ActionType.REFRESH)
         self.assertEqual(self.win.dual_pane_enabled, not was)
 
     def test_copy_and_move_selected_errors_and_success(self):
@@ -133,7 +133,7 @@ class FileManagerMore3Tests(unittest.TestCase):
         destdir = os.path.join(self.td, 'dst')
         os.mkdir(destdir)
         out2 = self.win.copy_selected(destdir)
-        self.assertIsNone(out2)
+        self.assertEqual(out2.type, ActionType.REFRESH)
         self.assertTrue(os.path.exists(os.path.join(destdir, 'c.txt')))
 
         # move to same dir -> error

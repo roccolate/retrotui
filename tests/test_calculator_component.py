@@ -327,7 +327,7 @@ class CalculatorComponentTests(unittest.TestCase):
         rendered = [str(call.args[3]) for call in safe_addstr.call_args_list if len(call.args) >= 4]
         self.assertTrue(any("Expr>" in text for text in rendered))
         self.assertTrue(any("1+1 = 2" in text for text in rendered))
-        self.assertTrue(any("Enter=Eval" in text for text in rendered))
+        self.assertTrue(any("Ctrl+L=Clear" in text for text in rendered))
 
 
 if __name__ == "__main__":

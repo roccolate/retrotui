@@ -65,6 +65,7 @@ class AppAction(str, Enum):
     FM_DELETE = "fm_delete"
     FM_CLOSE = "fm_close"
     FM_UNDO_DELETE = "fm_undo_delete"
+    FM_TOGGLE_SELECT = "fm_toggle_select"
     FM_BOOKMARK_1 = "fm_bookmark_1"
     FM_BOOKMARK_2 = "fm_bookmark_2"
     FM_BOOKMARK_3 = "fm_bookmark_3"
