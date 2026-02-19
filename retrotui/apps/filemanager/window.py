@@ -650,7 +650,7 @@ class FileManagerWindow(Window):
             lines = self._preview_lines(bh, max_cols=prev_w)
             for i in range(bh):
                 if i < len(lines):
-                     safe_addstr(stdscr, by + i, prev_x, lines[i][:prev_w], theme_attr('window_body'))
+                     safe_addstr(stdscr, by + i, prev_x, lines[i][:prev_w].ljust(prev_w), theme_attr('window_body'))
                 else:
                      safe_addstr(stdscr, by + i, prev_x, ' ' * prev_w, theme_attr('window_body'))
 
