@@ -7,7 +7,7 @@ import time
 from collections import deque
 
 from ..ui.window import Window
-from ..ui.menu import MenuBar
+from ..ui.menu import WindowMenu
 from ..core.actions import AppAction, ActionResult, ActionType
 from ..utils import safe_addstr, theme_attr
 
@@ -29,7 +29,7 @@ class SnakeWindow(Window):
         self.rows = 0
         self.cols = 0
 
-        self.window_menu = MenuBar({
+        self.window_menu = WindowMenu({
             "Game": [
                 ("New Game (R)", AppAction.SNAKE_NEW),
                 ("-", None),
