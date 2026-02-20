@@ -71,7 +71,7 @@ class RenderingTests(unittest.TestCase):
             get_icon_screen_pos=lambda idx: (3, 3 + idx * 5),
         )
         selected_attr = self.curses.color_pair(self.rendering.C_ICON_SEL) | self.curses.A_BOLD
-        normal_attr = self.curses.color_pair(self.rendering.C_ICON) | self.curses.A_BOLD
+        normal_attr = self.curses.color_pair(self.rendering.C_ICON)
 
         with mock.patch.object(self.rendering, "safe_addstr") as safe_addstr:
             self.rendering.draw_icons(app)
