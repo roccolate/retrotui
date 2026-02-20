@@ -155,13 +155,9 @@ class RetroTUI:
         self.dialog = None
         self.selected_icon = -1
         self.use_unicode = check_unicode_support()
-        base_icons = ICONS if self.use_unicode else ICONS_ASCII
-
         self.config = load_config()
         self.theme_name = self.config.theme
-        
-        hidden_labels = {x.strip().lower() for x in self.config.hidden_icons.split(",")} if getattr(self.config, 'hidden_icons', "") else set()
-        self.icons = [icon for icon in base_icons if icon["label"].lower() not in hidden_labels]
+        self.refresh_icons()
         self.theme = get_theme(self.theme_name)
         self.default_show_hidden = bool(self.config.show_hidden)
         self.default_word_wrap = bool(self.config.word_wrap_default)
@@ -214,6 +210,12 @@ class RetroTUI:
         self.theme = get_theme(theme_name)
         self.theme_name = self.theme.key
         init_colors(self.theme)
+
+    def refresh_icons(self):
+        """Rebuild desktop icons list based on config and unicode support."""
+        base_icons = ICONS if self.use_unicode else ICONS_ASCII
+        hidden_labels = {x.strip().lower() for x in self.config.hidden_icons.split(",")} if getattr(self.config, 'hidden_icons', "") else set()
+        self.icons = [icon for icon in base_icons if icon["label"].lower() not in hidden_labels]
 
     def apply_preferences(self, *, show_hidden=None, word_wrap_default=None, sunday_first=None, apply_to_open_windows=False):
         """Apply runtime preferences used by app windows and defaults."""
