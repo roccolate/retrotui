@@ -412,13 +412,13 @@ class HexViewerWindow(Window):
         safe_addstr(stdscr, by + bh - 1, bx, status[:bw].ljust(bw), theme_attr("status"))
 
         if self.window_menu:
-            self.window_menu.draw_dropdown(stdscr, self.x, self.y, self.w)
+            self.window_menu.draw_dropdown(stdscr, win_x=self.x, win_y=self.y, win_w=self.w)
 
     def handle_click(self, mx, my, bstate=None):
         """Handle menu interactions."""
         if self.window_menu:
-            if self.window_menu.on_menu_bar(mx, my, self.x, self.y, self.w) or self.window_menu.active:
-                action = self.window_menu.handle_click(mx, my, self.x, self.y, self.w)
+            if self.window_menu.on_menu_bar(mx, my, win_x=self.x, win_y=self.y, win_w=self.w) or self.window_menu.active:
+                action = self.window_menu.handle_click(mx, my, win_x=self.x, win_y=self.y, win_w=self.w)
                 if action:
                     return self.execute_action(action)
         row_idx = self._row_from_screen(mx, my)

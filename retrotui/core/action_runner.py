@@ -16,7 +16,7 @@ from ..apps.minesweeper import MinesweeperWindow
 from ..apps.solitaire import SolitaireWindow
 from ..apps.snake import SnakeWindow
 from ..apps.charmap import CharacterMapWindow
-from ..apps.clipboard_viewer import ClipboardViewerWindow
+from ..apps.hexviewer import HexViewerWindow
 from ..apps.wifi_manager import WifiManagerWindow
 from ..ui.dialog import Dialog
 from ..ui.window import Window
@@ -97,6 +97,11 @@ def execute_app_action(app, action, logger, *, version: str) -> None:
     if action == AppAction.IMAGE_VIEWER:
         offset_x, offset_y = app._next_window_offset(14, 3)
         app._spawn_window(ImageViewerWindow(offset_x, offset_y, 84, 26))
+        return
+
+    if action == AppAction.HEX_VIEWER:
+        offset_x, offset_y = app._next_window_offset(16, 4)
+        app._spawn_window(HexViewerWindow(offset_x, offset_y, 76, 22))
         return
 
     if action == AppAction.TERMINAL:
