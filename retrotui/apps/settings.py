@@ -112,12 +112,13 @@ class SettingsWindow(Window):
             def on_submit(value):
                 self.hidden_icons = value.strip()
                 
-            self.app.dialog = InputDialog(
+            dialog = InputDialog(
                 "Hidden Desktop Icons",
                 "Comma-separated list (e.g. Hex,Logs,Clock):",
                 self.hidden_icons,
-                on_submit
             )
+            dialog.callback = on_submit
+            self.app.dialog = dialog
             return None
         if idx == self._save_index():
             self._committed = True
