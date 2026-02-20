@@ -9,7 +9,7 @@ from collections import deque
 from ..ui.window import Window
 from ..ui.menu import WindowMenu
 from ..core.actions import AppAction, ActionResult, ActionType
-from ..utils import safe_addstr, theme_attr
+from ..utils import safe_addstr, theme_attr, normalize_key_code
 
 
 class SnakeWindow(Window):
@@ -128,6 +128,8 @@ class SnakeWindow(Window):
         if not self.visible:
             return
             
+        self.step()  # Update game state
+        
         bx, by, bw, bh = self.body_rect()
         # Update grid dimensions if window was resized
         if bh != self.rows or bw != self.cols:
@@ -177,7 +179,7 @@ class SnakeWindow(Window):
             if res:
                 return self.execute_action(res)
 
-        k = int(key) if getattr(key, '__int__', None) else -1
+        k = normalize_key_code(key)
         
         if k == ord('r') or k == ord('R'):
             return self.execute_action(AppAction.SNAKE_NEW)
@@ -187,13 +189,13 @@ class SnakeWindow(Window):
             return self.execute_action(AppAction.CLOSE_WINDOW)
 
         # Movement keys (Arrows or WASD)
-        if (key == curses.KEY_UP or k == ord('w')) and self.direction != (1, 0):
+        if (k == curses.KEY_UP or k == ord('w')) and self.direction != (1, 0):
             self.direction = (-1, 0)
-        elif (key == curses.KEY_DOWN or k == ord('s')) and self.direction != (-1, 0):
+        elif (k == curses.KEY_DOWN or k == ord('s')) and self.direction != (-1, 0):
             self.direction = (1, 0)
-        elif (key == curses.KEY_LEFT or k == ord('a')) and self.direction != (0, 1):
+        elif (k == curses.KEY_LEFT or k == ord('a')) and self.direction != (0, 1):
             self.direction = (0, -1)
-        elif (key == curses.KEY_RIGHT or k == ord('d')) and self.direction != (0, -1):
+        elif (k == curses.KEY_RIGHT or k == ord('d')) and self.direction != (0, -1):
             self.direction = (0, 1)
             
         return None
