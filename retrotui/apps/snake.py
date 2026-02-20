@@ -2,9 +2,11 @@
 from __future__ import annotations
 
 import curses
+import json
 import random
 import time
 from collections import deque
+from pathlib import Path
 
 from ..ui.window import Window
 from ..ui.menu import WindowMenu
@@ -23,10 +25,14 @@ class SnakeWindow(Window):
         self.direction = (0, 1)
         self.food = None
         self.score = 0
+        self.high_scores = {"Easy": 0, "Normal": 0, "Hard": 0}
         self.game_over = False
+        
+        self._load_high_scores()
         self.paused = False
         self.wrap_mode = False
         self.obstacles_mode = False
+        self.difficulty = "Normal"
         self.obstacles = set()
         self.special_food = None
         self.special_food_expires = 0
@@ -50,9 +56,39 @@ class SnakeWindow(Window):
                 ("  Wrap Around", AppAction.SNAKE_TOGGLE_WRAP),
                 ("  Obstacles", AppAction.SNAKE_TOGGLE_OBSTACLES),
             ],
+            "Difficulty": [
+                ("  Easy", AppAction.SNAKE_DIFF_EASY),
+                ("  Normal", AppAction.SNAKE_DIFF_NORMAL),
+                ("  Hard", AppAction.SNAKE_DIFF_HARD),
+            ],
         })
         
+        self._update_menu_checks()
         self._reset_game()
+
+    def _score_file_path(self) -> Path:
+        return Path.home() / ".config" / "retrotui" / "snake_scores.json"
+
+    def _load_high_scores(self):
+        try:
+            path = self._score_file_path()
+            if path.exists():
+                with open(path, "r", encoding="utf-8") as f:
+                    scores = json.load(f)
+                    for k, v in scores.items():
+                        if k in self.high_scores and isinstance(v, int):
+                            self.high_scores[k] = v
+        except Exception:
+            pass  # Fallback to 0 if corrupted or unreadable
+
+    def _save_high_scores(self):
+        try:
+            path = self._score_file_path()
+            path.parent.mkdir(parents=True, exist_ok=True)
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(self.high_scores, f)
+        except Exception:
+            pass
 
     def _reset_game(self):
         bx, by, bw, bh = self.body_rect()
@@ -70,7 +106,11 @@ class SnakeWindow(Window):
         self.score = 0
         self.game_over = False
         self.paused = False
-        self.base_speed = 0.2
+        
+        # Initial speed based on difficulty
+        speed_map = {"Easy": 0.3, "Normal": 0.2, "Hard": 0.1}
+        self.base_speed = speed_map.get(self.difficulty, 0.2)
+        
         self._last_move = time.time()
 
     def _place_obstacles(self):
@@ -125,7 +165,23 @@ class SnakeWindow(Window):
             # If turning on or off, a new game is best to apply/clear obstacles
             self._reset_game()
             return ActionResult(ActionType.REFRESH)
+        elif action == AppAction.SNAKE_DIFF_EASY:
+            self.difficulty = "Easy"
+            self._update_menu_checks()
+            self._reset_game()
+            return ActionResult(ActionType.REFRESH)
+        elif action == AppAction.SNAKE_DIFF_NORMAL:
+            self.difficulty = "Normal"
+            self._update_menu_checks()
+            self._reset_game()
+            return ActionResult(ActionType.REFRESH)
+        elif action == AppAction.SNAKE_DIFF_HARD:
+            self.difficulty = "Hard"
+            self._update_menu_checks()
+            self._reset_game()
+            return ActionResult(ActionType.REFRESH)
         elif action == AppAction.CLOSE_WINDOW:
+            self._save_high_scores()
             return ActionResult(ActionType.EXECUTE, AppAction.CLOSE_WINDOW)
         return None
 
@@ -138,6 +194,12 @@ class SnakeWindow(Window):
             elif action == AppAction.SNAKE_TOGGLE_OBSTACLES:
                 mark = "√" if self.obstacles_mode else " "
                 items[i] = (f"{mark} Obstacles", action)
+
+        # Update difficulty marks
+        diff_items = self.window_menu.items.get("Difficulty", [])
+        for i, (label, action) in enumerate(diff_items):
+            mark = "√" if label.strip() == self.difficulty else " "
+            diff_items[i] = (f"{mark} {label.strip()}", action)
 
     def step(self, now: float | None = None, force: bool = False):
         if self.game_over or self.paused:
@@ -180,11 +242,15 @@ class SnakeWindow(Window):
         self.snake.appendleft(target)
         if target == self.food:
             self.score += 1
+            if self.score > self.high_scores[self.difficulty]:
+                self.high_scores[self.difficulty] = self.score
             self._place_food()
             # Increase speed slightly
             self.base_speed = max(0.05, 0.2 - (self.score * 0.005))
         elif target == self.special_food:
             self.score += 5
+            if self.score > self.high_scores[self.difficulty]:
+                self.high_scores[self.difficulty] = self.score
             self.special_food = None
             # Do NOT increase speed for special food as much (optional)
         else:
@@ -207,13 +273,16 @@ class SnakeWindow(Window):
             elif self.food and not (0 <= self.food[0] < self.rows and 0 <= self.food[1] < self.cols):
                 self._place_food()
 
-        # Update title
+        # Update title with high score
         state = ""
         if self.game_over:
             state = "[GAME OVER] "
+            self._save_high_scores()
         elif self.paused:
             state = "[PAUSED] "
-        self.title = f"{state}Snake  ♟ {self.score}"
+            
+        hi_score = self.high_scores.get(self.difficulty, 0)
+        self.title = f"{state}Snake  ♟ {self.score} (HI: {hi_score})"
         
         body_attr = self.draw_frame(stdscr)
         
