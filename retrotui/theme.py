@@ -40,11 +40,6 @@ for _name, _fallback in {
     if not hasattr(curses, _name):
         setattr(curses, _name, _fallback)
 
-# Fix for Windows PowerShell rendering black as light gray
-WIN_BLACK = curses.COLOR_BLACK
-if sys.platform == 'win32':
-    WIN_BLACK = 0  # Sometimes explicit 0 works better than curses.COLOR_BLACK, or we can just use another contrasting color like White. Let's stick to explicit 0. 
-
 DEFAULT_THEME = "win31"
 
 ROLE_TO_PAIR_ID = {
@@ -102,7 +97,9 @@ class Theme:
     label: str
     desktop_pattern: str
     pairs_base: dict[str, tuple[int, int]]
+    pairs_base_win32: Optional[dict[str, tuple[int, int]]] = None
     pairs_256: Optional[dict[str, tuple[int, int]]] = None
+    pairs_256_win32: Optional[dict[str, tuple[int, int]]] = None
     custom_colors: Optional[dict[int, tuple[int, int, int]]] = None
 
 
@@ -113,30 +110,60 @@ THEMES = {
         desktop_pattern=" ",
         pairs_base=_mk_pairs(
             (
-                (WIN_BLACK, curses.COLOR_CYAN),
-                (WIN_BLACK, curses.COLOR_WHITE),
+                (curses.COLOR_BLACK, curses.COLOR_CYAN),
+                (curses.COLOR_BLACK, curses.COLOR_WHITE),
                 (curses.COLOR_WHITE, curses.COLOR_BLUE),
                 (curses.COLOR_WHITE, curses.COLOR_BLUE),
                 (curses.COLOR_WHITE, curses.COLOR_BLUE),
                 (curses.COLOR_BLUE, curses.COLOR_WHITE),
-                (WIN_BLACK, curses.COLOR_WHITE),
-                (curses.COLOR_WHITE, WIN_BLACK),
-                (WIN_BLACK, curses.COLOR_CYAN),
-                (WIN_BLACK, curses.COLOR_WHITE),
+                (curses.COLOR_BLACK, curses.COLOR_WHITE),
+                (curses.COLOR_WHITE, curses.COLOR_BLACK),
+                (curses.COLOR_BLACK, curses.COLOR_CYAN),
+                (curses.COLOR_BLACK, curses.COLOR_WHITE),
+                (curses.COLOR_BLUE, curses.COLOR_WHITE),
+            )
+        ),
+        pairs_base_win32=_mk_pairs(
+            (
+                (curses.COLOR_WHITE, curses.COLOR_CYAN), # White text for desktop
+                (curses.COLOR_BLUE, curses.COLOR_WHITE), # Blue text for menubar to avoid grey
+                (curses.COLOR_WHITE, curses.COLOR_BLUE),
+                (curses.COLOR_WHITE, curses.COLOR_BLUE),
+                (curses.COLOR_WHITE, curses.COLOR_BLUE),
+                (curses.COLOR_BLUE, curses.COLOR_WHITE),
+                (curses.COLOR_BLUE, curses.COLOR_WHITE), # Blue text for body to avoid grey
+                (curses.COLOR_WHITE, curses.COLOR_BLUE),
+                (curses.COLOR_WHITE, curses.COLOR_CYAN), # White text for status
+                (curses.COLOR_BLUE, curses.COLOR_WHITE),
                 (curses.COLOR_BLUE, curses.COLOR_WHITE),
             )
         ),
         pairs_256=_mk_pairs(
             (
-                (WIN_BLACK, 20),
-                (WIN_BLACK, curses.COLOR_WHITE),
+                (curses.COLOR_BLACK, 20),
+                (curses.COLOR_BLACK, curses.COLOR_WHITE),
                 (curses.COLOR_WHITE, curses.COLOR_BLUE),
                 (curses.COLOR_WHITE, curses.COLOR_BLUE),
                 (curses.COLOR_WHITE, 21),
                 (21, curses.COLOR_WHITE),
-                (WIN_BLACK, curses.COLOR_WHITE),
-                (curses.COLOR_WHITE, WIN_BLACK),
-                (WIN_BLACK, curses.COLOR_CYAN),
+                (curses.COLOR_BLACK, curses.COLOR_WHITE),
+                (curses.COLOR_WHITE, curses.COLOR_BLACK),
+                (curses.COLOR_BLACK, curses.COLOR_CYAN),
+                (curses.COLOR_WHITE, 23),
+                (curses.COLOR_BLUE, curses.COLOR_WHITE),
+            )
+        ),
+        pairs_256_win32=_mk_pairs(
+            (
+                (curses.COLOR_WHITE, 20),
+                (curses.COLOR_BLUE, curses.COLOR_WHITE),
+                (curses.COLOR_WHITE, curses.COLOR_BLUE),
+                (curses.COLOR_WHITE, curses.COLOR_BLUE),
+                (curses.COLOR_WHITE, 21),
+                (21, curses.COLOR_WHITE),
+                (curses.COLOR_BLUE, curses.COLOR_WHITE),
+                (curses.COLOR_WHITE, curses.COLOR_BLUE),
+                (curses.COLOR_WHITE, curses.COLOR_CYAN),
                 (curses.COLOR_WHITE, 23),
                 (curses.COLOR_BLUE, curses.COLOR_WHITE),
             )

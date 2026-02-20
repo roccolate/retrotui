@@ -39,9 +39,9 @@ def init_colors(theme_key_or_obj=None):
     if use_extended:
         for color_id, rgb in theme.custom_colors.items():
             curses.init_color(color_id, *rgb)
-        pair_map = theme.pairs_256
+        pair_map = theme.pairs_256_win32 if sys.platform == 'win32' and getattr(theme, 'pairs_256_win32', None) else theme.pairs_256
     else:
-        pair_map = theme.pairs_base
+        pair_map = theme.pairs_base_win32 if sys.platform == 'win32' and getattr(theme, 'pairs_base_win32', None) else theme.pairs_base
 
     for role, pair_id in ROLE_TO_PAIR_ID.items():
         fg, bg = pair_map[role]
