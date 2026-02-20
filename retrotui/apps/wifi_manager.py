@@ -117,8 +117,8 @@ class WifiManagerWindow(Window):
         for row in range(bh):
             safe_addstr(stdscr, by + row, bx, " " * bw, body_attr)
             
-        if not self.nmcli:
-            safe_addstr(stdscr, by + 2, bx + 2, "Error: 'nmcli' could not be found.", theme_attr('error'))
+        if getattr(self, '_fetch_error', False):
+            safe_addstr(stdscr, by + 2, bx + 2, "Error: 'nmcli' could not be found.", theme_attr('window_body') | curses.A_BOLD)
             return
             
         header_attr = theme_attr('title_bar') | curses.A_BOLD
