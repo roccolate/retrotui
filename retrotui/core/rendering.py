@@ -69,10 +69,7 @@ def draw_statusbar(app, version):
     h, w = app.stdscr.getmaxyx()
     attr = theme_attr("status")
     visible = sum(1 for win in app.windows if win.visible)
-    from datetime import datetime
-    now_str = datetime.now().strftime('%H:%M')
     
-    # Left part
     left_status = f' RetroTUI v{version} | Windows: {visible}/{len(app.windows)} | Mouse: Enabled'
     
     # Draw background
@@ -80,8 +77,3 @@ def draw_statusbar(app, version):
     
     # Draw left text
     safe_addstr(app.stdscr, h - 1, 0, left_status, attr)
-    
-    # Draw right clock
-    clock_len = len(now_str) + 2
-    if w > len(left_status) + clock_len:
-         safe_addstr(app.stdscr, h - 1, w - clock_len, now_str, attr | curses.A_BOLD)

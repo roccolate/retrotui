@@ -86,11 +86,23 @@ class IconPositionManager:
         if key_label in self.positions:
             return self.positions[key_label]
 
-        # Default vertical layout
+        # Default vertical layout with wrapping
         start_x = 3
         start_y = 3
+        spacing_x = 12
         spacing_y = 5
-        return (start_x, start_y + index * spacing_y)
+        
+        try:
+            h, _ = self._app.stdscr.getmaxyx()
+        except Exception:
+            h = 24
+            
+        max_y = h - 3
+        icons_per_col = max(1, (max_y - start_y) // spacing_y)
+        col = index // icons_per_col
+        row = index % icons_per_col
+        
+        return (start_x + col * spacing_x, start_y + row * spacing_y)
 
     def get_icon_at(self, mx, my):
         """Return icon index at mouse position, or -1."""

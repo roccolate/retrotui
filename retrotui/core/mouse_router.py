@@ -357,7 +357,10 @@ def handle_desktop_mouse(app, mx, my, bstate):
             return True
 
     # Check for drag motion
-    if dragging_icon >= 0 and (bstate & getattr(curses, 'BUTTON1_PRESSED', 0)):
+    is_drag_motion = bool(bstate & getattr(curses, 'BUTTON1_PRESSED', 0)) or \
+                     bool((bstate & getattr(curses, 'REPORT_MOUSE_POSITION', 0)) and getattr(app, 'button1_pressed', False))
+    
+    if dragging_icon >= 0 and is_drag_motion:
         # Update icon position
         # We need to map mx, my back to icon coordinates
         # Icons are drawn at specific positions.

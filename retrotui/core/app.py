@@ -155,10 +155,13 @@ class RetroTUI:
         self.dialog = None
         self.selected_icon = -1
         self.use_unicode = check_unicode_support()
-        self.icons = ICONS if self.use_unicode else ICONS_ASCII
+        base_icons = ICONS if self.use_unicode else ICONS_ASCII
 
         self.config = load_config()
         self.theme_name = self.config.theme
+        
+        hidden_labels = {x.strip().lower() for x in self.config.hidden_icons.split(",")} if getattr(self.config, 'hidden_icons', "") else set()
+        self.icons = [icon for icon in base_icons if icon["label"].lower() not in hidden_labels]
         self.theme = get_theme(self.theme_name)
         self.default_show_hidden = bool(self.config.show_hidden)
         self.default_word_wrap = bool(self.config.word_wrap_default)
