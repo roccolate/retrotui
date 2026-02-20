@@ -26,6 +26,12 @@ class SnakeWindow(Window):
         self.game_over = False
         self.paused = False
         self.wrap_mode = False
+        self.obstacles_mode = False
+        self.obstacles = set()
+        self.special_food = None
+        self.special_food_expires = 0
+        self._last_special_spawn = time.time()
+        
         self.base_speed = 0.2  # Interval in seconds
         self._last_move = time.time()
         
@@ -42,6 +48,7 @@ class SnakeWindow(Window):
             ],
             "Options": [
                 ("  Wrap Around", AppAction.SNAKE_TOGGLE_WRAP),
+                ("  Obstacles", AppAction.SNAKE_TOGGLE_OBSTACLES),
             ],
         })
         
@@ -53,21 +60,52 @@ class SnakeWindow(Window):
         self.cols = bw
         self.snake = deque([(self.rows // 2, self.cols // 2)])
         self.direction = (0, 1)
+        self.obstacles.clear()
+        if self.obstacles_mode:
+            self._place_obstacles()
         self._place_food()
+        self.special_food = None
+        self.special_food_expires = 0
+        self._last_special_spawn = time.time()
         self.score = 0
         self.game_over = False
         self.paused = False
         self.base_speed = 0.2
         self._last_move = time.time()
 
-    def _place_food(self):
+    def _place_obstacles(self):
+        # Place about 10% of the grid as obstacles
+        count = (self.rows * self.cols) // 10
+        attempts = 0
+        while len(self.obstacles) < count and attempts < count * 2:
+            r = random.randint(0, self.rows - 1)
+            c = random.randint(0, self.cols - 1)
+            # Avoid snake start position and its surroundings
+            if (r, c) not in self.snake and abs(r - self.rows // 2) > 2 and abs(c - self.cols // 2) > 2:
+                self.obstacles.add((r, c))
+            attempts += 1
+
+    def _place_food(self, special=False):
         if self.rows <= 0 or self.cols <= 0:
             return
-        empty = [(r, c) for r in range(self.rows) for c in range(self.cols) if (r, c) not in self.snake]
+        
+        # Combined occupied cells
+        occupied = set(self.snake) | self.obstacles
+        if self.food: occupied.add(self.food)
+        if self.special_food: occupied.add(self.special_food)
+        
+        empty = [(r, c) for r in range(self.rows) for c in range(self.cols) if (r, c) not in occupied]
         if not empty:
-            self.food = None
+            if special: self.special_food = None
+            else: self.food = None
             return
-        self.food = random.choice(empty)
+            
+        pos = random.choice(empty)
+        if special:
+            self.special_food = pos
+            self.special_food_expires = time.time() + 5.0
+        else:
+            self.food = pos
 
     def execute_action(self, action: str | AppAction) -> ActionResult | None:
         if action == AppAction.SNAKE_NEW:
@@ -81,6 +119,12 @@ class SnakeWindow(Window):
             self.wrap_mode = not self.wrap_mode
             self._update_menu_checks()
             return ActionResult(ActionType.REFRESH)
+        elif action == AppAction.SNAKE_TOGGLE_OBSTACLES:
+            self.obstacles_mode = not self.obstacles_mode
+            self._update_menu_checks()
+            # If turning on or off, a new game is best to apply/clear obstacles
+            self._reset_game()
+            return ActionResult(ActionType.REFRESH)
         elif action == AppAction.CLOSE_WINDOW:
             return ActionResult(ActionType.EXECUTE, AppAction.CLOSE_WINDOW)
         return None
@@ -91,6 +135,9 @@ class SnakeWindow(Window):
             if action == AppAction.SNAKE_TOGGLE_WRAP:
                 mark = "√" if self.wrap_mode else " "
                 items[i] = (f"{mark} Wrap Around", action)
+            elif action == AppAction.SNAKE_TOGGLE_OBSTACLES:
+                mark = "√" if self.obstacles_mode else " "
+                items[i] = (f"{mark} Obstacles", action)
 
     def step(self, now: float | None = None, force: bool = False):
         if self.game_over or self.paused:
@@ -99,6 +146,15 @@ class SnakeWindow(Window):
         if now is None:
             now = time.time()
             force = True
+
+        # Special food expiration
+        if self.special_food and now > self.special_food_expires:
+            self.special_food = None
+
+        # Special food spawning (every ~15s)
+        if not self.special_food and (now - self._last_special_spawn) > 15.0:
+            self._last_special_spawn = now
+            self._place_food(special=True)
 
         if not force and (now - self._last_move) < self.base_speed:
             return
@@ -115,16 +171,22 @@ class SnakeWindow(Window):
             self.game_over = True
             return
 
-        if (nr, nc) in self.snake:
+        # Collision with self, obstacles
+        target = (nr, nc)
+        if target in self.snake or target in self.obstacles:
             self.game_over = True
             return
 
-        self.snake.appendleft((nr, nc))
-        if self.food == (nr, nc):
+        self.snake.appendleft(target)
+        if target == self.food:
             self.score += 1
             self._place_food()
             # Increase speed slightly
             self.base_speed = max(0.05, 0.2 - (self.score * 0.005))
+        elif target == self.special_food:
+            self.score += 5
+            self.special_food = None
+            # Do NOT increase speed for special food as much (optional)
         else:
             self.snake.pop()
 
@@ -159,11 +221,22 @@ class SnakeWindow(Window):
         for r in range(bh):
             safe_addstr(stdscr, by + r, bx, " " * bw, body_attr)
             
+        # Draw obstacles
+        obs_attr = body_attr | theme_attr("window_inactive")
+        for r, c in self.obstacles:
+            safe_addstr(stdscr, by + r, bx + c, "▒", obs_attr)
+
         # Draw food (Red)
         if self.food:
             fr, fc = self.food
             food_attr = curses.color_pair(C_ANSI_START + curses.COLOR_RED) | curses.A_BOLD
             safe_addstr(stdscr, by + fr, bx + fc, "●", food_attr)
+
+        # Draw special food (Yellow)
+        if self.special_food:
+            sr, sc = self.special_food
+            s_attr = curses.color_pair(C_ANSI_START + curses.COLOR_YELLOW) | curses.A_BOLD
+            safe_addstr(stdscr, by + sr, bx + sc, "★", s_attr)
             
         # Draw snake (Green, or Red if Game Over)
         color = curses.COLOR_RED if self.game_over else curses.COLOR_GREEN
