@@ -2,8 +2,10 @@
 from __future__ import annotations
 
 import curses
+import json
 import random
 import time
+from pathlib import Path
 
 from ..ui.window import Window
 from ..ui.menu import WindowMenu
@@ -26,7 +28,33 @@ class MinesweeperWindow(Window):
             ]
         })
         self.difficulty = "Beginner"
+        self.best_times = {"Beginner": 9999, "Intermediate": 9999, "Expert": 9999}
+        self._load_high_scores()
         self._reset_game()
+
+    def _score_file_path(self) -> Path:
+        return Path.home() / ".config" / "retrotui" / "minesweeper_scores.json"
+
+    def _load_high_scores(self):
+        try:
+            path = self._score_file_path()
+            if path.exists():
+                with open(path, "r", encoding="utf-8") as f:
+                    scores = json.load(f)
+                    for k, v in scores.items():
+                        if k in self.best_times and isinstance(v, int):
+                            self.best_times[k] = v
+        except Exception:
+            pass
+
+    def _save_high_scores(self):
+        try:
+            path = self._score_file_path()
+            path.parent.mkdir(parents=True, exist_ok=True)
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(self.best_times, f)
+        except Exception:
+            pass
 
     def _reset_game(self, new_diff=None):
         if new_diff:
@@ -124,6 +152,12 @@ class MinesweeperWindow(Window):
                     return
         self.victory = True
         self.game_over = True
+        
+        if self.start_time:
+            self.elapsed = int(time.time() - self.start_time)
+            if self.elapsed < self.best_times[self.difficulty]:
+                self.best_times[self.difficulty] = self.elapsed
+                self._save_high_scores()
 
     def draw(self, stdscr):
         if not self.visible: return
@@ -131,7 +165,9 @@ class MinesweeperWindow(Window):
         if self.start_time and not self.game_over:
             self.elapsed = int(time.time() - self.start_time)
             
-        self.title = f"Minesweeper - {self.difficulty}"
+        bt = self.best_times.get(self.difficulty, 9999)
+        bt_str = "---" if bt == 9999 else str(bt)
+        self.title = f"Minesweeper - {self.difficulty} (Best: {bt_str})"
         body_attr = self.draw_frame(stdscr)
         bx, by, bw, bh = self.body_rect()
         

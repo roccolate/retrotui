@@ -2,8 +2,10 @@
 from __future__ import annotations
 
 import curses
+import json
 import random
 from typing import List
+from pathlib import Path
 
 from ..ui.window import Window
 from ..ui.menu import WindowMenu
@@ -13,7 +15,7 @@ from ..utils import safe_addstr, theme_attr
 
 class SolitaireWindow(Window):
     def __init__(self, x, y, w, h):
-        super().__init__("Solitaire", x, y, max(46, w), max(22, h), content=[], resizable=False)
+        super().__init__("Solitaire", x, y, 46, max(22, h), content=[], resizable=False)
         self.window_menu = WindowMenu({
             "Game": [
                 ("New Game (R)", "solitaire_new"),
@@ -21,7 +23,32 @@ class SolitaireWindow(Window):
                 ("Close (Q)", AppAction.CLOSE_WINDOW)
             ]
         })
+        self.best_moves = 9999
+        self._load_high_scores()
         self._reset_game()
+
+    def _score_file_path(self) -> Path:
+        return Path.home() / ".config" / "retrotui" / "solitaire_scores.json"
+
+    def _load_high_scores(self):
+        try:
+            path = self._score_file_path()
+            if path.exists():
+                with open(path, "r", encoding="utf-8") as f:
+                    scores = json.load(f)
+                    if "best_moves" in scores and isinstance(scores["best_moves"], int):
+                        self.best_moves = scores["best_moves"]
+        except Exception:
+            pass
+
+    def _save_high_scores(self):
+        try:
+            path = self._score_file_path()
+            path.parent.mkdir(parents=True, exist_ok=True)
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump({"best_moves": self.best_moves}, f)
+        except Exception:
+            pass
 
     def _reset_game(self):
         self.columns = [[] for _ in range(7)]
@@ -48,6 +75,7 @@ class SolitaireWindow(Window):
         self.stock = deck[pos:]
         self.selected = None
         self.moves = 0
+        self.scroll_y = 0
         self.victory = False
         self._last_click = None
 
@@ -114,13 +142,24 @@ class SolitaireWindow(Window):
     def _check_victory(self):
         if sum(len(f) for f in self.foundations) == 52:
             self.victory = True
+            if self.moves < self.best_moves:
+                self.best_moves = self.moves
+                self._save_high_scores()
 
-    def _draw_card(self, stdscr, y, x, card: str|None, face_up: bool, selected: bool, body_attr: int):
+    def _draw_card(self, stdscr, y, x, card: str|None, face_up: bool, selected: bool, body_attr: int, min_y: int = 0):
         from ..constants import C_ANSI_START
+        _, by, _, bh = self.body_rect()
+        max_y = by + bh
+
+        def safe_add(dy, dx, text, attr_val):
+            target_y = y + dy
+            if min_y <= target_y < max_y:
+                safe_addstr(stdscr, target_y, x + dx, text, attr_val)
+
         if card is None:
-            safe_addstr(stdscr, y,   x, "╭───╮", body_attr)
-            safe_addstr(stdscr, y+1, x, "│   │", body_attr)
-            safe_addstr(stdscr, y+2, x, "╰───╯", body_attr)
+            safe_add(0, 0, "╭───╮", body_attr)
+            safe_add(1, 0, "│   │", body_attr)
+            safe_add(2, 0, "╰───╯", body_attr)
             return
 
         rank = card[:-1]
@@ -136,23 +175,25 @@ class SolitaireWindow(Window):
             color_attr |= curses.A_REVERSE
 
         if not face_up:
-            safe_addstr(stdscr, y,   x, "╭───╮", attr)
-            safe_addstr(stdscr, y+1, x, "│▒▒▒│", attr)
-            safe_addstr(stdscr, y+2, x, "╰───╯", attr)
+            safe_add(0, 0, "╭───╮", attr)
+            safe_add(1, 0, "│▒▒▒│", attr)
+            safe_add(2, 0, "╰───╯", attr)
         else:
-            safe_addstr(stdscr, y,   x, "╭───╮", attr)
-            safe_addstr(stdscr, y+1, x, "│", attr)
-            safe_addstr(stdscr, y+1, x+1, f"{rank:<2}{suit_char}", color_attr | curses.A_BOLD)
-            safe_addstr(stdscr, y+1, x+4, "│", attr)
-            safe_addstr(stdscr, y+2, x, "╰───╯", attr)
+            safe_add(0, 0, "╭───╮", attr)
+            safe_add(1, 0, "│", attr)
+            safe_add(1, 1, f"{rank:<2}{suit_char}", color_attr | curses.A_BOLD)
+            safe_add(1, 4, "│", attr)
+            safe_add(2, 0, "╰───╯", attr)
 
     def draw(self, stdscr):
         if not self.visible: return
         
+        bm_str = "---" if self.best_moves == 9999 else str(self.best_moves)
+        
         if self.victory:
-            self.title = "Solitaire - YOU WON! 🎉"
+            self.title = f"Solitaire - YOU WON! 🎉 (Best: {bm_str})"
         else:
-            self.title = f"Solitaire  ♟ {self.moves}"
+            self.title = f"Solitaire  ♟ {self.moves} (Best: {bm_str})"
 
         body_attr = self.draw_frame(stdscr)
         bx, by, bw, bh = self.body_rect()
@@ -195,23 +236,37 @@ class SolitaireWindow(Window):
                 self._draw_card(stdscr, fy, fx, f[-1], True, is_sel, body_attr)
 
         # 4. Columns
+        max_col_h = 0
         for i, col in enumerate(self.columns):
             cx = bx + 2 + i * 6
-            cy = by + 5
+            cy = by + 5 - getattr(self, 'scroll_y', 0)
             
             if not col:
                 self.card_rects[("col", i, 0)] = (cx, cy, 5, 3)
-                self._draw_card(stdscr, cy, cx, None, True, False, body_attr)
+                self._draw_card(stdscr, cy, cx, None, True, False, body_attr, min_y=by+4)
+                max_col_h = max(max_col_h, 3)
                 continue
                 
+            col_y_start = cy
             for j, (card, up) in enumerate(col):
                 is_sel = False
                 if self.selected and self.selected[0] == "col" and self.selected[1] == i and j >= self.selected[2]:
                     is_sel = True
-                self._draw_card(stdscr, cy, cx, card, up, is_sel, body_attr)
+                self._draw_card(stdscr, cy, cx, card, up, is_sel, body_attr, min_y=by+4)
                 h = 3 if j == len(col) - 1 else (2 if up else 1)
                 self.card_rects[("col", i, j)] = (cx, cy, 5, h)
                 cy += 2 if up else 1
+            max_col_h = max(max_col_h, cy + 2 - col_y_start)
+
+        usable_h = bh - 5
+        self.max_scroll = max(0, max_col_h - usable_h)
+        self.scroll_y = max(0, min(getattr(self, 'scroll_y', 0), self.max_scroll))
+        
+        if self.max_scroll > 0:
+            scroll_pct = self.scroll_y / self.max_scroll
+            scroll_indicator_y = by + 5 + int(scroll_pct * (usable_h - 1))
+            if scroll_indicator_y < by + bh:
+                safe_addstr(stdscr, scroll_indicator_y, bx + bw - 1, "█", body_attr | curses.A_BOLD)
 
         if self.window_menu:
             self.window_menu.draw_dropdown(stdscr, self.x, self.y, self.w)
@@ -319,6 +374,18 @@ class SolitaireWindow(Window):
             res = self.window_menu.handle_key(key)
             if res: return self.execute_action(res)
             return None
+
+        from ..core.key_router import normalize_key_code
+        kc = normalize_key_code(key)
+        
+        if kc == curses.KEY_UP:
+            self.scroll_y = max(0, getattr(self, 'scroll_y', 0) - 1)
+        elif kc == curses.KEY_DOWN:
+            self.scroll_y = min(getattr(self, 'max_scroll', 0), getattr(self, 'scroll_y', 0) + 1)
+        elif kc == curses.KEY_PPAGE:
+            self.scroll_y = max(0, getattr(self, 'scroll_y', 0) - 5)
+        elif kc == curses.KEY_NPAGE:
+            self.scroll_y = min(getattr(self, 'max_scroll', 0), getattr(self, 'scroll_y', 0) + 5)
 
         if isinstance(key, int):
             if key == ord('q'):
