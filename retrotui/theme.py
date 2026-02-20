@@ -133,7 +133,7 @@ THEMES = {
                 (curses.COLOR_BLUE, curses.COLOR_WHITE),
                 (curses.COLOR_BLUE, curses.COLOR_WHITE), # Blue text for body to avoid grey
                 (curses.COLOR_WHITE, curses.COLOR_BLUE),
-                (curses.COLOR_WHITE, curses.COLOR_CYAN), # White text for status
+                (curses.COLOR_WHITE, curses.COLOR_CYAN), # White text for icons (unselected)
                 (curses.COLOR_BLUE, curses.COLOR_WHITE),
                 (curses.COLOR_BLUE, curses.COLOR_WHITE),
             )
@@ -155,7 +155,7 @@ THEMES = {
         ),
         pairs_256_win32=_mk_pairs(
             (
-                (curses.COLOR_WHITE, 20),
+                (curses.COLOR_WHITE, 20),                # White desktop pattern
                 (curses.COLOR_BLUE, curses.COLOR_WHITE),
                 (curses.COLOR_WHITE, curses.COLOR_BLUE),
                 (curses.COLOR_WHITE, curses.COLOR_BLUE),
@@ -163,7 +163,7 @@ THEMES = {
                 (21, curses.COLOR_WHITE),
                 (curses.COLOR_BLUE, curses.COLOR_WHITE),
                 (curses.COLOR_WHITE, curses.COLOR_BLUE),
-                (curses.COLOR_WHITE, curses.COLOR_CYAN),
+                (curses.COLOR_WHITE, curses.COLOR_CYAN), # White text for icons (unselected)
                 (curses.COLOR_WHITE, 23),
                 (curses.COLOR_BLUE, curses.COLOR_WHITE),
             )
