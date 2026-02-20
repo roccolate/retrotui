@@ -170,7 +170,7 @@ def execute_app_action(app, action, logger, *, version: str) -> None:
 
     if action == AppAction.SOLITAIRE:
         offset_x, offset_y = app._next_window_offset(20, 4)
-        app._spawn_window(SolitaireWindow(offset_x, offset_y, 70, 22))
+        app._spawn_window(SolitaireWindow(offset_x, offset_y, 46, 22))
         return
 
     if action == AppAction.SNAKE:
