@@ -38,7 +38,10 @@ def draw_icons(app):
             continue
 
         is_selected = idx == app.selected_icon
-        attr = theme_attr("icon_selected" if is_selected else "icon") | curses.A_BOLD
+        attr = theme_attr("icon_selected" if is_selected else "icon")
+        if is_selected:
+            attr |= curses.A_BOLD
+            
         for row, line in enumerate(icon['art']):
             safe_addstr(app.stdscr, y + row, x, line, attr)
         label = icon['label'].center(len(icon['art'][0]))
