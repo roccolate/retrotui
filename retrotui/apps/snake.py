@@ -9,6 +9,10 @@ from collections import deque
 from ..ui.window import Window
 from ..ui.menu import WindowMenu
 from ..core.actions import AppAction, ActionResult, ActionType
+from ..constants import (
+    ICONS, ICONS_ASCII, TASKBAR_TITLE_MAX_LEN, BINARY_DETECT_CHUNK_SIZE,
+    C_ANSI_START
+)
 from ..utils import safe_addstr, theme_attr, normalize_key_code
 
 
@@ -155,14 +159,15 @@ class SnakeWindow(Window):
         for r in range(bh):
             safe_addstr(stdscr, by + r, bx, " " * bw, body_attr)
             
-        # Draw food
+        # Draw food (Red)
         if self.food:
             fr, fc = self.food
-            food_attr = body_attr | theme_attr("menu_selected") | curses.A_BOLD
+            food_attr = curses.color_pair(C_ANSI_START + curses.COLOR_RED) | curses.A_BOLD
             safe_addstr(stdscr, by + fr, bx + fc, "●", food_attr)
             
-        # Draw snake
-        snake_attr = body_attr | theme_attr("file_directory") | curses.A_BOLD
+        # Draw snake (Green, or Red if Game Over)
+        color = curses.COLOR_RED if self.game_over else curses.COLOR_GREEN
+        snake_attr = curses.color_pair(C_ANSI_START + color) | curses.A_BOLD
         for i, (r, c) in enumerate(self.snake):
             char = "O" if i == 0 else "o"
             if self.game_over:
