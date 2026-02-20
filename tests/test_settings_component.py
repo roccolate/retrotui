@@ -68,19 +68,27 @@ class SettingsComponentTests(unittest.TestCase):
             theme_name="win31",
             default_show_hidden=False,
             default_word_wrap=False,
+            config=types.SimpleNamespace(
+                sunday_first=False,
+                show_welcome=True,
+                hidden_icons="",
+            ),
             windows=[],
         )
         app.apply_theme = mock.Mock(side_effect=lambda name: setattr(app, "theme_name", name))
 
-        def _apply_preferences(*, show_hidden=None, word_wrap_default=None, apply_to_open_windows=False):
+        def _apply_preferences(*, show_hidden=None, word_wrap_default=None, sunday_first=None, apply_to_open_windows=False):
             if show_hidden is not None:
                 app.default_show_hidden = bool(show_hidden)
             if word_wrap_default is not None:
                 app.default_word_wrap = bool(word_wrap_default)
+            if sunday_first is not None:
+                app.config.sunday_first = bool(sunday_first)
             app._last_apply_to_open = apply_to_open_windows
 
         app.apply_preferences = mock.Mock(side_effect=_apply_preferences)
         app.persist_config = mock.Mock(return_value=None)
+        app.refresh_icons = mock.Mock()
         return app
 
     def _make_window(self):
@@ -90,11 +98,14 @@ class SettingsComponentTests(unittest.TestCase):
         win = self._make_window()
 
         self.assertGreaterEqual(win._theme_count(), 5)
-        self.assertEqual(win._controls_count(), win._theme_count() + 4)
+        self.assertEqual(win._controls_count(), win._theme_count() + 7)
         self.assertEqual(win._toggle_show_hidden_index(), win._theme_count())
         self.assertEqual(win._toggle_wrap_index(), win._theme_count() + 1)
-        self.assertEqual(win._save_index(), win._theme_count() + 2)
-        self.assertEqual(win._cancel_index(), win._theme_count() + 3)
+        self.assertEqual(win._toggle_sunday_first_index(), win._theme_count() + 2)
+        self.assertEqual(win._toggle_show_welcome_index(), win._theme_count() + 3)
+        self.assertEqual(win._edit_hidden_icons_index(), win._theme_count() + 4)
+        self.assertEqual(win._save_index(), win._theme_count() + 5)
+        self.assertEqual(win._cancel_index(), win._theme_count() + 6)
 
         win._selection = 1
         self.assertIsNone(win._activate_selection())

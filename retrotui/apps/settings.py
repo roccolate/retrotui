@@ -18,19 +18,29 @@ class SettingsWindow(Window):
         self.theme_name = app.theme_name
         self.show_hidden = bool(app.default_show_hidden)
         self.word_wrap_default = bool(app.default_word_wrap)
-        self._initial_state = (app.theme_name, app.default_show_hidden, app.default_word_wrap)
+        self.sunday_first = bool(app.config.sunday_first)
+        self.show_welcome = bool(app.config.show_welcome)
+        self.hidden_icons = str(app.config.hidden_icons)
+        self._initial_state = (
+            app.theme_name,
+            app.default_show_hidden,
+            app.default_word_wrap,
+            app.config.sunday_first,
+            app.config.show_welcome,
+            app.config.hidden_icons,
+        )
         self._selection = 0
         self._committed = False
         self._control_rows = {}
         self._button_bounds = {}
-        self.h = max(self.h, 14)
-        self.w = max(self.w, 50)
+        self.h = max(self.h, 17)
+        self.w = max(self.w, 54)
 
     def _theme_count(self):
         return len(self._themes)
 
     def _controls_count(self):
-        return self._theme_count() + 4  # theme rows + 2 toggles + save + cancel
+        return self._theme_count() + 7  # theme rows + 4 toggles + 1 button + save + cancel
 
     def _toggle_show_hidden_index(self):
         return self._theme_count()
@@ -38,25 +48,41 @@ class SettingsWindow(Window):
     def _toggle_wrap_index(self):
         return self._theme_count() + 1
 
-    def _save_index(self):
+    def _toggle_sunday_first_index(self):
         return self._theme_count() + 2
+        
+    def _toggle_show_welcome_index(self):
+        return self._theme_count() + 3
+
+    def _edit_hidden_icons_index(self):
+        return self._theme_count() + 4
+
+    def _save_index(self):
+        return self._theme_count() + 5
 
     def _cancel_index(self):
-        return self._theme_count() + 3
+        return self._theme_count() + 6
 
     def _apply_runtime(self):
         self.app.apply_theme(self.theme_name)
         self.app.apply_preferences(
             show_hidden=self.show_hidden,
             word_wrap_default=self.word_wrap_default,
+            sunday_first=self.sunday_first,
             apply_to_open_windows=True,
         )
+        self.app.show_welcome = self.show_welcome
+        self.app.config.hidden_icons = self.hidden_icons
+        self.app.refresh_icons()
 
     def _revert_runtime(self):
-        initial_theme, initial_hidden, initial_wrap = self._initial_state
+        initial_theme, initial_hidden, initial_wrap, initial_sunday, initial_welcome, initial_icons = self._initial_state
         self.theme_name = initial_theme
         self.show_hidden = bool(initial_hidden)
         self.word_wrap_default = bool(initial_wrap)
+        self.sunday_first = bool(initial_sunday)
+        self.show_welcome = bool(initial_welcome)
+        self.hidden_icons = str(initial_icons)
         self._apply_runtime()
 
     def _activate_selection(self):
@@ -72,6 +98,26 @@ class SettingsWindow(Window):
         if idx == self._toggle_wrap_index():
             self.word_wrap_default = not self.word_wrap_default
             self.app.apply_preferences(word_wrap_default=self.word_wrap_default, apply_to_open_windows=True)
+            return None
+        if idx == self._toggle_sunday_first_index():
+            self.sunday_first = not self.sunday_first
+            self.app.apply_preferences(sunday_first=self.sunday_first, apply_to_open_windows=True)
+            return None
+        if idx == self._toggle_show_welcome_index():
+            self.show_welcome = not self.show_welcome
+            return None
+        if idx == self._edit_hidden_icons_index():
+            from ..ui.dialog import InputDialog
+            
+            def on_submit(value):
+                self.hidden_icons = value.strip()
+                
+            self.app.dialog = InputDialog(
+                "Hidden Desktop Icons",
+                "Comma-separated list (e.g. Hex,Logs,Clock):",
+                self.hidden_icons,
+                on_submit
+            )
             return None
         if idx == self._save_index():
             self._committed = True
@@ -124,6 +170,28 @@ class SettingsWindow(Window):
         wrap_attr = body_attr | curses.A_REVERSE if self._selection == wrap_idx else body_attr
         safe_addstr(stdscr, row, bx, f' {wrap_mark} Word wrap enabled by default'.ljust(bw)[:bw], wrap_attr)
         self._control_rows[wrap_idx] = row
+        row += 1
+
+        sunday_idx = self._toggle_sunday_first_index()
+        sunday_mark = '[x]' if self.sunday_first else '[ ]'
+        sunday_attr = body_attr | curses.A_REVERSE if self._selection == sunday_idx else body_attr
+        safe_addstr(stdscr, row, bx, f' {sunday_mark} Calendar: Week starts on Sunday'.ljust(bw)[:bw], sunday_attr)
+        self._control_rows[sunday_idx] = row
+        row += 1
+
+        welcome_idx = self._toggle_show_welcome_index()
+        welcome_mark = '[x]' if self.show_welcome else '[ ]'
+        welcome_attr = body_attr | curses.A_REVERSE if self._selection == welcome_idx else body_attr
+        safe_addstr(stdscr, row, bx, f' {welcome_mark} Show welcome screen on startup'.ljust(bw)[:bw], welcome_attr)
+        self._control_rows[welcome_idx] = row
+        row += 1
+        
+        icons_idx = self._edit_hidden_icons_index()
+        icons_label = '[ Edit Hidden Desktop Icons... ]'
+        icons_attr = theme_attr('button_selected') if self._selection == icons_idx else theme_attr('button')
+        safe_addstr(stdscr, row, bx + 1, icons_label, icons_attr)
+        self._control_rows[icons_idx] = row
+        self._button_bounds[icons_idx] = (bx + 1, bx + 1 + len(icons_label), row)
         row += 2
 
         save_idx = self._save_index()
@@ -161,10 +229,13 @@ class SettingsWindow(Window):
                 return self._activate_selection()
             if self._selection == self._toggle_show_hidden_index() and self.show_hidden:
                 self.show_hidden = False
-                self.app.apply_preferences(show_hidden=False, apply_to_open_windows=True)
             if self._selection == self._toggle_wrap_index() and self.word_wrap_default:
                 self.word_wrap_default = False
                 self.app.apply_preferences(word_wrap_default=False, apply_to_open_windows=True)
+            if self._selection == self._toggle_sunday_first_index() and self.sunday_first:
+                self.sunday_first = False
+            if self._selection == self._toggle_show_welcome_index() and self.show_welcome:
+                self.show_welcome = False
             return None
         if key_code == curses.KEY_RIGHT:
             if self._selection < self._theme_count():
@@ -172,10 +243,13 @@ class SettingsWindow(Window):
                 return self._activate_selection()
             if self._selection == self._toggle_show_hidden_index() and not self.show_hidden:
                 self.show_hidden = True
-                self.app.apply_preferences(show_hidden=True, apply_to_open_windows=True)
             if self._selection == self._toggle_wrap_index() and not self.word_wrap_default:
                 self.word_wrap_default = True
                 self.app.apply_preferences(word_wrap_default=True, apply_to_open_windows=True)
+            if self._selection == self._toggle_sunday_first_index() and not self.sunday_first:
+                self.sunday_first = True
+            if self._selection == self._toggle_show_welcome_index() and not self.show_welcome:
+                self.show_welcome = True
             return None
         if key_code in (curses.KEY_ENTER, 10, 13, 32):
             return self._activate_selection()
