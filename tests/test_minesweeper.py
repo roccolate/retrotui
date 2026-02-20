@@ -36,7 +36,7 @@ class MinesweeperTests(unittest.TestCase):
             sys.modules.pop("curses", None)
 
     def test_init_and_draw_and_click(self):
-        win = self.mod.MinesweeperWindow(0, 0, 36, 14, rows=5, cols=5, bombs=3)
+        win = self.mod.MinesweeperWindow(0, 0, 36, 14)
         # Patch drawing helpers to avoid real curses calls
         with mock.patch.object(win, "draw_frame", return_value=0), mock.patch.object(
             self.mod, "safe_addstr"
@@ -44,8 +44,12 @@ class MinesweeperTests(unittest.TestCase):
             win.draw(None)
 
         bx, by, bw, bh = win.body_rect()
-        # Click somewhere inside grid to reveal
-        win.handle_click(bx + 1, by + 1)
+        grid_start_y = by + 3
+        grid_start_x = bx + max(0, (bw - win.cols * 2) // 2)
+        
+        # Click somewhere inside grid to reveal (row 1, col 1)
+        win.handle_click(grid_start_x + 2, grid_start_y + 1)
+        
         # After reveal, at least one cell should be revealed
         revealed_any = any(any(row) for row in win.revealed)
         self.assertTrue(revealed_any)
@@ -53,19 +57,26 @@ class MinesweeperTests(unittest.TestCase):
     def test_first_click_safety_and_count(self):
         # Ensure bombs are not placed on the first-click cell or its neighbors,
         # and that the total number of bombs equals the requested count.
-        win = self.mod.MinesweeperWindow(0, 0, 36, 14, rows=5, cols=5, bombs=10)
+        win = self.mod.MinesweeperWindow(0, 0, 40, 20)
+        
+        # We use Beginner sizing: 9x9, 10 bombs
+        self.assertEqual(win.bombs, 10)
+        
         with mock.patch.object(win, "draw_frame", return_value=0), mock.patch.object(
             self.mod, "safe_addstr"
         ) as safe_addstr, mock.patch.object(self.mod, "theme_attr", return_value=0):
             bx, by, bw, bh = win.body_rect()
-            # Click near the center to trigger safe placement
-            cx = bx + 2
-            cy = by + 2
+            grid_start_y = by + 3
+            grid_start_x = bx + max(0, (bw - win.cols * 2) // 2)
+            
+            # Click near the center to trigger safe placement (row 2, col 2)
+            cx = grid_start_x + 4
+            cy = grid_start_y + 2
             win.handle_click(cx, cy)
 
         # Build excluded set (clicked cell + neighbors)
-        col = (cx - bx) // 2
-        row = cy - by
+        col = (cx - grid_start_x) // 2
+        row = cy - grid_start_y
         exclude = set()
         for dr in (-1, 0, 1):
             for dc in (-1, 0, 1):

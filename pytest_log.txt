@@ -1,0 +1,153 @@
+============================= test session starts =============================
+platform win32 -- Python 3.14.2, pytest-9.0.2, pluggy-1.6.0
+rootdir: F:\Proyectos\RetroTUI
+configfile: pyproject.toml
+plugins: anyio-4.12.1
+collected 684 items
+
+tests\test_action_runner.py .....................                        [  3%]
+tests\test_actions.py ...                                                [  3%]
+tests\test_bootstrap.py .....                                            [  4%]
+tests\test_calculator_component.py ...................                   [  7%]
+tests\test_charmap.py .                                                  [  7%]
+tests\test_clipboard_core.py .....                                       [  7%]
+tests\test_clipboard_viewer.py .                                         [  8%]
+tests\test_clock_component.py ........                                   [  9%]
+tests\test_constants_module.py .......                                   [ 10%]
+tests\test_context_menu.py .....                                         [ 10%]
+tests\test_core_app.py ................................................. [ 18%]
+................................                                         [ 22%]
+tests\test_dialog_component.py .........                                 [ 24%]
+tests\test_entry_and_content.py ............                             [ 25%]
+tests\test_event_loop.py ...........                                     [ 27%]
+tests\test_filemanager_additional.py ........                            [ 28%]
+tests\test_filemanager_clicks.py ...                                     [ 29%]
+tests\test_filemanager_component.py ...........                          [ 30%]
+tests\test_filemanager_draw_and_ops.py .....                             [ 31%]
+tests\test_filemanager_dual_copy_move.py ..                              [ 31%]
+tests\test_filemanager_edgecases.py ...                                  [ 32%]
+tests\test_filemanager_extra.py ........                                 [ 33%]
+tests\test_filemanager_more.py .......                                   [ 34%]
+tests\test_filemanager_more2.py ........                                 [ 35%]
+tests\test_filemanager_more3.py ......                                   [ 36%]
+tests\test_filemanager_more4.py ......                                   [ 37%]
+tests\test_filemanager_more_edges.py ......                              [ 38%]
+tests\test_filemanager_more_ops.py .....                                 [ 38%]
+tests\test_filemanager_ops_more.py ..                                    [ 39%]
+tests\test_filemanager_preview_and_ops.py .......                        [ 40%]
+tests\test_filemanager_remaining.py ....                                 [ 40%]
+tests\test_hexviewer_component.py ................                       [ 43%]
+tests\test_icon_drag.py .                                                [ 43%]
+tests\test_image_viewer_component.py .......                             [ 44%]
+tests\test_key_router.py .....................                           [ 47%]
+tests\test_logviewer_component.py .......                                [ 48%]
+tests\test_logviewer_extra.py .........                                  [ 49%]
+tests\test_logviewer_more.py .....                                       [ 50%]
+tests\test_menu_bar.py .......................................           [ 56%]
+tests\test_minesweeper.py .F                                             [ 56%]
+tests\test_module_coverage_tool.py .....                                 [ 57%]
+tests\test_mouse_router.py ............................................. [ 63%]
+....                                                                     [ 64%]
+tests\test_notepad_component.py ........................................ [ 70%]
+......                                                                   [ 71%]
+tests\test_notepad_more.py ..............                                [ 73%]
+tests\test_package_init_runtime.py ..                                    [ 73%]
+tests\test_package_init_trace.py .                                       [ 73%]
+tests\test_process_manager_component.py .....                            [ 74%]
+tests\test_process_manager_extra.py ....                                 [ 74%]
+tests\test_process_manager_kill.py ...                                   [ 75%]
+tests\test_process_manager_more.py .....                                 [ 76%]
+tests\test_process_manager_more2.py .....                                [ 76%]
+tests\test_process_manager_more_edges.py ...                             [ 77%]
+tests\test_process_manager_remaining.py .....                            [ 77%]
+tests\test_process_manager_sort_paging.py ..                             [ 78%]
+tests\test_release_tag_tool.py ...                                       [ 78%]
+tests\test_rendering.py .......                                          [ 79%]
+tests\test_settings_component.py .......                                 [ 80%]
+tests\test_snake.py .....                                                [ 81%]
+tests\test_solitaire.py ..                                               [ 81%]
+tests\test_terminal_component.py .....................................   [ 87%]
+tests\test_terminal_session.py .....................                     [ 90%]
+tests\test_theme_and_config.py .......                                   [ 91%]
+tests\test_trash_component.py .......                                    [ 92%]
+tests\test_utils_core.py ...............                                 [ 94%]
+tests\test_utils_video.py ....                                           [ 95%]
+tests\test_wifi_manager.py .                                             [ 95%]
+tests\test_window_component.py ...........                               [ 96%]
+tests\test_windows_logic.py ......................                       [100%]
+
+================================== FAILURES ===================================
+________________ MinesweeperTests.test_init_and_draw_and_click ________________
+
+self = <test_minesweeper.MinesweeperTests testMethod=test_init_and_draw_and_click>
+
+    def test_init_and_draw_and_click(self):
+        win = self.mod.MinesweeperWindow(0, 0, 36, 14)
+        # Patch drawing helpers to avoid real curses calls
+        with mock.patch.object(win, "draw_frame", return_value=0), mock.patch.object(
+            self.mod, "safe_addstr"
+        ) as safe_addstr, mock.patch.object(self.mod, "theme_attr", return_value=0):
+>           win.draw(None)
+
+tests\test_minesweeper.py:44: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <retrotui.apps.minesweeper.MinesweeperWindow object at 0x0000024D25E8CA50>
+stdscr = None
+
+    def draw(self, stdscr):
+        if not self.visible: return
+    
+        if self.start_time and not self.game_over:
+            self.elapsed = int(time.time() - self.start_time)
+    
+        self.title = f"Minesweeper - {self.difficulty}"
+        body_attr = self.draw_frame(stdscr)
+        bx, by, bw, bh = self.body_rect()
+    
+        # Clear body
+        for row in range(bh):
+            safe_addstr(stdscr, by + row, bx, " " * bw, body_attr)
+    
+        # Draw Classic Header
+        flags_used = sum(1 for r in range(self.rows) for c in range(self.cols) if self.flagged[r][c])
+        bombs_left = max(0, self.bombs - flags_used)
+    
+        timer_str = f"{min(999, self.elapsed):03d}"
+        bombs_str = f"{bombs_left:03d}"
+    
+        smiley = "\U0001f642"
+        if self.victory: smiley = "\U0001f60e"
+        elif self.game_over: smiley = "\U0001f635"
+    
+        header_y = by + 1
+        safe_addstr(stdscr, header_y, bx + 2, bombs_str, curses.color_pair(1) | curses.A_BOLD) # Red text if possible
+    
+        center_x = bx + (bw // 2) - 1
+        safe_addstr(stdscr, header_y, center_x, smiley, body_attr)
+    
+        safe_addstr(stdscr, header_y, bx + bw - 5, timer_str, curses.color_pair(1) | curses.A_BOLD)
+    
+        # Draw Grid horizontally centered
+        grid_start_y = by + 3
+        grid_w = self.cols * 2
+        grid_start_x = bx + max(0, (bw - grid_w) // 2)
+    
+        from ..constants import C_ANSI_START
+        color_map = {
+>           1: curses.COLOR_BLUE,      # Bright Blue
+               ^^^^^^^^^^^^^^^^^
+            2: curses.COLOR_GREEN,     # Green
+            3: curses.COLOR_RED,       # Red
+            4: curses.COLOR_BLUE,      # Dark Blue (fallback to blue)
+            5: curses.COLOR_RED,       # Dark Red (fallback to red)
+            6: curses.COLOR_CYAN,      # Cyan
+            7: curses.COLOR_WHITE,     # White
+            8: curses.COLOR_WHITE,     # Grey
+        }
+E       AttributeError: module 'curses' has no attribute 'COLOR_BLUE'. Did you mean: 'COLOR_GREEN'?
+
+retrotui\apps\minesweeper.py:168: AttributeError
+=========================== short test summary info ===========================
+FAILED tests/test_minesweeper.py::MinesweeperTests::test_init_and_draw_and_click
+======================== 1 failed, 683 passed in 1.56s ========================
