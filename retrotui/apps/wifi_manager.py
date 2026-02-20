@@ -121,7 +121,7 @@ class WifiManagerWindow(Window):
             safe_addstr(stdscr, by + 2, bx + 2, "Error: 'nmcli' could not be found.", theme_attr('window_body') | curses.A_BOLD)
             return
             
-        header_attr = theme_attr('title_bar') | curses.A_BOLD
+        header_attr = theme_attr('window_title') | curses.A_BOLD
         safe_addstr(stdscr, by, bx, " " * bw, header_attr)
         
         state_str = "RADIO: ON" if self.radio_on else "RADIO: OFF"
