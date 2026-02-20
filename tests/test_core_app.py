@@ -175,6 +175,7 @@ class CoreAppTests(unittest.TestCase):
 
         with (
             mock.patch.object(self.app_mod, "check_unicode_support", return_value=True),
+            mock.patch.object(self.app_mod, "load_config", return_value=types.SimpleNamespace(theme="win31", show_hidden=False, word_wrap_default=False, sunday_first=False, show_welcome=True, hidden_icons="")),
             mock.patch.object(self.app_mod, "configure_terminal") as configure_terminal,
             mock.patch.object(self.app_mod, "disable_flow_control") as disable_flow_control,
             mock.patch.object(self.app_mod, "enable_mouse_support", return_value=(11, 22, 33)),
@@ -216,6 +217,7 @@ class CoreAppTests(unittest.TestCase):
 
         with (
             mock.patch.object(self.app_mod, "check_unicode_support", return_value=False),
+            mock.patch.object(self.app_mod, "load_config", return_value=types.SimpleNamespace(theme="win31", show_hidden=False, word_wrap_default=False, sunday_first=False, show_welcome=True, hidden_icons="")),
             mock.patch.object(self.app_mod, "configure_terminal"),
             mock.patch.object(self.app_mod, "disable_flow_control"),
             mock.patch.object(self.app_mod, "enable_mouse_support", return_value=(1, 2, 3)),
