@@ -87,6 +87,9 @@ class AppAction(str, Enum):
     SNAKE_NEW = "snake_new"
     SNAKE_TOGGLE_WRAP = "snake_toggle_wrap"
     SNAKE_TOGGLE_OBSTACLES = "snake_toggle_obstacles"
+    SNAKE_DIFF_EASY = "snake_diff_easy"
+    SNAKE_DIFF_NORMAL = "snake_diff_normal"
+    SNAKE_DIFF_HARD = "snake_diff_hard"
     SNAKE_PAUSE = "snake_pause"
 
 
