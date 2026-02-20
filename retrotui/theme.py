@@ -26,6 +26,8 @@ from .constants import (
     C_WIN_TITLE_INV,
 )
 
+import sys
+
 # Test doubles may expose only a subset of color constants.
 for _name, _fallback in {
     "COLOR_BLACK": 0,
@@ -37,6 +39,11 @@ for _name, _fallback in {
 }.items():
     if not hasattr(curses, _name):
         setattr(curses, _name, _fallback)
+
+# Fix for Windows PowerShell rendering black as light gray
+WIN_BLACK = curses.COLOR_BLACK
+if sys.platform == 'win32':
+    WIN_BLACK = 0  # Sometimes explicit 0 works better than curses.COLOR_BLACK, or we can just use another contrasting color like White. Let's stick to explicit 0. 
 
 DEFAULT_THEME = "win31"
 
@@ -106,30 +113,30 @@ THEMES = {
         desktop_pattern=" ",
         pairs_base=_mk_pairs(
             (
-                (curses.COLOR_BLACK, curses.COLOR_CYAN),
-                (curses.COLOR_BLACK, curses.COLOR_WHITE),
+                (WIN_BLACK, curses.COLOR_CYAN),
+                (WIN_BLACK, curses.COLOR_WHITE),
                 (curses.COLOR_WHITE, curses.COLOR_BLUE),
                 (curses.COLOR_WHITE, curses.COLOR_BLUE),
                 (curses.COLOR_WHITE, curses.COLOR_BLUE),
                 (curses.COLOR_BLUE, curses.COLOR_WHITE),
-                (curses.COLOR_BLACK, curses.COLOR_WHITE),
-                (curses.COLOR_WHITE, curses.COLOR_BLACK),
-                (curses.COLOR_BLACK, curses.COLOR_CYAN),
-                (curses.COLOR_BLACK, curses.COLOR_WHITE),
+                (WIN_BLACK, curses.COLOR_WHITE),
+                (curses.COLOR_WHITE, WIN_BLACK),
+                (WIN_BLACK, curses.COLOR_CYAN),
+                (WIN_BLACK, curses.COLOR_WHITE),
                 (curses.COLOR_BLUE, curses.COLOR_WHITE),
             )
         ),
         pairs_256=_mk_pairs(
             (
-                (curses.COLOR_BLACK, 20),
-                (curses.COLOR_BLACK, curses.COLOR_WHITE),
+                (WIN_BLACK, 20),
+                (WIN_BLACK, curses.COLOR_WHITE),
                 (curses.COLOR_WHITE, curses.COLOR_BLUE),
                 (curses.COLOR_WHITE, curses.COLOR_BLUE),
                 (curses.COLOR_WHITE, 21),
                 (21, curses.COLOR_WHITE),
-                (curses.COLOR_BLACK, curses.COLOR_WHITE),
-                (curses.COLOR_WHITE, curses.COLOR_BLACK),
-                (curses.COLOR_BLACK, curses.COLOR_CYAN),
+                (WIN_BLACK, curses.COLOR_WHITE),
+                (curses.COLOR_WHITE, WIN_BLACK),
+                (WIN_BLACK, curses.COLOR_CYAN),
                 (curses.COLOR_WHITE, 23),
                 (curses.COLOR_BLUE, curses.COLOR_WHITE),
             )
