@@ -89,6 +89,7 @@ ICONS = [
     {"label": "Snake", "action": AppAction.SNAKE if hasattr(AppAction, 'SNAKE') else AppAction.CALCULATOR, "art": ["+--+", "|~~|", "+--+"]},
     {"label": "Chars", "action": AppAction.CHARMAP if hasattr(AppAction, 'CHARMAP') else AppAction.NOTEPAD, "art": ["+--+", "|¤ |", "+--+"]},
     {"label": "Clip", "action": AppAction.CLIPBOARD if hasattr(AppAction, 'CLIPBOARD') else AppAction.NOTEPAD, "art": ["+--+", "|Cb|", "+--+"]},
+    {"label": "Hex", "action": AppAction.HEX_VIEWER if hasattr(AppAction, 'HEX_VIEWER') else AppAction.NOTEPAD, "art": ["+--+", "|0x|", "+--+"]},
     {"label": "WiFi", "action": AppAction.WIFI_MANAGER if hasattr(AppAction, 'WIFI_MANAGER') else AppAction.SETTINGS, "art": ["+--+", "|Wi|", "+--+"]},
 ]
 
@@ -111,6 +112,7 @@ ICONS_ASCII = [
     {"label": "Snake", "action": AppAction.SNAKE if hasattr(AppAction, 'SNAKE') else AppAction.CALCULATOR, "art": ["+--+", "|~~|", "+--+"]},
     {"label": "Chars", "action": AppAction.CHARMAP if hasattr(AppAction, 'CHARMAP') else AppAction.NOTEPAD, "art": ["+--+", "|¤ |", "+--+"]},
     {"label": "Clip", "action": AppAction.CLIPBOARD if hasattr(AppAction, 'CLIPBOARD') else AppAction.NOTEPAD, "art": ["+--+", "|Cb|", "+--+"]},
+    {"label": "Hex", "action": AppAction.HEX_VIEWER if hasattr(AppAction, 'HEX_VIEWER') else AppAction.NOTEPAD, "art": ["+--+", "|0x|", "+--+"]},
     {"label": "WiFi", "action": AppAction.WIFI_MANAGER if hasattr(AppAction, 'WIFI_MANAGER') else AppAction.SETTINGS, "art": ["+--+", "|Wi|", "+--+"]},
 ]
 
