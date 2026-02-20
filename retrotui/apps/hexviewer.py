@@ -375,10 +375,10 @@ class HexViewerWindow(Window):
 
         for row in range(bh):
             safe_addstr(stdscr, by + row, bx, " " * bw, body_attr)
-
-        data_rows = max(0, bh - 2)
+            
+        data_rows = max(0, bh - 3)
         if data_rows > 0:
-            safe_addstr(stdscr, by, bx, self._format_header()[:bw].ljust(bw), theme_attr("menubar"))
+            safe_addstr(stdscr, by + 1, bx, self._format_header()[:bw].ljust(bw), theme_attr("menubar"))
 
             if self.filepath:
                 total = data_rows * self.BYTES_PER_ROW
@@ -397,9 +397,9 @@ class HexViewerWindow(Window):
                         row_attr = theme_attr("file_selected") | curses.A_REVERSE | curses.A_BOLD
                     if self.cursor_offset is not None and row_offset <= self.cursor_offset < row_offset + len(row_bytes):
                         row_attr = theme_attr("file_selected") | curses.A_BOLD
-                    safe_addstr(stdscr, by + 1 + row, bx, line[:bw].ljust(bw), row_attr)
+                    safe_addstr(stdscr, by + 2 + row, bx, line[:bw].ljust(bw), row_attr)
             else:
-                safe_addstr(stdscr, by + 1, bx, "No file opened. Press O to open."[:bw].ljust(bw), body_attr)
+                safe_addstr(stdscr, by + 2, bx, "No file opened. Press O to open."[:bw].ljust(bw), body_attr)
 
         if self.prompt_mode == "search":
             status = f"SEARCH> {self.prompt_value}"
