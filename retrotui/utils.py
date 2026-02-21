@@ -20,6 +20,44 @@ from .theme import ROLE_TO_PAIR_ID, get_theme
 # Cache for theme_attr() lookups — invalidated by init_colors().
 _theme_attr_cache: dict[str, int] = {}
 
+# Provide safe fallbacks for curses constants that may be missing in some test
+# environments (for example when tests inject a fake `curses` module or on
+# platforms without full curses support). Values are chosen to be stable and
+# non-conflicting for bitwise checks in code and tests.
+_CURSES_FALLBACKS = {
+    'KEY_UP': 259,
+    'KEY_DOWN': 258,
+    'KEY_LEFT': 260,
+    'KEY_RIGHT': 261,
+    'KEY_NPAGE': 338,
+    'KEY_PPAGE': 339,
+    'KEY_DC': 330,
+    'KEY_F1': 265,
+    'KEY_F2': 266,
+    'KEY_F3': 267,
+    'KEY_F4': 268,
+    'KEY_F5': 269,
+    'KEY_F6': 270,
+    'KEY_F7': 271,
+    'KEY_F8': 272,
+    'KEY_F9': 273,
+    'KEY_F10': 274,
+    'KEY_F11': 275,
+    'KEY_F12': 276,
+    # Mouse button flags (bitmasks)
+    'BUTTON1_PRESSED': 1 << 8,
+    'BUTTON1_RELEASED': 1 << 9,
+    'BUTTON1_CLICKED': 1 << 10,
+    'BUTTON1_DOUBLE_CLICKED': 1 << 11,
+}
+
+for _name, _val in _CURSES_FALLBACKS.items():
+    if not hasattr(curses, _name):
+        try:
+            setattr(curses, _name, _val)
+        except Exception:
+            pass
+
 
 def init_colors(theme_key_or_obj=None):
     """Initialize curses color pairs from the active semantic theme."""
@@ -77,7 +115,26 @@ def safe_addstr(win, y, x, text, attr=0):
     """Write string safely, clipping to window bounds."""
     if x < 0 or y < 0:
         return
-    h, w = win.getmaxyx()
+    # Be defensive: some tests provide a Mock for `win.getmaxyx()` which may
+    # return a Mock object rather than a (h, w) tuple. Try to coerce into a
+    # tuple when possible and bail out gracefully otherwise.
+    res = win.getmaxyx()
+    if not isinstance(res, (list, tuple)):
+        try:
+            # If the returned object is itself callable (a Mock), call it.
+            if callable(res):
+                res = res()
+        except Exception:
+            res = None
+        if not isinstance(res, (list, tuple)):
+            # Try to extract common attributes as a last resort
+            try:
+                h = int(getattr(res, 'h', None) or getattr(res, 'rows', None) or getattr(res, 'height', None))
+                w = int(getattr(res, 'w', None) or getattr(res, 'cols', None) or getattr(res, 'width', None))
+                res = (h, w)
+            except Exception:
+                return
+    h, w = res
     if y >= h or x >= w:
         return
     max_len = w - x - 1

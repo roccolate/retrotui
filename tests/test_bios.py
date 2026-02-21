@@ -1,5 +1,5 @@
+import unittest
 import time
-
 from retrotui.core.bios import BIOS
 
 
@@ -23,12 +23,18 @@ class DummyStdScr:
         pass
 
 
-def test_check_skip_and_sleep_fast():
-    std = DummyStdScr()
-    b = BIOS(std)
-    assert b._check_skip() is False
-    start = time.time()
-    # should return False and take approximately given time
-    res = b._sleep(0.02)
-    assert res is False
-    assert time.time() - start >= 0
+class BioTests(unittest.TestCase):
+    def test_check_skip_and_sleep_fast(self):
+        std = DummyStdScr()
+        b = BIOS(std)
+        self.assertFalse(b._check_skip())
+        start = time.time()
+        # should return False and take approximately given time
+        res = b._sleep(0.02)
+        self.assertFalse(res)
+        self.assertGreaterEqual(time.time() - start, 0)
+
+
+if __name__ == "__main__":
+    unittest.main()
+
