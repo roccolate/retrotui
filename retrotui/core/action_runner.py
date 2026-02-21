@@ -18,6 +18,10 @@ from ..apps.snake import SnakeWindow
 from ..apps.charmap import CharacterMapWindow
 from ..apps.hexviewer import HexViewerWindow
 from ..apps.wifi_manager import WifiManagerWindow
+from ..apps.sysmon import SystemMonitorWindow
+from ..apps.control_panel import ControlPanelWindow
+from ..apps.tetris import TetrisWindow
+from ..apps.retronet import RetroNetWindow
 from ..ui.dialog import Dialog
 from ..ui.window import Window
 from .actions import AppAction
@@ -44,6 +48,17 @@ def _supports_constructor_kwarg(constructor, kwarg: str) -> bool:
 
 def execute_app_action(app, action, logger, *, version: str) -> None:
     """Execute an AppAction against a RetroTUI-like app context."""
+    # Plugin actions: string like 'plugin:<id>' open plugin windows
+    try:
+        if isinstance(action, str) and action.startswith('plugin:'):
+            plugin_id = action.split(':', 1)[1]
+            opener = getattr(app, 'open_plugin', None)
+            if callable(opener):
+                opener(plugin_id)
+                return
+    except Exception:
+        # don't let plugin issues crash the app
+        logger.debug('plugin action failed', exc_info=True)
     if action == AppAction.EXIT:
         app.dialog = Dialog(
             "Exit RetroTUI",
@@ -202,6 +217,32 @@ def execute_app_action(app, action, logger, *, version: str) -> None:
     if action == AppAction.WIFI_MANAGER:
         offset_x, offset_y = app._next_window_offset(22, 4)
         app._spawn_window(WifiManagerWindow(offset_x, offset_y, 60, 18))
+        return
+
+    if action == AppAction.MARKDOWN_VIEWER:
+        from ..apps.markdown_viewer import MarkdownViewerWindow
+        offset_x, offset_y = app._next_window_offset(18, 4)
+        app._spawn_window(MarkdownViewerWindow(offset_x, offset_y, 70, 24))
+        return
+
+    if action == AppAction.SYSTEM_MONITOR:
+        offset_x, offset_y = app._next_window_offset(15, 4)
+        app._spawn_window(SystemMonitorWindow(offset_x, offset_y, 44, 20))
+        return
+
+    if action == AppAction.CONTROL_PANEL:
+        offset_x, offset_y = app._next_window_offset(10, 3)
+        app._spawn_window(ControlPanelWindow(offset_x, offset_y, 60, 18, app))
+        return
+
+    if action == AppAction.TETRIS:
+        offset_x, offset_y = app._next_window_offset(20, 4)
+        app._spawn_window(TetrisWindow(offset_x, offset_y))
+        return
+
+    if action == AppAction.RETRONET:
+        offset_x, offset_y = app._next_window_offset(15, 3)
+        app._spawn_window(RetroNetWindow(offset_x, offset_y, 70, 24))
         return
 
     logger.warning("Unknown action received: %s", action)

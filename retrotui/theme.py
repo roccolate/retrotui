@@ -24,6 +24,8 @@ from .constants import (
     C_WIN_INACTIVE,
     C_WIN_TITLE,
     C_WIN_TITLE_INV,
+    C_TERM_BODY,
+    C_ERROR,
 )
 
 import sys
@@ -36,6 +38,7 @@ def _ensure_curses_colors():
         "COLOR_BLUE": 4,
         "COLOR_CYAN": 6,
         "COLOR_GREEN": 2,
+        "COLOR_RED": 1,
         "COLOR_WHITE": 7,
         "COLOR_YELLOW": 3,
     }.items():
@@ -67,6 +70,8 @@ ROLE_TO_PAIR_ID = {
     "file_selected": C_FM_SELECTED,
     "file_directory": C_FM_DIR,
     "taskbar": C_TASKBAR,
+    "terminal": C_TERM_BODY,
+    "error": C_ERROR,
 }
 
 
@@ -91,6 +96,8 @@ def _mk_pairs(fg_bg):
         "file_selected": fg_bg[2],
         "file_directory": fg_bg[10],
         "taskbar": fg_bg[1],
+        "terminal": (curses.COLOR_WHITE, curses.COLOR_BLACK),
+        "error": fg_bg[11] if len(fg_bg) > 11 else (curses.COLOR_WHITE, curses.COLOR_RED),
     }
 
 
@@ -126,6 +133,7 @@ THEMES = {
                 (curses.COLOR_BLACK, curses.COLOR_CYAN),
                 (curses.COLOR_BLACK, curses.COLOR_WHITE),
                 (curses.COLOR_BLUE, curses.COLOR_WHITE),
+                (curses.COLOR_WHITE, curses.COLOR_RED),
             )
         ),
         pairs_base_win32=_mk_pairs(
@@ -141,6 +149,7 @@ THEMES = {
                 (curses.COLOR_WHITE, curses.COLOR_CYAN), # White text for icons (unselected)
                 (curses.COLOR_BLUE, curses.COLOR_WHITE),
                 (curses.COLOR_BLUE, curses.COLOR_WHITE),
+                (curses.COLOR_WHITE, curses.COLOR_RED),
             )
         ),
         pairs_256=_mk_pairs(
@@ -156,6 +165,7 @@ THEMES = {
                 (curses.COLOR_BLACK, curses.COLOR_CYAN),
                 (curses.COLOR_WHITE, 23),
                 (curses.COLOR_BLUE, curses.COLOR_WHITE),
+                (curses.COLOR_WHITE, curses.COLOR_RED),
             )
         ),
         pairs_256_win32=_mk_pairs(
@@ -171,6 +181,7 @@ THEMES = {
                 (curses.COLOR_WHITE, curses.COLOR_CYAN), # White text for icons (unselected)
                 (curses.COLOR_WHITE, 23),
                 (curses.COLOR_BLUE, curses.COLOR_WHITE),
+                (curses.COLOR_WHITE, curses.COLOR_RED),
             )
         ),
         custom_colors={
@@ -197,6 +208,7 @@ THEMES = {
                 (curses.COLOR_BLACK, curses.COLOR_CYAN),
                 (curses.COLOR_WHITE, curses.COLOR_BLUE),
                 (curses.COLOR_CYAN, curses.COLOR_BLUE),
+                (curses.COLOR_WHITE, curses.COLOR_RED),
             )
         ),
     ),
@@ -217,6 +229,7 @@ THEMES = {
                 (curses.COLOR_BLACK, curses.COLOR_CYAN),
                 (curses.COLOR_BLACK, curses.COLOR_WHITE),
                 (curses.COLOR_BLUE, curses.COLOR_WHITE),
+                (curses.COLOR_WHITE, curses.COLOR_RED),
             )
         ),
     ),
@@ -237,6 +250,7 @@ THEMES = {
                 (curses.COLOR_GREEN, curses.COLOR_BLACK),
                 (curses.COLOR_GREEN, curses.COLOR_BLACK),
                 (curses.COLOR_GREEN, curses.COLOR_BLACK),
+                (curses.COLOR_WHITE, curses.COLOR_RED),
             )
         ),
     ),
@@ -257,6 +271,7 @@ THEMES = {
                 (curses.COLOR_BLACK, curses.COLOR_CYAN),
                 (curses.COLOR_CYAN, curses.COLOR_BLUE),
                 (curses.COLOR_CYAN, curses.COLOR_BLUE),
+                (curses.COLOR_WHITE, curses.COLOR_RED),
             )
         ),
     ),

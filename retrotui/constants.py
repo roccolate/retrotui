@@ -104,6 +104,11 @@ ICONS = [
     {"label": "Hex", "action": AppAction.HEX_VIEWER, "art": ["+--+", "|0x|", "+--+"], "category": "Apps"},
     {"label": "WiFi", "action": AppAction.WIFI_MANAGER, "art": ["+--+", "|Wi|", "+--+"], "category": "Apps"},
     {"label": "AppMgr", "action": AppAction.APP_MANAGER, "art": ["\u256d\u2500\u2500\u256e", "\u2502AM\u2502", "\u2570\u2500\u2500\u256f"], "category": "Apps"},
+    {"label": "MdView", "action": AppAction.MARKDOWN_VIEWER, "art": ["\u250c\u2500\u2500\u2510", "\u2502\ud83d\udcd6 \u2502", "\u2514\u2500\u2500\u2518"], "category": "Apps"},
+    {"label": "SysMon", "action": AppAction.SYSTEM_MONITOR, "art": ["\u256d\u2500\u2500\u256e", "\u2502\ud83d\udcc8\u2502", "\u2570\u2500\u2500\u256f"], "category": "Apps"},
+    {"label": "Control", "action": AppAction.CONTROL_PANEL, "art": ["\u256d\u2500\u2500\u256e", "\u2502\u2699\ufe0f\u2502", "\u2570\u2500\u2500\u256f"], "category": "Apps"},
+    {"label": "Tetris", "action": AppAction.TETRIS, "art": ["\u256d\u2500\u2500\u256e", "\u2502\ud83e\uddf1\u2502", "\u2570\u2500\u2500\u256f"], "category": "Games"},
+    {"label": "RetroNet", "action": AppAction.RETRONET, "art": ["\u256d\u2500\u2500\u256e", "\u2502\ud83c\udf10\u2502", "\u2570\u2500\u2500\u256f"], "category": "Apps"},
 ]
 
 # Fallback ASCII icons for non-Unicode terminals.
@@ -128,6 +133,11 @@ ICONS_ASCII = [
     {"label": "Hex", "action": AppAction.HEX_VIEWER, "art": ["+--+", "|0x|", "+--+"], "category": "Apps"},
     {"label": "WiFi", "action": AppAction.WIFI_MANAGER, "art": ["+--+", "|Wi|", "+--+"], "category": "Apps"},
     {"label": "AppMgr", "action": AppAction.APP_MANAGER, "art": ["+--+", "|AM|", "+--+"], "category": "Apps"},
+    {"label": "MdView", "action": AppAction.MARKDOWN_VIEWER, "art": ["+--+", "|MD|", "+--+"], "category": "Apps"},
+    {"label": "SysMon", "action": AppAction.SYSTEM_MONITOR, "art": ["+--+", "|SM|", "+--+"], "category": "Apps"},
+    {"label": "Control", "action": AppAction.CONTROL_PANEL, "art": ["+--+", "|CP|", "+--+"], "category": "Apps"},
+    {"label": "Tetris", "action": AppAction.TETRIS, "art": ["+--+", "|[]|", "+--+"], "category": "Games"},
+    {"label": "RetroNet", "action": AppAction.RETRONET, "art": ["+--+", "|WW|", "+--+"], "category": "Apps"},
 ]
 
 VIDEO_EXTENSIONS = {
@@ -162,6 +172,8 @@ C_WIN_INACTIVE = 16
 C_FM_SELECTED = 17
 C_FM_DIR = 18
 C_TASKBAR = 19
+C_TERM_BODY = 20
+C_ERROR = 21
 C_ANSI_START = 50
 
 # Layout constants
