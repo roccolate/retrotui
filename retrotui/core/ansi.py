@@ -44,24 +44,21 @@ class AnsiStateMachine:
         if self.underline:
             attr |= curses.A_UNDERLINE
         
-        # Simple mapping for base 8 colors if terminal supports color
-        if curses.has_colors():
-             # FG 0-7 map to standard curses colors?
-             # Curses usually handles pairs. We can't set FG/BG independently easily without pairs.
-             # However, often pair N implies FG=N, BG=0 if we init them standardly.
-             # Let's assume standard pair initialization 1-7:
-             # Pair 1: Red on Black? No, usually 1 is Red.
-             # Standard Curses: 
-             # COLOR_BLACK=0, RED=1, GREEN=2, YELLOW=3, BLUE=4, MAGENTA=5, CYAN=6, WHITE=7
-             if self.fg >= 0 and self.fg <= 7:
-                 try:
-                     # Attempt to use color_pair corresponding to FG color
-                     # This assumes pair I is (FG=I, BG=Default/Black).
-                     # We can fallback to just attributes if this fails or looks bad.
-                     # Ideally init_colors in utils should safeguard this.
-                     attr |= curses.color_pair(C_ANSI_START + self.fg)
-                 except Exception:
-                     pass
+        # Simple mapping for base 8 colors if terminal supports color.
+        # Calling `curses.has_colors()` can raise if curses wasn't initialized
+        # (common in headless unit tests). Guard and treat as no-color in that case.
+        try:
+            has_colors = curses.has_colors()
+        except Exception:
+            has_colors = False
+
+        if has_colors:
+            # FG 0-7 map to standard curses colors. Use color pairs if available.
+            if self.fg >= 0 and self.fg <= 7:
+                try:
+                    attr |= curses.color_pair(C_ANSI_START + self.fg)
+                except Exception:
+                    pass
         
         self.attr = attr
 
