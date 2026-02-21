@@ -273,6 +273,7 @@ class RetroTUI:
             word_wrap_default=self.default_word_wrap,
             sunday_first=self.default_sunday_first,
             show_welcome=self.show_welcome,
+            hidden_icons=getattr(self.config, 'hidden_icons', ""),
         )
         path = save_config(self.config)
         try:
