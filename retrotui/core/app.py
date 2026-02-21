@@ -22,6 +22,7 @@ from ..apps.notepad import NotepadWindow
 from ..apps.logviewer import LogViewerWindow
 from ..apps.image_viewer import ImageViewerWindow
 from ..apps.hexviewer import HexViewerWindow
+from ..apps.markdown_viewer import MarkdownViewerWindow
 from .config import AppConfig, load_config, save_config
 from .actions import ActionResult, ActionType, AppAction
 from .action_runner import execute_app_action
@@ -184,7 +185,27 @@ class RetroTUI:
         self._icon_mgr = IconPositionManager(self)
         self._background_operation = None
         self._file_ops = FileOperationManager(self)
+        
+        # Plugin discovery and registration (optional; failures should not crash)
+        try:
+            from ..plugins.loader import discover_plugins, load_plugin
 
+            self._plugins = {}
+            for manifest in discover_plugins():
+                try:
+                    app_class = load_plugin(manifest)
+                    if app_class:
+                        plugin_info = manifest.get('plugin', {})
+                        pid = plugin_info.get('id')
+                        if pid:
+                            self._plugins[pid] = {
+                                'class': app_class,
+                                'manifest': manifest,
+                            }
+                except Exception:
+                    LOGGER.debug('failed to load plugin manifest', exc_info=True)
+        except Exception:
+            LOGGER.debug('plugin discovery unavailable', exc_info=True)
         # Setup terminal
         configure_terminal(stdscr, timeout_ms=500)
         self._validate_terminal_size()
@@ -482,6 +503,26 @@ class RetroTUI:
         self.windows.append(win)
         self.set_active_window(win)
 
+    def open_plugin(self, plugin_id):
+        """Instantiate and open a plugin window by id."""
+        if not getattr(self, '_plugins', None):
+            return
+        info = self._plugins.get(plugin_id)
+        if not info:
+            LOGGER.debug('plugin not found: %s', plugin_id)
+            return
+        manifest = info.get('manifest', {}).get('plugin', {})
+        win_config = info.get('manifest', {}).get('plugin', {}).get('window', {})
+        w = int(win_config.get('default_width', 40))
+        h = int(win_config.get('default_height', 15))
+        try:
+            cls = info.get('class')
+            x, y = self._next_window_offset(8, 3)
+            win = cls(manifest.get('name', plugin_id), x, y, w, h)
+            self._spawn_window(win)
+        except Exception:
+            LOGGER.debug('failed to open plugin %s', plugin_id, exc_info=True)
+
     def _next_window_offset(self, base_x, base_y, step_x=2, step_y=1):
         """Return staggered window coordinates based on open window count."""
         count = len(self.windows)
@@ -535,6 +576,15 @@ class RetroTUI:
             self._spawn_window(win)
             return
 
+        if lower_path.endswith('.md'):
+            offset_x = 18 + len(self.windows) * 2
+            offset_y = 3 + len(self.windows)
+            win_w = min(70, w - 4)
+            win_h = min(25, h - 4)
+            win = MarkdownViewerWindow(offset_x, offset_y, win_w, win_h, filepath=filepath)
+            self._spawn_window(win)
+            return
+
         # Check if file seems to be binary
         try:
             with open(filepath, 'rb') as f:
@@ -570,6 +620,15 @@ class RetroTUI:
         success, error = play_ascii_video(self.stdscr, filepath, subtitle_path=subtitle_path)
         if not success:
             self.dialog = Dialog('ASCII Video Error', error, ['OK'], width=58)
+
+    def show_url_dialog(self, source_win, default_url=None):
+        """Show input dialog for web URLs."""
+        from ..ui.dialog import InputDialog
+        # If payload is provided, use it; otherwise fallback to current window url if available
+        initial = default_url or getattr(source_win, 'url', '')
+        dialog = InputDialog('RetroNet Explorer', 'Enter URL:', initial_value=initial, width=64)
+        dialog.callback = source_win.open_path
+        self.dialog = dialog
 
     def show_video_open_dialog(self):
         """Open dialog flow to play a video path without using File Manager."""
@@ -716,6 +775,10 @@ class RetroTUI:
 
         if result.type == ActionType.OPEN_FILE and result.payload:
             self.open_file_viewer(result.payload)
+            return
+
+        if result.type == ActionType.REQUEST_URL:
+            self.show_url_dialog(source_win, result.payload)
             return
 
         if result.type == ActionType.EXECUTE:

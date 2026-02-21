@@ -50,8 +50,8 @@ def init_colors(theme_key_or_obj=None):
         fg, bg = pair_map[role]
         curses.init_pair(pair_id, fg, bg)
 
-    # Initialize terminal ANSI colors (0-7) with window background
-    term_bg = pair_map["window_body"][1]
+    # Initialize terminal ANSI colors (0-7) with themed terminal background
+    term_bg = pair_map.get("terminal", pair_map["window_body"])[1]
     for i in range(8):
         # pair 50+i: fg=i, bg=term_bg
         curses.init_pair(50 + i, i, term_bg)

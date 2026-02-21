@@ -10,7 +10,14 @@
       "Bash(git commit:*)",
       "Bash(python -c:*)",
       "Bash(python:*)",
-      "Bash(git stash:*)"
+      "Bash(git stash:*)",
+      "Bash(for i in 1 2 3)",
+      "Bash(do python -m pytest tests/ -q)",
+      "Bash(for i in 1 2 3 4 5)",
+      "Bash(do python -m pytest tests/test_minesweeper.py::MinesweeperTests::test_first_click_safety_and_count -q)",
+      "Bash(done)",
+      "Bash(echo:*)",
+      "Bash(wc:*)"
     ]
   }
 }

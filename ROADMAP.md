@@ -224,48 +224,27 @@ Hacer el file manager competitivo con Midnight Commander.
 
 ## Versiones Planificadas
 
-### v0.9.1 — Foundation
+### v0.9.1 — Ultimate Release ✅
 
-Refactor, documentación y mejoras de UX fundamentales.
+La versión definitiva pre-1.0 con utilidades avanzadas y refinamiento de UX.
 
-**Refactor**
-- [x] Separar monolito base en paquete Python:
-  - `retrotui/core/` — event loop, window manager
-  - `retrotui/apps/` — filemanager, notepad
-  - `retrotui/ui/` — ventanas, menús y diálogos
-- [x] Split de `filemanager.py` (1289 líneas) en package `filemanager/` (window, operations, preview)
-- [x] Cada app principal como módulo autocontenido
-- [x] API interna limpia para comunicación window manager ↔ app (`ActionResult` / `AppAction`)
+**Apps & Games**
+- [x] 🔠 Character Map — Overhaul completo con categorías y soporte Unicode extendido
+- [x] 📖 Markdown Viewer — Renderizado de archivos .md con formato y navegación
+- [x] 📊 System Monitor — Dashboard de rendimiento (CPU, RAM, Disk)
+- [x] ⚙️ Control Panel — Configuración centralizada del sistema
+- [x] 🕹️ Tetris — Juego clásico integrado con sistema de puntos y niveles
+- [x] 🌐 RetroNet Explorer Ultra — Navegador web de texto premium con modo sidecar, RichLine y scrollbar
 
-**Documentación**
-- [x] README bilingüe (EN + ES) con badges, features y screenshots
-- [x] ARCHITECTURE.md (evolución de PROJECT.md)
-- [x] CONTRIBUTING.md con convenciones y guía de desarrollo
-
-**UX**
-- [x] Context menu (clic derecho) — en File Manager, Desktop y Notepad
-- [x] Iconos de escritorio móviles — drag & drop, guardar posiciones en config
+**UX & Core**
+- [x] Context Menu — Menú contextual (clic derecho) funcional
+- [x] Desktop Persistence — Iconos de escritorio guardan/cargan posición
+- [x] Startup Optimization — Eliminación de intro vBIOS para carga instantánea
+- [x] Terminal Styling — Bordes y sombreados mejorados para todas las ventanas
 
 ---
 
-### v0.9.2 — Games & Classic Apps
-
-Los clásicos que hacen que la gente se quede. Branch: `feature/ux-games`
-
-**Juegos clásicos Win 3.1**
-- [x] 🃏 Solitaire — Klondike con cartas ASCII, drag con mouse
-- [x] 💣 Minesweeper — Grid clásico, flags, timer
-- [x] 🐍 Snake — Bonus retro
-
-**Apps utilitarias**
-- [x] 🔤 Character Map — Selector de caracteres Unicode, copiar al clipboard
-- [x] 📋 Clipboard Viewer — Ver contenido del clipboard interno
-- [x] 📻 WiFi Manager — Wrapper `nmcli`, listar redes, conectar/desconectar
-- [ ] 📖 Markdown Viewer — Renderizar `.md` con formato (headers, bold, listas, code blocks, tablas)
-
----
-
-### v0.9.3 — Plugin System
+### v0.9.2 — Plugin System
 
 Extensibilidad para la comunidad. Branch: `feature/plugins`
 
@@ -310,7 +289,7 @@ Extensibilidad para la comunidad. Branch: `feature/plugins`
 
 ---
 
-### v0.9.4 — Creative & System
+### v0.9.3 — Creative & System
 
 Apps creativas, multimedia y configuración avanzada. Branch: `feature/creative`
 
@@ -331,7 +310,7 @@ Apps creativas, multimedia y configuración avanzada. Branch: `feature/creative`
 
 ---
 
-### v0.9.5 — Menú Inicio & Temas Avanzados
+### v0.9.4 — Menú Inicio & Temas Avanzados
 
 La experiencia de escritorio completa. Branch: `feature/start-menu`
 
@@ -350,7 +329,7 @@ La experiencia de escritorio completa. Branch: `feature/start-menu`
 
 ---
 
-### v0.9.6 — DOS Mode 🐭
+### v0.9.5 — DOS Mode 🐭
 
 MS-DOS con mouse en RetroTUI. Branch: `feature/dos-mode`
 
