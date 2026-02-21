@@ -180,7 +180,7 @@ class CoreAppTests(unittest.TestCase):
             mock.patch.object(self.app_mod, "disable_flow_control") as disable_flow_control,
             mock.patch.object(self.app_mod, "enable_mouse_support", return_value=(11, 22, 33)),
             mock.patch.object(self.app_mod, "init_colors") as init_colors,
-            mock.patch.object(self.app_mod, "Menu", return_value=fake_menu),
+            mock.patch("retrotui.ui.menu.Menu", return_value=fake_menu),
             mock.patch.object(self.app_mod, "build_welcome_content", return_value=["welcome"]) as welcome_builder,
             mock.patch.object(self.app_mod, "Window", return_value=fake_window) as window_cls,
         ):
@@ -222,7 +222,7 @@ class CoreAppTests(unittest.TestCase):
             mock.patch.object(self.app_mod, "disable_flow_control"),
             mock.patch.object(self.app_mod, "enable_mouse_support", return_value=(1, 2, 3)),
             mock.patch.object(self.app_mod, "init_colors"),
-            mock.patch.object(self.app_mod, "Menu", return_value=fake_menu),
+            mock.patch("retrotui.ui.menu.Menu", return_value=fake_menu),
             mock.patch.object(self.app_mod, "build_welcome_content", return_value=["welcome"]),
             mock.patch.object(self.app_mod, "Window", return_value=types.SimpleNamespace(active=False)),
         ):
