@@ -107,3 +107,12 @@ class ActionResult:
 
     type: ActionType
     payload: Any = None
+
+    # Backwards-compatible aliases used by older tests/code
+    @property
+    def action_type(self):
+        return self.type
+
+    @property
+    def action_payload(self):
+        return self.payload

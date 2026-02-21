@@ -1,5 +1,5 @@
+import unittest
 from types import SimpleNamespace
-
 from retrotui.core.dialog_dispatch import DialogDispatcher
 from retrotui.core.actions import ActionResult, ActionType, AppAction
 
@@ -49,63 +49,68 @@ class DummyApp:
         return 'active'
 
 
-def test_dispatch_basic_branches():
-    app = DummyApp()
-    dd = DialogDispatcher(app)
+class DialogDispatchTests(unittest.TestCase):
+    def test_dispatch_basic_branches(self):
+        app = DummyApp()
+        dd = DialogDispatcher(app)
 
-    # Non-ActionResult ignored
-    dd.dispatch_window_result('not an action', None)
+        # Non-ActionResult ignored
+        dd.dispatch_window_result('not an action', None)
 
-    # REQUEST_OPEN_PATH -> calls show_open_dialog when source_win provided
-    res = ActionResult(ActionType.REQUEST_OPEN_PATH)
-    dd.dispatch_window_result(res, SimpleNamespace())
-    assert app.called.get('show_open_dialog')
+        # REQUEST_OPEN_PATH -> calls show_open_dialog when source_win provided
+        res = ActionResult(ActionType.REQUEST_OPEN_PATH)
+        dd.dispatch_window_result(res, SimpleNamespace())
+        self.assertTrue(app.called.get('show_open_dialog'))
 
-    # OPEN_FILE -> calls open_file_viewer
-    res2 = ActionResult(ActionType.OPEN_FILE, payload='/tmp/file')
-    dd.dispatch_window_result(res2, None)
-    assert app.called.get('open_file_viewer') == '/tmp/file'
+        # OPEN_FILE -> calls open_file_viewer
+        res2 = ActionResult(ActionType.OPEN_FILE, payload='/tmp/file')
+        dd.dispatch_window_result(res2, None)
+        self.assertEqual(app.called.get('open_file_viewer'), '/tmp/file')
 
-    # REQUEST_URL -> calls show_url_dialog
-    res3 = ActionResult(ActionType.REQUEST_URL, payload='http://x')
-    dd.dispatch_window_result(res3, SimpleNamespace())
-    assert app.called.get('show_url_dialog') == 'http://x'
+        # REQUEST_URL -> calls show_url_dialog
+        res3 = ActionResult(ActionType.REQUEST_URL, payload='http://x')
+        dd.dispatch_window_result(res3, SimpleNamespace())
+        self.assertEqual(app.called.get('show_url_dialog'), 'http://x')
 
-    # EXECUTE -> normalized to CLOSE_WINDOW and closes when source_win
-    res4 = ActionResult(ActionType.EXECUTE, payload='close')
-    dd.dispatch_window_result(res4, SimpleNamespace())
-    assert app.called.get('close_window')
+        # EXECUTE -> normalized to CLOSE_WINDOW and closes when source_win
+        res4 = ActionResult(ActionType.EXECUTE, payload='close')
+        dd.dispatch_window_result(res4, SimpleNamespace())
+        self.assertTrue(app.called.get('close_window'))
 
-    # REQUEST_COPY_BETWEEN_PANES with no source_win sets dialog
-    res5 = ActionResult(ActionType.REQUEST_COPY_BETWEEN_PANES, payload={'a': 'b'})
-    dd.dispatch_window_result(res5, None)
-    assert app.dialog is not None
+        # REQUEST_COPY_BETWEEN_PANES with no source_win sets dialog
+        res5 = ActionResult(ActionType.REQUEST_COPY_BETWEEN_PANES, payload={'a': 'b'})
+        dd.dispatch_window_result(res5, None)
+        self.assertIsNotNone(app.dialog)
 
-    # SAVE_ERROR sets dialog
-    app.dialog = None
-    res6 = ActionResult(ActionType.SAVE_ERROR, payload='boom')
-    dd.dispatch_window_result(res6, None)
-    assert app.dialog is not None
+        # SAVE_ERROR sets dialog
+        app.dialog = None
+        res6 = ActionResult(ActionType.SAVE_ERROR, payload='boom')
+        dd.dispatch_window_result(res6, None)
+        self.assertIsNotNone(app.dialog)
 
-    # UPDATE_CONFIG should call apply_preferences and persist_config
-    app.called.pop('apply_preferences', None)
-    app.called.pop('persist_config', None)
-    res7 = ActionResult(ActionType.UPDATE_CONFIG, payload={'show_hidden': True})
-    dd.dispatch_window_result(res7, None)
-    assert app.called.get('apply_preferences') is not None
-    assert app.called.get('persist_config')
+        # UPDATE_CONFIG should call apply_preferences and persist_config
+        app.called.pop('apply_preferences', None)
+        app.called.pop('persist_config', None)
+        res7 = ActionResult(ActionType.UPDATE_CONFIG, payload={'show_hidden': True})
+        dd.dispatch_window_result(res7, None)
+        self.assertIsNotNone(app.called.get('apply_preferences'))
+        self.assertTrue(app.called.get('persist_config'))
+
+    def test_resolve_dialog_result_exit(self):
+        app = DummyApp()
+        dd = DialogDispatcher(app)
+
+        # Fake dialog with Exit title and Yes button
+        dialog = SimpleNamespace()
+        dialog.title = 'Exit RetroTUI'
+        dialog.buttons = ['Yes']
+        dialog.callback = None
+        app.dialog = dialog
+
+        dd.resolve_dialog_result(0)
+        self.assertFalse(app.running)
 
 
-def test_resolve_dialog_result_exit():
-    app = DummyApp()
-    dd = DialogDispatcher(app)
+if __name__ == "__main__":
+    unittest.main()
 
-    # Fake dialog with Exit title and Yes button
-    dialog = SimpleNamespace()
-    dialog.title = 'Exit RetroTUI'
-    dialog.buttons = ['Yes']
-    dialog.callback = None
-    app.dialog = dialog
-
-    dd.resolve_dialog_result(0)
-    assert app.running is False

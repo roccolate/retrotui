@@ -1,3 +1,4 @@
+import unittest
 import sys
 import types
 
@@ -15,7 +16,8 @@ fake.start_color = lambda: None
 fake.use_default_colors = lambda: None
 fake.init_color = lambda *_: None
 fake.init_pair = lambda *_: None
-sys.modules['curses'] = fake
+if 'curses' not in sys.modules:
+    sys.modules['curses'] = fake
 
 from retrotui.plugins.base import RetroApp
 
@@ -29,15 +31,21 @@ class DummyApp(RetroApp):
         self._drawn = True
 
 
-def test_draw_delegates_to_draw_content():
-    win = DummyApp()
-    # fake curses window object
-    class FakeWin:
-        def getmaxyx(self):
-            return (24, 80)
-        def addnstr(self, *a, **k):
-            return
+class PluginBaseTests(unittest.TestCase):
+    def test_draw_delegates_to_draw_content(self):
+        win = DummyApp()
+        # fake curses window object
+        class FakeWin:
+            def getmaxyx(self):
+                return (24, 80)
+            def addnstr(self, *a, **k):
+                return
 
-    fake = FakeWin()
-    win.draw(fake)
-    assert getattr(win, '_drawn', False) is True
+        fake_win = FakeWin()
+        win.draw(fake_win)
+        self.assertTrue(getattr(win, '_drawn', False))
+
+
+if __name__ == "__main__":
+    unittest.main()
+

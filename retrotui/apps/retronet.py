@@ -108,9 +108,17 @@ class RetroNetWindow(Window):
             context = ssl._create_unverified_context()
             
             req = urllib.request.Request(url, headers=headers)
-            with urllib.request.urlopen(req, timeout=10, context=context) as response:
+            # Some test doubles for urllib.request.urlopen don't implement the
+            # context manager protocol; use a plain call and close when possible.
+            response = urllib.request.urlopen(req, timeout=10, context=context)
+            try:
                 charset = response.info().get_content_charset() or 'utf-8'
                 raw_html = response.read().decode(charset, errors='ignore')
+            finally:
+                try:
+                    response.close()
+                except Exception:
+                    pass
                 self.content = self._parse_html(raw_html)
         except BaseException as e:
             # Use pre-resolved attributes ONLY here
@@ -124,13 +132,13 @@ class RetroNetWindow(Window):
 
     def _parse_html(self, raw_html):
         """Ultra parser with style and structure support."""
-        # Clean scripts, styles, and SVG/Head/Nav (optional but helps)
-        text = re.sub(r'<(script|style|svg|head|noscript).*?>.*?</\1>', '', raw_html, flags=re.DOTALL | re.IGNORECASE)
-        
-        # Title
-        title_match = re.search(r'<title>(.*?)</title>', text, re.IGNORECASE | re.DOTALL)
+        # Extract title first (don't lose it when stripping head/script blocks)
+        title_match = re.search(r'<title>(.*?)</title>', raw_html, re.IGNORECASE | re.DOTALL)
         if title_match:
             self.title = f"RetroNet Ultra - {html.unescape(title_match.group(1)).strip()[:30]}"
+
+        # Clean scripts, styles, and SVG/Head/Nav (optional but helps)
+        text = re.sub(r'<(script|style|svg|noscript).*?>.*?</\1>', '', raw_html, flags=re.DOTALL | re.IGNORECASE)
 
         # 1. Headers
         text = re.sub(r'<h[1-3].*?>(.*?)</h[1-3]>', r'\n\n[H1]\1[/H]\n', text, flags=re.DOTALL | re.IGNORECASE)
@@ -188,7 +196,10 @@ class RetroNetWindow(Window):
             
             # Line attributes
             if "[H1]" in line_raw:
-                attr = curses.A_BOLD | curses.A_UNDERLINE
+                # Some environments or test doubles may not expose
+                # `curses.A_UNDERLINE`; be defensive and fall back.
+                underline = getattr(curses, 'A_UNDERLINE', 0)
+                attr = curses.A_BOLD | underline
                 line_raw = line_raw.replace("[H1]", "").replace("[/H]", "")
             elif "[H2]" in line_raw:
                 attr = curses.A_BOLD
