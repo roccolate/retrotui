@@ -186,7 +186,18 @@ WIN_SPAWN_SCREEN_MARGIN = 4  # Margin from screen edge for new windows
 ICON_ART_HEIGHT = 3          # Height of icon ASCII art in rows
 ICON_DEFAULT_START_X = 3     # Default icon grid X start
 ICON_DEFAULT_START_Y = 3     # Default icon grid Y start
+ICON_DEFAULT_SPACING_X = 12  # Default icon grid horizontal spacing (chars per column)
 ICON_DEFAULT_SPACING_Y = 5   # Default icon grid vertical spacing
+ICON_GRID_BOTTOM_MARGIN = 3  # Rows reserved at bottom for icon grid boundary
+ICON_FALLBACK_TERMINAL_HEIGHT = 24  # Fallback terminal height when stdscr is unavailable
 DEFAULT_DOUBLE_CLICK_INTERVAL = 0.35  # Seconds for double-click detection
 CLOCK_CLICK_REGION_WIDTH = 8  # Width of clock area in status bar
 BINARY_DETECT_CHUNK_SIZE = 1024  # Bytes read to detect binary files
+
+# Terminal / input constants
+TERMINAL_INPUT_TIMEOUT_MS = 500  # Curses input timeout in milliseconds
+MOUSE_SCROLL_DOWN_FALLBACK = 0x200000  # Fallback mask for BUTTON5_PRESSED (scroll down)
+
+# Welcome window dimensions
+WELCOME_WIN_WIDTH = 44   # Width of the welcome dialog window
+WELCOME_WIN_HEIGHT = 20  # Height of the welcome dialog window

@@ -158,6 +158,7 @@ class CoreAppTests(unittest.TestCase):
         app.icons = [{"action": self.actions_mod.AppAction.ABOUT, "art": ["[]"], "label": "About"}]
         app.show_welcome = True
         app.icon_positions = {}
+        app.drag_drop = self.app_mod.DragDropManager(app)
         return app
 
     def test_init_configures_terminal_and_creates_welcome_window(self):
@@ -764,7 +765,8 @@ class CoreAppTests(unittest.TestCase):
         self.assertEqual(app.windows, [bad])
         good.close.assert_called_once_with()
 
-        with mock.patch.object(self.app_mod.LOGGER, "debug") as log_debug:
+        from retrotui.core import window_manager as wm_mod
+        with mock.patch.object(wm_mod.LOGGER, "debug") as log_debug:
             app.close_window(bad)
         bad.close.assert_called_once_with()
         log_debug.assert_called_once()

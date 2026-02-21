@@ -4,14 +4,10 @@ import curses
 import inspect
 import time
 
-from .drag_drop import DragDropManager
 from ..constants import (
     DEFAULT_DOUBLE_CLICK_INTERVAL,
     MENU_BAR_HEIGHT,
     CLOCK_CLICK_REGION_WIDTH,
-    ICON_DEFAULT_START_X,
-    ICON_DEFAULT_START_Y,
-    ICON_DEFAULT_SPACING_Y,
 )
 
 
@@ -34,76 +30,6 @@ def _invoke_mouse_handler(handler, mx, my, bstate):
     if has_varargs or positional >= 3:
         return handler(mx, my, bstate)
     return handler(mx, my)
-
-
-def _clear_pending_file_drags(app):
-    """Clear pending drag candidates exposed by file-manager-like windows."""
-    for win in getattr(app, 'windows', []):
-        clearer = getattr(win, 'clear_pending_drag', None)
-        if callable(clearer):
-            clearer()
-
-
-def _set_drag_target(app, target):
-    """Track active drop target and update per-window highlight flags."""
-    for win in getattr(app, 'windows', []):
-        setattr(win, 'drop_target_highlight', bool(target is not None and win is target))
-    setattr(app, 'drag_target_window', target)
-
-
-def _clear_drag_state(app):
-    """Reset drag payload/source/target state."""
-    setattr(app, 'drag_payload', None)
-    setattr(app, 'drag_source_window', None)
-    _set_drag_target(app, None)
-
-
-def _supports_file_drop_target(win):
-    """Return True when window can accept dropped file paths."""
-    return callable(getattr(win, 'open_path', None)) or callable(
-        getattr(win, 'accept_dropped_path', None)
-    )
-
-
-def _find_drop_target_window(app, mx, my):
-    """Return topmost visible drop target under pointer, excluding source window."""
-    source = getattr(app, 'drag_source_window', None)
-    for win in reversed(getattr(app, 'windows', [])):
-        if not getattr(win, 'visible', False):
-            continue
-        contains = getattr(win, 'contains', None)
-        if not callable(contains) or not contains(mx, my):
-            continue
-        if win is source:
-            return None
-        if _supports_file_drop_target(win):
-            return win
-        return None
-    return None
-
-
-def _dispatch_drop(app, target, payload):
-    """Apply one dropped payload to target window and dispatch returned action."""
-    if target is None or not isinstance(payload, dict):
-        return
-    if payload.get('type') != 'file_path':
-        return
-    path = payload.get('path')
-    if not path:
-        return
-
-    result = None
-    open_path = getattr(target, 'open_path', None)
-    accept_path = getattr(target, 'accept_dropped_path', None)
-    if callable(open_path):
-        result = open_path(path)
-    elif callable(accept_path):
-        result = accept_path(path)
-
-    if result is not None:
-        dispatcher = getattr(app, '_dispatch_window_result', None)
-        if callable(dispatcher):
-            dispatcher(result, target)
 
 
 def _is_button1_click_event(bstate):
@@ -141,58 +67,7 @@ def _is_desktop_double_click(app, icon_idx, bstate):
 
 def handle_file_drag_drop_mouse(app, mx, my, bstate):
     """Handle file drag-and-drop between windows."""
-    mgr = getattr(app, 'drag_drop', None)
-    if mgr is not None:
-        return mgr.handle_mouse(mx, my, bstate)
-
-    # Fallback for callers that do not carry a DragDropManager (e.g. tests
-    # that pass a plain SimpleNamespace as app).
-    report_flag = getattr(curses, 'REPORT_MOUSE_POSITION', 0)
-    pressed_flag = getattr(curses, 'BUTTON1_PRESSED', 0)
-
-    is_motion = bool(bstate & report_flag)
-    button_down = bool((bstate & pressed_flag) or getattr(app, 'button1_pressed', False))
-    move_drag = is_motion and button_down
-
-    stop_drag = bool(bstate & getattr(curses, 'BUTTON1_RELEASED', 0))
-    if not stop_drag:
-        inferred_stop = getattr(app, 'stop_drag_flags', 0) & ~pressed_flag & ~report_flag
-        stop_drag = bool(bstate & inferred_stop)
-
-    drag_payload = getattr(app, 'drag_payload', None)
-
-    if drag_payload is not None:
-        if stop_drag:
-            target = _find_drop_target_window(app, mx, my)
-            _dispatch_drop(app, target, drag_payload)
-            _clear_drag_state(app)
-            _clear_pending_file_drags(app)
-            return True
-        if move_drag:
-            _set_drag_target(app, _find_drop_target_window(app, mx, my))
-            return True
-        return True
-
-    if stop_drag:
-        _clear_pending_file_drags(app)
-        _set_drag_target(app, None)
-        return False
-
-    if not move_drag:
-        return False
-
-    for win in reversed(getattr(app, 'windows', [])):
-        consumer = getattr(win, 'consume_pending_drag', None)
-        if not callable(consumer):
-            continue
-        payload = consumer(mx, my, bstate)
-        if payload is None:
-            continue
-        setattr(app, 'drag_payload', payload)
-        setattr(app, 'drag_source_window', win)
-        _set_drag_target(app, _find_drop_target_window(app, mx, my))
-        return True
-    return False
+    return app.drag_drop.handle_mouse(mx, my, bstate)
 
 
 def handle_drag_resize_mouse(app, mx, my, bstate):
@@ -338,106 +213,39 @@ def handle_window_mouse(app, mx, my, bstate):
 
 def handle_desktop_mouse(app, mx, my, bstate):
     """Handle desktop icon interactions: selection, activation, and dragging."""
-    # Handle icon dragging
-    dragging_icon = getattr(app, '_dragging_icon', -1)
-    
+    icon_mgr = getattr(app, '_icon_mgr', None)
+
     # Check for drag release
     if bstate & getattr(curses, 'BUTTON1_RELEASED', 0):
-        if dragging_icon >= 0:
-            # Snap to grid or just drop
-            # We don't need to do much since we update position live during drag (or on drop?)
-            # Let's simple clear the state
-            setattr(app, '_dragging_icon', -1)
-            # Save config to persist new position? 
-            # Ideally we save on exit or explicit save, but auto-save on drop is nice.
-            try:
-               app.persist_config()
-            except Exception:
-               pass
+        if icon_mgr is not None and icon_mgr.is_dragging:
+            icon_mgr.end_drag()
             return True
 
     # Check for drag motion
     is_drag_motion = bool(bstate & getattr(curses, 'BUTTON1_PRESSED', 0)) or \
                      bool((bstate & getattr(curses, 'REPORT_MOUSE_POSITION', 0)) and getattr(app, 'button1_pressed', False))
-    
-    if dragging_icon >= 0 and is_drag_motion:
-        # Update icon position
-        # We need to map mx, my back to icon coordinates
-        # Icons are drawn at specific positions.
-        # If we support arbitrary positioning, we need to update app.icon_positions
-        
-        # Determine which icon is being dragged
-        icon_key = app.icons[dragging_icon].get('label') # Using label as key for now
-        
-        # Simple center alignment offset? 
-        # For now, let's just set top-left to mouse pos - offset?
-        # We need to access the offset calculated at start of drag
-        dx = getattr(app, '_drag_icon_offset_x', 0)
-        dy = getattr(app, '_drag_icon_offset_y', 0)
-        
-        new_x = max(0, mx - dx)
-        new_y = max(0, my - dy)
-        
-        app.icon_positions[icon_key] = (new_x, new_y)
+
+    if icon_mgr is not None and icon_mgr.is_dragging and is_drag_motion:
+        icon_mgr.update_drag(mx, my)
         return True
 
     icon_idx = app.get_icon_at(mx, my)
-    
-    # Double click validation (unchanged)
+
+    # Double click validation
     if icon_idx >= 0 and _is_desktop_double_click(app, icon_idx, bstate):
         setattr(app, '_last_icon_click_idx', None)
         setattr(app, '_last_icon_click_ts', 0.0)
         app.execute_action(app.icons[icon_idx]['action'])
         return True
 
-    # Single click or Drag Start
+    # Single click or drag start
     if icon_idx >= 0:
         if bstate & getattr(curses, 'BUTTON1_PRESSED', 0):
-            # Start drag?
-            # We only start drag if we are not double clicking?
-            # Or usually drag starts on press + move.
-            # For simplicity, if we press on an icon, we arm it for drag.
-            
-            # Store initial offset to prevent jumping
-            # We need to know where the icon top-left is.
-            # app.get_icon_at doesn't return pos, we need to re-calc it or helper.
-            # Standard grid layout logic from app.py:
-            # start_y + i * spacing_y -> this is for vertical list default?
-            # Wait, get_icon_at uses strict vertical layout logic currently.
-            
-            # If we want arbitrary positions, get_icon_at needs to check app.icon_positions first!
-            # AND get_icon_at is in app.py. We need to update that first to support arbitrary positions.
-            
-            # Let's assume get_icon_at is updated or will be updated.
-            # To get current icon pos:
-            # icon_pos = app.get_icon_position(icon_idx)
-            # dx = mx - icon_pos_x
-            # dy = my - icon_pos_y
-            
             app.selected_icon = icon_idx
-            
-            # We need to signal that we MIGHT be dragging.
-            # But we don't know the exact icon (curr) x,y if we don't have a helper.
-            # Let's defer actual "drag start" to the next move event if we can?
-            
-            # For this step, let's just mark it as potentially dragging.
-            setattr(app, '_dragging_icon', icon_idx)
-            
-            # Calculate offset if possible. 
-            # We need a helper on app to get icon rect.
-            # rect = app.get_icon_rect(icon_idx) 
-            # For now, assume simple default layout if not in icon_positions
-            
-            # We will handle the offset calculation inside the drag motion block using a helper if needed
-            # or we accept a slight jump for the first MVP pass if we can't get exact rect easily here.
-            
-            # Better: call app.get_icon_screen_pos(icon_idx)
-            pos = getattr(app, 'get_icon_screen_pos', lambda i: (ICON_DEFAULT_START_X, ICON_DEFAULT_START_Y + i * ICON_DEFAULT_SPACING_Y))(icon_idx)
-            setattr(app, '_drag_icon_offset_x', mx - pos[0])
-            setattr(app, '_drag_icon_offset_y', my - pos[1])
-            
+            if icon_mgr is not None:
+                icon_mgr.start_drag(icon_idx, mx, my)
             return True
-            
+
         elif _is_button1_click_event(bstate):
             app.selected_icon = icon_idx
             return True
@@ -449,9 +257,8 @@ def handle_desktop_mouse(app, mx, my, bstate):
     if _is_button1_click_event(bstate):
         app.selected_icon = -1
         app.menu.active = False
-        
-    return True
 
+    return True
 
 def handle_mouse_event(app, event):
     """Handle mouse events."""
