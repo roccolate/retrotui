@@ -43,6 +43,6 @@ class CharMapTests(unittest.TestCase):
             win.draw(None)
 
         bx, by, bw, bh = win.body_rect()
-        info = win.handle_click(bx, by)
+        info = win.handle_click(bx, by + 1)
         self.assertIsNotNone(info)
         self.assertIn('char', info)

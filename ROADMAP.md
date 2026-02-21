@@ -253,14 +253,14 @@ Refactor, documentación y mejoras de UX fundamentales.
 Los clásicos que hacen que la gente se quede. Branch: `feature/ux-games`
 
 **Juegos clásicos Win 3.1**
-- [ ] 🃏 Solitaire — Klondike con cartas ASCII, drag con mouse
-- [ ] 💣 Minesweeper — Grid clásico, flags, timer
-- [ ] 🐍 Snake — Bonus retro
+- [x] 🃏 Solitaire — Klondike con cartas ASCII, drag con mouse
+- [x] 💣 Minesweeper — Grid clásico, flags, timer
+- [x] 🐍 Snake — Bonus retro
 
 **Apps utilitarias**
-- [ ] 🔤 Character Map — Selector de caracteres Unicode, copiar al clipboard
-- [ ] 📋 Clipboard Viewer — Ver contenido del clipboard interno
-- [ ] 📻 WiFi Manager — Wrapper `nmcli`, listar redes, conectar/desconectar
+- [x] 🔤 Character Map — Selector de caracteres Unicode, copiar al clipboard
+- [x] 📋 Clipboard Viewer — Ver contenido del clipboard interno
+- [x] 📻 WiFi Manager — Wrapper `nmcli`, listar redes, conectar/desconectar
 - [ ] 📖 Markdown Viewer — Renderizar `.md` con formato (headers, bold, listas, code blocks, tablas)
 
 ---

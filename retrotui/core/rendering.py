@@ -21,8 +21,9 @@ def draw_desktop(app):
     attr = theme_attr("desktop")
     pattern = getattr(getattr(app, "theme", None), "desktop_pattern", DESKTOP_PATTERN)
 
+    # Pre-compute pattern line once (avoids rebuilding per row).
+    line = (pattern * (w // len(pattern) + 1))[: w - 1]
     for row in range(1, h - 1):
-        line = (pattern * (w // len(pattern) + 1))[: w - 1]
         safe_addstr(app.stdscr, row, 0, line, attr)
 
 
@@ -52,11 +53,14 @@ def draw_taskbar(app):
     """Draw taskbar row with minimized window buttons."""
     h, w = app.stdscr.getmaxyx()
     taskbar_y = h - 2
+    attr = theme_attr("taskbar")
+    
+    # Always clear the taskbar line
+    safe_addstr(app.stdscr, taskbar_y, 0, ' ' * (w - 1), attr)
+    
     minimized = [win for win in app.windows if win.minimized]
     if not minimized:
         return
-    attr = theme_attr("taskbar")
-    safe_addstr(app.stdscr, taskbar_y, 0, ' ' * (w - 1), attr)
     x = 1
     for win in minimized:
         label = win.title[:TASKBAR_TITLE_MAX_LEN]

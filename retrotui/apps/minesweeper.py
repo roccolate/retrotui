@@ -69,8 +69,8 @@ class MinesweeperWindow(Window):
 
         # Adjust window size to fit contents:
         # Header = 2 lines + grid + borders
-        req_w = max(34, self.cols * 2 + 4)
-        req_h = max(12, self.rows + 5)
+        req_w = max(36, self.cols * 3 + 6)
+        req_h = max(14, self.rows + 8)
         self.w, self.h = req_w, req_h
 
         self.start_time = None
@@ -196,8 +196,9 @@ class MinesweeperWindow(Window):
         
         # Draw Grid horizontally centered
         grid_start_y = by + 3
-        grid_w = self.cols * 2
-        grid_start_x = bx + max(0, (bw - grid_w) // 2)
+        grid_w = self.cols * 3
+        # Centering logic: if window is wide enough, center it; otherwise flush left + 1
+        grid_start_x = bx + max(1, (bw - grid_w) // 2)
         
         from ..constants import C_ANSI_START
         color_map = {
@@ -213,25 +214,27 @@ class MinesweeperWindow(Window):
 
         for r in range(self.rows):
             for c in range(self.cols):
-                x = grid_start_x + c * 2
+                # Using 3 characters per cell: "[▓]" or " 1 " or " 🚩"
+                # This fits Expert mode (30 cols) into ~94 chars total.
+                x = grid_start_x + c * 3
                 y = grid_start_y + r
                 attr = body_attr
                 
                 if self.flagged[r][c] and (not self.game_over or self._grid[r][c] == -1):
-                    ch = '🚩'
+                    ch = " 🚩"
                 elif self.flagged[r][c] and self.game_over and self._grid[r][c] != -1:
-                    ch = '❌' # wrongly flagged
+                    ch = " ❌"
                 elif not self.revealed[r][c]:
-                    ch = '█' if not (self.game_over and not self.victory and self._grid[r][c] == -1) else '💣'
+                    # Using a bracketed shaded block to clearly mark cell boundaries
+                    ch = "[▓]" if not (self.game_over and not self.victory and self._grid[r][c] == -1) else " 💣"
                 else:
                     v = self._grid[r][c]
                     if v == -1:
-                        ch = '💥'
+                        ch = " 💥"
                     elif v == 0:
-                        ch = '·' # Empty space subtle dot
-                        attr = curses.A_DIM
+                        ch = "   " # Empty revealed
                     else:
-                        ch = str(v)
+                        ch = f" {v} "
                         c_val = color_map.get(v, curses.COLOR_WHITE)
                         attr = curses.color_pair(C_ANSI_START + c_val) | curses.A_BOLD
                         
@@ -257,13 +260,13 @@ class MinesweeperWindow(Window):
 
         # Grid bounds check
         grid_start_y = by + 3
-        grid_w = self.cols * 2
-        grid_start_x = bx + max(0, (bw - grid_w) // 2)
+        grid_w = self.cols * 3
+        grid_start_x = bx + max(1, (bw - grid_w) // 2)
         
         if not (grid_start_y <= my < grid_start_y + self.rows and grid_start_x <= mx < grid_start_x + grid_w):
             return None
             
-        col = (mx - grid_start_x) // 2
+        col = (mx - grid_start_x) // 3
         row = my - grid_start_y
         
         if bstate and getattr(bstate, 'right', False): # Right click

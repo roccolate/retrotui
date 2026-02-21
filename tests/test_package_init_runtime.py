@@ -22,7 +22,7 @@ class PackageInitRuntimeTests(unittest.TestCase):
         _purge_retrotui_modules()
         project_root = _ensure_project_root_on_path()
         package = importlib.import_module("retrotui")
-        self.assertEqual(package.__version__, "0.9.0")
+        self.assertEqual(package.__version__, "0.9.1")
         self.assertEqual(Path(package.__file__).resolve(), project_root / "retrotui" / "__init__.py")
 
     def test_direct_import_executes_package_init(self):
@@ -30,7 +30,7 @@ class PackageInitRuntimeTests(unittest.TestCase):
         project_root = _ensure_project_root_on_path()
         import retrotui  # noqa: PLC0415
 
-        self.assertEqual(retrotui.__version__, "0.9.0")
+        self.assertEqual(retrotui.__version__, "0.9.1")
         self.assertEqual(Path(retrotui.__file__).resolve(), project_root / "retrotui" / "__init__.py")
 
 

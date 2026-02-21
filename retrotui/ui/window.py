@@ -186,7 +186,12 @@ class Window:
         draw_box(stdscr, self.y, self.x, self.h, self.w, border_attr, double=True)
 
         # Title Bar
-        title = f' {self.title} '
+        max_title_len = max(0, self.w - self.MIN_BTN_OFFSET - 4)
+        display_title = self.title
+        if len(display_title) > max_title_len:
+            display_title = display_title[:max_title_len-1] + "…"
+            
+        title = f' {display_title} '
         # If active and has menu, show menu indicator
         if self.active and self.window_menu:
             title = ' ≡ ' + title.strip() + ' '

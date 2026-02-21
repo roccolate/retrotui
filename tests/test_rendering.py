@@ -113,7 +113,8 @@ class RenderingTests(unittest.TestCase):
         with mock.patch.object(self.rendering, "safe_addstr") as safe_addstr:
             self.rendering.draw_taskbar(app)
 
-        safe_addstr.assert_not_called()
+        # Only the background clear line, no button labels.
+        self.assertEqual(safe_addstr.call_count, 1)
 
     def test_draw_taskbar_renders_buttons_for_minimized_windows(self):
         stdscr = types.SimpleNamespace(getmaxyx=mock.Mock(return_value=(20, 80)))
