@@ -91,6 +91,7 @@ ICONS = [
     {"label": "Clip", "action": AppAction.CLIPBOARD if hasattr(AppAction, 'CLIPBOARD') else AppAction.NOTEPAD, "art": ["+--+", "|Cb|", "+--+"]},
     {"label": "Hex", "action": AppAction.HEX_VIEWER if hasattr(AppAction, 'HEX_VIEWER') else AppAction.NOTEPAD, "art": ["+--+", "|0x|", "+--+"]},
     {"label": "WiFi", "action": AppAction.WIFI_MANAGER if hasattr(AppAction, 'WIFI_MANAGER') else AppAction.SETTINGS, "art": ["+--+", "|Wi|", "+--+"]},
+    {"label": "AppMgr", "action": AppAction.APP_MANAGER, "art": ["\u256d\u2500\u2500\u256e", "\u2502AM\u2502", "\u2570\u2500\u2500\u256f"]},
 ]
 
 # Fallback ASCII icons for non-Unicode terminals.
@@ -114,6 +115,7 @@ ICONS_ASCII = [
     {"label": "Clip", "action": AppAction.CLIPBOARD if hasattr(AppAction, 'CLIPBOARD') else AppAction.NOTEPAD, "art": ["+--+", "|Cb|", "+--+"]},
     {"label": "Hex", "action": AppAction.HEX_VIEWER if hasattr(AppAction, 'HEX_VIEWER') else AppAction.NOTEPAD, "art": ["+--+", "|0x|", "+--+"]},
     {"label": "WiFi", "action": AppAction.WIFI_MANAGER if hasattr(AppAction, 'WIFI_MANAGER') else AppAction.SETTINGS, "art": ["+--+", "|Wi|", "+--+"]},
+    {"label": "AppMgr", "action": AppAction.APP_MANAGER, "art": ["+--+", "|AM|", "+--+"]},
 ]
 
 VIDEO_EXTENSIONS = {

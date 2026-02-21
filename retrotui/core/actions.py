@@ -83,6 +83,7 @@ class AppAction(str, Enum):
     CHARMAP = "charmap"
     CLIPBOARD = "clipboard"
     WIFI_MANAGER = "wifi_manager"
+    APP_MANAGER = "app_manager"
 
     # Snake specific
     SNAKE_NEW = "snake_new"

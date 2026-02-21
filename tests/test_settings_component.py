@@ -98,14 +98,13 @@ class SettingsComponentTests(unittest.TestCase):
         win = self._make_window()
 
         self.assertGreaterEqual(win._theme_count(), 5)
-        self.assertEqual(win._controls_count(), win._theme_count() + 7)
+        self.assertEqual(win._controls_count(), win._theme_count() + 6)
         self.assertEqual(win._toggle_show_hidden_index(), win._theme_count())
         self.assertEqual(win._toggle_wrap_index(), win._theme_count() + 1)
         self.assertEqual(win._toggle_sunday_first_index(), win._theme_count() + 2)
         self.assertEqual(win._toggle_show_welcome_index(), win._theme_count() + 3)
-        self.assertEqual(win._edit_hidden_icons_index(), win._theme_count() + 4)
-        self.assertEqual(win._save_index(), win._theme_count() + 5)
-        self.assertEqual(win._cancel_index(), win._theme_count() + 6)
+        self.assertEqual(win._save_index(), win._theme_count() + 4)
+        self.assertEqual(win._cancel_index(), win._theme_count() + 5)
 
         win._selection = 1
         self.assertIsNone(win._activate_selection())

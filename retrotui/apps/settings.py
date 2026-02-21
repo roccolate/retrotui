@@ -20,14 +20,12 @@ class SettingsWindow(Window):
         self.word_wrap_default = bool(app.default_word_wrap)
         self.sunday_first = bool(app.config.sunday_first)
         self.show_welcome = bool(app.config.show_welcome)
-        self.hidden_icons = str(app.config.hidden_icons)
         self._initial_state = (
             app.theme_name,
             app.default_show_hidden,
             app.default_word_wrap,
             app.config.sunday_first,
             app.config.show_welcome,
-            app.config.hidden_icons,
         )
         self._selection = 0
         self._committed = False
@@ -40,7 +38,7 @@ class SettingsWindow(Window):
         return len(self._themes)
 
     def _controls_count(self):
-        return self._theme_count() + 7  # theme rows + 4 toggles + 1 button + save + cancel
+        return self._theme_count() + 6  # theme rows + 4 toggles + save + cancel
 
     def _toggle_show_hidden_index(self):
         return self._theme_count()
@@ -54,14 +52,11 @@ class SettingsWindow(Window):
     def _toggle_show_welcome_index(self):
         return self._theme_count() + 3
 
-    def _edit_hidden_icons_index(self):
+    def _save_index(self):
         return self._theme_count() + 4
 
-    def _save_index(self):
-        return self._theme_count() + 5
-
     def _cancel_index(self):
-        return self._theme_count() + 6
+        return self._theme_count() + 5
 
     def _apply_runtime(self):
         self.app.apply_theme(self.theme_name)
@@ -72,17 +67,14 @@ class SettingsWindow(Window):
             apply_to_open_windows=True,
         )
         self.app.show_welcome = self.show_welcome
-        self.app.config.hidden_icons = self.hidden_icons
-        self.app.refresh_icons()
 
     def _revert_runtime(self):
-        initial_theme, initial_hidden, initial_wrap, initial_sunday, initial_welcome, initial_icons = self._initial_state
+        initial_theme, initial_hidden, initial_wrap, initial_sunday, initial_welcome = self._initial_state
         self.theme_name = initial_theme
         self.show_hidden = bool(initial_hidden)
         self.word_wrap_default = bool(initial_wrap)
         self.sunday_first = bool(initial_sunday)
         self.show_welcome = bool(initial_welcome)
-        self.hidden_icons = str(initial_icons)
         self._apply_runtime()
 
     def _activate_selection(self):
@@ -105,34 +97,6 @@ class SettingsWindow(Window):
             return None
         if idx == self._toggle_show_welcome_index():
             self.show_welcome = not self.show_welcome
-            return None
-        if idx == self._edit_hidden_icons_index():
-            from ..ui.dialog import MultiSelectDialog
-            from ..constants import ICONS, ICONS_ASCII
-            
-            base_icons = ICONS if self.app.use_unicode else ICONS_ASCII
-            current_hidden = {x.strip().lower() for x in self.hidden_icons.split(",")} if self.hidden_icons else set()
-            
-            # choices format: [(label, value, is_checked)]
-            # If an app is 'checked', it means it's visible (not hidden)
-            choices = []
-            for icon in base_icons:
-                label = icon["label"]
-                choices.append((label, label, label.lower() not in current_hidden))
-            
-            def on_submit(selected_values):
-                # The apps that were NOT selected should be hidden
-                selected_set = {v.lower() for v in selected_values}
-                hidden = [icon["label"] for icon in base_icons if icon["label"].lower() not in selected_set]
-                self.hidden_icons = ",".join(hidden)
-                
-            dialog = MultiSelectDialog(
-                "App Manager",
-                "Select apps to show on desktop and start menu:",
-                choices,
-            )
-            dialog.callback = on_submit
-            self.app.dialog = dialog
             return None
         if idx == self._save_index():
             self._committed = True
@@ -199,14 +163,6 @@ class SettingsWindow(Window):
         welcome_attr = body_attr | curses.A_REVERSE if self._selection == welcome_idx else body_attr
         safe_addstr(stdscr, row, bx, f' {welcome_mark} Show welcome screen on startup'.ljust(bw)[:bw], welcome_attr)
         self._control_rows[welcome_idx] = row
-        row += 1
-        
-        icons_idx = self._edit_hidden_icons_index()
-        icons_label = '[ App Manager... ]'
-        icons_attr = theme_attr('button_selected') if self._selection == icons_idx else theme_attr('button')
-        safe_addstr(stdscr, row, bx + 1, icons_label, icons_attr)
-        self._control_rows[icons_idx] = row
-        self._button_bounds[icons_idx] = (bx + 1, bx + 1 + len(icons_label), row)
         row += 2
 
         save_idx = self._save_index()

@@ -37,6 +37,7 @@ DEFAULT_GLOBAL_ITEMS = {
     ],
     'Edit': [
         ('Preferences', AppAction.SETTINGS),
+        ('App Manager', AppAction.APP_MANAGER),
     ],
     'Help': [
         ('About RetroTUI', AppAction.ABOUT),

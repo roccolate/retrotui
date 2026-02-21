@@ -178,6 +178,12 @@ def execute_app_action(app, action, logger, *, version: str) -> None:
         app._spawn_window(SolitaireWindow(offset_x, offset_y, 46, 22))
         return
 
+    if action == AppAction.APP_MANAGER:
+        from ..apps.app_manager import AppManagerWindow
+        offset_x, offset_y = app._next_window_offset(22, 6)
+        app._spawn_window(AppManagerWindow(offset_x, offset_y, 46, 18, app))
+        return
+
     if action == AppAction.SNAKE:
         offset_x, offset_y = app._next_window_offset(22, 5)
         app._spawn_window(SnakeWindow(offset_x, offset_y, 48, 20))
