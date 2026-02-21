@@ -31,17 +31,19 @@ class FileOperationManager:
     # Dialog helpers
     # ------------------------------------------------------------------
 
+    def _show_input_dialog(self, win, title, prompt, width, callback_method, **dialog_kwargs):
+        """Show an input dialog that calls a window method with the entered value."""
+        dialog = InputDialog(title, prompt, width=width, **dialog_kwargs)
+        dialog.callback = lambda value, target=win: getattr(target, callback_method)(value)
+        self._app.dialog = dialog
+
     def show_save_as_dialog(self, win):
         """Show dialog to get filename for saving."""
-        dialog = InputDialog('Save As', 'Enter filename:', width=40)
-        dialog.callback = lambda filename, target=win: target.save_as(filename)
-        self._app.dialog = dialog
+        self._show_input_dialog(win, 'Save As', 'Enter filename:', 40, 'save_as')
 
     def show_open_dialog(self, win):
         """Show dialog to get filename/path for opening in current window."""
-        dialog = InputDialog('Open File', 'Enter filename/path:', width=52)
-        dialog.callback = lambda filepath, target=win: target.open_path(filepath)
-        self._app.dialog = dialog
+        self._show_input_dialog(win, 'Open File', 'Enter filename/path:', 52, 'open_path')
 
     def show_rename_dialog(self, win):
         """Show dialog to rename selected File Manager entry."""
@@ -115,15 +117,11 @@ class FileOperationManager:
 
     def show_new_dir_dialog(self, win):
         """Show input dialog to create a new directory in current path."""
-        dialog = InputDialog('New Folder', 'Enter folder name:', width=52)
-        dialog.callback = lambda name, target=win: target.create_directory(name)
-        self._app.dialog = dialog
+        self._show_input_dialog(win, 'New Folder', 'Enter folder name:', 52, 'create_directory')
 
     def show_new_file_dialog(self, win):
         """Show input dialog to create a new file in current path."""
-        dialog = InputDialog('New File', 'Enter file name:', width=52)
-        dialog.callback = lambda name, target=win: target.create_file(name)
-        self._app.dialog = dialog
+        self._show_input_dialog(win, 'New File', 'Enter file name:', 52, 'create_file')
 
     def show_kill_confirm_dialog(self, win, payload):
         """Show confirmation dialog before sending signal to a process."""

@@ -10,11 +10,12 @@ from ..core.clipboard import copy_text, paste_text
 from ..core.terminal_session import TerminalSession
 from ..core.ansi import AnsiStateMachine
 from ..ui.menu import WindowMenu
+from ..ui.selectable_text import SelectableTextMixin
 from ..ui.window import Window
 from ..utils import normalize_key_code, safe_addstr, theme_attr
 
 
-class TerminalWindow(Window):
+class TerminalWindow(SelectableTextMixin, Window):
     """PTY-backed terminal window with ANSI color support and scrollback."""
 
     DEFAULT_SCROLLBACK = 2000
@@ -42,9 +43,7 @@ class TerminalWindow(Window):
         self._cursor_col = 0
         self.scrollback_offset = 0
         
-        self.selection_anchor = None  # (line_idx, col)
-        self.selection_cursor = None  # (line_idx, col)
-        self._mouse_selecting = False
+        self._init_selection()
 
         self.window_menu = WindowMenu({
             'Terminal': [
@@ -57,60 +56,6 @@ class TerminalWindow(Window):
                 ('Close', AppAction.CLOSE_WINDOW),
             ],
         })
-
-    def clear_selection(self):
-        """Clear text selection state."""
-        self.selection_anchor = None
-        self.selection_cursor = None
-        self._mouse_selecting = False
-
-    def has_selection(self):
-        """Return True when there is a non-empty selection."""
-        return (
-            self.selection_anchor is not None
-            and self.selection_cursor is not None
-            and self.selection_anchor != self.selection_cursor
-        )
-
-    def _selection_bounds(self):
-        """Return ordered ((line,col), (line,col)) selection bounds, or None."""
-        if not self.has_selection():
-            return None
-        a = self.selection_anchor
-        b = self.selection_cursor
-        return (a, b) if a <= b else (b, a)
-
-    def _line_selection_span(self, line_idx, line_len):
-        """Return [start,end) selected cols for one line, or None."""
-        bounds = self._selection_bounds()
-        if not bounds:
-            return None
-        (start_line, start_col), (end_line, end_col) = bounds
-        if line_idx < start_line or line_idx > end_line:
-            return None
-
-        if start_line == end_line:
-            start = max(0, min(line_len, start_col))
-            end = max(0, min(line_len, end_col))
-            if end <= start:
-                return None
-            return (start, end)
-
-        if line_idx == start_line:
-            start = max(0, min(line_len, start_col))
-            end = line_len
-            if end <= start:
-                return None
-            return (start, end)
-
-        if line_idx == end_line:
-            start = 0
-            end = max(0, min(line_len, end_col))
-            if end <= start:
-                return None
-            return (start, end)
-
-        return (0, line_len)
 
     def _get_line_text(self, line_cells):
         """Helper to convert cell list to plain string."""

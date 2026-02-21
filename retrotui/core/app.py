@@ -186,7 +186,7 @@ class RetroTUI:
         self.refresh_icons()
         
         # Build Start Menu with hidden apps filtered out
-        hidden_labels = {x.strip().lower() for x in self.config.hidden_icons.split(",")} if getattr(self.config, 'hidden_icons', "") else set()
+        hidden_labels = self._get_hidden_icon_labels()
         from ..ui.menu import DEFAULT_GLOBAL_ITEMS, Menu
         
         filtered_menu_items = {}
@@ -271,6 +271,11 @@ class RetroTUI:
             # don't fail startup on parse errors
             LOGGER.debug('failed to load icon positions', exc_info=True)
 
+    def _get_hidden_icon_labels(self):
+        """Return set of lowercased hidden icon labels from config."""
+        raw = getattr(self.config, 'hidden_icons', "").strip()
+        return {x.strip().lower() for x in raw.split(",")} if raw else set()
+
     def apply_theme(self, theme_name):
         """Apply a theme immediately to current runtime."""
         self.theme = get_theme(theme_name)
@@ -280,8 +285,7 @@ class RetroTUI:
     def refresh_icons(self):
         """Rebuild desktop icons list based on config and unicode support."""
         base_icons = ICONS if self.use_unicode else ICONS_ASCII
-        hidden_labels = {x.strip().lower() for x in self.config.hidden_icons.split(",")} if getattr(self.config, 'hidden_icons', "") else set()
-        self.icons = [icon for icon in base_icons if icon["label"].lower() not in hidden_labels]
+        self.icons = [icon for icon in base_icons if icon["label"].lower() not in self._get_hidden_icon_labels()]
 
     def apply_preferences(self, *, show_hidden=None, word_wrap_default=None, sunday_first=None, apply_to_open_windows=False):
         """Apply runtime preferences used by app windows and defaults."""
