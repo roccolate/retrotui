@@ -1,0 +1,11 @@
+[plugin]
+id = "fortune-cookie"
+name = "Fortune Cookie"
+version = "0.1.0"
+description = "Show a random fortune-like phrase on open (example)."
+menu_category = "Entertainment"
+
+[plugin.window]
+default_width = 50
+default_height = 8
+resizable = false

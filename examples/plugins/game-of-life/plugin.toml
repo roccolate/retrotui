@@ -1,0 +1,11 @@
+[plugin]
+id = "game-of-life"
+name = "Conway's Game of Life"
+version = "0.1.0"
+description = "Interactive Game of Life (example)."
+menu_category = "Entertainment"
+
+[plugin.window]
+default_width = 60
+default_height = 20
+resizable = true

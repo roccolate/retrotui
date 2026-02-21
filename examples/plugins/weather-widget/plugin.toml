@@ -1,0 +1,11 @@
+[plugin]
+id = "weather-widget"
+name = "Weather Widget"
+version = "0.1.0"
+description = "Simple weather fetch via wttr.in (example)."
+menu_category = "Entertainment"
+
+[plugin.window]
+default_width = 60
+default_height = 8
+resizable = false

@@ -21,6 +21,7 @@ class ActionType(str, Enum):
     REQUEST_MOVE_BETWEEN_PANES = "request_move_between_panes"
     REQUEST_NEW_DIR = "request_new_dir"
     REQUEST_NEW_FILE = "request_new_file"
+    REQUEST_URL = "request_url"
     REQUEST_KILL_CONFIRM = "request_kill_confirm"
     SAVE_ERROR = "save_error"
     ERROR = "error"
@@ -84,6 +85,11 @@ class AppAction(str, Enum):
     CLIPBOARD = "clipboard"
     WIFI_MANAGER = "wifi_manager"
     APP_MANAGER = "app_manager"
+    MARKDOWN_VIEWER = "markdown_viewer"
+    SYSTEM_MONITOR = "system_monitor"
+    CONTROL_PANEL = "control_panel"
+    TETRIS = "tetris"
+    RETRONET = "retronet"
 
     # Snake specific
     SNAKE_NEW = "snake_new"

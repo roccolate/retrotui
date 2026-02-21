@@ -1,0 +1,1517 @@
+setUpClass (test_action_runner.ActionRunnerTests) ... ERROR
+test_actions (unittest.loader._FailedTest.test_actions) ... ERROR
+test_app_manager_v2 (unittest.loader._FailedTest.test_app_manager_v2) ... ERROR
+setUpClass (test_bootstrap.BootstrapTests) ... ERROR
+setUpClass (test_calculator_component.CalculatorComponentTests) ... ERROR
+setUpClass (test_charmap.CharMapTests) ... ERROR
+test_clear_clipboard (test_clipboard_core.ClipboardCoreTests.test_clear_clipboard) ... ERROR
+test_copy_and_paste_text_with_sync_options (test_clipboard_core.ClipboardCoreTests.test_copy_and_paste_text_with_sync_options) ... ERROR
+test_detect_backend_priority (test_clipboard_core.ClipboardCoreTests.test_detect_backend_priority) ... ERROR
+test_system_copy_backends_and_errors (test_clipboard_core.ClipboardCoreTests.test_system_copy_backends_and_errors) ... ERROR
+test_system_paste_backends_and_errors (test_clipboard_core.ClipboardCoreTests.test_system_paste_backends_and_errors) ... ERROR
+setUpClass (test_clipboard_viewer.ClipboardViewerTests) ... ERROR
+setUpClass (test_clock_component.ClockComponentTests) ... ERROR
+setUpClass (test_constants_module.ConstantsModuleTests) ... ERROR
+test_context_menu (unittest.loader._FailedTest.test_context_menu) ... ERROR
+setUpClass (test_core_app.CoreAppTests) ... ERROR
+setUpClass (test_dialog_component.DialogComponentTests) ... ERROR
+test_main_cli_delegates_to_run (test_entry_and_content.EntryPointTests.test_main_cli_delegates_to_run) ... ERROR
+test_main_constructs_app_and_runs (test_entry_and_content.EntryPointTests.test_main_constructs_app_and_runs) ... ERROR
+test_module_import_enables_debug_logging_when_env_set (test_entry_and_content.EntryPointTests.test_module_import_enables_debug_logging_when_env_set) ... ERROR
+test_module_import_tolerates_locale_error (test_entry_and_content.EntryPointTests.test_module_import_tolerates_locale_error) ... ERROR
+test_module_main_guard_raises_system_exit_from_main_cli (test_entry_and_content.EntryPointTests.test_module_main_guard_raises_system_exit_from_main_cli) ... ERROR
+test_run_ignores_endwin_error_on_unhandled_exception (test_entry_and_content.EntryPointTests.test_run_ignores_endwin_error_on_unhandled_exception) ... ERROR
+test_run_returns_130_on_keyboard_interrupt (test_entry_and_content.EntryPointTests.test_run_returns_130_on_keyboard_interrupt) ... ERROR
+test_run_returns_1_on_unhandled_exception (test_entry_and_content.EntryPointTests.test_run_returns_1_on_unhandled_exception) ... ERROR
+test_run_returns_zero_when_wrapper_succeeds (test_entry_and_content.EntryPointTests.test_run_returns_zero_when_wrapper_succeeds) ... ERROR
+test_constants_module_exposes_expected_data (test_entry_and_content.StaticModuleContentTests.test_constants_module_exposes_expected_data) ... ERROR
+test_content_builders_include_expected_sections (test_entry_and_content.StaticModuleContentTests.test_content_builders_include_expected_sections) ... ERROR
+test_package_version_matches_runtime_constant (test_entry_and_content.StaticModuleContentTests.test_package_version_matches_runtime_constant) ... ERROR
+setUpClass (test_event_loop.EventLoopTests) ... ERROR
+test_filemanager_additional (unittest.loader._FailedTest.test_filemanager_additional) ... ERROR
+test_filemanager_clicks (unittest.loader._FailedTest.test_filemanager_clicks) ... ERROR
+setUpClass (test_filemanager_component.FileManagerComponentTests) ... ERROR
+test_filemanager_draw_and_ops (unittest.loader._FailedTest.test_filemanager_draw_and_ops) ... ERROR
+test_filemanager_dual_copy_move (unittest.loader._FailedTest.test_filemanager_dual_copy_move) ... ERROR
+test_filemanager_edgecases (unittest.loader._FailedTest.test_filemanager_edgecases) ... ERROR
+setUpClass (test_filemanager_extra.FileManagerExtraTests) ... ERROR
+setUpClass (test_filemanager_more.FileManagerMoreTests) ... ERROR
+test_filemanager_more2 (unittest.loader._FailedTest.test_filemanager_more2) ... ERROR
+test_filemanager_more3 (unittest.loader._FailedTest.test_filemanager_more3) ... ERROR
+test_filemanager_more4 (unittest.loader._FailedTest.test_filemanager_more4) ... ERROR
+test_filemanager_more_edges (unittest.loader._FailedTest.test_filemanager_more_edges) ... ERROR
+test_filemanager_more_ops (unittest.loader._FailedTest.test_filemanager_more_ops) ... ERROR
+test_filemanager_ops_more (unittest.loader._FailedTest.test_filemanager_ops_more) ... ERROR
+test_filemanager_preview_and_ops (unittest.loader._FailedTest.test_filemanager_preview_and_ops) ... ERROR
+test_filemanager_remaining (unittest.loader._FailedTest.test_filemanager_remaining) ... ERROR
+setUpClass (test_hexviewer_component.HexViewerComponentTests) ... ERROR
+test_placeholder (test_icon_drag.IconDragPlaceholderTests.test_placeholder) ... ok
+setUpClass (test_image_viewer_component.ImageViewerComponentTests) ... ERROR
+setUpClass (test_key_router.KeyRouterTests) ... ERROR
+setUpClass (test_logviewer_component.LogViewerComponentTests) ... ERROR
+setUpClass (test_logviewer_extra.LogViewerExtraTests) ... ERROR
+setUpClass (test_logviewer_more.LogViewerMoreTests) ... ERROR
+test_markdown_viewer (unittest.loader._FailedTest.test_markdown_viewer) ... ERROR
+setUpClass (test_menu_bar.MenuBarTests) ... ERROR
+setUpClass (test_minesweeper.MinesweeperTests) ... ERROR
+test_build_coverage_rows_maps_counts_from_foreign_root_by_suffix (test_module_coverage_tool.ModuleCoverageToolTests.test_build_coverage_rows_maps_counts_from_foreign_root_by_suffix) ... ok
+test_collect_executable_lines_detects_statement_rows (test_module_coverage_tool.ModuleCoverageToolTests.test_collect_executable_lines_detects_statement_rows) ... ok
+test_collect_executable_lines_excludes_docstrings (test_module_coverage_tool.ModuleCoverageToolTests.test_collect_executable_lines_excludes_docstrings) ... ok
+test_coverage_percent_handles_zero_denominator (test_module_coverage_tool.ModuleCoverageToolTests.test_coverage_percent_handles_zero_denominator) ... ok
+test_sort_coverage_rows_orders_lowest_first (test_module_coverage_tool.ModuleCoverageToolTests.test_sort_coverage_rows_orders_lowest_first) ... ok
+setUpClass (test_mouse_router.MouseRouterTests) ... ERROR
+setUpClass (test_notepad_component.NotepadComponentTests) ... ERROR
+setUpClass (test_notepad_more.NotepadMoreTests) ... ERROR
+test_direct_import_executes_package_init (test_package_init_runtime.PackageInitRuntimeTests.test_direct_import_executes_package_init) ... ok
+test_runtime_import_exposes_version (test_package_init_runtime.PackageInitRuntimeTests.test_runtime_import_exposes_version) ... ok
+test_direct_import_traces_init_module (test_package_init_trace.PackageInitTraceTests.test_direct_import_traces_init_module) ... ok
+test_plugin_base (unittest.loader._FailedTest.test_plugin_base) ... ERROR
+test_plugin_example (unittest.loader._FailedTest.test_plugin_example) ... ERROR
+test_plugin_loader (unittest.loader._FailedTest.test_plugin_loader) ... ERROR
+test_draw_renders_table_and_status (test_process_manager_component.ProcessManagerComponentTests.test_draw_renders_table_and_status) ... ok
+test_handle_key_sort_and_close_paths (test_process_manager_component.ProcessManagerComponentTests.test_handle_key_sort_and_close_paths) ... ok
+test_kill_process_calls_os_kill_and_refreshes (test_process_manager_component.ProcessManagerComponentTests.test_kill_process_calls_os_kill_and_refreshes) ... ok
+test_kill_process_permission_error_returns_error_action (test_process_manager_component.ProcessManagerComponentTests.test_kill_process_permission_error_returns_error_action) ... ok
+test_request_kill_selected_returns_confirm_action (test_process_manager_component.ProcessManagerComponentTests.test_request_kill_selected_returns_confirm_action) ... ok
+test_execute_action_sort_and_close (test_process_manager_extra.ProcessManagerExtraTests.test_execute_action_sort_and_close) ... ok
+test_format_uptime_variants (test_process_manager_extra.ProcessManagerExtraTests.test_format_uptime_variants) ... ok
+test_refresh_processes_populates_rows_and_summaries (test_process_manager_extra.ProcessManagerExtraTests.test_refresh_processes_populates_rows_and_summaries) ... ok
+test_request_kill_and_kill_process_paths (test_process_manager_extra.ProcessManagerExtraTests.test_request_kill_and_kill_process_paths) ... ok
+test_process_manager_kill (unittest.loader._FailedTest.test_process_manager_kill) ... ERROR
+test_read_command_prefers_cmdline_then_comm_then_fallback (test_process_manager_more.ProcessManagerMoreTests.test_read_command_prefers_cmdline_then_comm_then_fallback) ... ok
+test_read_mem_defaults_on_error (test_process_manager_more.ProcessManagerMoreTests.test_read_mem_defaults_on_error) ... ok
+test_read_process_row_various_edge_cases (test_process_manager_more.ProcessManagerMoreTests.test_read_process_row_various_edge_cases) ... ok
+test_read_total_jiffies_and_loadavg (test_process_manager_more.ProcessManagerMoreTests.test_read_total_jiffies_and_loadavg) ... ok
+test_sorting_and_selection_visibility (test_process_manager_more.ProcessManagerMoreTests.test_sorting_and_selection_visibility) ... ok
+test_process_manager_more2 (unittest.loader._FailedTest.test_process_manager_more2) ... ERROR
+test_process_manager_more_edges (unittest.loader._FailedTest.test_process_manager_more_edges) ... ERROR
+test_process_manager_remaining (unittest.loader._FailedTest.test_process_manager_remaining) ... ERROR
+test_process_manager_sort_paging (unittest.loader._FailedTest.test_process_manager_sort_paging) ... ERROR
+test_validate_release_tag_fails_on_app_version_mismatch (test_release_tag_tool.ReleaseTagToolTests.test_validate_release_tag_fails_on_app_version_mismatch) ... ok
+test_validate_release_tag_fails_without_v_prefix (test_release_tag_tool.ReleaseTagToolTests.test_validate_release_tag_fails_without_v_prefix) ... ok
+test_validate_release_tag_ok_when_versions_match (test_release_tag_tool.ReleaseTagToolTests.test_validate_release_tag_ok_when_versions_match) ... ok
+test_draw_desktop_renders_each_body_row (test_rendering.RenderingTests.test_draw_desktop_renders_each_body_row) ... ok
+test_draw_icons_stops_when_vertical_space_exhausted (test_rendering.RenderingTests.test_draw_icons_stops_when_vertical_space_exhausted) ... ok
+test_draw_icons_uses_selected_and_normal_colors (test_rendering.RenderingTests.test_draw_icons_uses_selected_and_normal_colors) ... ok
+test_draw_statusbar_includes_version_and_window_counts (test_rendering.RenderingTests.test_draw_statusbar_includes_version_and_window_counts) ... ok
+test_draw_taskbar_breaks_when_button_does_not_fit (test_rendering.RenderingTests.test_draw_taskbar_breaks_when_button_does_not_fit) ... ok
+test_draw_taskbar_no_minimized_windows_no_output (test_rendering.RenderingTests.test_draw_taskbar_no_minimized_windows_no_output) ... ok
+test_draw_taskbar_renders_buttons_for_minimized_windows (test_rendering.RenderingTests.test_draw_taskbar_renders_buttons_for_minimized_windows) ... ok
+test_activate_save_and_cancel_paths (test_settings_component.SettingsComponentTests.test_activate_save_and_cancel_paths) ... ok
+test_activate_save_failure_and_fallback_branch (test_settings_component.SettingsComponentTests.test_activate_save_failure_and_fallback_branch) ... ok
+test_apply_runtime_and_revert_runtime (test_settings_component.SettingsComponentTests.test_apply_runtime_and_revert_runtime) ... ok
+test_constructor_indices_and_activate_basic_paths (test_settings_component.SettingsComponentTests.test_constructor_indices_and_activate_basic_paths) ... ok
+test_draw_visibility_and_state_layout (test_settings_component.SettingsComponentTests.test_draw_visibility_and_state_layout) ... ok
+test_handle_click_and_close_paths (test_settings_component.SettingsComponentTests.test_handle_click_and_close_paths) ... ok
+test_handle_key_paths (test_settings_component.SettingsComponentTests.test_handle_key_paths) ... ok
+test_collision_and_game_over (test_snake.SnakeTests.test_collision_and_game_over) ... ok
+test_execute_actions (test_snake.SnakeTests.test_execute_actions) ... ok
+test_food_consumption (test_snake.SnakeTests.test_food_consumption) ... ok
+test_init_draw_and_movement (test_snake.SnakeTests.test_init_draw_and_movement) ... ok
+test_wrap_movement (test_snake.SnakeTests.test_wrap_movement) ... ok
+test_auto_move_drain_behavior (test_solitaire.SolitaireTests.test_auto_move_drain_behavior) ... ok
+test_init_draw_and_click (test_solitaire.SolitaireTests.test_init_draw_and_click) ... ok
+test_accept_dropped_path_quotes_and_forwards (test_terminal_component.TerminalComponentTests.test_accept_dropped_path_quotes_and_forwards) ... ok
+test_apply_csi_covers_extra_cursor_and_erase_modes (test_terminal_component.TerminalComponentTests.test_apply_csi_covers_extra_cursor_and_erase_modes) ... ok
+test_close_and_restart_reset_session_state (test_terminal_component.TerminalComponentTests.test_close_and_restart_reset_session_state) ... ok
+test_consume_output_applies_controls_and_trim_scrollback (test_terminal_component.TerminalComponentTests.test_consume_output_applies_controls_and_trim_scrollback) ... ok
+test_consume_output_applies_csi_delete_char_sequence (test_terminal_component.TerminalComponentTests.test_consume_output_applies_csi_delete_char_sequence) ... ok
+test_consume_output_applies_csi_line_edit_sequences (test_terminal_component.TerminalComponentTests.test_consume_output_applies_csi_line_edit_sequences) ... ok
+test_consume_output_handles_partial_escape_osc_and_two_byte_sequences (test_terminal_component.TerminalComponentTests.test_consume_output_handles_partial_escape_osc_and_two_byte_sequences) ... ok
+test_consume_output_keeps_viewport_when_scrolled_back (test_terminal_component.TerminalComponentTests.test_consume_output_keeps_viewport_when_scrolled_back) ... ok
+test_cursor_from_screen_early_returns (test_terminal_component.TerminalComponentTests.test_cursor_from_screen_early_returns) ... ok
+test_draw_live_cursor_clamps_and_skips_outside_view (test_terminal_component.TerminalComponentTests.test_draw_live_cursor_clamps_and_skips_outside_view) ... ok
+test_draw_live_cursor_uses_underscore_on_blank_cell (test_terminal_component.TerminalComponentTests.test_draw_live_cursor_uses_underscore_on_blank_cell) ... ok
+test_draw_live_cursor_visibility_rules (test_terminal_component.TerminalComponentTests.test_draw_live_cursor_visibility_rules) ... ok
+test_draw_renders_output_status_and_scrollbar (test_terminal_component.TerminalComponentTests.test_draw_renders_output_status_and_scrollbar) ... ok
+test_draw_scrollback_bar_draw_and_noop_paths (test_terminal_component.TerminalComponentTests.test_draw_scrollback_bar_draw_and_noop_paths) ... ok
+test_draw_selection_continue_and_fill_branches (test_terminal_component.TerminalComponentTests.test_draw_selection_continue_and_fill_branches) ... ok
+test_draw_states_init_and_exit_and_hidden_short_circuit (test_terminal_component.TerminalComponentTests.test_draw_states_init_and_exit_and_hidden_short_circuit) ... ok
+test_draw_with_error_and_no_session_populates_buffer_once (test_terminal_component.TerminalComponentTests.test_draw_with_error_and_no_session_populates_buffer_once) ... ok
+test_ensure_session_supported_and_start_errors (test_terminal_component.TerminalComponentTests.test_ensure_session_supported_and_start_errors) ... ok
+test_execute_action_paths (test_terminal_component.TerminalComponentTests.test_execute_action_paths) ... ok
+test_execute_menu_copy_and_accept_drop_edge_cases (test_terminal_component.TerminalComponentTests.test_execute_menu_copy_and_accept_drop_edge_cases) ... ok
+test_forward_payload_ignores_none (test_terminal_component.TerminalComponentTests.test_forward_payload_ignores_none) ... ok
+test_handle_click_and_mouse_drag_selection_clear_paths (test_terminal_component.TerminalComponentTests.test_handle_click_and_mouse_drag_selection_clear_paths) ... ok
+test_handle_click_menu_and_body_paths (test_terminal_component.TerminalComponentTests.test_handle_click_menu_and_body_paths) ... ok
+test_handle_key_ctrl_v_noop_when_clipboard_empty (test_terminal_component.TerminalComponentTests.test_handle_key_ctrl_v_noop_when_clipboard_empty) ... ok
+test_handle_key_ctrl_v_pastes_clipboard_into_session (test_terminal_component.TerminalComponentTests.test_handle_key_ctrl_v_pastes_clipboard_into_session) ... ok
+test_handle_key_f6_f7_send_interrupt_and_terminate (test_terminal_component.TerminalComponentTests.test_handle_key_f6_f7_send_interrupt_and_terminate) ... ok
+test_handle_key_menu_and_forwarding_and_write_error (test_terminal_component.TerminalComponentTests.test_handle_key_menu_and_forwarding_and_write_error) ... ok
+test_handle_key_pgup_pgdn_scrolls_scrollback_without_forwarding (test_terminal_component.TerminalComponentTests.test_handle_key_pgup_pgdn_scrolls_scrollback_without_forwarding) ... ok
+test_handle_key_without_running_session_is_noop (test_terminal_component.TerminalComponentTests.test_handle_key_without_running_session_is_noop) ... ok
+test_handle_scroll_bounds (test_terminal_component.TerminalComponentTests.test_handle_scroll_bounds) ... ok
+test_key_to_input_mapping_covers_special_and_printable (test_terminal_component.TerminalComponentTests.test_key_to_input_mapping_covers_special_and_printable) ... ok
+test_line_selection_span_and_selected_text_edge_cases (test_terminal_component.TerminalComponentTests.test_line_selection_span_and_selected_text_edge_cases) ... ok
+test_send_interrupt_and_terminate_error_paths (test_terminal_component.TerminalComponentTests.test_send_interrupt_and_terminate_error_paths) ... ok
+test_strip_ansi_handles_partial_and_osc_sequences (test_terminal_component.TerminalComponentTests.test_strip_ansi_handles_partial_and_osc_sequences) ... ok
+test_terminal_selection_drag_and_copy_f8 (test_terminal_component.TerminalComponentTests.test_terminal_selection_drag_and_copy_f8) ... ok
+test_terminal_selection_draw_overlay_and_clear (test_terminal_component.TerminalComponentTests.test_terminal_selection_draw_overlay_and_clear) ... ok
+test_visible_slice_and_fit_line (test_terminal_component.TerminalComponentTests.test_visible_slice_and_fit_line) ... ok
+test_close_closes_fd_and_ignores_close_errors (test_terminal_session.TerminalSessionTests.test_close_closes_fd_and_ignores_close_errors) ... ok
+test_interrupt_and_terminate_delegate_to_send_signal (test_terminal_session.TerminalSessionTests.test_interrupt_and_terminate_delegate_to_send_signal) ... ok
+test_is_supported_reflects_backend_availability (test_terminal_session.TerminalSessionTests.test_is_supported_reflects_backend_availability) ... ok
+test_poll_exit_paths (test_terminal_session.TerminalSessionTests.test_poll_exit_paths) ... ok
+test_read_decodes_chunks_and_marks_stop_on_eof (test_terminal_session.TerminalSessionTests.test_read_decodes_chunks_and_marks_stop_on_eof) ... ok
+test_read_handles_blocking_errors (test_terminal_session.TerminalSessionTests.test_read_handles_blocking_errors) ... ok
+test_read_handles_eagain_and_eio (test_terminal_session.TerminalSessionTests.test_read_handles_eagain_and_eio) ... ok
+test_read_raises_unexpected_oserror (test_terminal_session.TerminalSessionTests.test_read_raises_unexpected_oserror) ... ok
+test_read_returns_empty_without_fd (test_terminal_session.TerminalSessionTests.test_read_returns_empty_without_fd) ... ok
+test_read_stops_after_short_chunk (test_terminal_session.TerminalSessionTests.test_read_stops_after_short_chunk) ... ok
+test_resize_swallow_ioctl_oserror (test_terminal_session.TerminalSessionTests.test_resize_swallow_ioctl_oserror) ... ok
+test_resize_updates_dimensions_and_handles_backends (test_terminal_session.TerminalSessionTests.test_resize_updates_dimensions_and_handles_backends) ... ok
+test_resolve_posix_backends_import_error_returns_none (test_terminal_session.TerminalSessionTests.test_resolve_posix_backends_import_error_returns_none) ... ok
+test_resolve_posix_backends_success_and_cache (test_terminal_session.TerminalSessionTests.test_resolve_posix_backends_success_and_cache) ... ok
+test_send_signal_returns_false_when_kill_fails (test_terminal_session.TerminalSessionTests.test_send_signal_returns_false_when_kill_fails) ... ok
+test_send_signal_uses_foreground_pgid_then_child_fallback (test_terminal_session.TerminalSessionTests.test_send_signal_uses_foreground_pgid_then_child_fallback) ... ok
+test_start_child_branch_execs_shell_with_env_and_cwd (test_terminal_session.TerminalSessionTests.test_start_child_branch_execs_shell_with_env_and_cwd) ... ok
+test_start_is_noop_when_already_running (test_terminal_session.TerminalSessionTests.test_start_is_noop_when_already_running) ... ok
+test_start_parent_branch_sets_nonblocking_and_resizes (test_terminal_session.TerminalSessionTests.test_start_parent_branch_sets_nonblocking_and_resizes) ... ok
+test_start_raises_when_backends_missing (test_terminal_session.TerminalSessionTests.test_start_raises_when_backends_missing) ... ok
+test_write_variants_and_no_fd (test_terminal_session.TerminalSessionTests.test_write_variants_and_no_fd) ... ok
+test_coerce_bool_and_parse_scalar_helpers (test_theme_and_config.ThemeAndConfigTests.test_coerce_bool_and_parse_scalar_helpers) ... ok
+test_config_module_handles_missing_tomllib_import (test_theme_and_config.ThemeAndConfigTests.test_config_module_handles_missing_tomllib_import) ... ok
+test_default_config_path_uses_home (test_theme_and_config.ThemeAndConfigTests.test_default_config_path_uses_home) ... ok
+test_fallback_parse_toml_and_parse_toml_paths (test_theme_and_config.ThemeAndConfigTests.test_fallback_parse_toml_and_parse_toml_paths) ... ok
+test_list_themes_and_get_theme_fallback (test_theme_and_config.ThemeAndConfigTests.test_list_themes_and_get_theme_fallback) ... ok
+test_normalize_and_load_config_branches (test_theme_and_config.ThemeAndConfigTests.test_normalize_and_load_config_branches) ... ok
+test_serialize_and_save_config (test_theme_and_config.ThemeAndConfigTests.test_serialize_and_save_config) ... ok
+test_delete_path_handles_file_and_directory (test_trash_component.TrashComponentTests.test_delete_path_handles_file_and_directory) ... ok
+test_delete_selected_deletes_permanently_and_handles_errors (test_trash_component.TrashComponentTests.test_delete_selected_deletes_permanently_and_handles_errors) ... ok
+test_empty_trash_success_and_error_paths (test_trash_component.TrashComponentTests.test_empty_trash_success_and_error_paths) ... ok
+test_execute_action_and_key_shortcuts (test_trash_component.TrashComponentTests.test_execute_action_and_key_shortcuts) ... ok
+test_init_sets_trash_menu_and_hides_parent_entry_at_root (test_trash_component.TrashComponentTests.test_init_sets_trash_menu_and_hides_parent_entry_at_root) ... ok
+test_navigate_to_stays_within_trash_subtree (test_trash_component.TrashComponentTests.test_navigate_to_stays_within_trash_subtree) ... ok
+test_undo_last_delete_is_not_supported (test_trash_component.TrashComponentTests.test_undo_last_delete_is_not_supported) ... ok
+test_check_unicode_support_handles_encoding_failures (test_utils_core.UtilsCoreTests.test_check_unicode_support_handles_encoding_failures) ... ok
+test_draw_box_calls_safe_addstr_for_edges (test_utils_core.UtilsCoreTests.test_draw_box_calls_safe_addstr_for_edges) ... ok
+test_get_system_info_fallback_when_uname_or_meminfo_fail (test_utils_core.UtilsCoreTests.test_get_system_info_fallback_when_uname_or_meminfo_fail) ... ok
+test_get_system_info_with_uname_and_meminfo (test_utils_core.UtilsCoreTests.test_get_system_info_with_uname_and_meminfo) ... ok
+test_init_colors_accepts_theme_key_and_theme_object (test_utils_core.UtilsCoreTests.test_init_colors_accepts_theme_key_and_theme_object) ... ok
+test_init_colors_configures_extended_palette (test_utils_core.UtilsCoreTests.test_init_colors_configures_extended_palette) ... ok
+test_init_colors_uses_fallback_when_palette_not_customizable (test_utils_core.UtilsCoreTests.test_init_colors_uses_fallback_when_palette_not_customizable) ... ok
+test_is_video_file_detects_extensions_case_insensitive (test_utils_core.UtilsCoreTests.test_is_video_file_detects_extensions_case_insensitive) ... ok
+test_normalize_key_code_variants (test_utils_core.UtilsCoreTests.test_normalize_key_code_variants) ... ok
+test_play_ascii_video_handles_reset_mode_errors (test_utils_core.UtilsCoreTests.test_play_ascii_video_handles_reset_mode_errors) ... ok
+test_play_ascii_video_mplayer_receives_subtitle_argument (test_utils_core.UtilsCoreTests.test_play_ascii_video_mplayer_receives_subtitle_argument) ... ok
+test_play_ascii_video_prefers_mplayer_when_mpv_missing (test_utils_core.UtilsCoreTests.test_play_ascii_video_prefers_mplayer_when_mpv_missing) ... ok
+test_play_ascii_video_returns_backend_error_when_playback_fails (test_utils_core.UtilsCoreTests.test_play_ascii_video_returns_backend_error_when_playback_fails) ... ok
+test_play_ascii_video_returns_error_on_subprocess_oserror (test_utils_core.UtilsCoreTests.test_play_ascii_video_returns_error_on_subprocess_oserror) ... ok
+test_safe_addstr_clips_and_handles_errors (test_utils_core.UtilsCoreTests.test_safe_addstr_clips_and_handles_errors) ... ok
+test_failed_backends_return_error (test_utils_video.PlayAsciiVideoTests.test_failed_backends_return_error) ... ok
+test_mpv_command_includes_overlay_and_subtitle_args (test_utils_video.PlayAsciiVideoTests.test_mpv_command_includes_overlay_and_subtitle_args) ... ok
+test_no_backend_returns_error (test_utils_video.PlayAsciiVideoTests.test_no_backend_returns_error) ... ok
+test_successful_backend_returns_ok (test_utils_video.PlayAsciiVideoTests.test_successful_backend_returns_ok) ... ok
+test_draw_handles_no_nmcli (test_wifi_manager.WifiManagerTests.test_draw_handles_no_nmcli) ... ok
+test_body_rect_with_and_without_window_menu (test_window_component.WindowComponentTests.test_body_rect_with_and_without_window_menu) ... ok
+test_border_detection_and_resize_application (test_window_component.WindowComponentTests.test_border_detection_and_resize_application) ... ok
+test_contains_and_hit_regions (test_window_component.WindowComponentTests.test_contains_and_hit_regions) ... ok
+test_default_key_and_scroll_handlers (test_window_component.WindowComponentTests.test_default_key_and_scroll_handlers) ... ok
+test_draw_frame_and_draw_body_render_expected_paths (test_window_component.WindowComponentTests.test_draw_frame_and_draw_body_render_expected_paths) ... ok
+test_draw_frame_highlights_drop_target (test_window_component.WindowComponentTests.test_draw_frame_highlights_drop_target) ... ok
+test_draw_frame_inactive_uses_inactive_body_attr (test_window_component.WindowComponentTests.test_draw_frame_inactive_uses_inactive_body_attr) ... ok
+test_draw_frame_returns_zero_when_hidden (test_window_component.WindowComponentTests.test_draw_frame_returns_zero_when_hidden) ... ok
+test_draw_returns_early_when_window_is_hidden (test_window_component.WindowComponentTests.test_draw_returns_early_when_window_is_hidden) ... ok
+test_toggle_maximize_and_restore_with_clamp (test_window_component.WindowComponentTests.test_toggle_maximize_and_restore_with_clamp) ... ok
+test_toggle_minimize_updates_visibility_and_active (test_window_component.WindowComponentTests.test_toggle_minimize_updates_visibility_and_active) ... ok
+test_file_entry_ascii_icons (test_windows_logic.WindowLogicTests.test_file_entry_ascii_icons) ... ok
+test_filemanager_activate_selected_for_file_and_directory (test_windows_logic.WindowLogicTests.test_filemanager_activate_selected_for_file_and_directory) ... ok
+test_filemanager_key_navigation_and_scroll (test_windows_logic.WindowLogicTests.test_filemanager_key_navigation_and_scroll) ... ok
+test_filemanager_navigate_parent_reselects_previous_directory (test_windows_logic.WindowLogicTests.test_filemanager_navigate_parent_reselects_previous_directory) ... ok
+test_filemanager_rebuild_content_oserror_sets_message (test_windows_logic.WindowLogicTests.test_filemanager_rebuild_content_oserror_sets_message) ... ok
+test_filemanager_rebuild_content_permission_error_sets_message (test_windows_logic.WindowLogicTests.test_filemanager_rebuild_content_permission_error_sets_message) ... ok
+test_filemanager_rebuild_skips_entries_with_stat_errors (test_windows_logic.WindowLogicTests.test_filemanager_rebuild_skips_entries_with_stat_errors) ... ok
+test_filemanager_string_h_toggles_hidden (test_windows_logic.WindowLogicTests.test_filemanager_string_h_toggles_hidden) ... ok
+test_hidden_window_draw_skips_rendering (test_windows_logic.WindowLogicTests.test_hidden_window_draw_skips_rendering) ... ok
+test_input_dialog_accepts_unicode_string_input (test_windows_logic.WindowLogicTests.test_input_dialog_accepts_unicode_string_input) ... ok
+test_input_dialog_backspace_from_string (test_windows_logic.WindowLogicTests.test_input_dialog_backspace_from_string) ... ok
+test_notepad_accepts_unicode_string_input (test_windows_logic.WindowLogicTests.test_notepad_accepts_unicode_string_input) ... ok
+test_notepad_click_and_scroll_bounds (test_windows_logic.WindowLogicTests.test_notepad_click_and_scroll_bounds) ... ok
+test_notepad_ctrl_s_string_key_triggers_save (test_windows_logic.WindowLogicTests.test_notepad_ctrl_s_string_key_triggers_save) ... ok
+test_notepad_editing_enter_backspace_delete_and_wrap_toggle (test_windows_logic.WindowLogicTests.test_notepad_editing_enter_backspace_delete_and_wrap_toggle) ... ok
+test_notepad_load_file_success_with_unicode_path_and_content (test_windows_logic.WindowLogicTests.test_notepad_load_file_success_with_unicode_path_and_content) ... ok
+test_notepad_load_large_file_keeps_all_lines (test_windows_logic.WindowLogicTests.test_notepad_load_large_file_keeps_all_lines) ... ok
+test_notepad_load_permission_error_sets_placeholder_buffer (test_windows_logic.WindowLogicTests.test_notepad_load_permission_error_sets_placeholder_buffer) ... ok
+test_notepad_save_as_with_long_unicode_path (test_windows_logic.WindowLogicTests.test_notepad_save_as_with_long_unicode_path) ... ok
+test_notepad_save_error_returns_typed_error (test_windows_logic.WindowLogicTests.test_notepad_save_error_returns_typed_error) ... ok
+test_notepad_save_success_writes_buffer (test_windows_logic.WindowLogicTests.test_notepad_save_success_writes_buffer) ... ok
+test_notepad_save_without_filepath_requests_save_as (test_windows_logic.WindowLogicTests.test_notepad_save_without_filepath_requests_save_as) ... ok
+
+======================================================================
+ERROR: setUpClass (test_action_runner.ActionRunnerTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "F:\Proyectos\RetroTUI\tests\test_action_runner.py", line 179, in setUpClass
+    cls.actions_mod = importlib.import_module("retrotui.core.actions")
+                      ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Program Files\Python314\Lib\importlib\__init__.py", line 88, in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1314, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 491, in _call_with_frames_removed
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1314, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 491, in _call_with_frames_removed
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1335, in _find_and_load_unlocked
+ModuleNotFoundError: No module named 'retrotui'
+
+======================================================================
+ERROR: test_actions (unittest.loader._FailedTest.test_actions)
+----------------------------------------------------------------------
+ImportError: Failed to import test module: test_actions
+Traceback (most recent call last):
+  File "C:\Program Files\Python314\Lib\unittest\loader.py", line 426, in _find_test_path
+    module = self._get_module_from_name(name)
+  File "C:\Program Files\Python314\Lib\unittest\loader.py", line 367, in _get_module_from_name
+    __import__(name)
+    ~~~~~~~~~~^^^^^^
+  File "F:\Proyectos\RetroTUI\tests\test_actions.py", line 3, in <module>
+    from retrotui.core.actions import ActionResult, ActionType, AppAction
+ModuleNotFoundError: No module named 'retrotui'
+
+
+======================================================================
+ERROR: test_app_manager_v2 (unittest.loader._FailedTest.test_app_manager_v2)
+----------------------------------------------------------------------
+ImportError: Failed to import test module: test_app_manager_v2
+Traceback (most recent call last):
+  File "C:\Program Files\Python314\Lib\unittest\loader.py", line 426, in _find_test_path
+    module = self._get_module_from_name(name)
+  File "C:\Program Files\Python314\Lib\unittest\loader.py", line 367, in _get_module_from_name
+    __import__(name)
+    ~~~~~~~~~~^^^^^^
+  File "F:\Proyectos\RetroTUI\tests\test_app_manager_v2.py", line 6, in <module>
+    from retrotui.core.actions import AppAction, ActionType
+ModuleNotFoundError: No module named 'retrotui'
+
+
+======================================================================
+ERROR: setUpClass (test_bootstrap.BootstrapTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "F:\Proyectos\RetroTUI\tests\test_bootstrap.py", line 48, in setUpClass
+    cls.bootstrap = importlib.import_module("retrotui.core.bootstrap")
+                    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Program Files\Python314\Lib\importlib\__init__.py", line 88, in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1314, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 491, in _call_with_frames_removed
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1314, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 491, in _call_with_frames_removed
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1335, in _find_and_load_unlocked
+ModuleNotFoundError: No module named 'retrotui'
+
+======================================================================
+ERROR: setUpClass (test_calculator_component.CalculatorComponentTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "F:\Proyectos\RetroTUI\tests\test_calculator_component.py", line 45, in setUpClass
+    cls.actions_mod = importlib.import_module("retrotui.core.actions")
+                      ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Program Files\Python314\Lib\importlib\__init__.py", line 88, in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1314, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 491, in _call_with_frames_removed
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1314, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 491, in _call_with_frames_removed
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1335, in _find_and_load_unlocked
+ModuleNotFoundError: No module named 'retrotui'
+
+======================================================================
+ERROR: setUpClass (test_charmap.CharMapTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "F:\Proyectos\RetroTUI\tests\test_charmap.py", line 23, in setUpClass
+    cls.mod = importlib.import_module("retrotui.apps.charmap")
+              ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Program Files\Python314\Lib\importlib\__init__.py", line 88, in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1314, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 491, in _call_with_frames_removed
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1314, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 491, in _call_with_frames_removed
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1335, in _find_and_load_unlocked
+ModuleNotFoundError: No module named 'retrotui'
+
+======================================================================
+ERROR: test_clear_clipboard (test_clipboard_core.ClipboardCoreTests.test_clear_clipboard)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "F:\Proyectos\RetroTUI\tests\test_clipboard_core.py", line 9, in setUp
+    self.clip = importlib.reload(importlib.import_module("retrotui.core.clipboard"))
+                                 ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Program Files\Python314\Lib\importlib\__init__.py", line 88, in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1314, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 491, in _call_with_frames_removed
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1314, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 491, in _call_with_frames_removed
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1335, in _find_and_load_unlocked
+ModuleNotFoundError: No module named 'retrotui'
+
+======================================================================
+ERROR: test_copy_and_paste_text_with_sync_options (test_clipboard_core.ClipboardCoreTests.test_copy_and_paste_text_with_sync_options)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "F:\Proyectos\RetroTUI\tests\test_clipboard_core.py", line 9, in setUp
+    self.clip = importlib.reload(importlib.import_module("retrotui.core.clipboard"))
+                                 ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Program Files\Python314\Lib\importlib\__init__.py", line 88, in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1314, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 491, in _call_with_frames_removed
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1314, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 491, in _call_with_frames_removed
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1335, in _find_and_load_unlocked
+ModuleNotFoundError: No module named 'retrotui'
+
+======================================================================
+ERROR: test_detect_backend_priority (test_clipboard_core.ClipboardCoreTests.test_detect_backend_priority)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "F:\Proyectos\RetroTUI\tests\test_clipboard_core.py", line 9, in setUp
+    self.clip = importlib.reload(importlib.import_module("retrotui.core.clipboard"))
+                                 ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Program Files\Python314\Lib\importlib\__init__.py", line 88, in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1314, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 491, in _call_with_frames_removed
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1314, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 491, in _call_with_frames_removed
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1335, in _find_and_load_unlocked
+ModuleNotFoundError: No module named 'retrotui'
+
+======================================================================
+ERROR: test_system_copy_backends_and_errors (test_clipboard_core.ClipboardCoreTests.test_system_copy_backends_and_errors)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "F:\Proyectos\RetroTUI\tests\test_clipboard_core.py", line 9, in setUp
+    self.clip = importlib.reload(importlib.import_module("retrotui.core.clipboard"))
+                                 ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Program Files\Python314\Lib\importlib\__init__.py", line 88, in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1314, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 491, in _call_with_frames_removed
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1314, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 491, in _call_with_frames_removed
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1335, in _find_and_load_unlocked
+ModuleNotFoundError: No module named 'retrotui'
+
+======================================================================
+ERROR: test_system_paste_backends_and_errors (test_clipboard_core.ClipboardCoreTests.test_system_paste_backends_and_errors)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "F:\Proyectos\RetroTUI\tests\test_clipboard_core.py", line 9, in setUp
+    self.clip = importlib.reload(importlib.import_module("retrotui.core.clipboard"))
+                                 ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Program Files\Python314\Lib\importlib\__init__.py", line 88, in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1314, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 491, in _call_with_frames_removed
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1314, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 491, in _call_with_frames_removed
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1335, in _find_and_load_unlocked
+ModuleNotFoundError: No module named 'retrotui'
+
+======================================================================
+ERROR: setUpClass (test_clipboard_viewer.ClipboardViewerTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "F:\Proyectos\RetroTUI\tests\test_clipboard_viewer.py", line 24, in setUpClass
+    cls.mod = importlib.import_module("retrotui.apps.clipboard_viewer")
+              ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Program Files\Python314\Lib\importlib\__init__.py", line 88, in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1314, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 491, in _call_with_frames_removed
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1314, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 491, in _call_with_frames_removed
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1335, in _find_and_load_unlocked
+ModuleNotFoundError: No module named 'retrotui'
+
+======================================================================
+ERROR: setUpClass (test_clock_component.ClockComponentTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "F:\Proyectos\RetroTUI\tests\test_clock_component.py", line 34, in setUpClass
+    cls.actions_mod = importlib.import_module("retrotui.core.actions")
+                      ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Program Files\Python314\Lib\importlib\__init__.py", line 88, in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1314, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 491, in _call_with_frames_removed
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1314, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 491, in _call_with_frames_removed
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1335, in _find_and_load_unlocked
+ModuleNotFoundError: No module named 'retrotui'
+
+======================================================================
+ERROR: setUpClass (test_constants_module.ConstantsModuleTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "F:\Proyectos\RetroTUI\tests\test_constants_module.py", line 15, in setUpClass
+    cls.package = importlib.import_module("retrotui")
+                  ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+  File "C:\Program Files\Python314\Lib\importlib\__init__.py", line 88, in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1335, in _find_and_load_unlocked
+ModuleNotFoundError: No module named 'retrotui'
+
+======================================================================
+ERROR: test_context_menu (unittest.loader._FailedTest.test_context_menu)
+----------------------------------------------------------------------
+ImportError: Failed to import test module: test_context_menu
+Traceback (most recent call last):
+  File "C:\Program Files\Python314\Lib\unittest\loader.py", line 426, in _find_test_path
+    module = self._get_module_from_name(name)
+  File "C:\Program Files\Python314\Lib\unittest\loader.py", line 367, in _get_module_from_name
+    __import__(name)
+    ~~~~~~~~~~^^^^^^
+  File "F:\Proyectos\RetroTUI\tests\test_context_menu.py", line 13, in <module>
+    from retrotui.ui.context_menu import ContextMenu
+ModuleNotFoundError: No module named 'retrotui'
+
+
+======================================================================
+ERROR: setUpClass (test_core_app.CoreAppTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "F:\Proyectos\RetroTUI\tests\test_core_app.py", line 96, in setUpClass
+    cls.actions_mod = importlib.import_module("retrotui.core.actions")
+                      ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Program Files\Python314\Lib\importlib\__init__.py", line 88, in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1314, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 491, in _call_with_frames_removed
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1314, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 491, in _call_with_frames_removed
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1335, in _find_and_load_unlocked
+ModuleNotFoundError: No module named 'retrotui'
+
+======================================================================
+ERROR: setUpClass (test_dialog_component.DialogComponentTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "F:\Proyectos\RetroTUI\tests\test_dialog_component.py", line 36, in setUpClass
+    cls.dialog_mod = importlib.import_module("retrotui.ui.dialog")
+                     ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Program Files\Python314\Lib\importlib\__init__.py", line 88, in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1314, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 491, in _call_with_frames_removed
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1314, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 491, in _call_with_frames_removed
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1335, in _find_and_load_unlocked
+ModuleNotFoundError: No module named 'retrotui'
+
+======================================================================
+ERROR: test_main_cli_delegates_to_run (test_entry_and_content.EntryPointTests.test_main_cli_delegates_to_run)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "F:\Proyectos\RetroTUI\tests\test_entry_and_content.py", line 137, in test_main_cli_delegates_to_run
+    mod = _load_main_module()
+  File "F:\Proyectos\RetroTUI\tests\test_entry_and_content.py", line 38, in _load_main_module
+    return importlib.import_module("retrotui.__main__")
+           ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Program Files\Python314\Lib\importlib\__init__.py", line 88, in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1314, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 491, in _call_with_frames_removed
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1335, in _find_and_load_unlocked
+ModuleNotFoundError: No module named 'retrotui'
+
+======================================================================
+ERROR: test_main_constructs_app_and_runs (test_entry_and_content.EntryPointTests.test_main_constructs_app_and_runs)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "F:\Proyectos\RetroTUI\tests\test_entry_and_content.py", line 77, in test_main_constructs_app_and_runs
+    mod = _load_main_module()
+  File "F:\Proyectos\RetroTUI\tests\test_entry_and_content.py", line 38, in _load_main_module
+    return importlib.import_module("retrotui.__main__")
+           ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Program Files\Python314\Lib\importlib\__init__.py", line 88, in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1314, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 491, in _call_with_frames_removed
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1335, in _find_and_load_unlocked
+ModuleNotFoundError: No module named 'retrotui'
+
+======================================================================
+ERROR: test_module_import_enables_debug_logging_when_env_set (test_entry_and_content.EntryPointTests.test_module_import_enables_debug_logging_when_env_set)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "F:\Proyectos\RetroTUI\tests\test_entry_and_content.py", line 71, in test_module_import_enables_debug_logging_when_env_set
+    mod = importlib.import_module("retrotui.__main__")
+  File "C:\Program Files\Python314\Lib\importlib\__init__.py", line 88, in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1314, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 491, in _call_with_frames_removed
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1335, in _find_and_load_unlocked
+ModuleNotFoundError: No module named 'retrotui'
+
+======================================================================
+ERROR: test_module_import_tolerates_locale_error (test_entry_and_content.EntryPointTests.test_module_import_tolerates_locale_error)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "F:\Proyectos\RetroTUI\tests\test_entry_and_content.py", line 54, in test_module_import_tolerates_locale_error
+    mod = importlib.import_module("retrotui.__main__")
+  File "C:\Program Files\Python314\Lib\importlib\__init__.py", line 88, in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1314, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 491, in _call_with_frames_removed
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1335, in _find_and_load_unlocked
+ModuleNotFoundError: No module named 'retrotui'
+
+======================================================================
+ERROR: test_module_main_guard_raises_system_exit_from_main_cli (test_entry_and_content.EntryPointTests.test_module_main_guard_raises_system_exit_from_main_cli)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "<frozen runpy>", line 131, in _get_module_details
+  File "<frozen importlib.util>", line 90, in find_spec
+ModuleNotFoundError: No module named 'retrotui'
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "F:\Proyectos\RetroTUI\tests\test_entry_and_content.py", line 157, in test_module_main_guard_raises_system_exit_from_main_cli
+    runpy.run_module("retrotui.__main__", run_name="__main__")
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<frozen runpy>", line 222, in run_module
+  File "<frozen runpy>", line 140, in _get_module_details
+ImportError: Error while finding module specification for 'retrotui.__main__' (ModuleNotFoundError: No module named 'retrotui')
+
+======================================================================
+ERROR: test_run_ignores_endwin_error_on_unhandled_exception (test_entry_and_content.EntryPointTests.test_run_ignores_endwin_error_on_unhandled_exception)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "F:\Proyectos\RetroTUI\tests\test_entry_and_content.py", line 122, in test_run_ignores_endwin_error_on_unhandled_exception
+    mod = _load_main_module()
+  File "F:\Proyectos\RetroTUI\tests\test_entry_and_content.py", line 38, in _load_main_module
+    return importlib.import_module("retrotui.__main__")
+           ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Program Files\Python314\Lib\importlib\__init__.py", line 88, in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1314, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 491, in _call_with_frames_removed
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1335, in _find_and_load_unlocked
+ModuleNotFoundError: No module named 'retrotui'
+
+======================================================================
+ERROR: test_run_returns_130_on_keyboard_interrupt (test_entry_and_content.EntryPointTests.test_run_returns_130_on_keyboard_interrupt)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "F:\Proyectos\RetroTUI\tests\test_entry_and_content.py", line 97, in test_run_returns_130_on_keyboard_interrupt
+    mod = _load_main_module()
+  File "F:\Proyectos\RetroTUI\tests\test_entry_and_content.py", line 38, in _load_main_module
+    return importlib.import_module("retrotui.__main__")
+           ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Program Files\Python314\Lib\importlib\__init__.py", line 88, in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1314, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 491, in _call_with_frames_removed
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1335, in _find_and_load_unlocked
+ModuleNotFoundError: No module named 'retrotui'
+
+======================================================================
+ERROR: test_run_returns_1_on_unhandled_exception (test_entry_and_content.EntryPointTests.test_run_returns_1_on_unhandled_exception)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "F:\Proyectos\RetroTUI\tests\test_entry_and_content.py", line 105, in test_run_returns_1_on_unhandled_exception
+    mod = _load_main_module()
+  File "F:\Proyectos\RetroTUI\tests\test_entry_and_content.py", line 38, in _load_main_module
+    return importlib.import_module("retrotui.__main__")
+           ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Program Files\Python314\Lib\importlib\__init__.py", line 88, in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1314, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 491, in _call_with_frames_removed
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1335, in _find_and_load_unlocked
+ModuleNotFoundError: No module named 'retrotui'
+
+======================================================================
+ERROR: test_run_returns_zero_when_wrapper_succeeds (test_entry_and_content.EntryPointTests.test_run_returns_zero_when_wrapper_succeeds)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "F:\Proyectos\RetroTUI\tests\test_entry_and_content.py", line 88, in test_run_returns_zero_when_wrapper_succeeds
+    mod = _load_main_module()
+  File "F:\Proyectos\RetroTUI\tests\test_entry_and_content.py", line 38, in _load_main_module
+    return importlib.import_module("retrotui.__main__")
+           ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Program Files\Python314\Lib\importlib\__init__.py", line 88, in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1314, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 491, in _call_with_frames_removed
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1335, in _find_and_load_unlocked
+ModuleNotFoundError: No module named 'retrotui'
+
+======================================================================
+ERROR: test_constants_module_exposes_expected_data (test_entry_and_content.StaticModuleContentTests.test_constants_module_exposes_expected_data)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "F:\Proyectos\RetroTUI\tests\test_entry_and_content.py", line 166, in test_constants_module_exposes_expected_data
+    constants = importlib.import_module("retrotui.constants")
+  File "C:\Program Files\Python314\Lib\importlib\__init__.py", line 88, in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1314, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 491, in _call_with_frames_removed
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1335, in _find_and_load_unlocked
+ModuleNotFoundError: No module named 'retrotui'
+
+======================================================================
+ERROR: test_content_builders_include_expected_sections (test_entry_and_content.StaticModuleContentTests.test_content_builders_include_expected_sections)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "F:\Proyectos\RetroTUI\tests\test_entry_and_content.py", line 192, in test_content_builders_include_expected_sections
+    content = importlib.import_module("retrotui.core.content")
+  File "C:\Program Files\Python314\Lib\importlib\__init__.py", line 88, in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1314, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 491, in _call_with_frames_removed
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1314, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 491, in _call_with_frames_removed
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1335, in _find_and_load_unlocked
+ModuleNotFoundError: No module named 'retrotui'
+
+======================================================================
+ERROR: test_package_version_matches_runtime_constant (test_entry_and_content.StaticModuleContentTests.test_package_version_matches_runtime_constant)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "F:\Proyectos\RetroTUI\tests\test_entry_and_content.py", line 178, in test_package_version_matches_runtime_constant
+    package = importlib.import_module("retrotui")
+  File "C:\Program Files\Python314\Lib\importlib\__init__.py", line 88, in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1335, in _find_and_load_unlocked
+ModuleNotFoundError: No module named 'retrotui'
+
+======================================================================
+ERROR: setUpClass (test_event_loop.EventLoopTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "F:\Proyectos\RetroTUI\tests\test_event_loop.py", line 26, in setUpClass
+    cls.event_loop = importlib.import_module("retrotui.core.event_loop")
+                     ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Program Files\Python314\Lib\importlib\__init__.py", line 88, in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1314, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 491, in _call_with_frames_removed
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1314, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 491, in _call_with_frames_removed
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1335, in _find_and_load_unlocked
+ModuleNotFoundError: No module named 'retrotui'
+
+======================================================================
+ERROR: test_filemanager_additional (unittest.loader._FailedTest.test_filemanager_additional)
+----------------------------------------------------------------------
+ImportError: Failed to import test module: test_filemanager_additional
+Traceback (most recent call last):
+  File "C:\Program Files\Python314\Lib\unittest\loader.py", line 426, in _find_test_path
+    module = self._get_module_from_name(name)
+  File "C:\Program Files\Python314\Lib\unittest\loader.py", line 367, in _get_module_from_name
+    __import__(name)
+    ~~~~~~~~~~^^^^^^
+  File "F:\Proyectos\RetroTUI\tests\test_filemanager_additional.py", line 12, in <module>
+    from retrotui.apps.filemanager import (
+    ...<4 lines>...
+    )
+ModuleNotFoundError: No module named 'retrotui'
+
+
+======================================================================
+ERROR: test_filemanager_clicks (unittest.loader._FailedTest.test_filemanager_clicks)
+----------------------------------------------------------------------
+ImportError: Failed to import test module: test_filemanager_clicks
+Traceback (most recent call last):
+  File "C:\Program Files\Python314\Lib\unittest\loader.py", line 426, in _find_test_path
+    module = self._get_module_from_name(name)
+  File "C:\Program Files\Python314\Lib\unittest\loader.py", line 367, in _get_module_from_name
+    __import__(name)
+    ~~~~~~~~~~^^^^^^
+  File "F:\Proyectos\RetroTUI\tests\test_filemanager_clicks.py", line 10, in <module>
+    from retrotui.apps.filemanager import FileManagerWindow, FileEntry
+ModuleNotFoundError: No module named 'retrotui'
+
+
+======================================================================
+ERROR: setUpClass (test_filemanager_component.FileManagerComponentTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "F:\Proyectos\RetroTUI\tests\test_filemanager_component.py", line 57, in setUpClass
+    cls.actions_mod = importlib.import_module("retrotui.core.actions")
+                      ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Program Files\Python314\Lib\importlib\__init__.py", line 88, in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1314, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 491, in _call_with_frames_removed
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1314, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 491, in _call_with_frames_removed
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1335, in _find_and_load_unlocked
+ModuleNotFoundError: No module named 'retrotui'
+
+======================================================================
+ERROR: test_filemanager_draw_and_ops (unittest.loader._FailedTest.test_filemanager_draw_and_ops)
+----------------------------------------------------------------------
+ImportError: Failed to import test module: test_filemanager_draw_and_ops
+Traceback (most recent call last):
+  File "C:\Program Files\Python314\Lib\unittest\loader.py", line 426, in _find_test_path
+    module = self._get_module_from_name(name)
+  File "C:\Program Files\Python314\Lib\unittest\loader.py", line 367, in _get_module_from_name
+    __import__(name)
+    ~~~~~~~~~~^^^^^^
+  File "F:\Proyectos\RetroTUI\tests\test_filemanager_draw_and_ops.py", line 14, in <module>
+    from retrotui.apps import filemanager as fm
+ModuleNotFoundError: No module named 'retrotui'
+
+
+======================================================================
+ERROR: test_filemanager_dual_copy_move (unittest.loader._FailedTest.test_filemanager_dual_copy_move)
+----------------------------------------------------------------------
+ImportError: Failed to import test module: test_filemanager_dual_copy_move
+Traceback (most recent call last):
+  File "C:\Program Files\Python314\Lib\unittest\loader.py", line 426, in _find_test_path
+    module = self._get_module_from_name(name)
+  File "C:\Program Files\Python314\Lib\unittest\loader.py", line 367, in _get_module_from_name
+    __import__(name)
+    ~~~~~~~~~~^^^^^^
+  File "F:\Proyectos\RetroTUI\tests\test_filemanager_dual_copy_move.py", line 10, in <module>
+    from retrotui.apps.filemanager import FileManagerWindow, FileEntry
+ModuleNotFoundError: No module named 'retrotui'
+
+
+======================================================================
+ERROR: test_filemanager_edgecases (unittest.loader._FailedTest.test_filemanager_edgecases)
+----------------------------------------------------------------------
+ImportError: Failed to import test module: test_filemanager_edgecases
+Traceback (most recent call last):
+  File "C:\Program Files\Python314\Lib\unittest\loader.py", line 426, in _find_test_path
+    module = self._get_module_from_name(name)
+  File "C:\Program Files\Python314\Lib\unittest\loader.py", line 367, in _get_module_from_name
+    __import__(name)
+    ~~~~~~~~~~^^^^^^
+  File "F:\Proyectos\RetroTUI\tests\test_filemanager_edgecases.py", line 12, in <module>
+    from retrotui.apps.filemanager import FileManagerWindow, FileEntry
+ModuleNotFoundError: No module named 'retrotui'
+
+
+======================================================================
+ERROR: setUpClass (test_filemanager_extra.FileManagerExtraTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "F:\Proyectos\RetroTUI\tests\test_filemanager_extra.py", line 36, in setUpClass
+    cls.actions_mod = importlib.import_module("retrotui.core.actions")
+                      ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Program Files\Python314\Lib\importlib\__init__.py", line 88, in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1314, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 491, in _call_with_frames_removed
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1314, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 491, in _call_with_frames_removed
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1335, in _find_and_load_unlocked
+ModuleNotFoundError: No module named 'retrotui'
+
+======================================================================
+ERROR: setUpClass (test_filemanager_more.FileManagerMoreTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "F:\Proyectos\RetroTUI\tests\test_filemanager_more.py", line 32, in setUpClass
+    cls.actions_mod = importlib.import_module("retrotui.core.actions")
+                      ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Program Files\Python314\Lib\importlib\__init__.py", line 88, in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1314, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 491, in _call_with_frames_removed
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1314, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 491, in _call_with_frames_removed
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1335, in _find_and_load_unlocked
+ModuleNotFoundError: No module named 'retrotui'
+
+======================================================================
+ERROR: test_filemanager_more2 (unittest.loader._FailedTest.test_filemanager_more2)
+----------------------------------------------------------------------
+ImportError: Failed to import test module: test_filemanager_more2
+Traceback (most recent call last):
+  File "C:\Program Files\Python314\Lib\unittest\loader.py", line 426, in _find_test_path
+    module = self._get_module_from_name(name)
+  File "C:\Program Files\Python314\Lib\unittest\loader.py", line 367, in _get_module_from_name
+    __import__(name)
+    ~~~~~~~~~~^^^^^^
+  File "F:\Proyectos\RetroTUI\tests\test_filemanager_more2.py", line 14, in <module>
+    from retrotui.apps import filemanager as fm
+ModuleNotFoundError: No module named 'retrotui'
+
+
+======================================================================
+ERROR: test_filemanager_more3 (unittest.loader._FailedTest.test_filemanager_more3)
+----------------------------------------------------------------------
+ImportError: Failed to import test module: test_filemanager_more3
+Traceback (most recent call last):
+  File "C:\Program Files\Python314\Lib\unittest\loader.py", line 426, in _find_test_path
+    module = self._get_module_from_name(name)
+  File "C:\Program Files\Python314\Lib\unittest\loader.py", line 367, in _get_module_from_name
+    __import__(name)
+    ~~~~~~~~~~^^^^^^
+  File "F:\Proyectos\RetroTUI\tests\test_filemanager_more3.py", line 12, in <module>
+    from retrotui.apps import filemanager as fm
+ModuleNotFoundError: No module named 'retrotui'
+
+
+======================================================================
+ERROR: test_filemanager_more4 (unittest.loader._FailedTest.test_filemanager_more4)
+----------------------------------------------------------------------
+ImportError: Failed to import test module: test_filemanager_more4
+Traceback (most recent call last):
+  File "C:\Program Files\Python314\Lib\unittest\loader.py", line 426, in _find_test_path
+    module = self._get_module_from_name(name)
+  File "C:\Program Files\Python314\Lib\unittest\loader.py", line 367, in _get_module_from_name
+    __import__(name)
+    ~~~~~~~~~~^^^^^^
+  File "F:\Proyectos\RetroTUI\tests\test_filemanager_more4.py", line 13, in <module>
+    from retrotui.apps import filemanager as fm
+ModuleNotFoundError: No module named 'retrotui'
+
+
+======================================================================
+ERROR: test_filemanager_more_edges (unittest.loader._FailedTest.test_filemanager_more_edges)
+----------------------------------------------------------------------
+ImportError: Failed to import test module: test_filemanager_more_edges
+Traceback (most recent call last):
+  File "C:\Program Files\Python314\Lib\unittest\loader.py", line 426, in _find_test_path
+    module = self._get_module_from_name(name)
+  File "C:\Program Files\Python314\Lib\unittest\loader.py", line 367, in _get_module_from_name
+    __import__(name)
+    ~~~~~~~~~~^^^^^^
+  File "F:\Proyectos\RetroTUI\tests\test_filemanager_more_edges.py", line 10, in <module>
+    from retrotui.apps.filemanager import FileManagerWindow, FileEntry
+ModuleNotFoundError: No module named 'retrotui'
+
+
+======================================================================
+ERROR: test_filemanager_more_ops (unittest.loader._FailedTest.test_filemanager_more_ops)
+----------------------------------------------------------------------
+ImportError: Failed to import test module: test_filemanager_more_ops
+Traceback (most recent call last):
+  File "C:\Program Files\Python314\Lib\unittest\loader.py", line 426, in _find_test_path
+    module = self._get_module_from_name(name)
+  File "C:\Program Files\Python314\Lib\unittest\loader.py", line 367, in _get_module_from_name
+    __import__(name)
+    ~~~~~~~~~~^^^^^^
+  File "F:\Proyectos\RetroTUI\tests\test_filemanager_more_ops.py", line 10, in <module>
+    from retrotui.apps.filemanager import FileManagerWindow, FileEntry
+ModuleNotFoundError: No module named 'retrotui'
+
+
+======================================================================
+ERROR: test_filemanager_ops_more (unittest.loader._FailedTest.test_filemanager_ops_more)
+----------------------------------------------------------------------
+ImportError: Failed to import test module: test_filemanager_ops_more
+Traceback (most recent call last):
+  File "C:\Program Files\Python314\Lib\unittest\loader.py", line 426, in _find_test_path
+    module = self._get_module_from_name(name)
+  File "C:\Program Files\Python314\Lib\unittest\loader.py", line 367, in _get_module_from_name
+    __import__(name)
+    ~~~~~~~~~~^^^^^^
+  File "F:\Proyectos\RetroTUI\tests\test_filemanager_ops_more.py", line 10, in <module>
+    from retrotui.apps.filemanager import FileManagerWindow
+ModuleNotFoundError: No module named 'retrotui'
+
+
+======================================================================
+ERROR: test_filemanager_preview_and_ops (unittest.loader._FailedTest.test_filemanager_preview_and_ops)
+----------------------------------------------------------------------
+ImportError: Failed to import test module: test_filemanager_preview_and_ops
+Traceback (most recent call last):
+  File "C:\Program Files\Python314\Lib\unittest\loader.py", line 426, in _find_test_path
+    module = self._get_module_from_name(name)
+  File "C:\Program Files\Python314\Lib\unittest\loader.py", line 367, in _get_module_from_name
+    __import__(name)
+    ~~~~~~~~~~^^^^^^
+  File "F:\Proyectos\RetroTUI\tests\test_filemanager_preview_and_ops.py", line 13, in <module>
+    from retrotui.apps.filemanager import FileManagerWindow, FileEntry
+ModuleNotFoundError: No module named 'retrotui'
+
+
+======================================================================
+ERROR: test_filemanager_remaining (unittest.loader._FailedTest.test_filemanager_remaining)
+----------------------------------------------------------------------
+ImportError: Failed to import test module: test_filemanager_remaining
+Traceback (most recent call last):
+  File "C:\Program Files\Python314\Lib\unittest\loader.py", line 426, in _find_test_path
+    module = self._get_module_from_name(name)
+  File "C:\Program Files\Python314\Lib\unittest\loader.py", line 367, in _get_module_from_name
+    __import__(name)
+    ~~~~~~~~~~^^^^^^
+  File "F:\Proyectos\RetroTUI\tests\test_filemanager_remaining.py", line 14, in <module>
+    from retrotui.apps.filemanager import FileManagerWindow, FileEntry
+ModuleNotFoundError: No module named 'retrotui'
+
+
+======================================================================
+ERROR: setUpClass (test_hexviewer_component.HexViewerComponentTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "F:\Proyectos\RetroTUI\tests\test_hexviewer_component.py", line 49, in setUpClass
+    cls.actions_mod = importlib.import_module("retrotui.core.actions")
+                      ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Program Files\Python314\Lib\importlib\__init__.py", line 88, in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1314, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 491, in _call_with_frames_removed
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1314, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 491, in _call_with_frames_removed
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1335, in _find_and_load_unlocked
+ModuleNotFoundError: No module named 'retrotui'
+
+======================================================================
+ERROR: setUpClass (test_image_viewer_component.ImageViewerComponentTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "F:\Proyectos\RetroTUI\tests\test_image_viewer_component.py", line 38, in setUpClass
+    cls.actions_mod = importlib.import_module("retrotui.core.actions")
+                      ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Program Files\Python314\Lib\importlib\__init__.py", line 88, in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1314, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 491, in _call_with_frames_removed
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1314, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 491, in _call_with_frames_removed
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1335, in _find_and_load_unlocked
+ModuleNotFoundError: No module named 'retrotui'
+
+======================================================================
+ERROR: setUpClass (test_key_router.KeyRouterTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "F:\Proyectos\RetroTUI\tests\test_key_router.py", line 27, in setUpClass
+    cls.actions_mod = importlib.import_module("retrotui.core.actions")
+                      ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Program Files\Python314\Lib\importlib\__init__.py", line 88, in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1314, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 491, in _call_with_frames_removed
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1314, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 491, in _call_with_frames_removed
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1335, in _find_and_load_unlocked
+ModuleNotFoundError: No module named 'retrotui'
+
+======================================================================
+ERROR: setUpClass (test_logviewer_component.LogViewerComponentTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "F:\Proyectos\RetroTUI\tests\test_logviewer_component.py", line 52, in setUpClass
+    cls.actions_mod = importlib.import_module("retrotui.core.actions")
+                      ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Program Files\Python314\Lib\importlib\__init__.py", line 88, in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1314, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 491, in _call_with_frames_removed
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1314, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 491, in _call_with_frames_removed
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1335, in _find_and_load_unlocked
+ModuleNotFoundError: No module named 'retrotui'
+
+======================================================================
+ERROR: setUpClass (test_logviewer_extra.LogViewerExtraTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "F:\Proyectos\RetroTUI\tests\test_logviewer_extra.py", line 33, in setUpClass
+    cls.clipboard_mod = importlib.import_module("retrotui.core.clipboard")
+                        ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Program Files\Python314\Lib\importlib\__init__.py", line 88, in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1314, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 491, in _call_with_frames_removed
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1314, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 491, in _call_with_frames_removed
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1335, in _find_and_load_unlocked
+ModuleNotFoundError: No module named 'retrotui'
+
+======================================================================
+ERROR: setUpClass (test_logviewer_more.LogViewerMoreTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "F:\Proyectos\RetroTUI\tests\test_logviewer_more.py", line 32, in setUpClass
+    cls.actions_mod = importlib.import_module("retrotui.core.actions")
+                      ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Program Files\Python314\Lib\importlib\__init__.py", line 88, in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1314, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 491, in _call_with_frames_removed
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1314, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 491, in _call_with_frames_removed
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1335, in _find_and_load_unlocked
+ModuleNotFoundError: No module named 'retrotui'
+
+======================================================================
+ERROR: test_markdown_viewer (unittest.loader._FailedTest.test_markdown_viewer)
+----------------------------------------------------------------------
+ImportError: Failed to import test module: test_markdown_viewer
+Traceback (most recent call last):
+  File "C:\Program Files\Python314\Lib\unittest\loader.py", line 426, in _find_test_path
+    module = self._get_module_from_name(name)
+  File "C:\Program Files\Python314\Lib\unittest\loader.py", line 367, in _get_module_from_name
+    __import__(name)
+    ~~~~~~~~~~^^^^^^
+  File "F:\Proyectos\RetroTUI\tests\test_markdown_viewer.py", line 7, in <module>
+    from retrotui.apps.markdown_viewer import MarkdownViewerWindow
+ModuleNotFoundError: No module named 'retrotui'
+
+
+======================================================================
+ERROR: setUpClass (test_menu_bar.MenuBarTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "F:\Proyectos\RetroTUI\tests\test_menu_bar.py", line 28, in setUpClass
+    cls.menu_mod = importlib.import_module('retrotui.ui.menu')
+                   ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+  File "C:\Program Files\Python314\Lib\importlib\__init__.py", line 88, in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1314, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 491, in _call_with_frames_removed
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1314, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 491, in _call_with_frames_removed
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1335, in _find_and_load_unlocked
+ModuleNotFoundError: No module named 'retrotui'
+
+======================================================================
+ERROR: setUpClass (test_minesweeper.MinesweeperTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "F:\Proyectos\RetroTUI\tests\test_minesweeper.py", line 23, in setUpClass
+    cls.mod = importlib.import_module("retrotui.apps.minesweeper")
+              ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Program Files\Python314\Lib\importlib\__init__.py", line 88, in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1314, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 491, in _call_with_frames_removed
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1314, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 491, in _call_with_frames_removed
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1335, in _find_and_load_unlocked
+ModuleNotFoundError: No module named 'retrotui'
+
+======================================================================
+ERROR: setUpClass (test_mouse_router.MouseRouterTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "F:\Proyectos\RetroTUI\tests\test_mouse_router.py", line 26, in setUpClass
+    cls.mouse_router = importlib.import_module("retrotui.core.mouse_router")
+                       ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Program Files\Python314\Lib\importlib\__init__.py", line 88, in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1314, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 491, in _call_with_frames_removed
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1314, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 491, in _call_with_frames_removed
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1335, in _find_and_load_unlocked
+ModuleNotFoundError: No module named 'retrotui'
+
+======================================================================
+ERROR: setUpClass (test_notepad_component.NotepadComponentTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "F:\Proyectos\RetroTUI\tests\test_notepad_component.py", line 50, in setUpClass
+    cls.actions_mod = importlib.import_module("retrotui.core.actions")
+                      ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Program Files\Python314\Lib\importlib\__init__.py", line 88, in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1314, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 491, in _call_with_frames_removed
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1314, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 491, in _call_with_frames_removed
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1335, in _find_and_load_unlocked
+ModuleNotFoundError: No module named 'retrotui'
+
+======================================================================
+ERROR: setUpClass (test_notepad_more.NotepadMoreTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "F:\Proyectos\RetroTUI\tests\test_notepad_more.py", line 32, in setUpClass
+    cls.notepad_mod = importlib.import_module("retrotui.apps.notepad")
+                      ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Program Files\Python314\Lib\importlib\__init__.py", line 88, in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1314, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 491, in _call_with_frames_removed
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1314, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 491, in _call_with_frames_removed
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1335, in _find_and_load_unlocked
+ModuleNotFoundError: No module named 'retrotui'
+
+======================================================================
+ERROR: test_plugin_base (unittest.loader._FailedTest.test_plugin_base)
+----------------------------------------------------------------------
+ImportError: Failed to import test module: test_plugin_base
+Traceback (most recent call last):
+  File "C:\Program Files\Python314\Lib\unittest\loader.py", line 426, in _find_test_path
+    module = self._get_module_from_name(name)
+  File "C:\Program Files\Python314\Lib\unittest\loader.py", line 367, in _get_module_from_name
+    __import__(name)
+    ~~~~~~~~~~^^^^^^
+  File "F:\Proyectos\RetroTUI\tests\test_plugin_base.py", line 20, in <module>
+    from retrotui.plugins.base import RetroApp
+ModuleNotFoundError: No module named 'retrotui'
+
+
+======================================================================
+ERROR: test_plugin_example (unittest.loader._FailedTest.test_plugin_example)
+----------------------------------------------------------------------
+ImportError: Failed to import test module: test_plugin_example
+Traceback (most recent call last):
+  File "C:\Program Files\Python314\Lib\unittest\loader.py", line 426, in _find_test_path
+    module = self._get_module_from_name(name)
+  File "C:\Program Files\Python314\Lib\unittest\loader.py", line 367, in _get_module_from_name
+    __import__(name)
+    ~~~~~~~~~~^^^^^^
+  File "F:\Proyectos\RetroTUI\tests\test_plugin_example.py", line 22, in <module>
+    from retrotui.plugins import loader
+ModuleNotFoundError: No module named 'retrotui'
+
+
+======================================================================
+ERROR: test_plugin_loader (unittest.loader._FailedTest.test_plugin_loader)
+----------------------------------------------------------------------
+ImportError: Failed to import test module: test_plugin_loader
+Traceback (most recent call last):
+  File "C:\Program Files\Python314\Lib\unittest\loader.py", line 426, in _find_test_path
+    module = self._get_module_from_name(name)
+  File "C:\Program Files\Python314\Lib\unittest\loader.py", line 367, in _get_module_from_name
+    __import__(name)
+    ~~~~~~~~~~^^^^^^
+  File "F:\Proyectos\RetroTUI\tests\test_plugin_loader.py", line 27, in <module>
+    from retrotui.plugins import loader
+ModuleNotFoundError: No module named 'retrotui'
+
+
+======================================================================
+ERROR: test_process_manager_kill (unittest.loader._FailedTest.test_process_manager_kill)
+----------------------------------------------------------------------
+ImportError: Failed to import test module: test_process_manager_kill
+Traceback (most recent call last):
+  File "C:\Program Files\Python314\Lib\unittest\loader.py", line 426, in _find_test_path
+    module = self._get_module_from_name(name)
+  File "C:\Program Files\Python314\Lib\unittest\loader.py", line 367, in _get_module_from_name
+    __import__(name)
+    ~~~~~~~~~~^^^^^^
+  File "F:\Proyectos\RetroTUI\tests\test_process_manager_kill.py", line 9, in <module>
+    from retrotui.apps.process_manager import ProcessManagerWindow
+ModuleNotFoundError: No module named 'retrotui'
+
+
+======================================================================
+ERROR: test_process_manager_more2 (unittest.loader._FailedTest.test_process_manager_more2)
+----------------------------------------------------------------------
+ImportError: Failed to import test module: test_process_manager_more2
+Traceback (most recent call last):
+  File "C:\Program Files\Python314\Lib\unittest\loader.py", line 426, in _find_test_path
+    module = self._get_module_from_name(name)
+  File "C:\Program Files\Python314\Lib\unittest\loader.py", line 367, in _get_module_from_name
+    __import__(name)
+    ~~~~~~~~~~^^^^^^
+  File "F:\Proyectos\RetroTUI\tests\test_process_manager_more2.py", line 34, in <module>
+    from retrotui.apps.process_manager import ProcessManagerWindow, ProcessRow
+ModuleNotFoundError: No module named 'retrotui'
+
+
+======================================================================
+ERROR: test_process_manager_more_edges (unittest.loader._FailedTest.test_process_manager_more_edges)
+----------------------------------------------------------------------
+ImportError: Failed to import test module: test_process_manager_more_edges
+Traceback (most recent call last):
+  File "C:\Program Files\Python314\Lib\unittest\loader.py", line 426, in _find_test_path
+    module = self._get_module_from_name(name)
+  File "C:\Program Files\Python314\Lib\unittest\loader.py", line 367, in _get_module_from_name
+    __import__(name)
+    ~~~~~~~~~~^^^^^^
+  File "F:\Proyectos\RetroTUI\tests\test_process_manager_more_edges.py", line 8, in <module>
+    from retrotui.apps.process_manager import ProcessManagerWindow, ProcessRow
+ModuleNotFoundError: No module named 'retrotui'
+
+
+======================================================================
+ERROR: test_process_manager_remaining (unittest.loader._FailedTest.test_process_manager_remaining)
+----------------------------------------------------------------------
+ImportError: Failed to import test module: test_process_manager_remaining
+Traceback (most recent call last):
+  File "C:\Program Files\Python314\Lib\unittest\loader.py", line 426, in _find_test_path
+    module = self._get_module_from_name(name)
+  File "C:\Program Files\Python314\Lib\unittest\loader.py", line 367, in _get_module_from_name
+    __import__(name)
+    ~~~~~~~~~~^^^^^^
+  File "F:\Proyectos\RetroTUI\tests\test_process_manager_remaining.py", line 10, in <module>
+    from retrotui.apps.process_manager import (
+        ProcessManagerWindow,
+    )
+ModuleNotFoundError: No module named 'retrotui'
+
+
+======================================================================
+ERROR: test_process_manager_sort_paging (unittest.loader._FailedTest.test_process_manager_sort_paging)
+----------------------------------------------------------------------
+ImportError: Failed to import test module: test_process_manager_sort_paging
+Traceback (most recent call last):
+  File "C:\Program Files\Python314\Lib\unittest\loader.py", line 426, in _find_test_path
+    module = self._get_module_from_name(name)
+  File "C:\Program Files\Python314\Lib\unittest\loader.py", line 367, in _get_module_from_name
+    __import__(name)
+    ~~~~~~~~~~^^^^^^
+  File "F:\Proyectos\RetroTUI\tests\test_process_manager_sort_paging.py", line 9, in <module>
+    from retrotui.apps.process_manager import ProcessManagerWindow, ProcessRow
+ModuleNotFoundError: No module named 'retrotui'
+
+
+----------------------------------------------------------------------
+Ran 214 tests in 0.196s
+
+FAILED (errors=66)
+
+EXIT_CODE:1

@@ -1,0 +1,13 @@
+[plugin]
+name = "Todo List"
+id = "todo-list"
+version = "1.0.0"
+description = "Simple task manager with priorities"
+author = "RetroTUI"
+icon = "📝"
+menu_category = "Apps"
+
+[plugin.window]
+default_width = 45
+default_height = 20
+resizable = true

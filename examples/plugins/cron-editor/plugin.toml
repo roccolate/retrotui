@@ -1,0 +1,11 @@
+[plugin]
+id = "cron-editor"
+name = "Cron Editor"
+version = "0.1.0"
+description = "View and append lines to the user's crontab (example)."
+menu_category = "System"
+
+[plugin.window]
+default_width = 70
+default_height = 16
+resizable = true

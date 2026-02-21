@@ -23,6 +23,7 @@ DEFAULT_GLOBAL_ITEMS = {
         ('Minesweeper', AppAction.MINESWEEPER),
         ('Solitaire', AppAction.SOLITAIRE),
         ('Snake', AppAction.SNAKE),
+        ('Tetris', AppAction.TETRIS),
     ],
     'Apps': [
         ('Calculator', AppAction.CALCULATOR),
@@ -33,9 +34,13 @@ DEFAULT_GLOBAL_ITEMS = {
         ('WiFi Manager', AppAction.WIFI_MANAGER),
         ('Process Manager', AppAction.PROCESS_MANAGER),
         ('Log Viewer', AppAction.LOG_VIEWER),
+        ('Markdown Viewer', AppAction.MARKDOWN_VIEWER),
+        ('System Monitor', AppAction.SYSTEM_MONITOR),
+        ('RetroNet Explorer', AppAction.RETRONET),
         ('Trash Bin', AppAction.TRASH_BIN),
     ],
     'Edit': [
+        ('Control Panel', AppAction.CONTROL_PANEL),
         ('Preferences', AppAction.SETTINGS),
         ('App Manager', AppAction.APP_MANAGER),
     ],
