@@ -150,14 +150,30 @@ class RetroTUI:
         self.stdscr = stdscr
         self.running = True
         self.windows = []
-        self.menu = Menu()
-        self.context_menu = None
-        self.dialog = None
-        self.selected_icon = -1
         self.use_unicode = check_unicode_support()
         self.config = load_config()
         self.theme_name = self.config.theme
         self.refresh_icons()
+        
+        # Build Start Menu with hidden apps filtered out
+        hidden_labels = {x.strip().lower() for x in self.config.hidden_icons.split(",")} if getattr(self.config, 'hidden_icons', "") else set()
+        from ..ui.menu import DEFAULT_GLOBAL_ITEMS, Menu
+        
+        filtered_menu_items = {}
+        for category, items in DEFAULT_GLOBAL_ITEMS.items():
+            filtered_items = []
+            for item in items:
+                label = item[0].split("  ")[0] # Strip shortcuts like "Exit  Ctrl+Q"
+                if label.lower() not in hidden_labels:
+                    filtered_items.append(item)
+            if filtered_items: # Only add category if it's not empty
+                filtered_menu_items[category] = filtered_items
+                
+        self.menu = Menu(filtered_menu_items)
+        self.context_menu = None
+        self.dialog = None
+        self.selected_icon = -1
+        
         self.theme = get_theme(self.theme_name)
         self.default_show_hidden = bool(self.config.show_hidden)
         self.default_word_wrap = bool(self.config.word_wrap_default)

@@ -291,8 +291,9 @@ class MenuBar:
 class Menu(MenuBar):
     """Backwards-compatible global menu wrapper."""
 
-    def __init__(self):
-        super().__init__(DEFAULT_GLOBAL_ITEMS, mode='global', show_clock=True, show_logo=True)
+    def __init__(self, items=None):
+        items = items if items is not None else DEFAULT_GLOBAL_ITEMS
+        super().__init__(items, mode='global', show_clock=True, show_logo=True)
 
     def draw_bar(self, stdscr, width):
         super().draw_bar(stdscr, width=width)

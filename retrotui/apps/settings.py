@@ -107,15 +107,29 @@ class SettingsWindow(Window):
             self.show_welcome = not self.show_welcome
             return None
         if idx == self._edit_hidden_icons_index():
-            from ..ui.dialog import InputDialog
+            from ..ui.dialog import MultiSelectDialog
+            from ..constants import ICONS, ICONS_ASCII
             
-            def on_submit(value):
-                self.hidden_icons = value.strip()
+            base_icons = ICONS if self.app.use_unicode else ICONS_ASCII
+            current_hidden = {x.strip().lower() for x in self.hidden_icons.split(",")} if self.hidden_icons else set()
+            
+            # choices format: [(label, value, is_checked)]
+            # If an app is 'checked', it means it's visible (not hidden)
+            choices = []
+            for icon in base_icons:
+                label = icon["label"]
+                choices.append((label, label, label.lower() not in current_hidden))
+            
+            def on_submit(selected_values):
+                # The apps that were NOT selected should be hidden
+                selected_set = {v.lower() for v in selected_values}
+                hidden = [icon["label"] for icon in base_icons if icon["label"].lower() not in selected_set]
+                self.hidden_icons = ",".join(hidden)
                 
-            dialog = InputDialog(
-                "Hidden Desktop Icons",
-                "Comma-separated list (e.g. Hex,Logs,Clock):",
-                self.hidden_icons,
+            dialog = MultiSelectDialog(
+                "App Manager",
+                "Select apps to show on desktop and start menu:",
+                choices,
             )
             dialog.callback = on_submit
             self.app.dialog = dialog
@@ -188,7 +202,7 @@ class SettingsWindow(Window):
         row += 1
         
         icons_idx = self._edit_hidden_icons_index()
-        icons_label = '[ Edit Hidden Desktop Icons... ]'
+        icons_label = '[ App Manager... ]'
         icons_attr = theme_attr('button_selected') if self._selection == icons_idx else theme_attr('button')
         safe_addstr(stdscr, row, bx + 1, icons_label, icons_attr)
         self._control_rows[icons_idx] = row

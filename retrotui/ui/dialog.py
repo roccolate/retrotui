@@ -204,6 +204,130 @@ class InputDialog(Dialog):
         return -1
 
 
+class MultiSelectDialog(Dialog):
+    """Modal dialog with a scrollable list of checkboxes."""
+
+    def __init__(self, title, message, choices, width=54):
+        # choices: list of tuples (label, value, is_checked)
+        super().__init__(title, message, ['OK', 'Cancel'], width)
+        self.choices = [[label, value, bool(checked)] for label, value, checked in choices]
+        self.list_offset = 0
+        self.list_selected = 0
+        self.in_list = True  # Focus starts in list, not on buttons
+        self.visible_rows = 6
+        self.height += self.visible_rows + 2
+
+    def draw(self, stdscr):
+        super().draw(stdscr)
+        
+        max_h, max_w = stdscr.getmaxyx()
+        x = (max_w - self.width) // 2
+        y = (max_h - self.height) // 2
+        
+        list_y = y + len(self.lines) + 4
+        list_x = x + 3
+        list_w = self.width - 6
+        
+        attr = theme_attr('window_body')
+        sel_attr = attr | curses.A_REVERSE
+        
+        # Draw list background and border
+        draw_box(stdscr, list_y - 1, list_x - 1, self.visible_rows + 2, list_w + 2, attr, double=False)
+        
+        for i in range(self.visible_rows):
+            idx = self.list_offset + i
+            if idx < len(self.choices):
+                label, _, checked = self.choices[idx]
+                mark = '[x]' if checked else '[ ]'
+                text = f" {mark} {label}"
+                
+                row_attr = sel_attr if (self.in_list and idx == self.list_selected) else attr
+                safe_addstr(stdscr, list_y + i, list_x, text.ljust(list_w)[:list_w], row_attr)
+            else:
+                safe_addstr(stdscr, list_y + i, list_x, ' ' * list_w, attr)
+                
+        # Draw scrollbar if needed
+        if len(self.choices) > self.visible_rows:
+            sb_x = list_x + list_w
+            thumb_pos = int(self.list_offset / max(1, len(self.choices) - self.visible_rows) * (self.visible_rows - 1))
+            for i in range(self.visible_rows):
+                ch = '█' if i == thumb_pos else '░'
+                safe_addstr(stdscr, list_y + i, sb_x, ch, theme_attr('scrollbar'))
+
+    def handle_click(self, mx, my):
+        # Delegate down to buttons
+        if not self.in_list:
+            btn_hit = super().handle_click(mx, my)
+            if btn_hit != -1:
+                return btn_hit
+                
+        # Check list clicks
+        max_h, max_w = curses.initscr().getmaxyx()
+        x = (max_w - self.width) // 2
+        y = (max_h - self.height) // 2
+        list_y = y + len(self.lines) + 4
+        list_x = x + 3
+        list_w = self.width - 6
+        
+        if list_x <= mx <= list_x + list_w and list_y <= my < list_y + self.visible_rows:
+            click_idx = self.list_offset + (my - list_y)
+            if click_idx < len(self.choices):
+                self.in_list = True
+                self.list_selected = click_idx
+                # Toggle
+                self.choices[click_idx][2] = not self.choices[click_idx][2]
+                
+        # Detect clicks on buttons even if focus is in list
+        if my == self._btn_y:
+            btn_x = self._btn_x_start
+            for i, btn_text in enumerate(self.buttons):
+                btn_w = len(btn_text) + 4
+                if btn_x <= mx < btn_x + btn_w:
+                    self.in_list = False
+                    self.selected = i
+                    return i
+                btn_x += btn_w + 2
+                
+        return -1
+
+    def handle_key(self, key):
+        key_code = normalize_key_code(key)
+
+        if key_code == 27: # Esc
+            return 1 # Cancel
+            
+        if key_code in (curses.KEY_UP, curses.KEY_DOWN):
+            if not self.in_list:
+                self.in_list = True
+                return -1
+                
+            if key_code == curses.KEY_UP:
+                self.list_selected = max(0, self.list_selected - 1)
+                if self.list_selected < self.list_offset:
+                    self.list_offset = self.list_selected
+            elif key_code == curses.KEY_DOWN:
+                self.list_selected = min(len(self.choices) - 1, self.list_selected + 1)
+                if self.list_selected >= self.list_offset + self.visible_rows:
+                    self.list_offset = self.list_selected - self.visible_rows + 1
+            return -1
+            
+        if key_code in (9,): # Tab
+            self.in_list = not self.in_list
+            return -1
+            
+        if self.in_list:
+            if key_code in (32, 10, 13, curses.KEY_ENTER): # Space or Enter
+                if self.choices:
+                    self.choices[self.list_selected][2] = not self.choices[self.list_selected][2]
+                return -1
+        else:
+            return super().handle_key(key)
+            
+        return -1
+
+        return [val for _, val, checked in self.choices if checked]
+
+
 class ProgressDialog:
     """Modal progress dialog for background operations."""
 
