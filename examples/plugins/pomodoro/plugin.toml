@@ -1,0 +1,13 @@
+[plugin]
+name = "Pomodoro Timer"
+id = "pomodoro"
+version = "0.1.0"
+description = "Pomodoro 25/5 timer with bell and history"
+author = "RetroTUI"
+icon = "⏲️"
+menu_category = "Apps"
+
+[plugin.window]
+default_width = 36
+default_height = 10
+resizable = false

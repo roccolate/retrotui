@@ -1,0 +1,11 @@
+[plugin]
+id = "system-monitor"
+name = "System Monitor"
+version = "0.1.0"
+description = "Simple system dashboard: load, memory, disk (example plugin)"
+menu_category = "System"
+
+[plugin.window]
+default_width = 50
+default_height = 12
+resizable = true

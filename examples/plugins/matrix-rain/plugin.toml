@@ -1,0 +1,11 @@
+[plugin]
+id = "matrix-rain"
+name = "Matrix Rain"
+version = "0.1.0"
+description = "Matrix rain screensaver-style effect (example)."
+menu_category = "Entertainment"
+
+[plugin.window]
+default_width = 60
+default_height = 20
+resizable = true

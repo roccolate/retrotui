@@ -1,0 +1,11 @@
+[plugin]
+id = "disk-usage"
+name = "Disk Usage"
+version = "0.1.0"
+description = "ncdu-style disk usage viewer (example plugin)"
+menu_category = "System"
+
+[plugin.window]
+default_width = 60
+default_height = 20
+resizable = true

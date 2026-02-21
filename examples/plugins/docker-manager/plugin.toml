@@ -1,0 +1,11 @@
+[plugin]
+id = "docker-manager"
+name = "Docker Manager"
+version = "0.1.0"
+description = "List containers and allow start/stop (example). Requires docker CLI if present."
+menu_category = "Development"
+
+[plugin.window]
+default_width = 80
+default_height = 18
+resizable = true
