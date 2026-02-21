@@ -3,6 +3,7 @@ Notepad Application.
 """
 import curses
 import os
+from ..ui.selectable_text import SelectableTextMixin
 from ..ui.window import Window
 from ..ui.menu import WindowMenu
 from ..core.actions import ActionResult, ActionType, AppAction
@@ -10,7 +11,7 @@ from ..core.clipboard import copy_text, paste_text
 from ..utils import safe_addstr, normalize_key_code, theme_attr
 from ..constants import C_STATUS, C_SCROLLBAR
 
-class NotepadWindow(Window):
+class NotepadWindow(SelectableTextMixin, Window):
     """Editable text editor window with word wrap support."""
 
     KEY_F6 = getattr(curses, 'KEY_F6', -1)
@@ -30,9 +31,7 @@ class NotepadWindow(Window):
         self._wrap_cache = []       # list[(buf_line, start_col, text)]
         self._wrap_cache_w = -1     # Width used to build cache
         self._wrap_stale = True
-        self.selection_anchor = None  # (line, col)
-        self.selection_cursor = None  # (line, col)
-        self._mouse_selecting = False
+        self._init_selection()
         self.window_menu = WindowMenu({
             'File': [
                 ('New',           AppAction.NP_NEW),
@@ -102,56 +101,6 @@ class NotepadWindow(Window):
     def _invalidate_wrap(self):
         """Mark wrap cache as needing rebuild."""
         self._wrap_stale = True
-
-    def clear_selection(self):
-        """Clear current text selection."""
-        self.selection_anchor = None
-        self.selection_cursor = None
-        self._mouse_selecting = False
-
-    def has_selection(self):
-        """Return True when there is a non-empty text selection."""
-        return (
-            self.selection_anchor is not None
-            and self.selection_cursor is not None
-            and self.selection_anchor != self.selection_cursor
-        )
-
-    def _selection_bounds(self):
-        """Return ordered ((line,col), (line,col)) selection bounds, or None."""
-        if not self.has_selection():
-            return None
-        a = self.selection_anchor
-        b = self.selection_cursor
-        return (a, b) if a <= b else (b, a)
-
-    def _line_selection_span(self, line_idx, line_len):
-        """Return [start,end) selected columns for a buffer line, or None."""
-        bounds = self._selection_bounds()
-        if bounds is None:
-            return None
-        (s_line, s_col), (e_line, e_col) = bounds
-        if line_idx < s_line or line_idx > e_line:
-            return None
-        if s_line == e_line:
-            start = max(0, min(line_len, s_col))
-            end = max(0, min(line_len, e_col))
-            if start >= end:
-                return None
-            return (start, end)
-        if line_idx == s_line:
-            start = max(0, min(line_len, s_col))
-            end = line_len
-            if start >= end:
-                return None
-            return (start, end)
-        if line_idx == e_line:
-            start = 0
-            end = max(0, min(line_len, e_col))
-            if start >= end:
-                return None
-            return (start, end)
-        return (0, line_len)
 
     def _selected_text(self):
         """Return selected text as plain string."""

@@ -7,11 +7,12 @@ import time
 from ..core.actions import ActionResult, ActionType, AppAction
 from ..core.clipboard import copy_text
 from ..ui.menu import WindowMenu
+from ..ui.selectable_text import SelectableTextMixin
 from ..ui.window import Window
 from ..utils import normalize_key_code, safe_addstr, theme_attr
 
 
-class LogViewerWindow(Window):
+class LogViewerWindow(SelectableTextMixin, Window):
     """Read-only log viewer with follow mode and vim-like search."""
 
     MAX_LINES = 5000
@@ -39,9 +40,7 @@ class LogViewerWindow(Window):
         self.search_index = -1
         self.search_input_mode = False
         self.search_input = ""
-        self.selection_anchor = None  # (line_idx, col)
-        self.selection_cursor = None  # (line_idx, col)
-        self._mouse_selecting = False
+        self._init_selection()
 
         self.window_menu = WindowMenu(
             {
@@ -65,56 +64,6 @@ class LogViewerWindow(Window):
 
         if filepath:
             self.open_path(filepath)
-
-    def clear_selection(self):
-        """Clear line/column selection state."""
-        self.selection_anchor = None
-        self.selection_cursor = None
-        self._mouse_selecting = False
-
-    def has_selection(self):
-        """Return True when there is a non-empty text selection."""
-        return (
-            self.selection_anchor is not None
-            and self.selection_cursor is not None
-            and self.selection_anchor != self.selection_cursor
-        )
-
-    def _selection_bounds(self):
-        """Return ordered ((line,col),(line,col)) bounds or None."""
-        if not self.has_selection():
-            return None
-        a = self.selection_anchor
-        b = self.selection_cursor
-        return (a, b) if a <= b else (b, a)
-
-    def _line_selection_span(self, line_idx, line_len):
-        """Return [start,end) selection span for one line, or None."""
-        bounds = self._selection_bounds()
-        if not bounds:
-            return None
-        (start_line, start_col), (end_line, end_col) = bounds
-        if line_idx < start_line or line_idx > end_line:
-            return None
-
-        if start_line == end_line:
-            start = max(0, min(line_len, start_col))
-            end = max(0, min(line_len, end_col))
-            if end <= start:
-                return None
-            return (start, end)
-
-        if line_idx == start_line:
-            start = max(0, min(line_len, start_col))
-            if line_len <= start:
-                return None
-            return (start, line_len)
-        if line_idx == end_line:
-            end = max(0, min(line_len, end_col))
-            if end <= 0:
-                return None
-            return (0, end)
-        return (0, line_len)
 
     def _selected_text(self):
         """Return selected text as plain string."""

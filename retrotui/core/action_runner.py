@@ -22,6 +22,7 @@ from ..apps.sysmon import SystemMonitorWindow
 from ..apps.control_panel import ControlPanelWindow
 from ..apps.tetris import TetrisWindow
 from ..apps.retronet import RetroNetWindow
+from ..apps.clipboard_viewer import ClipboardViewerWindow
 from ..ui.dialog import Dialog
 from ..ui.window import Window
 from .actions import AppAction
@@ -46,6 +47,81 @@ def _supports_constructor_kwarg(constructor, kwarg: str) -> bool:
     return False
 
 
+# Registry mapping AppAction -> (class_name, width, height, base_x, base_y, kwarg_map)
+#
+# class_name is a string — the module-level attribute name of the window class.
+# Looked up via globals() at dispatch time so that mock.patch.object() works in
+# tests (patching the module attribute is enough; no need to monkey-patch the dict).
+#
+# kwarg_map: {constructor_kwarg_name: app_attribute_name}
+# Only "simple spawn" actions belong here — actions with special logic stay
+# as explicit handlers below.
+_APP_REGISTRY = {
+    AppAction.IMAGE_VIEWER:    ("ImageViewerWindow",    84, 26, 14, 3, {}),
+    AppAction.HEX_VIEWER:      ("HexViewerWindow",      76, 22, 16, 4, {}),
+    AppAction.TERMINAL:        ("TerminalWindow",        70, 18, 18, 5, {}),
+    AppAction.TRASH_BIN:       ("TrashWindow",           62, 20, 15, 4, {}),
+    AppAction.CALCULATOR:      ("CalculatorWindow",      44, 14, 24, 5, {}),
+    AppAction.LOG_VIEWER:      ("LogViewerWindow",       74, 22, 16, 4, {}),
+    AppAction.PROCESS_MANAGER: ("ProcessManagerWindow",  76, 22, 14, 3, {}),
+    AppAction.MINESWEEPER:     ("MinesweeperWindow",     54, 20, 18, 4, {}),
+    AppAction.SOLITAIRE:       ("SolitaireWindow",       46, 22, 20, 4, {}),
+    AppAction.SNAKE:           ("SnakeWindow",           48, 20, 22, 5, {}),
+    AppAction.CHARMAP:         ("CharacterMapWindow",    46, 18, 26, 6, {}),
+    AppAction.CLIPBOARD:       ("ClipboardViewerWindow", 56, 18, 24, 5, {}),
+    AppAction.WIFI_MANAGER:    ("WifiManagerWindow",     60, 18, 22, 4, {}),
+    AppAction.SYSTEM_MONITOR:  ("SystemMonitorWindow",   44, 20, 15, 4, {}),
+    AppAction.RETRONET:        ("RetroNetWindow",        70, 24, 15, 3, {}),
+    # Actions with kwargs derived from app state
+    AppAction.FILE_MANAGER:    ("FileManagerWindow",     70, 24,  8, 3,
+                                {"show_hidden_default": "default_show_hidden"}),
+    AppAction.NOTEPAD:         ("NotepadWindow",         60, 20, 20, 4,
+                                {"wrap_default": "default_word_wrap"}),
+}
+
+# Module globals reference, captured once so _spawn_registered_app can resolve
+# class names to the current module-level binding (honours mock.patch.object).
+_MODULE_GLOBALS = globals()
+
+
+def _spawn_registered_app(app, action, registry) -> bool:
+    """Look up *action* in *registry* and spawn the window.
+
+    Returns True when the action was handled, False when not found.
+    Terminal size is retrieved via curses when available; dimensions are
+    clamped so windows fit on-screen.
+    """
+    entry = registry.get(action)
+    if entry is None:
+        return False
+
+    class_name, default_w, default_h, base_x, base_y, kwarg_map = entry
+
+    # Resolve the class through the module's live globals so that
+    # mock.patch.object() substitutions are picked up at call time.
+    cls = _MODULE_GLOBALS[class_name]
+
+    # Clamp to terminal size when curses is available.
+    try:
+        import curses
+        term_h, term_w = curses.LINES, curses.COLS
+        w = min(default_w, term_w - 4)
+        h = min(default_h, term_h - 4)
+    except Exception:
+        w, h = default_w, default_h
+
+    offset_x, offset_y = app._next_window_offset(base_x, base_y)
+
+    kwargs = {}
+    for kwarg_name, attr_name in kwarg_map.items():
+        if _supports_constructor_kwarg(cls, kwarg_name):
+            kwargs[kwarg_name] = getattr(app, attr_name, False)
+
+    win = cls(offset_x, offset_y, w, h, **kwargs)
+    app._spawn_window(win)
+    return True
+
+
 def execute_app_action(app, action, logger, *, version: str) -> None:
     """Execute an AppAction against a RetroTUI-like app context."""
     # Plugin actions: string like 'plugin:<id>' open plugin windows
@@ -59,6 +135,9 @@ def execute_app_action(app, action, logger, *, version: str) -> None:
     except Exception:
         # don't let plugin issues crash the app
         logger.debug('plugin action failed', exc_info=True)
+
+    # --- Special-case actions (non-trivial logic) ---
+
     if action == AppAction.EXIT:
         app.dialog = Dialog(
             "Exit RetroTUI",
@@ -76,24 +155,6 @@ def execute_app_action(app, action, logger, *, version: str) -> None:
         app.dialog = Dialog("Keyboard & Mouse Help", build_help_message(), ["OK"], width=46)
         return
 
-    if action == AppAction.FILE_MANAGER:
-        offset_x, offset_y = app._next_window_offset(8, 3)
-        kwargs = {}
-        if _supports_constructor_kwarg(FileManagerWindow, 'show_hidden_default'):
-            kwargs['show_hidden_default'] = getattr(app, 'default_show_hidden', False)
-        win = FileManagerWindow(offset_x, offset_y, 70, 24, **kwargs)
-        app._spawn_window(win)
-        return
-
-    if action == AppAction.NOTEPAD:
-        offset_x, offset_y = app._next_window_offset(20, 4)
-        kwargs = {}
-        if _supports_constructor_kwarg(NotepadWindow, 'wrap_default'):
-            kwargs['wrap_default'] = getattr(app, 'default_word_wrap', False)
-        win = NotepadWindow(offset_x, offset_y, 60, 20, **kwargs)
-        app._spawn_window(win)
-        return
-
     if action == AppAction.ASCII_VIDEO:
         opener = getattr(app, "show_video_open_dialog", None)
         if callable(opener):
@@ -109,48 +170,8 @@ def execute_app_action(app, action, logger, *, version: str) -> None:
         )
         return
 
-    if action == AppAction.IMAGE_VIEWER:
-        offset_x, offset_y = app._next_window_offset(14, 3)
-        app._spawn_window(ImageViewerWindow(offset_x, offset_y, 84, 26))
-        return
-
-    if action == AppAction.HEX_VIEWER:
-        offset_x, offset_y = app._next_window_offset(16, 4)
-        app._spawn_window(HexViewerWindow(offset_x, offset_y, 76, 22))
-        return
-
-    if action == AppAction.TERMINAL:
-        offset_x, offset_y = app._next_window_offset(18, 5)
-        app._spawn_window(TerminalWindow(offset_x, offset_y, 70, 18))
-        return
-
-    if action == AppAction.TRASH_BIN:
-        offset_x, offset_y = app._next_window_offset(15, 4)
-        app._spawn_window(TrashWindow(offset_x, offset_y, 62, 20))
-        return
-
-    if action == AppAction.SETTINGS:
-        offset_x, offset_y = app._next_window_offset(22, 4)
-        app._spawn_window(SettingsWindow(offset_x, offset_y, 56, 18, app))
-        return
-
-    if action == AppAction.CALCULATOR:
-        offset_x, offset_y = app._next_window_offset(24, 5)
-        app._spawn_window(CalculatorWindow(offset_x, offset_y, 44, 14))
-        return
-
-    if action == AppAction.LOG_VIEWER:
-        offset_x, offset_y = app._next_window_offset(16, 4)
-        app._spawn_window(LogViewerWindow(offset_x, offset_y, 74, 22))
-        return
-
-    if action == AppAction.PROCESS_MANAGER:
-        offset_x, offset_y = app._next_window_offset(14, 3)
-        app._spawn_window(ProcessManagerWindow(offset_x, offset_y, 76, 22))
-        return
-
     if action == AppAction.CLOCK_CALENDAR:
-        # Toggle existing clock instance if any
+        # Toggle existing clock instance if any.
         existing = next((w for w in app.windows if isinstance(w, ClockCalendarWindow)), None)
         if existing:
             if existing.visible and existing.active:
@@ -183,14 +204,9 @@ def execute_app_action(app, action, logger, *, version: str) -> None:
         )
         return
 
-    if action == AppAction.MINESWEEPER:
-        offset_x, offset_y = app._next_window_offset(18, 4)
-        app._spawn_window(MinesweeperWindow(offset_x, offset_y, 54, 20))
-        return
-
-    if action == AppAction.SOLITAIRE:
-        offset_x, offset_y = app._next_window_offset(20, 4)
-        app._spawn_window(SolitaireWindow(offset_x, offset_y, 46, 22))
+    if action == AppAction.SETTINGS:
+        offset_x, offset_y = app._next_window_offset(22, 4)
+        app._spawn_window(SettingsWindow(offset_x, offset_y, 56, 18, app))
         return
 
     if action == AppAction.APP_MANAGER:
@@ -199,35 +215,10 @@ def execute_app_action(app, action, logger, *, version: str) -> None:
         app._spawn_window(AppManagerWindow(offset_x, offset_y, 46, 18, app))
         return
 
-    if action == AppAction.SNAKE:
-        offset_x, offset_y = app._next_window_offset(22, 5)
-        app._spawn_window(SnakeWindow(offset_x, offset_y, 48, 20))
-        return
-
-    if action == AppAction.CHARMAP:
-        offset_x, offset_y = app._next_window_offset(26, 6)
-        app._spawn_window(CharacterMapWindow(offset_x, offset_y, 46, 18))
-        return
-
-    if action == AppAction.CLIPBOARD:
-        offset_x, offset_y = app._next_window_offset(24, 5)
-        app._spawn_window(ClipboardViewerWindow(offset_x, offset_y, 56, 18))
-        return
-
-    if action == AppAction.WIFI_MANAGER:
-        offset_x, offset_y = app._next_window_offset(22, 4)
-        app._spawn_window(WifiManagerWindow(offset_x, offset_y, 60, 18))
-        return
-
     if action == AppAction.MARKDOWN_VIEWER:
         from ..apps.markdown_viewer import MarkdownViewerWindow
         offset_x, offset_y = app._next_window_offset(18, 4)
         app._spawn_window(MarkdownViewerWindow(offset_x, offset_y, 70, 24))
-        return
-
-    if action == AppAction.SYSTEM_MONITOR:
-        offset_x, offset_y = app._next_window_offset(15, 4)
-        app._spawn_window(SystemMonitorWindow(offset_x, offset_y, 44, 20))
         return
 
     if action == AppAction.CONTROL_PANEL:
@@ -240,9 +231,8 @@ def execute_app_action(app, action, logger, *, version: str) -> None:
         app._spawn_window(TetrisWindow(offset_x, offset_y))
         return
 
-    if action == AppAction.RETRONET:
-        offset_x, offset_y = app._next_window_offset(15, 3)
-        app._spawn_window(RetroNetWindow(offset_x, offset_y, 70, 24))
+    # --- Registry dispatch for simple window-spawn actions ---
+    if _spawn_registered_app(app, action, _APP_REGISTRY):
         return
 
     logger.warning("Unknown action received: %s", action)
