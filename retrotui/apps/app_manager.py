@@ -91,9 +91,6 @@ class AppManagerWindow(Window):
             curr_x += btn_w + 2
 
     def handle_click(self, mx, my):
-        if not super().handle_click(mx, my):
-            return False
-            
         list_y = self.y + 3
         list_x = self.x + 2
         list_w = self.w - 4
@@ -115,11 +112,10 @@ class AppManagerWindow(Window):
                 if curr_x <= mx < curr_x + btn_w:
                     self.in_list = False
                     self.selected_button = i
-                    self._activate_button()
-                    return True
+                    return self._activate_button()
                 curr_x += btn_w + 2
                 
-        return True
+        return False
 
     def handle_key(self, key):
         key_code = normalize_key_code(key)
