@@ -13,6 +13,50 @@ class IconPositionManager:
         self._app = app
         self.positions = {}  # icon_key -> (x, y)
 
+        # Desktop icon drag state
+        self.dragging_icon = -1
+        self.drag_offset_x = 0
+        self.drag_offset_y = 0
+
+    # ------------------------------------------------------------------
+    # Icon drag helpers
+    # ------------------------------------------------------------------
+
+    @property
+    def is_dragging(self):
+        """Return True when a desktop icon drag is in progress."""
+        return self.dragging_icon >= 0
+
+    def start_drag(self, icon_idx, mx, my):
+        """Begin dragging icon at *icon_idx* from mouse position (mx, my)."""
+        self.dragging_icon = icon_idx
+        ix, iy = self.get_screen_pos(icon_idx)
+        self.drag_offset_x = mx - ix
+        self.drag_offset_y = my - iy
+
+    def update_drag(self, mx, my):
+        """Update the dragged icon's position based on current mouse (mx, my)."""
+        if not self.is_dragging:
+            return
+        icons = self._app.icons
+        icon_idx = self.dragging_icon
+        if not (0 <= icon_idx < len(icons)):
+            return
+        icon_key = icons[icon_idx].get('label')
+        new_x = max(0, mx - self.drag_offset_x)
+        new_y = max(0, my - self.drag_offset_y)
+        self.positions[icon_key] = (new_x, new_y)
+
+    def end_drag(self):
+        """Finish the drag and persist the new icon position."""
+        self.dragging_icon = -1
+        self.drag_offset_x = 0
+        self.drag_offset_y = 0
+        try:
+            self._app.persist_config()
+        except Exception:
+            pass
+
     def load(self, cfg_path):
         """Load icon positions from config TOML under [icons] section."""
         path = Path(cfg_path)

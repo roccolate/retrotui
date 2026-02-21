@@ -441,7 +441,8 @@ class TerminalWindow(Window):
         if not self.visible:
             return
 
-        body_attr = self.draw_frame(stdscr)
+        _ = self.draw_frame(stdscr)
+        body_attr = theme_attr('terminal') if self.active else theme_attr('window_inactive')
         bx, by, bw, bh = self.body_rect()
         text_cols, text_rows = max(1, bw - 1), max(1, bh - 1)
 

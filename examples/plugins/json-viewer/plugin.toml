@@ -1,0 +1,11 @@
+[plugin]
+id = "json-viewer"
+name = "JSON Viewer"
+version = "0.1.0"
+description = "Pretty-print a JSON file or show a sample tree (example)."
+menu_category = "Development"
+
+[plugin.window]
+default_width = 70
+default_height = 18
+resizable = true

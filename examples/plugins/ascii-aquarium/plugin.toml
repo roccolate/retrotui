@@ -1,0 +1,11 @@
+[plugin]
+id = "ascii-aquarium"
+name = "ASCII Aquarium"
+version = "0.1.0"
+description = "Animated ASCII aquarium (simple demo)."
+menu_category = "Entertainment"
+
+[plugin.window]
+default_width = 60
+default_height = 16
+resizable = true

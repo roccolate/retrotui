@@ -45,10 +45,11 @@ class MinesweeperTests(unittest.TestCase):
 
         bx, by, bw, bh = win.body_rect()
         grid_start_y = by + 3
-        grid_start_x = bx + max(0, (bw - win.cols * 2) // 2)
+        grid_start_x = bx + max(0, (bw - win.cols * 3) // 2)
         
         # Click somewhere inside grid to reveal (row 1, col 1)
-        win.handle_click(grid_start_x + 2, grid_start_y + 1)
+        # use offset 4 to land in column 1 with 3-char cells
+        win.handle_click(grid_start_x + 4, grid_start_y + 1)
         
         # After reveal, at least one cell should be revealed
         revealed_any = any(any(row) for row in win.revealed)
@@ -67,15 +68,16 @@ class MinesweeperTests(unittest.TestCase):
         ) as safe_addstr, mock.patch.object(self.mod, "theme_attr", return_value=0):
             bx, by, bw, bh = win.body_rect()
             grid_start_y = by + 3
-            grid_start_x = bx + max(0, (bw - win.cols * 2) // 2)
+            grid_start_x = bx + max(0, (bw - win.cols * 3) // 2)
             
             # Click near the center to trigger safe placement (row 2, col 2)
-            cx = grid_start_x + 4
+            # use offset 7 to target column 2 with 3-char cells
+            cx = grid_start_x + 7
             cy = grid_start_y + 2
             win.handle_click(cx, cy)
 
         # Build excluded set (clicked cell + neighbors)
-        col = (cx - grid_start_x) // 2
+        col = (cx - grid_start_x) // 3
         row = cy - grid_start_y
         exclude = set()
         for dr in (-1, 0, 1):
