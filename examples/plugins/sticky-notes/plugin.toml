@@ -1,0 +1,13 @@
+[plugin]
+name = "Sticky Notes"
+id = "sticky-notes"
+version = "0.1.0"
+description = "Persistent sticky notes on the desktop"
+author = "RetroTUI"
+icon = "📌"
+menu_category = "Apps"
+
+[plugin.window]
+default_width = 30
+default_height = 8
+resizable = true

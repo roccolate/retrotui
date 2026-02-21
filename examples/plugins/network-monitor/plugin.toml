@@ -1,0 +1,11 @@
+[plugin]
+id = "network-monitor"
+name = "Network Monitor"
+version = "0.1.0"
+description = "Network interfaces counters and simple rates (example)"
+menu_category = "System"
+
+[plugin.window]
+default_width = 60
+default_height = 14
+resizable = true
