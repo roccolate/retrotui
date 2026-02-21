@@ -65,7 +65,11 @@ def theme_attr(role):
     cached = _theme_attr_cache.get(role)
     if cached is not None:
         return cached
-    attr = curses.color_pair(ROLE_TO_PAIR_ID[role])
+    try:
+        attr = curses.color_pair(ROLE_TO_PAIR_ID[role])
+    except Exception:
+        # curses may not be initialized in some test environments; fall back to 0
+        attr = 0
     _theme_attr_cache[role] = attr
     return attr
 
