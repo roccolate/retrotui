@@ -11,6 +11,8 @@ from ..constants import (
     DESKTOP_PATTERN,
     TASKBAR_TITLE_MAX_LEN,
     ICON_ART_HEIGHT,
+    MENU_BAR_HEIGHT,
+    BOTTOM_BARS_HEIGHT,
 )
 from ..utils import safe_addstr, theme_attr
 
@@ -23,7 +25,7 @@ def draw_desktop(app):
 
     # Pre-compute pattern line once (avoids rebuilding per row).
     line = (pattern * (w // len(pattern) + 1))[: w - 1]
-    for row in range(1, h - 1):
+    for row in range(MENU_BAR_HEIGHT, h - BOTTOM_BARS_HEIGHT + 1):
         safe_addstr(app.stdscr, row, 0, line, attr)
 
 
@@ -35,7 +37,7 @@ def draw_icons(app):
         x, y = app.get_icon_screen_pos(idx)
         
         # Clip if off-screen (y)
-        if y + ICON_ART_HEIGHT >= h - 1:
+        if y + ICON_ART_HEIGHT >= h - BOTTOM_BARS_HEIGHT:
             continue
 
         is_selected = idx == app.selected_icon
@@ -52,7 +54,7 @@ def draw_icons(app):
 def draw_taskbar(app):
     """Draw taskbar row with minimized window buttons."""
     h, w = app.stdscr.getmaxyx()
-    taskbar_y = h - 2
+    taskbar_y = h - BOTTOM_BARS_HEIGHT
     attr = theme_attr("taskbar")
     
     # Always clear the taskbar line
@@ -79,8 +81,9 @@ def draw_statusbar(app, version):
     
     left_status = f' RetroTUI v{version} | Windows: {visible}/{len(app.windows)} | Mouse: Enabled'
     
+    statusbar_y = h - BOTTOM_BARS_HEIGHT + 1  # Last row: below taskbar
     # Draw background
-    safe_addstr(app.stdscr, h - 1, 0, ' ' * (w - 1), attr)
-    
+    safe_addstr(app.stdscr, statusbar_y, 0, ' ' * (w - 1), attr)
+
     # Draw left text
-    safe_addstr(app.stdscr, h - 1, 0, left_status, attr)
+    safe_addstr(app.stdscr, statusbar_y, 0, left_status, attr)

@@ -2,6 +2,15 @@
 import logging
 from pathlib import Path
 
+from ..constants import (
+    ICON_DEFAULT_START_X,
+    ICON_DEFAULT_START_Y,
+    ICON_DEFAULT_SPACING_X,
+    ICON_DEFAULT_SPACING_Y,
+    ICON_GRID_BOTTOM_MARGIN,
+    ICON_FALLBACK_TERMINAL_HEIGHT,
+)
+
 LOGGER = logging.getLogger(__name__)
 
 
@@ -131,17 +140,17 @@ class IconPositionManager:
             return self.positions[key_label]
 
         # Default vertical layout with wrapping
-        start_x = 3
-        start_y = 3
-        spacing_x = 12
-        spacing_y = 5
-        
+        start_x = ICON_DEFAULT_START_X
+        start_y = ICON_DEFAULT_START_Y
+        spacing_x = ICON_DEFAULT_SPACING_X
+        spacing_y = ICON_DEFAULT_SPACING_Y
+
         try:
             h, _ = self._app.stdscr.getmaxyx()
         except Exception:
-            h = 24
-            
-        max_y = h - 3
+            h = ICON_FALLBACK_TERMINAL_HEIGHT
+
+        max_y = h - ICON_GRID_BOTTOM_MARGIN
         icons_per_col = max(1, (max_y - start_y) // spacing_y)
         col = index // icons_per_col
         row = index % icons_per_col

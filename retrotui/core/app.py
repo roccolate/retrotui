@@ -8,7 +8,9 @@ import threading
 import time
 
 from ..constants import (
-    ICONS, ICONS_ASCII, TASKBAR_TITLE_MAX_LEN, BINARY_DETECT_CHUNK_SIZE,
+    ICONS, ICONS_ASCII, BINARY_DETECT_CHUNK_SIZE,
+    TERMINAL_INPUT_TIMEOUT_MS,
+    WELCOME_WIN_WIDTH, WELCOME_WIN_HEIGHT,
 )
 from ..utils import (
     check_unicode_support, init_colors,
@@ -62,6 +64,8 @@ from .bootstrap import (
     disable_mouse_support,
 )
 
+from .window_manager import WindowManager
+
 LOGGER = logging.getLogger(__name__)
 
 APP_VERSION = '0.9.1'
@@ -72,6 +76,17 @@ class RetroTUI:
     MIN_TERM_HEIGHT = 24
     LONG_FILE_OPERATION_BYTES = 8 * 1024 * 1024
     BACKGROUND_OPERATION_JOIN_TIMEOUT = 5.0
+
+    # Methods delegated to FileOperationManager via __getattr__
+    _FILE_OPS_METHODS = frozenset({
+        'show_save_as_dialog', 'show_open_dialog', 'show_rename_dialog',
+        'show_delete_confirm_dialog', 'show_copy_dialog', 'show_move_dialog',
+        'show_new_dir_dialog', 'show_new_file_dialog', 'show_kill_confirm_dialog',
+        '_window_selected_entry', '_resolve_between_panes_destination',
+        '_is_long_file_operation', '_start_background_operation',
+        'has_background_operation', 'poll_background_operation',
+        '_run_file_operation_with_progress',
+    })
 
     # Dispatch table for _dispatch_window_result: ActionType -> method name
     # Methods are called as self.<method>(source_win) for entries requiring source_win
@@ -88,69 +103,83 @@ class RetroTUI:
 
     @property
     def file_ops(self):
-        """Return the FileOperationManager, creating it lazily when needed."""
-        try:
-            return self._file_ops
-        except AttributeError:
+        """Return the FileOperationManager, creating it lazily if needed (e.g. in tests using __new__)."""
+        if not hasattr(self, '_file_ops'):
             self._file_ops = FileOperationManager(self)
-            return self._file_ops
+        return self._file_ops
 
     @file_ops.setter
     def file_ops(self, value):
         self._file_ops = value
 
+    def __getattr__(self, name):
+        """Delegate file-operation methods to FileOperationManager."""
+        if name in RetroTUI._FILE_OPS_METHODS:
+            return getattr(self.file_ops, name)
+        raise AttributeError(f"'{type(self).__name__}' has no attribute '{name}'")
+
+    def _get_icon_mgr(self):
+        """Return the IconPositionManager, creating it lazily if needed (e.g. in tests using __new__)."""
+        if not hasattr(self, '_icon_mgr'):
+            self._icon_mgr = IconPositionManager(self)
+        return self._icon_mgr
+
     @property
     def icon_positions(self):
-        try:
-            return self._icon_mgr.positions
-        except AttributeError:
-            self._icon_mgr = IconPositionManager(self)
-            return self._icon_mgr.positions
+        return self._get_icon_mgr().positions
 
     @icon_positions.setter
     def icon_positions(self, value):
-        try:
-            self._icon_mgr.positions = value
-        except AttributeError:
-            self._icon_mgr = IconPositionManager(self)
-            self._icon_mgr.positions = value
+        self._get_icon_mgr().positions = value
 
-    def _ensure_drag_drop(self):
-        """Lazily create DragDropManager when accessed before __init__ completes."""
-        try:
-            return self.drag_drop
-        except AttributeError:
+    def _get_window_mgr(self):
+        """Return the WindowManager, creating it lazily if needed (e.g. in tests using __new__)."""
+        if not hasattr(self, 'window_mgr'):
+            self.window_mgr = WindowManager(self)
+        return self.window_mgr
+
+    @property
+    def windows(self):
+        return self._get_window_mgr().windows
+
+    @windows.setter
+    def windows(self, value):
+        self._get_window_mgr().windows = value
+
+    def _get_drag_drop(self):
+        """Return the DragDropManager, creating it lazily if needed (e.g. in tests using __new__)."""
+        if not hasattr(self, 'drag_drop'):
             self.drag_drop = DragDropManager(self)
-            return self.drag_drop
+        return self.drag_drop
 
     @property
     def drag_payload(self):
-        return self._ensure_drag_drop().payload
+        return self._get_drag_drop().payload
 
     @drag_payload.setter
     def drag_payload(self, value):
-        self._ensure_drag_drop().payload = value
+        self._get_drag_drop().payload = value
 
     @property
     def drag_source_window(self):
-        return self._ensure_drag_drop().source_window
+        return self._get_drag_drop().source_window
 
     @drag_source_window.setter
     def drag_source_window(self, value):
-        self._ensure_drag_drop().source_window = value
+        self._get_drag_drop().source_window = value
 
     @property
     def drag_target_window(self):
-        return self._ensure_drag_drop().target_window
+        return self._get_drag_drop().target_window
 
     @drag_target_window.setter
     def drag_target_window(self, value):
-        self._ensure_drag_drop().target_window = value
+        self._get_drag_drop().target_window = value
 
     def __init__(self, stdscr):
         self.stdscr = stdscr
         self.running = True
-        self.windows = []
+        self.window_mgr = WindowManager(self)
         self.use_unicode = check_unicode_support()
         self.config = load_config()
         self.theme_name = self.config.theme
@@ -207,7 +236,7 @@ class RetroTUI:
         except Exception:
             LOGGER.debug('plugin discovery unavailable', exc_info=True)
         # Setup terminal
-        configure_terminal(stdscr, timeout_ms=500)
+        configure_terminal(stdscr, timeout_ms=TERMINAL_INPUT_TIMEOUT_MS)
         self._validate_terminal_size()
 
         disable_flow_control()
@@ -220,7 +249,7 @@ class RetroTUI:
         if self.show_welcome:
             h, w = stdscr.getmaxyx()
             welcome_content = build_welcome_content(APP_VERSION)
-            win = Window('Welcome to RetroTUI', w // 2 - 22, h // 2 - 10, 44, 20,
+            win = Window('Welcome to RetroTUI', w // 2 - WELCOME_WIN_WIDTH // 2, h // 2 - WELCOME_WIN_HEIGHT // 2, WELCOME_WIN_WIDTH, WELCOME_WIN_HEIGHT,
                           content=welcome_content)
             
             # Custom handler to process "Don't show again"
@@ -442,49 +471,19 @@ class RetroTUI:
 
     def set_active_window(self, win):
         """Set a window as active (bring to front)."""
-        for w in self.windows:
-            w.active = False
-        win.active = True
-        # Move to top of its layer.
-        self.windows.remove(win)
-        self.normalize_window_layers()
-        if getattr(win, 'always_on_top', False):
-            self.windows.append(win)
-            return
-
-        insert_at = len(self.windows)
-        for i, candidate in enumerate(self.windows):
-            if getattr(candidate, 'always_on_top', False):
-                insert_at = i
-                break
-        self.windows.insert(insert_at, win)
+        self.window_mgr.set_active_window(win)
 
     def normalize_window_layers(self):
         """Keep always-on-top windows above regular windows preserving order."""
-        normal = [w for w in self.windows if not getattr(w, 'always_on_top', False)]
-        pinned = [w for w in self.windows if getattr(w, 'always_on_top', False)]
-        self.windows = normal + pinned
+        self.window_mgr.normalize_window_layers()
 
     def close_window(self, win):
         """Close a window."""
-        closer = getattr(win, 'close', None)
-        if callable(closer):
-            try:
-                closer()
-            except Exception:  # pragma: no cover - defensive window cleanup path
-                LOGGER.debug('Window close hook failed for %r', win, exc_info=True)
-        self.windows.remove(win)
-        self._activate_last_visible_window()
+        self.window_mgr.close_window(win)
 
     def _activate_last_visible_window(self):
         """Activate topmost visible window after z-order/window-list changes."""
-        for candidate in self.windows:
-            candidate.active = False
-        for candidate in reversed(self.windows):
-            if getattr(candidate, 'visible', True):
-                candidate.active = True
-                return candidate
-        return None
+        return self.window_mgr._activate_last_visible_window()
 
     @staticmethod
     def _normalize_action(action):
@@ -525,8 +524,7 @@ class RetroTUI:
 
     def _next_window_offset(self, base_x, base_y, step_x=2, step_y=1):
         """Return staggered window coordinates based on open window count."""
-        count = len(self.windows)
-        return base_x + count * step_x, base_y + count * step_y
+        return self.window_mgr._next_window_offset(base_x, base_y, step_x, step_y)
 
     def execute_action(self, action):
         """Execute a menu/icon action."""
@@ -544,74 +542,58 @@ class RetroTUI:
         # 2. Fallback to global/app-level actions
         execute_app_action(self, action, LOGGER, version=APP_VERSION)
 
-    def open_file_viewer(self, filepath):
-        """Open file in best viewer: ASCII video or Notepad."""
-        h, w = self.stdscr.getmaxyx()
+    # Margin subtracted from screen dimensions when sizing viewer windows.
+    _WINDOW_MARGIN = 4
+
+    def _detect_viewer_type(self, filepath):
+        """Determine the appropriate viewer for a file.
+
+        Returns a tuple ``(WindowClass, base_x, base_y, max_w, max_h, extra_kwargs)``.
+        """
         lower_path = filepath.lower()
+        ext = os.path.splitext(lower_path)[1]
 
-        if is_video_file(filepath):
-            self._play_ascii_video(filepath)
-            return
+        _LOG_EXTENSIONS = {'.log', '.out', '.err'}
+        if ext in _LOG_EXTENSIONS or '/log/' in lower_path or '\\log\\' in lower_path:
+            return (LogViewerWindow, 16, 4, 74, 22, {})
 
-        if (
-            lower_path.endswith(('.log', '.out', '.err'))
-            or '/log/' in lower_path
-            or '\\log\\' in lower_path
-        ):
-            offset_x = 16 + len(self.windows) * 2
-            offset_y = 4 + len(self.windows)
-            win_w = min(74, w - 4)
-            win_h = min(22, h - 4)
-            win = LogViewerWindow(offset_x, offset_y, win_w, win_h, filepath=filepath)
-            self._spawn_window(win)
-            return
+        if ext in ImageViewerWindow.IMAGE_EXTENSIONS:
+            return (ImageViewerWindow, 14, 3, 84, 26, {})
 
-        image_ext = os.path.splitext(lower_path)[1]
-        if image_ext in ImageViewerWindow.IMAGE_EXTENSIONS:
-            offset_x = 14 + len(self.windows) * 2
-            offset_y = 3 + len(self.windows)
-            win_w = min(84, w - 4)
-            win_h = min(26, h - 4)
-            win = ImageViewerWindow(offset_x, offset_y, win_w, win_h, filepath=filepath)
-            self._spawn_window(win)
-            return
+        if ext == '.md':
+            return (MarkdownViewerWindow, 18, 3, 70, 25, {})
 
-        if lower_path.endswith('.md'):
-            offset_x = 18 + len(self.windows) * 2
-            offset_y = 3 + len(self.windows)
-            win_w = min(70, w - 4)
-            win_h = min(25, h - 4)
-            win = MarkdownViewerWindow(offset_x, offset_y, win_w, win_h, filepath=filepath)
-            self._spawn_window(win)
-            return
-
-        # Check if file seems to be binary
+        # Content-based detection: null bytes indicate a binary file.
         try:
             with open(filepath, 'rb') as f:
                 chunk = f.read(BINARY_DETECT_CHUNK_SIZE)
                 if b'\x00' in chunk:
-                    offset_x = 12 + len(self.windows) * 2
-                    offset_y = 3 + len(self.windows)
-                    win_w = min(92, w - 4)
-                    win_h = min(26, h - 4)
-                    win = HexViewerWindow(offset_x, offset_y, win_w, win_h, filepath=filepath)
-                    self._spawn_window(win)
-                    return
+                    return (HexViewerWindow, 12, 3, 92, 26, {})
         except OSError:
             pass
 
-        # Create NotepadWindow with file
-        offset_x = 18 + len(self.windows) * 2
-        offset_y = 3 + len(self.windows)
-        win_w = min(70, w - 4)
-        win_h = min(25, h - 4)
-        win = NotepadWindow(
-            offset_x,
-            offset_y,
-            win_w,
-            win_h,
+        # Default: plain-text viewer.
+        return (
+            NotepadWindow,
+            18, 3, 70, 25,
+            {'wrap_default': getattr(self, 'default_word_wrap', False)},
+        )
+
+    def open_file_viewer(self, filepath):
+        """Open file in the best available viewer."""
+        if is_video_file(filepath):
+            self._play_ascii_video(filepath)
+            return
+
+        cls, base_x, base_y, max_w, max_h, extra_kwargs = self._detect_viewer_type(filepath)
+        h, w = self.stdscr.getmaxyx()
+        ox, oy = self._next_window_offset(base_x, base_y)
+        win = cls(
+            ox, oy,
+            min(max_w, w - self._WINDOW_MARGIN),
+            min(max_h, h - self._WINDOW_MARGIN),
             filepath=filepath,
-            wrap_default=getattr(self, 'default_word_wrap', False),
+            **extra_kwargs,
         )
         self._spawn_window(win)
 
@@ -673,84 +655,9 @@ class RetroTUI:
         self._play_ascii_video(video_path, subtitle_path=subtitle)
         return None
 
-    def show_save_as_dialog(self, win):
-        """Show dialog to get filename for saving."""
-        self.file_ops.show_save_as_dialog(win)
-
-    def show_open_dialog(self, win):
-        """Show dialog to get filename/path for opening in current window."""
-        self.file_ops.show_open_dialog(win)
-
-    def show_rename_dialog(self, win):
-        """Show dialog to rename selected File Manager entry."""
-        self.file_ops.show_rename_dialog(win)
-
-    def show_delete_confirm_dialog(self, win):
-        """Show confirmation dialog before deleting selected File Manager entry."""
-        self.file_ops.show_delete_confirm_dialog(win)
-
-    def show_copy_dialog(self, win):
-        """Show destination input for copy operation in File Manager."""
-        self.file_ops.show_copy_dialog(win)
-
-    def show_move_dialog(self, win):
-        """Show destination input for move operation in File Manager."""
-        self.file_ops.show_move_dialog(win)
-
-    def show_new_dir_dialog(self, win):
-        """Show input dialog to create a new directory in current path."""
-        self.file_ops.show_new_dir_dialog(win)
-
-    def show_new_file_dialog(self, win):
-        """Show input dialog to create a new file in current path."""
-        self.file_ops.show_new_file_dialog(win)
-
-    def show_kill_confirm_dialog(self, win, payload):
-        """Show confirmation dialog before sending signal to a process."""
-        self.file_ops.show_kill_confirm_dialog(win, payload)
-
-    @staticmethod
-    def _window_selected_entry(win):
-        """Resolve selected entry accessor from supported window APIs."""
-        return FileOperationManager._window_selected_entry(win)
-
-    @staticmethod
-    def _resolve_between_panes_destination(win, payload):
-        """Resolve destination path for copy/move between panes requests."""
-        return FileOperationManager._resolve_between_panes_destination(win, payload)
-
-    def _is_long_file_operation(self, entry):
-        """Return True when operation should show a modal progress dialog."""
-        return self.file_ops._is_long_file_operation(entry)
-
-    def _start_background_operation(self, *, title, message, worker, source_win):
-        """Run blocking filesystem operation in a worker thread and show progress."""
-        return self.file_ops._start_background_operation(
-            title=title,
-            message=message,
-            worker=worker,
-            source_win=source_win,
-        )
-
-    def has_background_operation(self):
-        """Return whether a background file operation is currently running."""
-        return self.file_ops.has_background_operation()
-
-    def poll_background_operation(self):
-        """Advance progress state and dispatch completion when worker finishes."""
-        return self.file_ops.poll_background_operation()
-
-    def _run_file_operation_with_progress(self, win, *, operation, destination=None):
-        """Run file operation directly or via background worker with progress dialog."""
-        return self.file_ops._run_file_operation_with_progress(
-            win,
-            operation=operation,
-            destination=destination,
-        )
-
     def get_active_window(self):
         """Return the active window, if any."""
-        return next((w for w in self.windows if w.active), None)
+        return self.window_mgr.get_active_window()
 
     def _dispatch_window_result(self, result, source_win):
         """Handle ActionResult returned by window/dialog callbacks."""
@@ -890,23 +797,7 @@ class RetroTUI:
 
     def handle_taskbar_click(self, mx, my):
         """Handle click on taskbar row. Returns True if handled."""
-        h, w = self.stdscr.getmaxyx()
-        taskbar_y = h - 2
-        if my != taskbar_y:
-            return False
-        minimized = [win for win in self.windows if win.minimized]
-        if not minimized:
-            return False
-        x = 1
-        for win in minimized:
-            label = win.title[:TASKBAR_TITLE_MAX_LEN]
-            btn_w = len(label) + 2  # [label]
-            if x <= mx < x + btn_w:
-                win.toggle_minimize()
-                self.set_active_window(win)
-                return True
-            x += btn_w + 1
-        return False
+        return self.window_mgr.handle_taskbar_click(mx, my)
 
     def _handle_drag_resize_mouse(self, mx, my, bstate):
         """Handle active drag or resize operations."""

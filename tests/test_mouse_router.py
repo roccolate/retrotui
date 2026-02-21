@@ -23,12 +23,15 @@ class MouseRouterTests(unittest.TestCase):
         sys.modules["curses"] = _install_fake_curses()
 
         sys.modules.pop("retrotui.core.mouse_router", None)
+        sys.modules.pop("retrotui.core.drag_drop", None)
         cls.mouse_router = importlib.import_module("retrotui.core.mouse_router")
+        cls.drag_drop_mod = importlib.import_module("retrotui.core.drag_drop")
         cls.curses = sys.modules["curses"]
 
     @classmethod
     def tearDownClass(cls):
         sys.modules.pop("retrotui.core.mouse_router", None)
+        sys.modules.pop("retrotui.core.drag_drop", None)
         if cls._prev_curses is not None:
             sys.modules["curses"] = cls._prev_curses
         else:
@@ -40,11 +43,9 @@ class MouseRouterTests(unittest.TestCase):
             | self.curses.BUTTON1_PRESSED
             | self.curses.BUTTON1_DOUBLE_CLICKED
         )
-        return types.SimpleNamespace(
+        app = types.SimpleNamespace(
             windows=[],
-            drag_payload=None,
-            drag_source_window=None,
-            drag_target_window=None,
+            button1_pressed=False,
             stdscr=types.SimpleNamespace(getmaxyx=mock.Mock(return_value=(25, 80))),
             stop_drag_flags=0xFFFF,
             click_flags=click_flags,
@@ -69,6 +70,8 @@ class MouseRouterTests(unittest.TestCase):
             _handle_window_mouse=mock.Mock(return_value=False),
             _handle_desktop_mouse=mock.Mock(),
         )
+        app.drag_drop = self.drag_drop_mod.DragDropManager(app)
+        return app
 
     def _make_window(self, **overrides):
         base = dict(
@@ -109,29 +112,30 @@ class MouseRouterTests(unittest.TestCase):
 
     def test_find_drop_target_window_and_dispatch_drop_edge_cases(self):
         app = self._make_app()
+        mgr = app.drag_drop
 
         invisible = self._make_window(visible=False, contains=mock.Mock(return_value=True))
         app.windows = [invisible]
-        self.assertIsNone(self.mouse_router._find_drop_target_window(app, 1, 1))
+        self.assertIsNone(mgr.find_drop_target_window(1, 1))
 
         miss = self._make_window(visible=True, contains=mock.Mock(return_value=False))
         app.windows = [miss]
-        self.assertIsNone(self.mouse_router._find_drop_target_window(app, 1, 1))
+        self.assertIsNone(mgr.find_drop_target_window(1, 1))
 
         source = self._make_window(visible=True, contains=mock.Mock(return_value=True), open_path=mock.Mock())
         app.windows = [source]
-        app.drag_source_window = source
-        self.assertIsNone(self.mouse_router._find_drop_target_window(app, 1, 1))
+        mgr.source_window = source
+        self.assertIsNone(mgr.find_drop_target_window(1, 1))
 
         unsupported = self._make_window(visible=True, contains=mock.Mock(return_value=True))
         app.windows = [unsupported]
-        app.drag_source_window = None
-        self.assertIsNone(self.mouse_router._find_drop_target_window(app, 1, 1))
+        mgr.source_window = None
+        self.assertIsNone(mgr.find_drop_target_window(1, 1))
 
         target = self._make_window(open_path=mock.Mock(return_value=None))
-        self.mouse_router._dispatch_drop(app, None, {})
-        self.mouse_router._dispatch_drop(app, target, {"type": "other"})
-        self.mouse_router._dispatch_drop(app, target, {"type": "file_path"})
+        mgr.dispatch_drop(None, {})
+        mgr.dispatch_drop(target, {"type": "other"})
+        mgr.dispatch_drop(target, {"type": "file_path"})
 
     def test_handle_file_drag_drop_mouse_move_and_consumer_none_paths(self):
         app = self._make_app()
@@ -140,23 +144,23 @@ class MouseRouterTests(unittest.TestCase):
         source = self._make_window()
         target = self._make_window(contains=mock.Mock(return_value=True), open_path=mock.Mock(return_value=None))
         app.windows = [source, target]
-        app.drag_payload = payload
-        app.drag_source_window = source
+        app.drag_drop.payload = payload
+        app.drag_drop.source_window = source
 
         # move_drag updates drag target highlighting
         handled = self.mouse_router.handle_file_drag_drop_mouse(
             app, 10, 7, self.curses.REPORT_MOUSE_POSITION | self.curses.BUTTON1_PRESSED
         )
         self.assertTrue(handled)
-        self.assertIs(app.drag_target_window, target)
+        self.assertIs(app.drag_drop.target_window, target)
 
         # Existing drag payload but not moving or stopping still consumes the event.
         handled = self.mouse_router.handle_file_drag_drop_mouse(app, 10, 7, self.curses.REPORT_MOUSE_POSITION)
         self.assertTrue(handled)
 
         # No drag payload and not moving returns False.
-        app.drag_payload = None
-        app.drag_source_window = None
+        app.drag_drop.payload = None
+        app.drag_drop.source_window = None
         handled = self.mouse_router.handle_file_drag_drop_mouse(app, 10, 7, 0)
         self.assertFalse(handled)
 
@@ -351,9 +355,9 @@ class MouseRouterTests(unittest.TestCase):
         )
 
         self.assertTrue(handled)
-        self.assertEqual(app.drag_payload, payload)
-        self.assertIs(app.drag_source_window, source)
-        self.assertIs(app.drag_target_window, target)
+        self.assertEqual(app.drag_drop.payload, payload)
+        self.assertIs(app.drag_drop.source_window, source)
+        self.assertIs(app.drag_drop.target_window, target)
         self.assertTrue(target.drop_target_highlight)
 
     def test_handle_file_drag_drop_mouse_drop_opens_notepad_target(self):
@@ -365,9 +369,9 @@ class MouseRouterTests(unittest.TestCase):
             open_path=mock.Mock(return_value="opened"),
         )
         app.windows = [source, target]
-        app.drag_payload = payload
-        app.drag_source_window = source
-        app.drag_target_window = target
+        app.drag_drop.payload = payload
+        app.drag_drop.source_window = source
+        app.drag_drop.target_window = target
         target.drop_target_highlight = True
 
         handled = self.mouse_router.handle_file_drag_drop_mouse(app, 12, 8, app.stop_drag_flags)
@@ -375,9 +379,9 @@ class MouseRouterTests(unittest.TestCase):
         self.assertTrue(handled)
         target.open_path.assert_called_once_with("/tmp/demo.txt")
         app._dispatch_window_result.assert_called_once_with("opened", target)
-        self.assertIsNone(app.drag_payload)
-        self.assertIsNone(app.drag_source_window)
-        self.assertIsNone(app.drag_target_window)
+        self.assertIsNone(app.drag_drop.payload)
+        self.assertIsNone(app.drag_drop.source_window)
+        self.assertIsNone(app.drag_drop.target_window)
         self.assertFalse(target.drop_target_highlight)
 
     def test_handle_file_drag_drop_mouse_drop_forwards_terminal_target(self):
@@ -389,15 +393,15 @@ class MouseRouterTests(unittest.TestCase):
             accept_dropped_path=mock.Mock(return_value=None),
         )
         app.windows = [source, target]
-        app.drag_payload = payload
-        app.drag_source_window = source
+        app.drag_drop.payload = payload
+        app.drag_drop.source_window = source
 
         handled = self.mouse_router.handle_file_drag_drop_mouse(app, 12, 8, app.stop_drag_flags)
 
         self.assertTrue(handled)
         target.accept_dropped_path.assert_called_once_with("/tmp/demo.txt")
         app._dispatch_window_result.assert_not_called()
-        self.assertIsNone(app.drag_payload)
+        self.assertIsNone(app.drag_drop.payload)
 
     def test_handle_file_drag_drop_mouse_stop_without_active_drag_clears_candidates(self):
         app = self._make_app()

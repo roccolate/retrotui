@@ -4,6 +4,8 @@ import curses
 import sys
 import os
 
+from ..constants import MOUSE_SCROLL_DOWN_FALLBACK
+
 # Platform-aware termios import
 if os.name == 'nt':
     from . import win_termios as termios
@@ -100,7 +102,7 @@ def enable_mouse_support():
         | curses.BUTTON1_CLICKED
         | curses.BUTTON1_DOUBLE_CLICKED
     )
-    scroll_down_mask = getattr(curses, 'BUTTON5_PRESSED', 0x200000)
+    scroll_down_mask = getattr(curses, 'BUTTON5_PRESSED', MOUSE_SCROLL_DOWN_FALLBACK)
 
     # Use 1002 (button-event tracking) + 1006 (SGR coordinates)
     print('\033[?1002h', end='', flush=True)

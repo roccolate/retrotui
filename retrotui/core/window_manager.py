@@ -1,6 +1,8 @@
 """Window lifecycle management for RetroTUI."""
 import logging
 
+from ..constants import TASKBAR_TITLE_MAX_LEN, BOTTOM_BARS_HEIGHT
+
 LOGGER = logging.getLogger(__name__)
 
 
@@ -78,3 +80,27 @@ class WindowManager:
         """Return staggered window coordinates based on open window count."""
         count = len(self.windows)
         return base_x + count * step_x, base_y + count * step_y
+
+    # ------------------------------------------------------------------
+    # Taskbar
+    # ------------------------------------------------------------------
+
+    def handle_taskbar_click(self, mx, my):
+        """Handle click on taskbar row. Returns True if handled."""
+        h, w = self._app.stdscr.getmaxyx()
+        taskbar_y = h - BOTTOM_BARS_HEIGHT
+        if my != taskbar_y:
+            return False
+        minimized = [win for win in self.windows if win.minimized]
+        if not minimized:
+            return False
+        x = 1
+        for win in minimized:
+            label = win.title[:TASKBAR_TITLE_MAX_LEN]
+            btn_w = len(label) + 2  # [label]
+            if x <= mx < x + btn_w:
+                win.toggle_minimize()
+                self._app.set_active_window(win)
+                return True
+            x += btn_w + 1
+        return False
