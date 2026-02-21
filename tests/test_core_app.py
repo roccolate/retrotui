@@ -852,6 +852,7 @@ class CoreAppTests(unittest.TestCase):
         app.default_show_hidden = True
         app.default_word_wrap = False
         app.default_sunday_first = True
+        app.config = types.SimpleNamespace(hidden_icons="some_apps")
 
         with mock.patch.object(self.app_mod, "save_config", return_value="/tmp/config.toml") as save_config:
             result = app.persist_config()

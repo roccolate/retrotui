@@ -168,7 +168,8 @@ class AppManagerWindow(Window):
             base_icons = ICONS if self.app.use_unicode else ICONS_ASCII
             hidden = [icon["label"] for icon in base_icons if icon["label"].lower() not in selected_set]
             
-            self.app.config.hidden_icons = ",".join(hidden)
+            from dataclasses import replace
+            self.app.config = replace(self.app.config, hidden_icons=",".join(hidden))
             try:
                 self.app.persist_config()
                 self.app.refresh_icons()
