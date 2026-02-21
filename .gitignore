@@ -22,3 +22,9 @@ tests/_mkdir_py_*
 
 # Tool caches
 .pytest_cache/
+
+# Debug/test scratch files at root
+debug_*.py
+test.py
+pytest_*.txt
+test_fail_*.log

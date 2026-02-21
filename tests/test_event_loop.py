@@ -56,6 +56,8 @@ class EventLoopTests(unittest.TestCase):
             menu=types.SimpleNamespace(draw_bar=mock.Mock(), draw_dropdown=mock.Mock()),
             windows=[win],
             dialog=None,
+            context_menu=None,
+            normalize_window_layers=mock.Mock(),
             handle_mouse=mock.Mock(),
             handle_key=mock.Mock(),
             has_background_operation=mock.Mock(return_value=False),
@@ -67,7 +69,6 @@ class EventLoopTests(unittest.TestCase):
 
     def test_draw_frame_calls_normalize_layers_when_present(self):
         app = self._make_app()
-        app.normalize_window_layers = mock.Mock()
 
         self.event_loop.draw_frame(app)
 

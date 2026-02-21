@@ -28,17 +28,22 @@ from .constants import (
 
 import sys
 
-# Test doubles may expose only a subset of color constants.
-for _name, _fallback in {
-    "COLOR_BLACK": 0,
-    "COLOR_BLUE": 4,
-    "COLOR_CYAN": 6,
-    "COLOR_GREEN": 2,
-    "COLOR_WHITE": 7,
-    "COLOR_YELLOW": 3,
-}.items():
-    if not hasattr(curses, _name):
-        setattr(curses, _name, _fallback)
+
+def _ensure_curses_colors():
+    """Ensure curses color constants exist (test doubles may omit them)."""
+    for name, fallback in {
+        "COLOR_BLACK": 0,
+        "COLOR_BLUE": 4,
+        "COLOR_CYAN": 6,
+        "COLOR_GREEN": 2,
+        "COLOR_WHITE": 7,
+        "COLOR_YELLOW": 3,
+    }.items():
+        if not hasattr(curses, name):
+            setattr(curses, name, fallback)
+
+
+_ensure_curses_colors()
 
 DEFAULT_THEME = "win31"
 

@@ -17,6 +17,9 @@ from .constants import (
 )
 from .theme import ROLE_TO_PAIR_ID, get_theme
 
+# Cache for theme_attr() lookups — invalidated by init_colors().
+_theme_attr_cache: dict[str, int] = {}
+
 
 def init_colors(theme_key_or_obj=None):
     """Initialize curses color pairs from the active semantic theme."""
@@ -53,15 +56,25 @@ def init_colors(theme_key_or_obj=None):
         # pair 50+i: fg=i, bg=term_bg
         curses.init_pair(50 + i, i, term_bg)
 
+    # Invalidate theme_attr cache so next calls pick up new pairs.
+    _theme_attr_cache.clear()
+
 
 def theme_attr(role):
-    """Return curses color attribute for a semantic role."""
-    return curses.color_pair(ROLE_TO_PAIR_ID[role])
+    """Return curses color attribute for a semantic role (cached)."""
+    cached = _theme_attr_cache.get(role)
+    if cached is not None:
+        return cached
+    attr = curses.color_pair(ROLE_TO_PAIR_ID[role])
+    _theme_attr_cache[role] = attr
+    return attr
 
 def safe_addstr(win, y, x, text, attr=0):
     """Write string safely, clipping to window bounds."""
+    if x < 0 or y < 0:
+        return
     h, w = win.getmaxyx()
-    if y < 0 or y >= h or x >= w:
+    if y >= h or x >= w:
         return
     max_len = w - x - 1
     if max_len <= 0:
