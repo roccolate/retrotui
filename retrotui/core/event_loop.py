@@ -13,6 +13,7 @@ def clamp_windows_to_terminal(app):
 
 def draw_frame(app):
     """Render a full frame before reading input."""
+    app._frame_size = app.stdscr.getmaxyx()
     app.stdscr.erase()
     app.normalize_window_layers()
     app.draw_desktop()
@@ -20,7 +21,8 @@ def draw_frame(app):
 
     if not app.has_background_operation():
         for win in app.windows:
-            win.draw(app.stdscr)
+            if getattr(win, "visible", True):
+                win.draw(app.stdscr)
 
     _, width = app.stdscr.getmaxyx()
     app.menu.draw_bar(app.stdscr, width)
@@ -49,9 +51,12 @@ def read_input_key(stdscr):
 
 
 def dispatch_input(app, key):
-    """Dispatch one normalized input event."""
+    """Dispatch one normalized input event.
+
+    Returns True when the event likely changed UI state and should trigger redraw.
+    """
     if key is None:
-        return
+        return False
 
     # Handle context menu input first (modal behavior).
     ctx = app.context_menu
@@ -59,36 +64,36 @@ def dispatch_input(app, key):
         if isinstance(key, int) and key == curses.KEY_MOUSE:
             try:
                 event = curses.getmouse()
-                _, mx, my, _, bstate = event
+                _, mx, my, _, _bstate = event
                 action = ctx.handle_click(mx, my)
                 if action:
                     app.execute_action(action)
-                    return
-                # Click outside closed the menu — let event fall through.
+                    return True
+                # Click outside may close the menu; either way this was UI input.
                 if ctx.is_open():
-                     return
+                    return True
             except curses.error:
-                pass
+                return False
         else:
             action = ctx.handle_input(key)
             if action:
                 app.execute_action(action)
-            return
+            return True
 
     if isinstance(key, int) and key == curses.KEY_MOUSE:
         try:
             event = curses.getmouse()
-            app.handle_mouse(event)
+            return bool(app.handle_mouse(event))
         except curses.error:
-            return
-        return
+            return False
 
     if isinstance(key, int) and key == curses.KEY_RESIZE:
         curses.update_lines_cols()
         clamp_windows_to_terminal(app)
-        return
+        return True
 
     app.handle_key(key)
+    return True
 
 
 def _has_live_terminals(app):
@@ -102,6 +107,9 @@ def _has_live_terminals(app):
 
 def run_app_loop(app):
     """Run main draw/input loop with terminal cleanup on exit."""
+    install_handlers = getattr(app, "_install_runtime_signal_handlers", None)
+    if callable(install_handlers):
+        install_handlers()
     try:
         while app.running:
             app.poll_background_operation()
@@ -112,9 +120,12 @@ def run_app_loop(app):
                 draw_frame(app)
                 app._dirty = False
             key = read_input_key(app.stdscr)
-            if key is not None:
+            if key is None:
+                consume_sigint = getattr(app, "_consume_pending_sigint", None)
+                if callable(consume_sigint):
+                    key = consume_sigint()
+            if dispatch_input(app, key):
                 app._dirty = True
-            dispatch_input(app, key)
             app.poll_background_operation()
     finally:
         app.cleanup()

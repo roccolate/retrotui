@@ -20,8 +20,16 @@ class DragDropManager:
 
     def set_drag_target(self, target):
         """Track active drop target and update per-window highlight flags."""
-        for win in getattr(self._app, 'windows', []):
-            setattr(win, 'drop_target_highlight', bool(target is not None and win is target))
+        if target is self.target_window:
+            return
+
+        previous = self.target_window
+        if previous is not None:
+            setattr(previous, 'drop_target_highlight', False)
+
+        if target is not None:
+            setattr(target, 'drop_target_highlight', True)
+
         self.target_window = target
 
     def clear_state(self):

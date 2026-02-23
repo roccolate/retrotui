@@ -831,6 +831,40 @@ class MouseRouterTests(unittest.TestCase):
 
         app._handle_desktop_mouse.assert_not_called()
 
+    def test_trace_mouse_normalization_is_rate_limited(self):
+        raw = (0, 1, 2, 0, self.curses.BUTTON1_CLICKED)
+        norm = {
+            "backend": "gpm",
+            "mx": 1,
+            "my": 2,
+            "bstate": self.curses.BUTTON1_CLICKED,
+            "is_click_like": True,
+            "right_click": False,
+            "is_drag": False,
+            "is_motion": False,
+            "is_passive_noop": False,
+            "inferred_motion": False,
+            "inferred_right_click": False,
+        }
+        original_trace = self.mouse_router._TRACE_MOUSE
+        original_interval = self.mouse_router._TRACE_MOUSE_MIN_INTERVAL
+        original_ts = self.mouse_router._TRACE_MOUSE_LAST_TS["value"]
+        self.mouse_router._TRACE_MOUSE = True
+        self.mouse_router._TRACE_MOUSE_MIN_INTERVAL = 0.5
+        self.mouse_router._TRACE_MOUSE_LAST_TS["value"] = 0.0
+        try:
+            with mock.patch.object(self.mouse_router.LOGGER, "isEnabledFor", return_value=True):
+                with mock.patch.object(self.mouse_router.LOGGER, "debug") as log_debug:
+                    with mock.patch.object(self.mouse_router.time, "monotonic", side_effect=[1.0, 1.1, 1.7]):
+                        self.mouse_router._trace_mouse_normalization(raw, norm, norm["bstate"])
+                        self.mouse_router._trace_mouse_normalization(raw, norm, norm["bstate"])
+                        self.mouse_router._trace_mouse_normalization(raw, norm, norm["bstate"])
+            self.assertEqual(log_debug.call_count, 2)
+        finally:
+            self.mouse_router._TRACE_MOUSE = original_trace
+            self.mouse_router._TRACE_MOUSE_MIN_INTERVAL = original_interval
+            self.mouse_router._TRACE_MOUSE_LAST_TS["value"] = original_ts
+
 
 if __name__ == "__main__":
     unittest.main()
