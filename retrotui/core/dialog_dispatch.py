@@ -6,8 +6,8 @@ processes dialog button results, keeping the core App class leaner.
 """
 import logging
 
-from ..ui.dialog import Dialog, InputDialog
-from .actions import ActionResult, ActionType, AppAction
+from ..ui.dialog import Dialog
+from .actions import ActionType, AppAction
 
 LOGGER = logging.getLogger(__name__)
 
@@ -37,50 +37,53 @@ class DialogDispatcher:
     def dispatch_window_result(self, result, source_win):
         """Handle ActionResult returned by window/dialog callbacks."""
         if not result or result is True:
-            return
+            return True
 
-        if not isinstance(result, ActionResult):
+        if not hasattr(result, 'type') or not hasattr(result, 'payload'):
             LOGGER.debug('Ignoring non-ActionResult return from window callback: %r', result)
-            return
+            return True
 
-        if result.type == ActionType.REFRESH:
-            return
+        result_type = result.type
+        result_payload = result.payload
 
-        LOGGER.debug('Dispatching window result: type=%s payload=%r', result.type, result.payload)
+        if result_type == ActionType.REFRESH:
+            return True
+
+        LOGGER.debug('Dispatching window result: type=%s payload=%r', result_type, result_payload)
 
         # Simple dialog dispatches (require source_win)
-        method_name = self._RESULT_DISPATCH.get(result.type)
+        method_name = self._RESULT_DISPATCH.get(result_type)
         if method_name is not None:
             if source_win:
                 getattr(self._app, method_name)(source_win)
-            return
+            return True
 
-        if result.type == ActionType.OPEN_FILE and result.payload:
-            self._app.open_file_viewer(result.payload)
-            return
+        if result_type == ActionType.OPEN_FILE and result_payload:
+            self._app.open_file_viewer(result_payload)
+            return True
 
-        if result.type == ActionType.REQUEST_URL:
-            self._app.show_url_dialog(source_win, result.payload)
-            return
+        if result_type == ActionType.REQUEST_URL:
+            self._app.show_url_dialog(source_win, result_payload)
+            return True
 
-        if result.type == ActionType.EXECUTE:
-            exec_action = self._app._normalize_action(result.payload)
+        if result_type == ActionType.EXECUTE:
+            exec_action = self._app._normalize_action(result_payload)
             if exec_action == AppAction.CLOSE_WINDOW and source_win:
                 self._app.close_window(source_win)
             elif exec_action:
                 self._app.execute_action(exec_action)
-            return
+            return True
 
-        if result.type in (
+        if result_type in (
             ActionType.REQUEST_COPY_BETWEEN_PANES,
             ActionType.REQUEST_MOVE_BETWEEN_PANES,
         ):
             operation = (
                 'copy'
-                if result.type == ActionType.REQUEST_COPY_BETWEEN_PANES
+                if result_type == ActionType.REQUEST_COPY_BETWEEN_PANES
                 else 'move'
             )
-            destination = self._app._resolve_between_panes_destination(source_win, result.payload)
+            destination = self._app._resolve_between_panes_destination(source_win, result_payload)
             if not source_win:
                 self._app.dialog = Dialog(
                     'Operation Error',
@@ -88,7 +91,7 @@ class DialogDispatcher:
                     ['OK'],
                     width=54,
                 )
-                return
+                return True
             if not destination:
                 self._app.dialog = Dialog(
                     'Operation Error',
@@ -96,7 +99,7 @@ class DialogDispatcher:
                     ['OK'],
                     width=62,
                 )
-                return
+                return True
             op_result = self._app._run_file_operation_with_progress(
                 source_win,
                 operation=operation,
@@ -104,29 +107,30 @@ class DialogDispatcher:
             )
             if op_result is not None:
                 self.dispatch_window_result(op_result, source_win)
-            return
+            return True
 
-        if result.type == ActionType.REQUEST_KILL_CONFIRM and source_win:
-            self._app.show_kill_confirm_dialog(source_win, result.payload)
-            return
+        if result_type == ActionType.REQUEST_KILL_CONFIRM and source_win:
+            self._app.show_kill_confirm_dialog(source_win, result_payload)
+            return True
 
-        if result.type == ActionType.SAVE_ERROR:
-            message = result.payload or 'Unknown save error.'
+        if result_type == ActionType.SAVE_ERROR:
+            message = result_payload or 'Unknown save error.'
             self._app.dialog = Dialog('Save Error', str(message), ['OK'], width=50)
-            return
+            return True
 
-        if result.type == ActionType.ERROR:
-            message = result.payload or 'Unknown error.'
+        if result_type == ActionType.ERROR:
+            message = result_payload or 'Unknown error.'
             self._app.dialog = Dialog('Error', str(message), ['OK'], width=50)
-            return
+            return True
 
-        if result.type == ActionType.UPDATE_CONFIG:
-            payload = result.payload or {}
+        if result_type == ActionType.UPDATE_CONFIG:
+            payload = result_payload or {}
             self._app.apply_preferences(**payload, apply_to_open_windows=False)
             self._app.persist_config()
-            return
+            return True
 
-        LOGGER.debug('Unhandled ActionResult type: %s', result.type)
+        LOGGER.debug('Unhandled ActionResult type: %s', result_type)
+        return False
 
     def resolve_dialog_result(self, result_idx):
         """Apply dialog button result and run dialog callback when needed."""
@@ -142,7 +146,7 @@ class DialogDispatcher:
         elif result_idx == 0:
             callback = getattr(dialog, 'callback', None)
             if callable(callback):
-                if isinstance(dialog, InputDialog):
+                if hasattr(dialog, 'value'):
                     callback_result = callback(dialog.value)
                 else:
                     callback_result = callback()
@@ -150,4 +154,8 @@ class DialogDispatcher:
         if self._app.dialog is dialog:
             self._app.dialog = None
         if callback_result is not None:
-            self.dispatch_window_result(callback_result, self._app.get_active_window())
+            app_dispatch = getattr(self._app, '_dispatch_window_result', None)
+            if callable(app_dispatch):
+                app_dispatch(callback_result, self._app.get_active_window())
+            else:
+                self.dispatch_window_result(callback_result, self._app.get_active_window())

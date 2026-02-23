@@ -64,6 +64,8 @@ class EventLoopTests(unittest.TestCase):
             poll_background_operation=mock.Mock(),
             cleanup=mock.Mock(),
             running=True,
+            _install_runtime_signal_handlers=mock.Mock(),
+            _consume_pending_sigint=mock.Mock(return_value=None),
         )
         return app
 
@@ -170,7 +172,24 @@ class EventLoopTests(unittest.TestCase):
         draw_mock.assert_called_once_with(app)
         app.handle_key.assert_called_once_with("a")
         self.assertGreaterEqual(app.poll_background_operation.call_count, 2)
+        app._install_runtime_signal_handlers.assert_called_once_with()
         app.cleanup.assert_called_once_with()
+
+    def test_run_app_loop_consumes_pending_sigint_when_no_key(self):
+        app = self._make_app()
+        app._consume_pending_sigint.return_value = "\x03"
+
+        with mock.patch.object(self.event_loop, "draw_frame"):
+            with mock.patch.object(self.event_loop, "read_input_key", return_value=None):
+                def _dispatch_once(target, key):
+                    target.handle_key(key)
+                    target.running = False
+
+                with mock.patch.object(self.event_loop, "dispatch_input", side_effect=_dispatch_once):
+                    self.event_loop.run_app_loop(app)
+
+        app._consume_pending_sigint.assert_called_once_with()
+        app.handle_key.assert_called_once_with("\x03")
 
 
 if __name__ == "__main__":

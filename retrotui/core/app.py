@@ -4,6 +4,7 @@ Main RetroTUI Application Class.
 import os
 import curses
 import logging
+import signal
 import threading
 import time
 
@@ -40,8 +41,6 @@ from .mouse_router import (
     handle_desktop_mouse,
     handle_mouse_event,
 )
-from pathlib import Path
-from .config import default_config_path
 from .key_router import (
     normalize_app_key,
     handle_menu_hotkeys,
@@ -57,6 +56,7 @@ from .rendering import (
     draw_statusbar,
 )
 from .event_loop import run_app_loop
+from .dialog_dispatch import DialogDispatcher
 from .bootstrap import (
     configure_terminal,
     disable_flow_control,
@@ -77,30 +77,6 @@ class RetroTUI:
     LONG_FILE_OPERATION_BYTES = 8 * 1024 * 1024
     BACKGROUND_OPERATION_JOIN_TIMEOUT = 5.0
 
-    # Methods delegated to FileOperationManager via __getattr__
-    _FILE_OPS_METHODS = frozenset({
-        'show_save_as_dialog', 'show_open_dialog', 'show_rename_dialog',
-        'show_delete_confirm_dialog', 'show_copy_dialog', 'show_move_dialog',
-        'show_new_dir_dialog', 'show_new_file_dialog', 'show_kill_confirm_dialog',
-        '_window_selected_entry', '_resolve_between_panes_destination',
-        '_is_long_file_operation', '_start_background_operation',
-        'has_background_operation', 'poll_background_operation',
-        '_run_file_operation_with_progress',
-    })
-
-    # Dispatch table for _dispatch_window_result: ActionType -> method name
-    # Methods are called as self.<method>(source_win) for entries requiring source_win
-    _RESULT_DISPATCH = {
-        ActionType.REQUEST_SAVE_AS: 'show_save_as_dialog',
-        ActionType.REQUEST_OPEN_PATH: 'show_open_dialog',
-        ActionType.REQUEST_RENAME_ENTRY: 'show_rename_dialog',
-        ActionType.REQUEST_DELETE_CONFIRM: 'show_delete_confirm_dialog',
-        ActionType.REQUEST_COPY_ENTRY: 'show_copy_dialog',
-        ActionType.REQUEST_MOVE_ENTRY: 'show_move_dialog',
-        ActionType.REQUEST_NEW_DIR: 'show_new_dir_dialog',
-        ActionType.REQUEST_NEW_FILE: 'show_new_file_dialog',
-    }
-
     @property
     def file_ops(self):
         """Return the FileOperationManager, creating it lazily if needed (e.g. in tests using __new__)."""
@@ -112,11 +88,66 @@ class RetroTUI:
     def file_ops(self, value):
         self._file_ops = value
 
-    def __getattr__(self, name):
-        """Delegate file-operation methods to FileOperationManager."""
-        if name in RetroTUI._FILE_OPS_METHODS:
-            return getattr(self.file_ops, name)
-        raise AttributeError(f"'{type(self).__name__}' has no attribute '{name}'")
+    # ------------------------------------------------------------------
+    # File operations facade
+    # ------------------------------------------------------------------
+
+    def show_save_as_dialog(self, win):
+        return self.file_ops.show_save_as_dialog(win)
+
+    def show_open_dialog(self, win):
+        return self.file_ops.show_open_dialog(win)
+
+    def show_rename_dialog(self, win):
+        return self.file_ops.show_rename_dialog(win)
+
+    def show_delete_confirm_dialog(self, win):
+        return self.file_ops.show_delete_confirm_dialog(win)
+
+    def show_copy_dialog(self, win):
+        return self.file_ops.show_copy_dialog(win)
+
+    def show_move_dialog(self, win):
+        return self.file_ops.show_move_dialog(win)
+
+    def show_new_dir_dialog(self, win):
+        return self.file_ops.show_new_dir_dialog(win)
+
+    def show_new_file_dialog(self, win):
+        return self.file_ops.show_new_file_dialog(win)
+
+    def show_kill_confirm_dialog(self, win, payload):
+        return self.file_ops.show_kill_confirm_dialog(win, payload)
+
+    def _window_selected_entry(self, win):
+        return self.file_ops._window_selected_entry(win)
+
+    def _resolve_between_panes_destination(self, win, payload):
+        return self.file_ops._resolve_between_panes_destination(win, payload)
+
+    def _is_long_file_operation(self, entry):
+        return self.file_ops._is_long_file_operation(entry)
+
+    def _start_background_operation(self, *, title, message, worker, source_win):
+        return self.file_ops._start_background_operation(
+            title=title,
+            message=message,
+            worker=worker,
+            source_win=source_win,
+        )
+
+    def has_background_operation(self):
+        return self.file_ops.has_background_operation()
+
+    def poll_background_operation(self):
+        return self.file_ops.poll_background_operation()
+
+    def _run_file_operation_with_progress(self, win, *, operation, destination=None):
+        return self.file_ops._run_file_operation_with_progress(
+            win,
+            operation=operation,
+            destination=destination,
+        )
 
     def _get_icon_mgr(self):
         """Return the IconPositionManager, creating it lazily if needed (e.g. in tests using __new__)."""
@@ -152,6 +183,12 @@ class RetroTUI:
             self.drag_drop = DragDropManager(self)
         return self.drag_drop
 
+    def _get_dialog_dispatcher(self):
+        """Return the dialog dispatcher, creating it lazily if needed."""
+        if not hasattr(self, '_dialog_dispatcher'):
+            self._dialog_dispatcher = DialogDispatcher(self)
+        return self._dialog_dispatcher
+
     @property
     def drag_payload(self):
         return self._get_drag_drop().payload
@@ -179,6 +216,9 @@ class RetroTUI:
     def __init__(self, stdscr):
         self.stdscr = stdscr
         self.running = True
+        self._pending_sigint = False
+        self._prev_sigint_handler = None
+        self._sigint_handler_installed = False
         self.window_mgr = WindowManager(self)
         self.use_unicode = check_unicode_support()
         self.config = load_config()
@@ -214,11 +254,13 @@ class RetroTUI:
         self._resizing_win = None   # O(1) resize tracking
         self._last_icon_click_idx = None
         self._last_icon_click_ts = 0.0
+        self._mouse_norm = None
         self.drag_drop = DragDropManager(self)
         # Movable desktop icon positions: mapping icon_key -> (x, y)
         self._icon_mgr = IconPositionManager(self)
         self._background_operation = None
         self._file_ops = FileOperationManager(self)
+        self._dialog_dispatcher = DialogDispatcher(self)
         
         # Plugin discovery and registration (optional; failures should not crash)
         try:
@@ -435,6 +477,7 @@ class RetroTUI:
 
     def cleanup(self):
         """Restore terminal state."""
+        self._restore_runtime_signal_handlers()
         op_state = getattr(self, '_background_operation', None)
         if op_state:
             thread = op_state.get('thread')
@@ -453,6 +496,45 @@ class RetroTUI:
                 except Exception:  # pragma: no cover - defensive cleanup path
                     LOGGER.debug('Window cleanup failed for %r', win, exc_info=True)
         disable_mouse_support()
+
+    def _install_runtime_signal_handlers(self):
+        """Install runtime signal handlers (main thread only)."""
+        if getattr(self, '_sigint_handler_installed', False):
+            return
+        if threading.current_thread() is not threading.main_thread():
+            return
+        try:
+            self._prev_sigint_handler = signal.getsignal(signal.SIGINT)
+            signal.signal(signal.SIGINT, self._handle_sigint)
+            self._sigint_handler_installed = True
+        except (AttributeError, ValueError, OSError):
+            self._prev_sigint_handler = None
+            self._sigint_handler_installed = False
+
+    def _restore_runtime_signal_handlers(self):
+        """Restore process signal handlers changed for runtime."""
+        if not getattr(self, '_sigint_handler_installed', False):
+            return
+        try:
+            prev = getattr(self, '_prev_sigint_handler', None)
+            if prev is not None:
+                signal.signal(signal.SIGINT, self._prev_sigint_handler)
+        except (AttributeError, ValueError, OSError):
+            pass
+        finally:
+            self._prev_sigint_handler = None
+            self._sigint_handler_installed = False
+
+    def _handle_sigint(self, _signum, _frame):
+        """Queue SIGINT as in-app Ctrl+C key instead of terminating session."""
+        self._pending_sigint = True
+
+    def _consume_pending_sigint(self):
+        """Return queued Ctrl+C key when SIGINT was received."""
+        if getattr(self, '_pending_sigint', False):
+            self._pending_sigint = False
+            return '\x03'
+        return None
 
     def draw_desktop(self):
         """Draw the desktop background pattern."""
@@ -670,121 +752,13 @@ class RetroTUI:
 
     def _dispatch_window_result(self, result, source_win):
         """Handle ActionResult returned by window/dialog callbacks."""
-        if not result or result is True:
-            return
-
-        if not isinstance(result, ActionResult):
-            LOGGER.debug('Ignoring non-ActionResult return from window callback: %r', result)
-            return
-
-        if result.type == ActionType.REFRESH:
-            return
-
-        LOGGER.debug('Dispatching window result: type=%s payload=%r', result.type, result.payload)
-
-        # Simple dialog dispatches (require source_win)
-        method_name = self._RESULT_DISPATCH.get(result.type)
-        if method_name is not None:
-            if source_win:
-                getattr(self, method_name)(source_win)
-            return
-
-        if result.type == ActionType.OPEN_FILE and result.payload:
-            self.open_file_viewer(result.payload)
-            return
-
-        if result.type == ActionType.REQUEST_URL:
-            self.show_url_dialog(source_win, result.payload)
-            return
-
-        if result.type == ActionType.EXECUTE:
-            exec_action = self._normalize_action(result.payload)
-            if exec_action == AppAction.CLOSE_WINDOW and source_win:
-                self.close_window(source_win)
-            elif exec_action:
-                self.execute_action(exec_action)
-            return
-
-        if result.type in (
-            ActionType.REQUEST_COPY_BETWEEN_PANES,
-            ActionType.REQUEST_MOVE_BETWEEN_PANES,
-        ):
-            operation = (
-                'copy'
-                if result.type == ActionType.REQUEST_COPY_BETWEEN_PANES
-                else 'move'
-            )
-            destination = self._resolve_between_panes_destination(source_win, result.payload)
-            if not source_win:
-                self.dialog = Dialog(
-                    'Operation Error',
-                    f'Cannot {operation}: no source window context.',
-                    ['OK'],
-                    width=54,
-                )
-                return
-            if not destination:
-                self.dialog = Dialog(
-                    'Operation Error',
-                    f'Cannot {operation}: destination pane path is unavailable.',
-                    ['OK'],
-                    width=62,
-                )
-                return
-            op_result = self._run_file_operation_with_progress(
-                source_win,
-                operation=operation,
-                destination=destination,
-            )
-            if op_result is not None:
-                self._dispatch_window_result(op_result, source_win)
-            return
-
-        if result.type == ActionType.REQUEST_KILL_CONFIRM and source_win:
-            self.show_kill_confirm_dialog(source_win, result.payload)
-            return
-
-        if result.type == ActionType.SAVE_ERROR:
-            message = result.payload or 'Unknown save error.'
-            self.dialog = Dialog('Save Error', str(message), ['OK'], width=50)
-            return
-
-        if result.type == ActionType.ERROR:
-            message = result.payload or 'Unknown error.'
-            self.dialog = Dialog('Error', str(message), ['OK'], width=50)
-            return
-
-        if result.type == ActionType.UPDATE_CONFIG:
-            payload = result.payload or {}
-            self.apply_preferences(**payload, apply_to_open_windows=False)
-            self.persist_config()
-            return
-
-        LOGGER.debug('Unhandled ActionResult type: %s', result.type)
+        handled = self._get_dialog_dispatcher().dispatch_window_result(result, source_win)
+        if handled is False and hasattr(result, 'type'):
+            LOGGER.debug('Unhandled ActionResult type: %s', result.type)
 
     def _resolve_dialog_result(self, result_idx):
         """Apply dialog button result and run dialog callback when needed."""
-        if result_idx < 0 or not self.dialog:
-            return
-
-        dialog = self.dialog
-        btn_text = dialog.buttons[result_idx] if result_idx < len(dialog.buttons) else ''
-        callback_result = None
-
-        if dialog.title == 'Exit RetroTUI' and btn_text == 'Yes':
-            self.running = False
-        elif result_idx == 0:
-            callback = getattr(dialog, 'callback', None)
-            if callable(callback):
-                if isinstance(dialog, InputDialog):
-                    callback_result = callback(dialog.value)
-                else:
-                    callback_result = callback()
-
-        if self.dialog is dialog:
-            self.dialog = None
-        if callback_result is not None:
-            self._dispatch_window_result(callback_result, self.get_active_window())
+        self._get_dialog_dispatcher().resolve_dialog_result(result_idx)
 
     def _handle_dialog_mouse(self, mx, my, bstate):
         """Handle mouse events when a modal dialog is open."""
@@ -816,13 +790,17 @@ class RetroTUI:
         """Handle mouse interaction when the global menu is active."""
         return handle_global_menu_mouse(self, mx, my, bstate)
 
-    def _handle_window_mouse(self, mx, my, bstate):
+    def _handle_window_mouse(self, mx, my, bstate, norm=None):
         """Route mouse events to windows in z-order."""
-        return handle_window_mouse(self, mx, my, bstate)
+        if norm is None:
+            norm = getattr(self, '_mouse_norm', None)
+        return handle_window_mouse(self, mx, my, bstate, norm=norm)
 
-    def _handle_desktop_mouse(self, mx, my, bstate):
+    def _handle_desktop_mouse(self, mx, my, bstate, norm=None):
         """Handle desktop icon interactions and deselection."""
-        return handle_desktop_mouse(self, mx, my, bstate)
+        if norm is None:
+            norm = getattr(self, '_mouse_norm', None)
+        return handle_desktop_mouse(self, mx, my, bstate, norm=norm)
 
     def handle_mouse(self, event):
         """Handle mouse events."""

@@ -1268,6 +1268,24 @@ class CoreAppTests(unittest.TestCase):
         )
         disable_mouse_support.assert_called_once_with()
 
+    def test_runtime_signal_handler_install_and_restore(self):
+        app = self._make_app()
+        app._pending_sigint = False
+        app._prev_sigint_handler = None
+        app._sigint_handler_installed = False
+
+        with mock.patch.object(self.app_mod.threading, "current_thread", return_value=self.app_mod.threading.main_thread()):
+            with mock.patch.object(self.app_mod.signal, "getsignal", return_value="old") as getsig:
+                with mock.patch.object(self.app_mod.signal, "signal") as setsig:
+                    app._install_runtime_signal_handlers()
+                    self.assertTrue(app._sigint_handler_installed)
+                    getsig.assert_called_once_with(self.app_mod.signal.SIGINT)
+                    setsig.assert_called_once()
+
+                    app._restore_runtime_signal_handlers()
+                    self.assertFalse(app._sigint_handler_installed)
+                    self.assertIsNone(app._prev_sigint_handler)
+
     def test_show_new_dir_and_file_dialogs_set_callbacks(self):
         app = self._make_app()
         target = types.SimpleNamespace(
