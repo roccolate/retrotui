@@ -24,7 +24,10 @@ tests/_mkdir_py_*
 .pytest_cache/
 
 # Debug/test scratch files at root
-debug_*.py
-test.py
-pytest_*.txt
-test_fail_*.log
+/debug_*.py
+/test.py
+/pytest_*.txt
+/test_fail_*.log
+/coverage*.txt
+/test_output.txt
+/tests_output.txt
