@@ -117,7 +117,7 @@ def _is_desktop_double_click(app, icon_idx, bstate):
     now = time.monotonic()
     last_idx = app._last_icon_click_idx
     last_ts = app._last_icon_click_ts
-    interval = app.double_click_interval or DEFAULT_DOUBLE_CLICK_INTERVAL
+    interval = getattr(app, "double_click_interval", None) or DEFAULT_DOUBLE_CLICK_INTERVAL
     is_double = (last_idx == icon_idx) and ((now - last_ts) <= interval)
     app._last_icon_click_idx = icon_idx
     app._last_icon_click_ts = now
