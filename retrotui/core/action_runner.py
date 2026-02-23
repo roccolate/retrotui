@@ -1,5 +1,7 @@
 """Action execution helpers for RetroTUI app-level actions."""
 
+import curses
+import functools
 import inspect
 
 from ..apps.filemanager import FileManagerWindow
@@ -29,6 +31,7 @@ from .actions import AppAction
 from .content import build_about_message, build_help_message
 
 
+@functools.lru_cache(maxsize=None)
 def _supports_constructor_kwarg(constructor, kwarg: str) -> bool:
     """Return True when callable constructor accepts the provided keyword."""
     try:
@@ -103,7 +106,6 @@ def _spawn_registered_app(app, action, registry) -> bool:
 
     # Clamp to terminal size when curses is available.
     try:
-        import curses
         term_h, term_w = curses.LINES, curses.COLS
         w = min(default_w, term_w - 4)
         h = min(default_h, term_h - 4)

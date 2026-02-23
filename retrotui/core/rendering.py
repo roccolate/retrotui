@@ -16,6 +16,9 @@ from ..constants import (
 )
 from ..utils import safe_addstr, theme_attr
 
+# Cache for desktop pattern line to avoid rebuilding every frame.
+_desktop_line_cache = {'key': None, 'line': ''}
+
 
 def draw_desktop(app):
     """Draw the desktop background pattern."""
@@ -23,8 +26,13 @@ def draw_desktop(app):
     attr = theme_attr("desktop")
     pattern = getattr(getattr(app, "theme", None), "desktop_pattern", DESKTOP_PATTERN)
 
-    # Pre-compute pattern line once (avoids rebuilding per row).
-    line = (pattern * (w // len(pattern) + 1))[: w - 1]
+    # Reuse cached line when width and pattern haven't changed.
+    cache_key = (w, pattern)
+    if _desktop_line_cache['key'] != cache_key:
+        _desktop_line_cache['line'] = (pattern * (w // len(pattern) + 1))[: w - 1]
+        _desktop_line_cache['key'] = cache_key
+    line = _desktop_line_cache['line']
+
     for row in range(MENU_BAR_HEIGHT, h - BOTTOM_BARS_HEIGHT + 1):
         safe_addstr(app.stdscr, row, 0, line, attr)
 

@@ -19,6 +19,7 @@ class TerminalWindow(SelectableTextMixin, Window):
     """PTY-backed terminal window with ANSI color support and scrollback."""
 
     DEFAULT_SCROLLBACK = 2000
+    MAX_OUTPUT_PER_FRAME = 8192  # Throttle: max bytes processed per render tick.
     MENU_CLEAR = 'term_clear'
     MENU_COPY = 'term_copy'
     MENU_INTERRUPT = 'term_interrupt'
@@ -34,7 +35,8 @@ class TerminalWindow(SelectableTextMixin, Window):
 
         self._session = None
         self._session_error = None
-        
+        self._pending_output = ''
+
         self.ansi = AnsiStateMachine()
 
         # Buffer storage: list of list of (char, attr) tuples
@@ -43,6 +45,7 @@ class TerminalWindow(SelectableTextMixin, Window):
         self._cursor_col = 0
         self.scrollback_offset = 0
         
+        self._dirty_lines = set()
         self._init_selection()
 
         self.window_menu = WindowMenu({
@@ -151,6 +154,7 @@ class TerminalWindow(SelectableTextMixin, Window):
                 self._line_cells.append((' ', 0))
             self._line_cells.append((ch, attr))
         self._cursor_col += 1
+        self._dirty_lines.add(len(self._scroll_lines))
 
     def _append_newline(self):
         """Commit current line to scrollback."""
@@ -158,22 +162,22 @@ class TerminalWindow(SelectableTextMixin, Window):
         self._scroll_lines.append(list(self._line_cells))
         self._line_cells = []
         self._cursor_col = 0
+        self._dirty_lines.add(len(self._scroll_lines))  # new current line
         overflow = len(self._scroll_lines) - self.max_scrollback
         if overflow > 0:
             del self._scroll_lines[:overflow]
 
     def _erase_line(self, mode):
         """Apply CSI K (erase in line) mode."""
-        # Use default attr (0) for erased cells? Or current ansi attr?
-        # Usually erase uses current background color.
         fill_attr = self.ansi.attr
-        
-        if mode == 2: # Clear entire line
+        self._dirty_lines.add(len(self._scroll_lines))  # current line changed
+
+        if mode == 2:  # Clear entire line
             self._line_cells = []
             self._cursor_col = 0
             return
 
-        if mode == 1: # Clear from beginning to cursor
+        if mode == 1:  # Clear from beginning to cursor
             end = min(len(self._line_cells), self._cursor_col + 1)
             for i in range(end):
                 self._line_cells[i] = (' ', fill_attr)
@@ -181,12 +185,6 @@ class TerminalWindow(SelectableTextMixin, Window):
 
         # mode 0 (default): erase from cursor to end
         if self._cursor_col < len(self._line_cells):
-            # Truncate or fill with spaces?
-            # Standard terminals fill with spaces (and background color).
-            # If we just truncate, we lose background color extending to right.
-            # For simplicity in this TUI, truncating is cleaner for implementation 
-            # unless we implement fixed-width line buffers.
-            # Let's truncate for now to avoid management hell.
             del self._line_cells[self._cursor_col:]
 
     def _apply_csi(self, params, final):
@@ -225,15 +223,16 @@ class TerminalWindow(SelectableTextMixin, Window):
             count = max(1, _num(0, 1))
             if self._cursor_col < len(self._line_cells):
                 del self._line_cells[self._cursor_col:self._cursor_col + count]
+            self._dirty_lines.add(len(self._scroll_lines))
             return
-        if final == 'J': # Erase in display
-            # 2J = clear screen. `clear` command uses this.
+        if final == 'J':  # Erase in display
             mode = _num(0, 0)
             if mode == 2:
                 self._scroll_lines = []
                 self._line_cells = []
                 self._cursor_col = 0
                 self.scrollback_offset = 0
+                self._dirty_lines.clear()  # everything gone, full redraw next
 
     def _consume_output(self, text):
         """Feed text to ANSI state machine and update buffer."""
@@ -355,8 +354,7 @@ class TerminalWindow(SelectableTextMixin, Window):
         safe_addstr(stdscr, row, x + col, ch, effective_attr | curses.A_REVERSE | curses.A_BOLD)
 
     def _draw_selection(self, stdscr, x, y, text_cols, start_idx, visible_lines, body_attr):
-        """Draw reverse-video overlay for selected text."""
-        # visible_lines is list of cell-lists
+        """Draw reverse-video overlay for selected text (run-batched)."""
         if not self.has_selection():
             return
         for row, line_cells in enumerate(visible_lines):
@@ -365,21 +363,30 @@ class TerminalWindow(SelectableTextMixin, Window):
             if not span:
                 continue
             start, end = span
-            if start >= text_cols:
-                continue
             start = max(0, start)
-            end = min(max(start, end), text_cols)
+            end = min(end, text_cols)
             if end <= start:
                 continue
-            
-            # For selection, we just invert the range
+            # Run-based batching: group consecutive cells with same attr
+            first = line_cells[start] if start < len(line_cells) else (' ', 0)
+            run_attr = (first[1] or body_attr) | curses.A_REVERSE | curses.A_BOLD
+            run_start = start
+            run_chars: list[str] = []
             for col in range(start, end):
                 if col < len(line_cells):
                     ch, attr = line_cells[col]
                 else:
                     ch, attr = ' ', 0
-                effective_attr = attr if attr else body_attr
-                safe_addstr(stdscr, y + row, x + col, ch, effective_attr | curses.A_REVERSE | curses.A_BOLD)
+                effective = (attr or body_attr) | curses.A_REVERSE | curses.A_BOLD
+                if effective != run_attr:
+                    safe_addstr(stdscr, y + row, x + run_start, ''.join(run_chars), run_attr)
+                    run_start = col
+                    run_chars = [ch]
+                    run_attr = effective
+                else:
+                    run_chars.append(ch)
+            if run_chars:
+                safe_addstr(stdscr, y + row, x + run_start, ''.join(run_chars), run_attr)
 
     def draw(self, stdscr):
         """Draw terminal body, live output, scrollback and status line."""
@@ -391,31 +398,50 @@ class TerminalWindow(SelectableTextMixin, Window):
         bx, by, bw, bh = self.body_rect()
         text_cols, text_rows = max(1, bw - 1), max(1, bh - 1)
 
-        # Clear background
+        # Clear background (reuse single blank string across rows).
+        blank = ' ' * bw
         for row in range(bh):
-            safe_addstr(stdscr, by + row, bx, ' ' * bw, body_attr)
+            safe_addstr(stdscr, by + row, bx, blank, body_attr)
 
         self._ensure_session()
         if self._session is not None:
             self._session.resize(text_cols, text_rows)
             chunk = self._session.read()
             if chunk:
-                self._consume_output(chunk)
+                self._pending_output += chunk
             self._session.poll_exit()
         elif self._session_error and not self._scroll_lines and not self._line_cells:
-            self._consume_output(self._session_error + '\n')
+            self._pending_output += self._session_error + '\n'
+            self._session_error = None  # avoid re-appending
+
+        # Throttle: process at most MAX_OUTPUT_PER_FRAME per render tick.
+        if self._pending_output:
+            to_process = self._pending_output[:self.MAX_OUTPUT_PER_FRAME]
+            self._pending_output = self._pending_output[self.MAX_OUTPUT_PER_FRAME:]
+            self._consume_output(to_process)
 
         visible, start_idx, total_lines = self._visible_slice(text_rows)
-        
-        # Render visible lines
-        # visible is list of lists of (char, attr)
+
+        # Render visible lines using run-based batching: group consecutive
+        # cells with the same attribute into single safe_addstr calls.
         for i, line_cells in enumerate(visible):
-            # Fit line to width
             fitted = self._fit_line(line_cells, text_cols)
-            for j, (ch, attr) in enumerate(fitted):
-                # Use cell attribute if present, else body_attr
-                # Also ensure we don't crash on weird attributes
-                safe_addstr(stdscr, by + i, bx + j, ch, attr if attr else body_attr)
+            if not fitted:
+                continue
+            run_start = 0
+            run_chars = []
+            run_attr = fitted[0][1] or body_attr
+            for j, (ch, a) in enumerate(fitted):
+                effective = a if a else body_attr
+                if effective != run_attr:
+                    safe_addstr(stdscr, by + i, bx + run_start, ''.join(run_chars), run_attr)
+                    run_start = j
+                    run_chars = [ch]
+                    run_attr = effective
+                else:
+                    run_chars.append(ch)
+            if run_chars:
+                safe_addstr(stdscr, by + i, bx + run_start, ''.join(run_chars), run_attr)
 
         self._draw_selection(stdscr, bx, by, text_cols, start_idx, visible, body_attr)
         self._draw_live_cursor(stdscr, bx, by, text_cols, text_rows, start_idx, total_lines, body_attr)
@@ -432,6 +458,8 @@ class TerminalWindow(SelectableTextMixin, Window):
         live_state = 'LIVE' if self.scrollback_offset == 0 else f'BACK {self.scrollback_offset}'
         status = f' {state}  {live_state} '
         safe_addstr(stdscr, by + bh - 1, bx, status.ljust(bw)[:bw], theme_attr('status'))
+
+        self._dirty_lines.clear()
 
         if self.window_menu:
             self.window_menu.draw_dropdown(stdscr, self.x, self.y, self.w)
@@ -681,7 +709,8 @@ class TerminalWindow(SelectableTextMixin, Window):
         """Reset scrollback state and start a fresh shell session lazily."""
         self.close()
         self._session_error = None
-        self.ansi = AnsiStateMachine() # Reset ansi state
+        self._pending_output = ''
+        self.ansi = AnsiStateMachine()
         self._scroll_lines = []
         self._line_cells = []
         self._cursor_col = 0
@@ -689,6 +718,7 @@ class TerminalWindow(SelectableTextMixin, Window):
 
     def close(self):
         """Release PTY resources when terminal window is closed."""
+        self._pending_output = ''
         if self._session is not None:
             self._session.close()
             self._session = None

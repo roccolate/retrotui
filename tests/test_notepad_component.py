@@ -521,13 +521,22 @@ class NotepadComponentTests(unittest.TestCase):
             win.handle_key(self.curses.KEY_F6)
         copy_text.assert_called_once_with("alpha")
 
-    def test_handle_key_ctrl_c_no_longer_triggers_copy(self):
+    def test_handle_key_ctrl_c_copies_current_line(self):
         win = self._make_window()
         win.buffer = ["first"]
         win.cursor_line = 0
-        with mock.patch.object(self.notepad_mod, "copy_text") as copy_text:
+        with mock.patch.object(self.notepad_mod, "copy_text") as copy_mock:
             win.handle_key(3)
-        copy_text.assert_not_called()
+        copy_mock.assert_called_once_with("first")
+
+    def test_handle_key_ctrl_c_copies_selection(self):
+        win = self._make_window()
+        win.buffer = ["hello world"]
+        win.selection_anchor = (0, 0)
+        win.selection_cursor = (0, 5)
+        with mock.patch.object(self.notepad_mod, "copy_text") as copy_mock:
+            win.handle_key(3)
+        copy_mock.assert_called_once_with("hello")
 
     def test_handle_key_ctrl_v_pastes_multiline_text(self):
         win = self._make_window()

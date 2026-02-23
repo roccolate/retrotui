@@ -12,6 +12,7 @@ class WindowManager:
     def __init__(self, app):
         self._app = app
         self.windows = []
+        self._layers_dirty = True
 
     # ------------------------------------------------------------------
     # Window list / activation
@@ -24,23 +25,27 @@ class WindowManager:
         win.active = True
         # Move to top of its layer.
         self.windows.remove(win)
+        self._layers_dirty = True
         self.normalize_window_layers()
-        if getattr(win, 'always_on_top', False):
+        if win.always_on_top:
             self.windows.append(win)
             return
 
         insert_at = len(self.windows)
         for i, candidate in enumerate(self.windows):
-            if getattr(candidate, 'always_on_top', False):
+            if candidate.always_on_top:
                 insert_at = i
                 break
         self.windows.insert(insert_at, win)
 
     def normalize_window_layers(self):
         """Keep always-on-top windows above regular windows preserving order."""
-        normal = [w for w in self.windows if not getattr(w, 'always_on_top', False)]
-        pinned = [w for w in self.windows if getattr(w, 'always_on_top', False)]
+        if not self._layers_dirty:
+            return
+        normal = [w for w in self.windows if not w.always_on_top]
+        pinned = [w for w in self.windows if w.always_on_top]
         self.windows = normal + pinned
+        self._layers_dirty = False
 
     def close_window(self, win):
         """Close a window."""
@@ -51,6 +56,7 @@ class WindowManager:
             except Exception:  # pragma: no cover - defensive window cleanup path
                 LOGGER.debug('Window close hook failed for %r', win, exc_info=True)
         self.windows.remove(win)
+        self._layers_dirty = True
         self._activate_last_visible_window()
 
     def _activate_last_visible_window(self):
@@ -74,6 +80,7 @@ class WindowManager:
     def _spawn_window(self, win):
         """Append a window and make it active."""
         self.windows.append(win)
+        self._layers_dirty = True
         self.set_active_window(win)
 
     def _next_window_offset(self, base_x, base_y, step_x=2, step_y=1):

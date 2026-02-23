@@ -5,8 +5,18 @@ from __future__ import annotations
 
 import shutil
 import subprocess
+import sys
 
 _STATE = {"text": ""}
+
+# Cache detected backend (never changes mid-session).
+_BACKEND_CACHE: dict = {"value": None, "resolved": False}
+
+
+def _reset_backend_cache() -> None:
+    """Reset backend cache (for tests)."""
+    _BACKEND_CACHE["value"] = None
+    _BACKEND_CACHE["resolved"] = False
 
 
 def clear_clipboard() -> None:
@@ -21,15 +31,25 @@ def has_clipboard_text() -> bool:
 
 def _detect_backend() -> str | None:
     """Return available system clipboard backend key, or None."""
-    has_wl_copy = shutil.which("wl-copy")
-    has_wl_paste = shutil.which("wl-paste")
-    if has_wl_copy and has_wl_paste:
-        return "wl"
-    if shutil.which("xclip"):
-        return "xclip"
-    if shutil.which("xsel"):
-        return "xsel"
-    return None
+    if _BACKEND_CACHE["resolved"]:
+        return _BACKEND_CACHE["value"]
+
+    result: str | None = None
+    if sys.platform == "win32":
+        result = "win32"
+    else:
+        has_wl_copy = shutil.which("wl-copy")
+        has_wl_paste = shutil.which("wl-paste")
+        if has_wl_copy and has_wl_paste:
+            result = "wl"
+        elif shutil.which("xclip"):
+            result = "xclip"
+        elif shutil.which("xsel"):
+            result = "xsel"
+
+    _BACKEND_CACHE["value"] = result
+    _BACKEND_CACHE["resolved"] = True
+    return result
 
 
 def _system_copy(text: str) -> bool:
@@ -38,7 +58,15 @@ def _system_copy(text: str) -> bool:
     if backend is None:
         return False
     try:
-        if backend == "wl":
+        if backend == "win32":
+            result = subprocess.run(
+                ["clip.exe"],
+                input=text,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+        elif backend == "wl":
             result = subprocess.run(
                 ["wl-copy", "--type", "text/plain"],
                 input=text,
@@ -73,7 +101,14 @@ def _system_paste() -> str | None:
     if backend is None:
         return None
     try:
-        if backend == "wl":
+        if backend == "win32":
+            result = subprocess.run(
+                ["powershell", "-NoProfile", "-Command", "Get-Clipboard"],
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+        elif backend == "wl":
             result = subprocess.run(
                 ["wl-paste", "--no-newline"],
                 text=True,

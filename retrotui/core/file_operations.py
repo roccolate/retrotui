@@ -239,6 +239,9 @@ class FileOperationManager:
         if not state:
             return
 
+        # Active background operation always needs redraw (progress animation).
+        self._app._dirty = True
+
         elapsed = max(0.0, time.monotonic() - state['started_at'])
         dialog = state.get('dialog')
         if dialog and hasattr(dialog, 'set_elapsed'):
