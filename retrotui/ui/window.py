@@ -216,10 +216,11 @@ class Window:
             sep_y = self.y + 2
             safe_addstr(stdscr, sep_y, self.x, '╟' + '─' * (self.w - 2) + '╢', border_attr)
 
-        # Fill body background
+        # Fill body background (reuse single blank string across rows).
         bx, by, bw, bh = self.body_rect()
+        blank = ' ' * bw
         for i in range(bh):
-            safe_addstr(stdscr, by + i, bx, ' ' * bw, body_attr)
+            safe_addstr(stdscr, by + i, bx, blank, body_attr)
 
         return body_attr
 

@@ -91,13 +91,29 @@ def dispatch_input(app, key):
     app.handle_key(key)
 
 
+def _has_live_terminals(app):
+    """Return True if any window has an active PTY session producing output."""
+    for w in app.windows:
+        session = getattr(w, '_session', None)
+        if session is not None and getattr(session, 'running', False):
+            return True
+    return False
+
+
 def run_app_loop(app):
     """Run main draw/input loop with terminal cleanup on exit."""
     try:
         while app.running:
             app.poll_background_operation()
-            draw_frame(app)
+            # Always redraw when live terminals may have pending PTY output.
+            if _has_live_terminals(app):
+                app._dirty = True
+            if getattr(app, '_dirty', True):
+                draw_frame(app)
+                app._dirty = False
             key = read_input_key(app.stdscr)
+            if key is not None:
+                app._dirty = True
             dispatch_input(app, key)
             app.poll_background_operation()
     finally:

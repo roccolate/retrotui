@@ -64,9 +64,9 @@ def cycle_focus(app):
     if not visible_windows:
         return
     current = next((i for i, w in enumerate(visible_windows) if w.active), -1)
+    if current >= 0:
+        visible_windows[current].active = False
     next_idx = (current + 1) % len(visible_windows)
-    for win in app.windows:
-        win.active = False
     visible_windows[next_idx].active = True
 
 

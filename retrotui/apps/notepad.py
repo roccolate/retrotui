@@ -389,15 +389,22 @@ class NotepadWindow(SelectableTextMixin, Window):
             self.window_menu.draw_dropdown(stdscr, self.x, self.y, self.w)
 
     def _draw_selection_span(self, stdscr, screen_y, body_x, body_w, line_text, start_col, span, sel_attr):
-        """Draw selection highlight characters for a span on one screen line."""
+        """Draw selection highlight for a span on one screen line (batched)."""
         if span is None:
             return
         sel_start, sel_end = span
-        for abs_col in range(sel_start, sel_end):
-            local_col = abs_col - start_col
-            if 0 <= local_col < body_w - 1:
-                ch = line_text[abs_col] if abs_col < len(line_text) else ' '
-                safe_addstr(stdscr, screen_y, body_x + local_col, ch, sel_attr)
+        # Clamp to visible body area
+        vis_start = max(sel_start - start_col, 0)
+        vis_end = min(sel_end - start_col, body_w - 1)
+        if vis_end <= vis_start:
+            return
+        abs_start = start_col + vis_start
+        abs_end = start_col + vis_end
+        text_slice = line_text[abs_start:abs_end]
+        pad = vis_end - vis_start - len(text_slice)
+        if pad > 0:
+            text_slice += ' ' * pad
+        safe_addstr(stdscr, screen_y, body_x + vis_start, text_slice, sel_attr)
 
     def execute_action(self, action):
         """Execute a window menu action. Returns signal or None."""
@@ -448,6 +455,17 @@ class NotepadWindow(SelectableTextMixin, Window):
             self.cursor_line = last_line
             self.cursor_col = last_col
             self._ensure_cursor_visible()
+            return None
+
+        # Copy: Ctrl+C
+        if key_code == 3:
+            if self.has_selection():
+                selected = self._selected_text()
+                if selected:
+                    copy_text(selected)
+            else:
+                if self.buffer and self.cursor_line < len(self.buffer):
+                    copy_text(self.buffer[self.cursor_line])
             return None
 
         # Cut: Ctrl+X

@@ -158,6 +158,11 @@ class CoreAppTests(unittest.TestCase):
         app.icons = [{"action": self.actions_mod.AppAction.ABOUT, "art": ["[]"], "label": "About"}]
         app.show_welcome = True
         app.icon_positions = {}
+        app._dragging_win = None
+        app._resizing_win = None
+        app._last_icon_click_idx = None
+        app._last_icon_click_ts = 0.0
+        app.double_click_interval = 0.4
         app.drag_drop = self.app_mod.DragDropManager(app)
         return app
 

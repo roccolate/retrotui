@@ -8,29 +8,43 @@ class ClipboardCoreTests(unittest.TestCase):
     def setUp(self):
         self.clip = importlib.reload(importlib.import_module("retrotui.core.clipboard"))
         self.clip.clear_clipboard()
+        self.clip._reset_backend_cache()
 
     def test_detect_backend_priority(self):
-        with mock.patch.object(self.clip.shutil, "which", side_effect=lambda name: {
-            "wl-copy": "/usr/bin/wl-copy",
-            "wl-paste": "/usr/bin/wl-paste",
-            "xclip": "/usr/bin/xclip",
-            "xsel": "/usr/bin/xsel",
-        }.get(name)):
+        with mock.patch.object(self.clip.sys, "platform", "linux"), \
+             mock.patch.object(self.clip.shutil, "which", side_effect=lambda name: {
+                 "wl-copy": "/usr/bin/wl-copy",
+                 "wl-paste": "/usr/bin/wl-paste",
+                 "xclip": "/usr/bin/xclip",
+                 "xsel": "/usr/bin/xsel",
+             }.get(name)):
+            self.clip._reset_backend_cache()
             self.assertEqual(self.clip._detect_backend(), "wl")
 
-        with mock.patch.object(self.clip.shutil, "which", side_effect=lambda name: {
-            "xclip": "/usr/bin/xclip",
-            "xsel": "/usr/bin/xsel",
-        }.get(name)):
+        with mock.patch.object(self.clip.sys, "platform", "linux"), \
+             mock.patch.object(self.clip.shutil, "which", side_effect=lambda name: {
+                 "xclip": "/usr/bin/xclip",
+                 "xsel": "/usr/bin/xsel",
+             }.get(name)):
+            self.clip._reset_backend_cache()
             self.assertEqual(self.clip._detect_backend(), "xclip")
 
-        with mock.patch.object(self.clip.shutil, "which", side_effect=lambda name: {
-            "xsel": "/usr/bin/xsel",
-        }.get(name)):
+        with mock.patch.object(self.clip.sys, "platform", "linux"), \
+             mock.patch.object(self.clip.shutil, "which", side_effect=lambda name: {
+                 "xsel": "/usr/bin/xsel",
+             }.get(name)):
+            self.clip._reset_backend_cache()
             self.assertEqual(self.clip._detect_backend(), "xsel")
 
-        with mock.patch.object(self.clip.shutil, "which", return_value=None):
+        with mock.patch.object(self.clip.sys, "platform", "linux"), \
+             mock.patch.object(self.clip.shutil, "which", return_value=None):
+            self.clip._reset_backend_cache()
             self.assertIsNone(self.clip._detect_backend())
+
+    def test_detect_backend_win32(self):
+        with mock.patch.object(self.clip.sys, "platform", "win32"):
+            self.clip._reset_backend_cache()
+            self.assertEqual(self.clip._detect_backend(), "win32")
 
     def test_system_copy_backends_and_errors(self):
         with (

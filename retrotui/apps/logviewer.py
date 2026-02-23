@@ -536,8 +536,14 @@ class LogViewerWindow(SelectableTextMixin, Window):
             self.follow_mode = not self.follow_mode
             if self.follow_mode and not self.freeze_scroll:
                 self._scroll_to_bottom()
-        elif key_code in (getattr(curses, "KEY_F6", -1), getattr(curses, "KEY_IC", -1)):
+        elif key_code in (3, getattr(curses, "KEY_F6", -1), getattr(curses, "KEY_IC", -1)):
             self._copy_selection()
+        elif key_code == 1:  # Ctrl+A: select all
+            if self.lines:
+                last_line = len(self.lines) - 1
+                last_col = len(self.lines[last_line])
+                self.selection_anchor = (0, 0)
+                self.selection_cursor = (last_line, last_col)
         elif key_code in (ord(" "), ord("p"), ord("P")):
             self.freeze_scroll = not self.freeze_scroll
         elif key_code in (ord("/"),):

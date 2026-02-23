@@ -69,6 +69,11 @@ class MouseRouterTests(unittest.TestCase):
             _handle_global_menu_mouse=mock.Mock(return_value=False),
             _handle_window_mouse=mock.Mock(return_value=False),
             _handle_desktop_mouse=mock.Mock(),
+            _dragging_win=None,
+            _resizing_win=None,
+            _last_icon_click_idx=None,
+            _last_icon_click_ts=0.0,
+            double_click_interval=0.4,
         )
         app.drag_drop = self.drag_drop_mod.DragDropManager(app)
         return app
@@ -197,6 +202,7 @@ class MouseRouterTests(unittest.TestCase):
             apply_resize=mock.Mock(),
         )
         app.windows = [win]
+        app._dragging_win = win
 
         handled = self.mouse_router.handle_drag_resize_mouse(app, 20, 10, 0)
 
@@ -219,6 +225,7 @@ class MouseRouterTests(unittest.TestCase):
             apply_resize=mock.Mock(),
         )
         app.windows = [win]
+        app._dragging_win = win
 
         handled = self.mouse_router.handle_drag_resize_mouse(app, 0, 0, app.stop_drag_flags)
 
@@ -241,6 +248,7 @@ class MouseRouterTests(unittest.TestCase):
             apply_resize=mock.Mock(),
         )
         app.windows = [win]
+        app._dragging_win = win
 
         handled = self.mouse_router.handle_drag_resize_mouse(
             app,
@@ -254,34 +262,13 @@ class MouseRouterTests(unittest.TestCase):
         self.assertEqual(win.x, 8)
         self.assertEqual(win.y, 6)
 
-    def test_handle_drag_resize_mouse_drag_state_changes_mid_pass(self):
+    def test_handle_drag_resize_mouse_no_tracked_window(self):
+        """When no window is tracked as dragging/resizing, return False."""
         app = self._make_app()
-
-        class FlakyDragWindow:
-            def __init__(self):
-                self._reads = 0
-                self.drag_offset_x = 0
-                self.drag_offset_y = 0
-                self.resizing = False
-                self.resize_edge = None
-                self.w = 10
-                self.h = 5
-                self.x = 0
-                self.y = 0
-                self.apply_resize = mock.Mock()
-
-            @property
-            def dragging(self):
-                self._reads += 1
-                return self._reads == 1
-
-            @dragging.setter
-            def dragging(self, value):
-                self._reads = 99 if value else 0
-
-        app.windows = [FlakyDragWindow()]
+        app._dragging_win = None
+        app._resizing_win = None
         handled = self.mouse_router.handle_drag_resize_mouse(app, 5, 5, 0)
-        self.assertTrue(handled)
+        self.assertFalse(handled)
 
     def test_handle_drag_resize_mouse_stops_resizing(self):
         app = self._make_app()
@@ -292,6 +279,7 @@ class MouseRouterTests(unittest.TestCase):
             apply_resize=mock.Mock(),
         )
         app.windows = [win]
+        app._resizing_win = win
 
         handled = self.mouse_router.handle_drag_resize_mouse(app, 0, 0, app.stop_drag_flags)
 
@@ -308,34 +296,26 @@ class MouseRouterTests(unittest.TestCase):
             apply_resize=mock.Mock(),
         )
         app.windows = [win]
+        app._resizing_win = win
 
         handled = self.mouse_router.handle_drag_resize_mouse(app, 15, 9, 0)
 
         self.assertTrue(handled)
         win.apply_resize.assert_called_once_with(15, 9, 80, 25)
 
-    def test_handle_drag_resize_mouse_resize_state_changes_mid_pass(self):
+    def test_handle_drag_resize_mouse_clears_pointer_on_stop(self):
+        """Stopping a resize clears the _resizing_win pointer."""
         app = self._make_app()
-
-        class FlakyResizeWindow:
-            def __init__(self):
-                self.dragging = False
-                self._reads = 0
-                self.resize_edge = "right"
-                self.apply_resize = mock.Mock()
-
-            @property
-            def resizing(self):
-                self._reads += 1
-                return self._reads == 1
-
-            @resizing.setter
-            def resizing(self, value):
-                self._reads = 99 if value else 0
-
-        app.windows = [FlakyResizeWindow()]
-        handled = self.mouse_router.handle_drag_resize_mouse(app, 8, 8, 0)
+        win = types.SimpleNamespace(
+            dragging=False,
+            resizing=True,
+            resize_edge="right",
+            apply_resize=mock.Mock(),
+        )
+        app._resizing_win = win
+        handled = self.mouse_router.handle_drag_resize_mouse(app, 0, 0, app.stop_drag_flags)
         self.assertTrue(handled)
+        self.assertIsNone(app._resizing_win)
 
     def test_handle_file_drag_drop_mouse_starts_drag_and_highlights_target(self):
         app = self._make_app()

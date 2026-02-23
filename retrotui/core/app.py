@@ -209,6 +209,11 @@ class RetroTUI:
         self.default_word_wrap = bool(self.config.word_wrap_default)
         self.default_sunday_first = bool(self.config.sunday_first)
         self.show_welcome = bool(self.config.show_welcome)
+        self._dirty = True  # Render flag: redraw only when True
+        self._dragging_win = None   # O(1) drag tracking
+        self._resizing_win = None   # O(1) resize tracking
+        self._last_icon_click_idx = None
+        self._last_icon_click_ts = 0.0
         self.drag_drop = DragDropManager(self)
         # Movable desktop icon positions: mapping icon_key -> (x, y)
         self._icon_mgr = IconPositionManager(self)
