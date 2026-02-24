@@ -357,6 +357,10 @@ def handle_mouse_event(app, event):
 
     if norm["inferred_motion"]:
         bstate |= _REPORT_MOUSE_POSITION
+    # Keep drag-selection usable on backends that omit BUTTON1_PRESSED during motion.
+    if norm.get("is_motion") and norm.get("button1_down"):
+        bstate |= _BUTTON1_PRESSED
+        norm["button1_pressed"] = True
     if norm["inferred_right_click"]:
         bstate |= _BUTTON3_CLICKED
     _trace_mouse_normalization(event, norm, bstate)

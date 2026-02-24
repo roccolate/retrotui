@@ -1,6 +1,11 @@
 """Main loop helpers for RetroTUI."""
 
 import curses
+import logging
+import os
+import time
+
+LOGGER = logging.getLogger(__name__)
 
 
 def clamp_windows_to_terminal(app):
@@ -105,27 +110,124 @@ def _has_live_terminals(app):
     return False
 
 
+def _profile_enabled():
+    value = (
+        os.environ.get("RETROTUI_PROFILE")
+        or os.environ.get("RETROTUI_DEBUG")
+        or ""
+    ).strip().lower()
+    return value in {"1", "true", "yes", "on"}
+
+
+def _ensure_runtime_metrics(app):
+    metrics = getattr(app, "_runtime_metrics", None)
+    if isinstance(metrics, dict):
+        return metrics
+    now = time.perf_counter()
+    metrics = {
+        "enabled": _profile_enabled(),
+        "started_at": now,
+        "last_report_at": now,
+        "report_interval_s": float(os.environ.get("RETROTUI_PROFILE_INTERVAL", "5.0")),
+        "loops": 0,
+        "redraws": 0,
+        "dispatched_events": 0,
+        "mouse_events": 0,
+        "resize_events": 0,
+        "key_events": 0,
+        "empty_polls": 0,
+        "draw_time_s": 0.0,
+        "dispatch_time_s": 0.0,
+        "input_wait_time_s": 0.0,
+    }
+    app._runtime_metrics = metrics
+    return metrics
+
+
+def _record_input_stats(metrics, key):
+    if key is None:
+        metrics["empty_polls"] += 1
+        return
+    if isinstance(key, int) and key == getattr(curses, "KEY_MOUSE", -1):
+        metrics["mouse_events"] += 1
+        return
+    if isinstance(key, int) and key == getattr(curses, "KEY_RESIZE", -1):
+        metrics["resize_events"] += 1
+        return
+    metrics["key_events"] += 1
+
+
+def _emit_runtime_metrics(metrics, final=False):
+    if not metrics.get("enabled"):
+        return
+    now = time.perf_counter()
+    if not final:
+        interval = max(0.1, float(metrics.get("report_interval_s", 5.0)))
+        if now - metrics.get("last_report_at", now) < interval:
+            return
+        metrics["last_report_at"] = now
+    elapsed = max(1e-6, now - metrics.get("started_at", now))
+    redraws = int(metrics.get("redraws", 0))
+    events = int(metrics.get("dispatched_events", 0))
+    loops = int(metrics.get("loops", 0))
+    draw_time_s = float(metrics.get("draw_time_s", 0.0))
+    dispatch_time_s = float(metrics.get("dispatch_time_s", 0.0))
+    input_wait_s = float(metrics.get("input_wait_time_s", 0.0))
+    redraw_ratio = redraws / max(1, loops)
+    LOGGER.debug(
+        "profile%s elapsed_s=%.3f loops=%d redraws=%d redraw_ratio=%.3f "
+        "events=%d mouse=%d resize=%d key=%d empty_polls=%d draw_ms=%.2f "
+        "dispatch_ms=%.2f input_wait_ms=%.2f",
+        "_final" if final else "",
+        elapsed,
+        loops,
+        redraws,
+        redraw_ratio,
+        events,
+        int(metrics.get("mouse_events", 0)),
+        int(metrics.get("resize_events", 0)),
+        int(metrics.get("key_events", 0)),
+        int(metrics.get("empty_polls", 0)),
+        draw_time_s * 1000.0,
+        dispatch_time_s * 1000.0,
+        input_wait_s * 1000.0,
+    )
+
+
 def run_app_loop(app):
     """Run main draw/input loop with terminal cleanup on exit."""
+    metrics = _ensure_runtime_metrics(app)
     install_handlers = getattr(app, "_install_runtime_signal_handlers", None)
     if callable(install_handlers):
         install_handlers()
     try:
         while app.running:
+            metrics["loops"] += 1
             app.poll_background_operation()
             # Always redraw when live terminals may have pending PTY output.
             if _has_live_terminals(app):
                 app._dirty = True
             if getattr(app, '_dirty', True):
+                draw_start = time.perf_counter()
                 draw_frame(app)
+                metrics["draw_time_s"] += time.perf_counter() - draw_start
+                metrics["redraws"] += 1
                 app._dirty = False
+            input_start = time.perf_counter()
             key = read_input_key(app.stdscr)
+            metrics["input_wait_time_s"] += time.perf_counter() - input_start
             if key is None:
                 consume_sigint = getattr(app, "_consume_pending_sigint", None)
                 if callable(consume_sigint):
                     key = consume_sigint()
+            _record_input_stats(metrics, key)
+            dispatch_start = time.perf_counter()
             if dispatch_input(app, key):
                 app._dirty = True
+                metrics["dispatched_events"] += 1
+            metrics["dispatch_time_s"] += time.perf_counter() - dispatch_start
             app.poll_background_operation()
+            _emit_runtime_metrics(metrics, final=False)
     finally:
+        _emit_runtime_metrics(metrics, final=True)
         app.cleanup()
