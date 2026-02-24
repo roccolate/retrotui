@@ -39,10 +39,10 @@ def normalize_mouse_payload(app, event):
     if not has_motion and last_pos is not None and button1_down:
         inferred_motion = (mx, my) != tuple(last_pos)
 
-    # In some GPM setups right-click may come as press/release without CLICKED flag.
-    right_click = bool(bstate & b3_clicked)
+    # Some terminals/backends report right-click via PRESSED/RELEASED instead of CLICKED.
+    right_click = bool(bstate & (b3_clicked | b3_pressed | b3_released))
     inferred_right_click = False
-    if not right_click and backend == "gpm" and (bstate & (b3_pressed | b3_released)):
+    if not (bstate & b3_clicked) and backend == "gpm" and (bstate & (b3_pressed | b3_released)):
         inferred_right_click = True
 
     is_click_like = bool(

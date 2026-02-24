@@ -12,6 +12,9 @@ def _install_fake_curses():
     fake.BUTTON1_PRESSED = 0x0002
     fake.BUTTON1_DOUBLE_CLICKED = 0x0008
     fake.BUTTON1_RELEASED = 0x0001
+    fake.BUTTON3_CLICKED = 0x0010
+    fake.BUTTON3_PRESSED = 0x0020
+    fake.BUTTON3_RELEASED = 0x0040
     fake.BUTTON4_PRESSED = 0x100000
     return fake
 
@@ -754,6 +757,17 @@ class MouseRouterTests(unittest.TestCase):
         app.execute_action.assert_not_called()
         self.assertEqual(app.selected_icon, 0)
 
+    def test_handle_desktop_mouse_release_does_not_trigger_fallback_double_click(self):
+        app = self._make_app()
+        app.get_icon_at.return_value = 0
+
+        with mock.patch.object(self.mouse_router.time, "monotonic", side_effect=[3.0, 3.1]):
+            self.mouse_router.handle_desktop_mouse(app, 9, 9, self.curses.BUTTON1_RELEASED)
+            self.mouse_router.handle_desktop_mouse(app, 9, 9, self.curses.BUTTON1_RELEASED)
+
+        app.execute_action.assert_not_called()
+        self.assertEqual(app.selected_icon, -1)
+
     def test_handle_desktop_mouse_deselects_when_no_icon_hit(self):
         app = self._make_app()
 
@@ -791,6 +805,18 @@ class MouseRouterTests(unittest.TestCase):
 
         self.mouse_router.handle_mouse_event(app, (0, 3, 3, 0, self.curses.BUTTON1_CLICKED))
 
+        app._handle_drag_resize_mouse.assert_not_called()
+        app._handle_window_mouse.assert_not_called()
+        app._handle_desktop_mouse.assert_not_called()
+
+    def test_handle_mouse_event_right_click_respects_dialog_priority(self):
+        app = self._make_app()
+        app._handle_dialog_mouse.return_value = True
+        app.handle_right_click = mock.Mock(return_value=True)
+
+        self.mouse_router.handle_mouse_event(app, (0, 3, 3, 0, self.curses.BUTTON3_CLICKED))
+
+        app.handle_right_click.assert_not_called()
         app._handle_drag_resize_mouse.assert_not_called()
         app._handle_window_mouse.assert_not_called()
         app._handle_desktop_mouse.assert_not_called()

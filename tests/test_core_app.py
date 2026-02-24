@@ -1419,6 +1419,47 @@ class CoreAppTests(unittest.TestCase):
         self.assertTrue(handled_key)
         app._resolve_dialog_result.assert_called()
 
+    def test_handle_right_click_sets_active_window_and_opens_context_menu(self):
+        app = self._make_app()
+        app.theme = object()
+        app.context_menu = None
+        app.set_active_window = mock.Mock()
+        win = types.SimpleNamespace(
+            visible=True,
+            contains=mock.Mock(return_value=True),
+            handle_right_click=mock.Mock(return_value=[{"label": "Copy", "action": "copy"}]),
+        )
+        app.windows = [win]
+
+        with mock.patch("retrotui.ui.context_menu.ContextMenu") as context_menu_cls:
+            context_menu = context_menu_cls.return_value
+            handled = app.handle_right_click(4, 5, 0)
+
+        self.assertTrue(handled)
+        app.set_active_window.assert_called_once_with(win)
+        context_menu_cls.assert_called_once_with(app.theme)
+        context_menu.show.assert_called_once_with(4, 5, [{"label": "Copy", "action": "copy"}])
+
+    def test_handle_right_click_uses_open_context_menu_before_routing(self):
+        app = self._make_app()
+        app.context_menu = types.SimpleNamespace(
+            active=True,
+            handle_click=mock.Mock(return_value=None),
+            is_open=mock.Mock(return_value=True),
+        )
+        win = types.SimpleNamespace(
+            visible=True,
+            contains=mock.Mock(return_value=True),
+            handle_right_click=mock.Mock(return_value=[{"label": "X", "action": "x"}]),
+        )
+        app.windows = [win]
+
+        handled = app.handle_right_click(10, 10, 0)
+
+        self.assertTrue(handled)
+        app.context_menu.handle_click.assert_called_once_with(10, 10)
+        win.handle_right_click.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()

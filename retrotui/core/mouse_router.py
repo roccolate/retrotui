@@ -27,7 +27,7 @@ _BUTTON3_RELEASED = getattr(curses, 'BUTTON3_RELEASED', 0)
 _REPORT_MOUSE_POSITION = getattr(curses, 'REPORT_MOUSE_POSITION', 0)
 _BUTTON4_PRESSED = getattr(curses, 'BUTTON4_PRESSED', 0)
 
-_BUTTON1_CLICK_MASK = _BUTTON1_CLICKED | _BUTTON1_PRESSED | _BUTTON1_RELEASED
+_BUTTON1_CLICK_MASK = _BUTTON1_CLICKED | _BUTTON1_PRESSED | _BUTTON1_DOUBLE_CLICKED
 _BUTTON3_MASK = _BUTTON3_PRESSED | _BUTTON3_CLICKED | _BUTTON3_RELEASED
 
 # Cache for inspect.signature arity checks (handler -> bool).
@@ -369,7 +369,10 @@ def handle_mouse_event(app, event):
     elif norm.get("button1_clicked"):
         app.button1_pressed = False
 
-    # Detect right-click.
+    if app._handle_dialog_mouse(mx, my, bstate):
+        return True
+
+    # Detect right-click only after modal dialogs had a chance to consume input.
     if norm.get("right_click"):
         handler = getattr(app, 'handle_right_click', None)
         if callable(handler):
@@ -379,9 +382,6 @@ def handle_mouse_event(app, event):
                 handled = False
             if handled:
                 return True
-
-    if app._handle_dialog_mouse(mx, my, bstate):
-        return True
 
     if handle_file_drag_drop_mouse(app, mx, my, bstate):
         return True
