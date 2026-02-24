@@ -34,6 +34,7 @@ def clamp_windows_to_terminal(app):
 def draw_frame(app):
     """Render a full frame before reading input."""
     frame_size = app.stdscr.getmaxyx()
+    app._render_cycle_id = int(getattr(app, "_render_cycle_id", 0)) + 1
     app._frame_size = frame_size
     _, frame_w = frame_size
     app.stdscr.erase()

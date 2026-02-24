@@ -41,6 +41,44 @@ class WindowManagerTests(unittest.TestCase):
         self.assertIsInstance(x, int)
         self.assertIsInstance(y, int)
 
+    def test_taskbar_buttons_layout_and_cache(self):
+        app = SimpleNamespace(stdscr=SimpleNamespace(getmaxyx=lambda: (20, 80)))
+        wm = WindowManager(app)
+        one = SimpleNamespace(minimized=True, title="One")
+        two = SimpleNamespace(minimized=False, title="Two")
+        tri = SimpleNamespace(minimized=True, title="Three")
+        wm.windows = [one, two, tri]
+
+        first = wm.taskbar_buttons(80)
+        second = wm.taskbar_buttons(80)
+
+        self.assertEqual(first, second)
+        self.assertEqual(len(first), 2)
+        self.assertEqual(first[0][2], "One")
+        self.assertEqual(first[1][2], "Three")
+        self.assertEqual(first[0][0], 1)
+        self.assertLess(first[0][0], first[0][1])
+
+    def test_handle_taskbar_click_uses_button_ranges(self):
+        activated = []
+        app = SimpleNamespace(
+            stdscr=SimpleNamespace(getmaxyx=lambda: (20, 80)),
+            set_active_window=lambda win: activated.append(win),
+        )
+        wm = WindowManager(app)
+        one = SimpleNamespace(minimized=True, title="One", toggle_minimize=lambda: activated.append("toggle_one"))
+        two = SimpleNamespace(minimized=True, title="Two", toggle_minimize=lambda: activated.append("toggle_two"))
+        wm.windows = [one, two]
+
+        buttons = wm.taskbar_buttons(80)
+        self.assertTrue(buttons)
+        start_x, end_x, _label, _win = buttons[1]
+        mx = (start_x + end_x) // 2
+
+        self.assertTrue(wm.handle_taskbar_click(mx, 18))
+        self.assertIn("toggle_two", activated)
+        self.assertIn(two, activated)
+
 
 if __name__ == "__main__":
     unittest.main()
