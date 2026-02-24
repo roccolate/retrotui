@@ -27,9 +27,15 @@ def _frame_size(app):
     return app.stdscr.getmaxyx()
 
 
-def draw_desktop(app):
+def _resolve_frame_size(app, frame_size):
+    if isinstance(frame_size, tuple) and len(frame_size) == 2:
+        return frame_size
+    return _frame_size(app)
+
+
+def draw_desktop(app, frame_size=None):
     """Draw the desktop background pattern."""
-    h, w = _frame_size(app)
+    h, w = _resolve_frame_size(app, frame_size)
     attr = theme_attr("desktop")
     pattern = getattr(getattr(app, "theme", None), "desktop_pattern", DESKTOP_PATTERN)
 
@@ -44,9 +50,9 @@ def draw_desktop(app):
         safe_addstr(app.stdscr, row, 0, line, attr)
 
 
-def draw_icons(app):
+def draw_icons(app, frame_size=None):
     """Draw desktop icons (3x4 art + label)."""
-    h, _ = _frame_size(app)
+    h, _ = _resolve_frame_size(app, frame_size)
     for idx, icon in enumerate(app.icons):
         # Use dynamic position helper
         x, y = app.get_icon_screen_pos(idx)
@@ -66,9 +72,9 @@ def draw_icons(app):
         safe_addstr(app.stdscr, y + ICON_ART_HEIGHT, x, label, attr)
 
 
-def draw_taskbar(app):
+def draw_taskbar(app, frame_size=None):
     """Draw taskbar row with minimized window buttons."""
-    h, w = _frame_size(app)
+    h, w = _resolve_frame_size(app, frame_size)
     taskbar_y = h - BOTTOM_BARS_HEIGHT
     attr = theme_attr("taskbar")
     
@@ -88,9 +94,9 @@ def draw_taskbar(app):
         x += len(btn) + 1
 
 
-def draw_statusbar(app, version):
+def draw_statusbar(app, version, frame_size=None):
     """Draw the bottom status bar."""
-    h, w = _frame_size(app)
+    h, w = _resolve_frame_size(app, frame_size)
     attr = theme_attr("status")
     visible = sum(1 for win in app.windows if win.visible)
     

@@ -18,6 +18,14 @@ from .operations import (
 from .preview import get_preview_lines, get_entry_info_lines, IMAGE_EXTENSIONS, _read_text_preview, _read_image_preview
 from .bookmarks import get_default_bookmarks, set_bookmark, navigate_bookmark
 
+_ENTRY_ATTR_PATH_ERRORS = (
+    AttributeError,
+    OSError,
+    RuntimeError,
+    TypeError,
+    ValueError,
+)
+
 class FileManagerWindow(Window):
     """Interactive file manager window with directory navigation."""
 
@@ -725,7 +733,7 @@ class FileManagerWindow(Window):
             try:
                 if os.access(entry_obj.full_path, os.X_OK):
                     return theme_attr('window_body') | curses.A_BOLD
-            except Exception:
+            except _ENTRY_ATTR_PATH_ERRORS:
                 pass
         return theme_attr('window_body')
 

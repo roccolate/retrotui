@@ -1,4 +1,5 @@
 import importlib
+import inspect as py_inspect
 import sys
 import types
 import unittest
@@ -25,6 +26,7 @@ class MouseRouterTests(unittest.TestCase):
         cls._prev_curses = sys.modules.get("curses")
         sys.modules["curses"] = _install_fake_curses()
 
+        sys.modules.pop("retrotui.core.platform.mouse_backend", None)
         sys.modules.pop("retrotui.core.mouse_router", None)
         sys.modules.pop("retrotui.core.drag_drop", None)
         cls.mouse_router = importlib.import_module("retrotui.core.mouse_router")
@@ -33,6 +35,7 @@ class MouseRouterTests(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
+        sys.modules.pop("retrotui.core.platform.mouse_backend", None)
         sys.modules.pop("retrotui.core.mouse_router", None)
         sys.modules.pop("retrotui.core.drag_drop", None)
         if cls._prev_curses is not None:
@@ -74,6 +77,7 @@ class MouseRouterTests(unittest.TestCase):
             _handle_desktop_mouse=mock.Mock(),
             _dragging_win=None,
             _resizing_win=None,
+            _active_window_menu_owner=None,
             _last_icon_click_idx=None,
             _last_icon_click_ts=0.0,
             double_click_interval=0.4,
@@ -117,6 +121,27 @@ class MouseRouterTests(unittest.TestCase):
             out = self.mouse_router._invoke_mouse_handler(handler, 1, 2, 3)
         self.assertEqual(out, "ok")
         handler.assert_called_once_with(1, 2)
+
+    def test_handler_accepts_bstate_uses_stable_cache_key_for_bound_methods(self):
+        class Owner:
+            def handle_click(self, mx, my, bstate):
+                return (mx, my, bstate)
+
+        owner = Owner()
+        self.mouse_router._HANDLER_ARITY_CACHE.clear()
+
+        with mock.patch.object(
+            self.mouse_router.inspect,
+            "signature",
+            side_effect=py_inspect.signature,
+        ) as signature:
+            first = self.mouse_router._handler_accepts_bstate(owner.handle_click)
+            second = self.mouse_router._handler_accepts_bstate(owner.handle_click)
+
+        self.assertTrue(first)
+        self.assertTrue(second)
+        self.assertEqual(signature.call_count, 1)
+        self.assertEqual(len(self.mouse_router._HANDLER_ARITY_CACHE), 1)
 
     def test_find_drop_target_window_and_dispatch_drop_edge_cases(self):
         app = self._make_app()
@@ -557,6 +582,7 @@ class MouseRouterTests(unittest.TestCase):
         menu = types.SimpleNamespace(active=True, handle_hover=mock.Mock(return_value=True))
         win = self._make_window(window_menu=menu)
         app.windows = [win]
+        app._active_window_menu_owner = win
 
         handled = self.mouse_router.handle_window_mouse(app, 11, 7, self.curses.REPORT_MOUSE_POSITION)
 
@@ -568,11 +594,13 @@ class MouseRouterTests(unittest.TestCase):
         menu = types.SimpleNamespace(active=True, handle_hover=mock.Mock(return_value=False))
         win = self._make_window(window_menu=menu, contains=mock.Mock(return_value=False))
         app.windows = [win]
+        app._active_window_menu_owner = win
 
         handled = self.mouse_router.handle_window_mouse(app, 1, 1, self.curses.BUTTON1_CLICKED)
 
         self.assertFalse(handled)
         self.assertFalse(menu.active)
+        self.assertIsNone(app._active_window_menu_owner)
 
     def test_handle_window_mouse_contains_click_evaluates_other_window_condition(self):
         app = self._make_app()
@@ -583,6 +611,7 @@ class MouseRouterTests(unittest.TestCase):
         )
         other = self._make_window(window_menu=types.SimpleNamespace(active=True))
         app.windows = [other, win]
+        app._active_window_menu_owner = other
 
         handled = self.mouse_router.handle_window_mouse(app, 11, 7, self.curses.BUTTON1_CLICKED)
 
@@ -599,6 +628,7 @@ class MouseRouterTests(unittest.TestCase):
         other_active = self._make_window(window_menu=types.SimpleNamespace(active=True))
         other_inactive = self._make_window(window_menu=types.SimpleNamespace(active=False))
         app.windows = [other_inactive, other_active, win]
+        app._active_window_menu_owner = other_active
 
         handled = self.mouse_router.handle_window_mouse(app, 11, 7, self.curses.BUTTON1_CLICKED)
 
@@ -615,13 +645,70 @@ class MouseRouterTests(unittest.TestCase):
         )
         other = self._make_window(window_menu=active_menu)
         app.windows = [other, win]
+        app._active_window_menu_owner = other
 
         handled = self.mouse_router.handle_window_mouse(app, 11, 7, self.curses.BUTTON1_CLICKED)
 
         self.assertTrue(handled)
         self.assertFalse(active_menu.active)
+        self.assertIs(app._active_window_menu_owner, win)
         app._dispatch_window_result.assert_called_once_with("result", win)
         win.handle_click.assert_called_once_with(11, 7, self.curses.BUTTON1_CLICKED)
+
+    def test_handle_window_mouse_click_inside_closes_tracked_menu_without_full_scan(self):
+        app = self._make_app()
+        tracked_menu = types.SimpleNamespace(active=True)
+        tracked = self._make_window(window_menu=tracked_menu)
+        clicked = self._make_window(
+            contains=mock.Mock(return_value=True),
+            handle_click=mock.Mock(return_value=None),
+            window_menu=types.SimpleNamespace(active=False, handle_hover=mock.Mock(return_value=False)),
+        )
+
+        class PoisonWindow:
+            visible = True
+            active = False
+            minimized = False
+            maximized = False
+            x = 1
+            y = 1
+            w = 2
+            h = 2
+            dragging = False
+            drag_offset_x = 0
+            drag_offset_y = 0
+            resizing = False
+            resize_edge = None
+
+            def on_close_button(self, *_):
+                return False
+
+            def on_minimize_button(self, *_):
+                return False
+
+            def on_maximize_button(self, *_):
+                return False
+
+            def on_border(self, *_):
+                return None
+
+            def on_title_bar(self, *_):
+                return False
+
+            def contains(self, *_):
+                return False
+
+            @property
+            def window_menu(self):
+                raise AssertionError("window_menu scan should not occur")
+
+        app.windows = [PoisonWindow(), tracked, clicked]
+        app._active_window_menu_owner = tracked
+
+        handled = self.mouse_router.handle_window_mouse(app, 11, 7, self.curses.BUTTON1_CLICKED)
+
+        self.assertTrue(handled)
+        self.assertFalse(tracked_menu.active)
 
     def test_handle_window_mouse_click_inside_supports_legacy_two_arg_handler(self):
         app = self._make_app()
@@ -845,6 +932,15 @@ class MouseRouterTests(unittest.TestCase):
         app._handle_drag_resize_mouse.assert_not_called()
         app._handle_window_mouse.assert_not_called()
         app._handle_desktop_mouse.assert_not_called()
+
+    def test_handle_mouse_event_right_click_route_error_falls_back_to_desktop(self):
+        app = self._make_app()
+        app.handle_right_click = mock.Mock(side_effect=ValueError("bad handler"))
+
+        self.mouse_router.handle_mouse_event(app, (0, 3, 3, 0, self.curses.BUTTON3_CLICKED))
+
+        app.handle_right_click.assert_called_once_with(3, 3, self.curses.BUTTON3_CLICKED)
+        app._handle_desktop_mouse.assert_called_once_with(3, 3, self.curses.BUTTON3_CLICKED)
 
     def test_handle_mouse_event_taskbar_short_circuit(self):
         app = self._make_app()

@@ -280,6 +280,30 @@ class CoreAppTests(unittest.TestCase):
         draw_taskbar.assert_called_once_with(app)
         draw_statusbar.assert_called_once_with(app, self.app_mod.APP_VERSION)
 
+    def test_draw_wrappers_forward_optional_frame_size(self):
+        app = self._make_app()
+        frame_size = (25, 80)
+
+        with (
+            mock.patch.object(self.app_mod, "draw_desktop", return_value="desktop") as draw_desktop,
+            mock.patch.object(self.app_mod, "draw_icons", return_value="icons") as draw_icons,
+            mock.patch.object(self.app_mod, "draw_taskbar", return_value="taskbar") as draw_taskbar,
+            mock.patch.object(self.app_mod, "draw_statusbar", return_value="status") as draw_statusbar,
+        ):
+            self.assertEqual(app.draw_desktop(frame_size=frame_size), "desktop")
+            self.assertEqual(app.draw_icons(frame_size=frame_size), "icons")
+            self.assertEqual(app.draw_taskbar(frame_size=frame_size), "taskbar")
+            self.assertEqual(app.draw_statusbar(frame_size=frame_size), "status")
+
+        draw_desktop.assert_called_once_with(app, frame_size=frame_size)
+        draw_icons.assert_called_once_with(app, frame_size=frame_size)
+        draw_taskbar.assert_called_once_with(app, frame_size=frame_size)
+        draw_statusbar.assert_called_once_with(
+            app,
+            self.app_mod.APP_VERSION,
+            frame_size=frame_size,
+        )
+
     def test_mouse_and_key_wrappers_delegate_to_router_helpers(self):
         app = self._make_app()
 
@@ -344,6 +368,73 @@ class CoreAppTests(unittest.TestCase):
 
         self.assertTrue(called["ok"])
         runner.assert_not_called()
+
+    def test_execute_action_callable_failure_is_logged_and_ignored(self):
+        app = self._make_app()
+
+        def _action():
+            raise RuntimeError("boom")
+
+        with (
+            mock.patch.object(self.app_mod, "execute_app_action") as runner,
+            mock.patch.object(self.app_mod.LOGGER, "debug") as log_debug,
+        ):
+            app.execute_action(_action)
+
+        runner.assert_not_called()
+        self.assertTrue(
+            any(
+                call.args and "callable action failed" in str(call.args[0])
+                for call in log_debug.call_args_list
+            )
+        )
+
+    def test_open_plugin_build_failure_is_logged_and_does_not_spawn(self):
+        app = self._make_app()
+        bad_cls = mock.Mock(side_effect=RuntimeError("bad plugin"))
+        app._plugins = {
+            "demo": {
+                "class": bad_cls,
+                "manifest": {
+                    "plugin": {
+                        "id": "demo",
+                        "name": "Demo",
+                        "window": {"default_width": 40, "default_height": 15},
+                    }
+                },
+            }
+        }
+        app._spawn_window = mock.Mock()
+        app._next_window_offset = mock.Mock(return_value=(8, 3))
+
+        with mock.patch.object(self.app_mod.LOGGER, "debug") as log_debug:
+            app.open_plugin("demo")
+
+        app._spawn_window.assert_not_called()
+        self.assertTrue(
+            any(
+                call.args and "failed to open plugin" in str(call.args[0])
+                for call in log_debug.call_args_list
+            )
+        )
+
+    def test_register_plugin_manifest_load_error_is_logged_and_ignored(self):
+        app = self._make_app()
+        app._plugins = {}
+        load_plugin = mock.Mock(side_effect=ValueError("bad manifest"))
+        manifest = {"plugin": {"id": "demo"}}
+
+        with mock.patch.object(self.app_mod.LOGGER, "debug") as log_debug:
+            app._register_plugin_manifest(manifest, load_plugin)
+
+        load_plugin.assert_called_once_with(manifest)
+        self.assertEqual(app._plugins, {})
+        self.assertTrue(
+            any(
+                call.args and "failed to load plugin manifest" in str(call.args[0])
+                for call in log_debug.call_args_list
+            )
+        )
 
     def test_dispatch_open_file_calls_file_viewer(self):
         app = self._make_app()
@@ -885,6 +976,21 @@ class CoreAppTests(unittest.TestCase):
         self.assertFalse(app.config.word_wrap_default)
         self.assertTrue(app.config.sunday_first)
 
+    def test_persist_config_ignores_icon_save_parse_errors(self):
+        app = self._make_app()
+        app.theme_name = "win31"
+        app.default_show_hidden = False
+        app.default_word_wrap = False
+        app.default_sunday_first = False
+        app.config = types.SimpleNamespace(hidden_icons="")
+        app._save_icon_positions = mock.Mock(side_effect=ValueError("bad icons"))
+
+        with mock.patch.object(self.app_mod, "save_config", return_value="/tmp/config.toml"):
+            result = app.persist_config()
+
+        self.assertEqual(result, "/tmp/config.toml")
+        app._save_icon_positions.assert_called_once_with("/tmp/config.toml")
+
     def test_open_file_viewer_video_error_opens_dialog(self):
         app = self._make_app()
         app.stdscr = types.SimpleNamespace(getmaxyx=lambda: (30, 120))
@@ -1209,6 +1315,32 @@ class CoreAppTests(unittest.TestCase):
         worker.assert_called_once_with()
         self.assertIsNone(app._background_operation)
 
+    def test_start_background_operation_worker_error_converts_to_action_error(self):
+        app = self._make_app()
+        worker = mock.Mock(side_effect=ValueError("copy failed"))
+        app._dispatch_window_result = mock.Mock()
+
+        result = app._start_background_operation(
+            title="Copying",
+            message="copying...",
+            worker=worker,
+            source_win=None,
+        )
+
+        self.assertIsNone(result)
+        for _ in range(50):
+            state = app._background_operation
+            if state and state.get("done"):
+                break
+            time.sleep(0.01)
+
+        app.poll_background_operation()
+        worker.assert_called_once_with()
+        self.assertIsNone(app._background_operation)
+        dispatched = app._dispatch_window_result.call_args.args[0]
+        self.assertEqual(dispatched.type, self.actions_mod.ActionType.ERROR)
+        self.assertIn("copy failed", str(dispatched.payload))
+
     def test_poll_background_operation_keeps_state_while_worker_running(self):
         app = self._make_app()
         progress_dialog = types.SimpleNamespace(set_elapsed=mock.Mock())
@@ -1286,19 +1418,130 @@ class CoreAppTests(unittest.TestCase):
         app = self._make_app()
         app._pending_sigint = False
         app._prev_sigint_handler = None
+        app._prev_signal_handlers = {}
         app._sigint_handler_installed = False
 
+        expected_signals = [self.app_mod.signal.SIGINT]
+        sigterm = getattr(self.app_mod.signal, "SIGTERM", None)
+        if sigterm is not None:
+            expected_signals.append(sigterm)
+        sighup = getattr(self.app_mod.signal, "SIGHUP", None)
+        if sighup is not None:
+            expected_signals.append(sighup)
+
         with mock.patch.object(self.app_mod.threading, "current_thread", return_value=self.app_mod.threading.main_thread()):
-            with mock.patch.object(self.app_mod.signal, "getsignal", return_value="old") as getsig:
+            with mock.patch.object(
+                self.app_mod.signal,
+                "getsignal",
+                side_effect=lambda sig: f"old-{sig}",
+            ) as getsig:
                 with mock.patch.object(self.app_mod.signal, "signal") as setsig:
                     app._install_runtime_signal_handlers()
                     self.assertTrue(app._sigint_handler_installed)
-                    getsig.assert_called_once_with(self.app_mod.signal.SIGINT)
-                    setsig.assert_called_once()
+                    self.assertEqual(getsig.call_count, len(expected_signals))
+                    self.assertEqual(setsig.call_count, len(expected_signals))
+
+                    installed = {call.args[0]: call.args[1] for call in setsig.call_args_list}
+                    sigint_handler = installed[self.app_mod.signal.SIGINT]
+                    self.assertIs(getattr(sigint_handler, "__self__", None), app)
+                    self.assertEqual(getattr(sigint_handler, "__name__", ""), "_handle_sigint")
+                    if sigterm is not None:
+                        sigterm_handler = installed[sigterm]
+                        self.assertIs(getattr(sigterm_handler, "__self__", None), app)
+                        self.assertEqual(getattr(sigterm_handler, "__name__", ""), "_handle_shutdown_signal")
+                    if sighup is not None:
+                        sighup_handler = installed[sighup]
+                        self.assertIs(getattr(sighup_handler, "__self__", None), app)
+                        self.assertEqual(getattr(sighup_handler, "__name__", ""), "_handle_shutdown_signal")
+
+                    setsig.reset_mock()
 
                     app._restore_runtime_signal_handlers()
                     self.assertFalse(app._sigint_handler_installed)
                     self.assertIsNone(app._prev_sigint_handler)
+                    self.assertEqual(app._prev_signal_handlers, {})
+                    self.assertEqual(setsig.call_count, len(expected_signals))
+
+    def test_runtime_signal_handler_install_is_idempotent_when_already_installed(self):
+        app = self._make_app()
+        app._sigint_handler_installed = True
+        app._prev_signal_handlers = {self.app_mod.signal.SIGINT: "old"}
+        app._prev_sigint_handler = "old"
+
+        with (
+            mock.patch.object(self.app_mod.signal, "getsignal") as getsig,
+            mock.patch.object(self.app_mod.signal, "signal") as setsig,
+        ):
+            app._install_runtime_signal_handlers()
+
+        getsig.assert_not_called()
+        setsig.assert_not_called()
+        self.assertTrue(app._sigint_handler_installed)
+
+    def test_runtime_signal_handler_install_rolls_back_on_partial_failure(self):
+        app = self._make_app()
+        app._pending_sigint = False
+        app._prev_sigint_handler = None
+        app._prev_signal_handlers = {}
+        app._sigint_handler_installed = False
+
+        failed = {"value": False}
+
+        def _setsig(_sig, handler):
+            if callable(handler) and not failed["value"]:
+                failed["value"] = True
+                raise OSError("boom")
+            return None
+
+        with mock.patch.object(self.app_mod.threading, "current_thread", return_value=self.app_mod.threading.main_thread()):
+            with mock.patch.object(
+                self.app_mod.signal,
+                "getsignal",
+                side_effect=lambda sig: f"old-{sig}",
+            ):
+                with mock.patch.object(self.app_mod.signal, "signal", side_effect=_setsig) as setsig:
+                    app._install_runtime_signal_handlers()
+
+        # One failing install call + rollback restore calls.
+        self.assertGreaterEqual(setsig.call_count, 2)
+        self.assertFalse(app._sigint_handler_installed)
+        self.assertEqual(app._prev_signal_handlers, {})
+        self.assertIsNone(app._prev_sigint_handler)
+
+    def test_handle_sigint_queue_and_consume_once(self):
+        app = self._make_app()
+        app._pending_sigint = False
+
+        app._handle_sigint(None, None)
+
+        self.assertEqual(app._consume_pending_sigint(), "\x03")
+        self.assertIsNone(app._consume_pending_sigint())
+
+    def test_restore_runtime_signal_handlers_clears_state_on_signal_error(self):
+        app = self._make_app()
+        app._sigint_handler_installed = True
+        app._prev_signal_handlers = {self.app_mod.signal.SIGINT: "old"}
+        app._prev_sigint_handler = "old"
+        app._shutdown_signal = 15
+
+        with mock.patch.object(self.app_mod.signal, "signal", side_effect=OSError("denied")) as setsig:
+            app._restore_runtime_signal_handlers()
+
+        setsig.assert_called()
+        self.assertFalse(app._sigint_handler_installed)
+        self.assertEqual(app._prev_signal_handlers, {})
+        self.assertIsNone(app._prev_sigint_handler)
+        self.assertIsNone(app._shutdown_signal)
+
+    def test_handle_shutdown_signal_requests_clean_exit(self):
+        app = self._make_app()
+        app.running = True
+        app._shutdown_signal = None
+
+        app._handle_shutdown_signal(15, None)
+
+        self.assertFalse(app.running)
+        self.assertEqual(app._shutdown_signal, 15)
 
     def test_show_new_dir_and_file_dialogs_set_callbacks(self):
         app = self._make_app()
@@ -1473,6 +1716,35 @@ class CoreAppTests(unittest.TestCase):
         self.assertTrue(handled)
         app.context_menu.handle_click.assert_called_once_with(10, 10)
         win.handle_right_click.assert_not_called()
+
+    def test_handle_right_click_window_handler_route_error_falls_back_to_desktop(self):
+        app = self._make_app()
+        app.context_menu = None
+        app.set_active_window = mock.Mock()
+        app._handle_desktop_right_click = mock.Mock(return_value=True)
+        win = types.SimpleNamespace(
+            visible=True,
+            contains=mock.Mock(return_value=True),
+            handle_right_click=mock.Mock(side_effect=ValueError("bad handler")),
+        )
+        app.windows = [win]
+
+        handled = app.handle_right_click(7, 8, 0)
+
+        self.assertTrue(handled)
+        app.set_active_window.assert_called_once_with(win)
+        app._handle_desktop_right_click.assert_called_once_with(7, 8, 0)
+
+    def test_handle_right_click_desktop_route_error_returns_false(self):
+        app = self._make_app()
+        app.context_menu = None
+        app.windows = []
+        app._handle_desktop_right_click = mock.Mock(side_effect=ValueError("bad desktop"))
+
+        handled = app.handle_right_click(7, 8, 0)
+
+        self.assertFalse(handled)
+        app._handle_desktop_right_click.assert_called_once_with(7, 8, 0)
 
     def test_desktop_icon_properties_action_opens_dialog(self):
         app = self._make_app()

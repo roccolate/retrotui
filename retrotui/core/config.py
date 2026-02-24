@@ -12,6 +12,15 @@ try:  # Python 3.11+
 except ModuleNotFoundError:  # pragma: no cover - exercised on Python <3.11
     tomllib = None
 
+if tomllib is not None:
+    _TOML_PARSE_ERRORS = (
+        getattr(tomllib, "TOMLDecodeError", ValueError),
+        TypeError,
+        ValueError,
+    )
+else:
+    _TOML_PARSE_ERRORS = (TypeError, ValueError)
+
 
 @dataclass(frozen=True)
 class AppConfig:
@@ -88,7 +97,7 @@ def _parse_toml(text: str) -> dict:
     if tomllib is not None:
         try:
             return tomllib.loads(text)
-        except Exception:
+        except _TOML_PARSE_ERRORS:
             return _fallback_parse_toml(text)
     return _fallback_parse_toml(text)
 

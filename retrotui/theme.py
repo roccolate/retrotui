@@ -28,9 +28,6 @@ from .constants import (
     C_ERROR,
 )
 
-import sys
-
-
 def _ensure_curses_colors():
     """Ensure curses color constants exist (test doubles may omit them)."""
     for name, fallback in {
@@ -101,6 +98,17 @@ def _mk_pairs(fg_bg):
     }
 
 
+def _with_white_icons(pairs):
+    """Return a copy with white icon foreground while preserving theme backgrounds."""
+    white = curses.COLOR_WHITE
+    updated = dict(pairs)
+    icon_bg = updated["icon"][1]
+    icon_sel_bg = updated["icon_selected"][1]
+    updated["icon"] = (white, icon_bg)
+    updated["icon_selected"] = (white, icon_sel_bg)
+    return updated
+
+
 @dataclass(frozen=True)
 class Theme:
     """RetroTUI semantic theme definition."""
@@ -109,9 +117,7 @@ class Theme:
     label: str
     desktop_pattern: str
     pairs_base: dict[str, tuple[int, int]]
-    pairs_base_win32: Optional[dict[str, tuple[int, int]]] = None
     pairs_256: Optional[dict[str, tuple[int, int]]] = None
-    pairs_256_win32: Optional[dict[str, tuple[int, int]]] = None
     custom_colors: Optional[dict[int, tuple[int, int, int]]] = None
 
 
@@ -120,7 +126,7 @@ THEMES = {
         key="win31",
         label="Windows 3.1",
         desktop_pattern=" ",
-        pairs_base=_mk_pairs(
+        pairs_base=_with_white_icons(_mk_pairs(
             (
                 (curses.COLOR_BLACK, curses.COLOR_CYAN),
                 (curses.COLOR_BLACK, curses.COLOR_WHITE),
@@ -135,61 +141,23 @@ THEMES = {
                 (curses.COLOR_BLUE, curses.COLOR_WHITE),
                 (curses.COLOR_WHITE, curses.COLOR_RED),
             )
-        ),
-        pairs_base_win32=_mk_pairs(
+        )),
+        pairs_256=_with_white_icons(_mk_pairs(
             (
-                (curses.COLOR_WHITE, curses.COLOR_CYAN), # White text for desktop
-                (curses.COLOR_BLUE, curses.COLOR_WHITE), # Blue text for menubar to avoid grey
-                (curses.COLOR_WHITE, curses.COLOR_BLUE),
-                (curses.COLOR_WHITE, curses.COLOR_BLUE),
-                (curses.COLOR_WHITE, curses.COLOR_BLUE),
-                (curses.COLOR_BLUE, curses.COLOR_WHITE),
-                (curses.COLOR_BLUE, curses.COLOR_WHITE), # Blue text for body to avoid grey
-                (curses.COLOR_WHITE, curses.COLOR_BLUE),
-                (curses.COLOR_WHITE, curses.COLOR_CYAN), # White text for icons (unselected)
-                (curses.COLOR_BLUE, curses.COLOR_WHITE),
-                (curses.COLOR_BLUE, curses.COLOR_WHITE),
-                (curses.COLOR_WHITE, curses.COLOR_RED),
-            )
-        ),
-        pairs_256=_mk_pairs(
-            (
-                (curses.COLOR_BLACK, 20),
+                (curses.COLOR_BLACK, 37),
                 (curses.COLOR_BLACK, curses.COLOR_WHITE),
                 (curses.COLOR_WHITE, curses.COLOR_BLUE),
                 (curses.COLOR_WHITE, curses.COLOR_BLUE),
-                (curses.COLOR_WHITE, 21),
-                (21, curses.COLOR_WHITE),
+                (curses.COLOR_WHITE, 25),
+                (25, curses.COLOR_WHITE),
                 (curses.COLOR_BLACK, curses.COLOR_WHITE),
                 (curses.COLOR_WHITE, curses.COLOR_BLACK),
-                (curses.COLOR_BLACK, curses.COLOR_CYAN),
-                (curses.COLOR_WHITE, 23),
+                (curses.COLOR_BLACK, 37),
+                (curses.COLOR_WHITE, 244),
                 (curses.COLOR_BLUE, curses.COLOR_WHITE),
                 (curses.COLOR_WHITE, curses.COLOR_RED),
             )
-        ),
-        pairs_256_win32=_mk_pairs(
-            (
-                (curses.COLOR_WHITE, 20),                # White desktop pattern
-                (curses.COLOR_BLUE, curses.COLOR_WHITE),
-                (curses.COLOR_WHITE, curses.COLOR_BLUE),
-                (curses.COLOR_WHITE, curses.COLOR_BLUE),
-                (curses.COLOR_WHITE, 21),
-                (21, curses.COLOR_WHITE),
-                (curses.COLOR_BLUE, curses.COLOR_WHITE),
-                (curses.COLOR_WHITE, curses.COLOR_BLUE),
-                (curses.COLOR_WHITE, curses.COLOR_CYAN), # White text for icons (unselected)
-                (curses.COLOR_WHITE, 23),
-                (curses.COLOR_BLUE, curses.COLOR_WHITE),
-                (curses.COLOR_WHITE, curses.COLOR_RED),
-            )
-        ),
-        custom_colors={
-            20: (0, 500, 500),      # desktop teal
-            21: (0, 0, 500),        # title blue
-            22: (800, 800, 800),    # light gray (reserved for future)
-            23: (600, 600, 600),    # inactive gray
-        },
+        )),
     ),
     "dos_cga": Theme(
         key="dos_cga",

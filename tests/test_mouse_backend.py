@@ -1,4 +1,5 @@
 import types
+from unittest import mock
 
 from retrotui.core.platform import mouse_backend
 
@@ -78,3 +79,17 @@ def test_normalize_mouse_payload_treats_right_press_as_right_click_for_sgr():
     assert result is not None
     assert result["right_click"] is True
     assert result["inferred_right_click"] is False
+
+
+def test_normalize_mouse_payload_uses_forced_env_backend_when_app_has_none():
+    app = types.SimpleNamespace(
+        _last_mouse_pos=None,
+        button1_pressed=False,
+    )
+    event = (0, 1, 1, 0, 0)
+
+    with mock.patch.dict(mouse_backend.os.environ, {"RETROTUI_MOUSE_BACKEND": "gpm"}, clear=False):
+        result = mouse_backend.normalize_mouse_payload(app, event)
+
+    assert result is not None
+    assert result["backend"] == "gpm"

@@ -15,6 +15,16 @@ from .actions import AppAction
 from .platform.mouse_backend import normalize_mouse_payload
 
 LOGGER = logging.getLogger(__name__)
+_CURSES_ERROR = getattr(curses, "error", Exception)
+
+_MOUSE_ROUTE_ERRORS = (
+    AttributeError,
+    LookupError,
+    OSError,
+    TypeError,
+    ValueError,
+    _CURSES_ERROR,
+)
 
 # Module-level curses constant masks (resolved once at import time).
 _BUTTON1_CLICKED = getattr(curses, 'BUTTON1_CLICKED', 0)
@@ -30,7 +40,7 @@ _BUTTON4_PRESSED = getattr(curses, 'BUTTON4_PRESSED', 0)
 _BUTTON1_CLICK_MASK = _BUTTON1_CLICKED | _BUTTON1_PRESSED | _BUTTON1_DOUBLE_CLICKED
 _BUTTON3_MASK = _BUTTON3_PRESSED | _BUTTON3_CLICKED | _BUTTON3_RELEASED
 
-# Cache for inspect.signature arity checks (handler -> bool).
+# Cache for inspect.signature arity checks keyed by stable callable identity.
 _HANDLER_ARITY_CACHE: dict = {}
 
 # Enable detailed mouse normalization traces only when debug mode is explicitly on.
@@ -70,25 +80,35 @@ def _trace_mouse_normalization(raw_event, norm, adjusted_bstate):
     )
 
 
+def _handler_cache_key(handler):
+    """Return a stable key for callable arity cache lookups."""
+    bound_func = getattr(handler, "__func__", None)
+    if bound_func is not None:
+        owner = getattr(handler, "__self__", None)
+        return (bound_func, getattr(owner, "__class__", None))
+    return handler
+
+
 def _handler_accepts_bstate(handler):
     """Return True if handler accepts 3+ positional args (mx, my, bstate)."""
-    cached = _HANDLER_ARITY_CACHE.get(handler)
+    cache_key = _handler_cache_key(handler)
+    cached = _HANDLER_ARITY_CACHE.get(cache_key)
     if cached is not None:
         return cached
     try:
         params = list(inspect.signature(handler).parameters.values())
     except (TypeError, ValueError):
-        _HANDLER_ARITY_CACHE[handler] = False
+        _HANDLER_ARITY_CACHE[cache_key] = False
         return False
     positional = 0
     for p in params:
         if p.kind == inspect.Parameter.VAR_POSITIONAL:
-            _HANDLER_ARITY_CACHE[handler] = True
+            _HANDLER_ARITY_CACHE[cache_key] = True
             return True
         if p.kind in (inspect.Parameter.POSITIONAL_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD):
             positional += 1
     result = positional >= 3
-    _HANDLER_ARITY_CACHE[handler] = result
+    _HANDLER_ARITY_CACHE[cache_key] = result
     return result
 
 
@@ -97,6 +117,44 @@ def _invoke_mouse_handler(handler, mx, my, bstate):
     if _handler_accepts_bstate(handler):
         return handler(mx, my, bstate)
     return handler(mx, my)
+
+
+def _get_active_window_menu_owner(app):
+    """Return tracked window-menu owner when its menu is currently active."""
+    owner = getattr(app, "_active_window_menu_owner", None)
+    if owner is None:
+        return None
+    menu = getattr(owner, "window_menu", None)
+    if not menu or not getattr(menu, "active", False):
+        app._active_window_menu_owner = None
+        return None
+    if not getattr(owner, "visible", False):
+        menu.active = False
+        app._active_window_menu_owner = None
+        return None
+    return owner
+
+
+def _close_tracked_window_menu(app, *, except_win=None):
+    """Close tracked window menu unless it belongs to *except_win*."""
+    owner = _get_active_window_menu_owner(app)
+    if owner is None or owner is except_win:
+        return False
+    menu = getattr(owner, "window_menu", None)
+    if menu is not None:
+        menu.active = False
+    app._active_window_menu_owner = None
+    return True
+
+
+def _sync_window_menu_owner(app, win):
+    """Update tracked owner based on clicked/handled window menu state."""
+    menu = getattr(win, "window_menu", None)
+    if menu and getattr(menu, "active", False):
+        _close_tracked_window_menu(app, except_win=win)
+        app._active_window_menu_owner = win
+    elif getattr(app, "_active_window_menu_owner", None) is win:
+        app._active_window_menu_owner = None
 
 
 def _is_button1_click_event(bstate):
@@ -197,16 +255,38 @@ def handle_window_mouse(app, mx, my, bstate, norm=None):
         scroll_up = bool(bstate & _BUTTON4_PRESSED)
         scroll_down = bool(bstate & app.scroll_down_mask)
 
+    active_menu_owner = _get_active_window_menu_owner(app)
+    if is_mouse_motion and active_menu_owner is not None:
+        active_menu = getattr(active_menu_owner, "window_menu", None)
+        if active_menu and active_menu.handle_hover(mx, my, active_menu_owner.x, active_menu_owner.y, active_menu_owner.w):
+            return True
+
+    if is_click_like and active_menu_owner is not None:
+        owner_contains = getattr(active_menu_owner, "contains", None)
+        if callable(owner_contains) and not owner_contains(mx, my):
+            active_menu = getattr(active_menu_owner, "window_menu", None)
+            if active_menu is not None:
+                active_menu.active = False
+            if getattr(app, "_active_window_menu_owner", None) is active_menu_owner:
+                app._active_window_menu_owner = None
+
     for win in reversed(app.windows):
         if not win.visible:
             continue
 
         if is_click_like and win.on_close_button(mx, my):
+            if getattr(app, "_active_window_menu_owner", None) is win:
+                app._active_window_menu_owner = None
             app.close_window(win)
             return True
 
         if is_click_like and win.on_minimize_button(mx, my):
             app.set_active_window(win)
+            if getattr(app, "_active_window_menu_owner", None) is win:
+                menu = getattr(win, "window_menu", None)
+                if menu is not None:
+                    menu.active = False
+                app._active_window_menu_owner = None
             win.toggle_minimize()
             visible = [w for w in app.windows if w.visible]
             if visible:
@@ -246,14 +326,6 @@ def handle_window_mouse(app, mx, my, bstate, norm=None):
                 app.set_active_window(win)
                 return True
 
-        if is_mouse_motion and win.window_menu and win.window_menu.active:
-            if win.window_menu.handle_hover(mx, my, win.x, win.y, win.w):
-                return True
-
-        if win.window_menu and win.window_menu.active and not win.contains(mx, my):
-            if is_click_like:
-                win.window_menu.active = False
-
         if win.contains(mx, my):
             if is_mouse_motion and is_button1_pressed:
                 drag_handler = getattr(win, "handle_mouse_drag", None)
@@ -264,13 +336,10 @@ def handle_window_mouse(app, mx, my, bstate, norm=None):
 
             if is_click_like:
                 app.set_active_window(win)
-                for other_win in app.windows:
-                    other_menu = getattr(other_win, "window_menu", None)
-                    if other_win is win or not other_menu or not other_menu.active:
-                        continue
-                    other_menu.active = False
+                _close_tracked_window_menu(app, except_win=win)
                 result = _invoke_mouse_handler(win.handle_click, mx, my, bstate)
                 app._dispatch_window_result(result, win)
+                _sync_window_menu_owner(app, win)
                 return True
 
             if scroll_up:
@@ -382,7 +451,8 @@ def handle_mouse_event(app, event):
         if callable(handler):
             try:
                 handled = handler(mx, my, bstate)
-            except Exception:
+            except _MOUSE_ROUTE_ERRORS:
+                LOGGER.debug("right-click handler failed", exc_info=True)
                 handled = False
             if handled:
                 return True

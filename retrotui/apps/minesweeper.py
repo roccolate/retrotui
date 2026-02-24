@@ -12,6 +12,18 @@ from ..ui.menu import WindowMenu
 from ..core.actions import AppAction, ActionResult, ActionType
 from ..utils import safe_addstr, theme_attr
 
+_MINESWEEPER_SCORE_LOAD_ERRORS = (
+    OSError,
+    TypeError,
+    ValueError,
+    json.JSONDecodeError,
+)
+_MINESWEEPER_SCORE_SAVE_ERRORS = (
+    OSError,
+    TypeError,
+    ValueError,
+)
+
 
 class MinesweeperWindow(Window):
     def __init__(self, x, y, w, h):
@@ -44,7 +56,7 @@ class MinesweeperWindow(Window):
                     for k, v in scores.items():
                         if k in self.best_times and isinstance(v, int):
                             self.best_times[k] = v
-        except Exception:
+        except _MINESWEEPER_SCORE_LOAD_ERRORS:
             pass
 
     def _save_high_scores(self):
@@ -53,7 +65,7 @@ class MinesweeperWindow(Window):
             path.parent.mkdir(parents=True, exist_ok=True)
             with open(path, "w", encoding="utf-8") as f:
                 json.dump(self.best_times, f)
-        except Exception:
+        except _MINESWEEPER_SCORE_SAVE_ERRORS:
             pass
 
     def _reset_game(self, new_diff=None):
@@ -308,4 +320,3 @@ class MinesweeperWindow(Window):
             # But we don't know the cursor pos precisely. Ignore.
             pass
         return None
-

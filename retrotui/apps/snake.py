@@ -11,11 +11,20 @@ from pathlib import Path
 from ..ui.window import Window
 from ..ui.menu import WindowMenu
 from ..core.actions import AppAction, ActionResult, ActionType
-from ..constants import (
-    ICONS, ICONS_ASCII, TASKBAR_TITLE_MAX_LEN, BINARY_DETECT_CHUNK_SIZE,
-    C_ANSI_START
-)
+from ..constants import C_ANSI_START
 from ..utils import safe_addstr, theme_attr, normalize_key_code
+
+_SNAKE_SCORE_LOAD_ERRORS = (
+    OSError,
+    TypeError,
+    ValueError,
+    json.JSONDecodeError,
+)
+_SNAKE_SCORE_SAVE_ERRORS = (
+    OSError,
+    TypeError,
+    ValueError,
+)
 
 
 class SnakeWindow(Window):
@@ -78,7 +87,7 @@ class SnakeWindow(Window):
                     for k, v in scores.items():
                         if k in self.high_scores and isinstance(v, int):
                             self.high_scores[k] = v
-        except Exception:
+        except _SNAKE_SCORE_LOAD_ERRORS:
             pass  # Fallback to 0 if corrupted or unreadable
 
     def _save_high_scores(self):
@@ -87,7 +96,7 @@ class SnakeWindow(Window):
             path.parent.mkdir(parents=True, exist_ok=True)
             with open(path, "w", encoding="utf-8") as f:
                 json.dump(self.high_scores, f)
-        except Exception:
+        except _SNAKE_SCORE_SAVE_ERRORS:
             pass
 
     def _reset_game(self):

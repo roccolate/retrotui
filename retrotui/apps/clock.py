@@ -9,6 +9,15 @@ from ..ui.menu import WindowMenu
 from ..ui.window import Window
 from ..utils import normalize_key_code, safe_addstr, theme_attr
 
+_CURSES_ERROR = getattr(curses, "error", Exception)
+_CLOCK_CHIME_ERRORS = (
+    _CURSES_ERROR,
+    OSError,
+    RuntimeError,
+    TypeError,
+    ValueError,
+)
+
 
 class ClockCalendarWindow(Window):
     """Small widget with digital clock and ASCII month calendar."""
@@ -44,7 +53,7 @@ class ClockCalendarWindow(Window):
         if callable(beeper):
             try:
                 beeper()
-            except Exception:
+            except _CLOCK_CHIME_ERRORS:
                 pass
 
     def execute_action(self, action):

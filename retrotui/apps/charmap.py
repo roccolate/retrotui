@@ -12,8 +12,16 @@ from ..core.actions import ActionResult, ActionType, AppAction
 
 try:
     import pyperclip
-except Exception:
+except ImportError:
     pyperclip = None
+
+_SYSTEM_CLIPBOARD_SYNC_ERRORS = (
+    AttributeError,
+    OSError,
+    RuntimeError,
+    TypeError,
+    ValueError,
+)
 
 UNICODE_BLOCKS = [
     ("Basic Latin", 0x0020, 0x007F),
@@ -178,12 +186,20 @@ class CharacterMapWindow(Window):
         elif key_code in (ord('c'), ord('C')):
             if self.selected_char:
                 copy_text(self.selected_char)
-                if pyperclip: pyperclip.copy(self.selected_char)
+                if pyperclip:
+                    try:
+                        pyperclip.copy(self.selected_char)
+                    except _SYSTEM_CLIPBOARD_SYNC_ERRORS:
+                        pass
         elif key_code in (ord('h'), ord('H')):
             if self.selected_char:
                 hex_val = f"U+{ord(self.selected_char):04X}"
                 copy_text(hex_val)
-                if pyperclip: pyperclip.copy(hex_val)
+                if pyperclip:
+                    try:
+                        pyperclip.copy(hex_val)
+                    except _SYSTEM_CLIPBOARD_SYNC_ERRORS:
+                        pass
 
         self.selected_char = self.chars[self.sel_idx]
         return None
@@ -229,14 +245,22 @@ class CharacterMapWindow(Window):
         if action == "copy_hex":
             if self.selected_char:
                 copy_text(self.selected_char)
-                if pyperclip: pyperclip.copy(self.selected_char)
+                if pyperclip:
+                    try:
+                        pyperclip.copy(self.selected_char)
+                    except _SYSTEM_CLIPBOARD_SYNC_ERRORS:
+                        pass
             return None
         
         if action == "copy_hex_val":
             if self.selected_char:
                 val = f"U+{ord(self.selected_char):04X}"
                 copy_text(val)
-                if pyperclip: pyperclip.copy(val)
+                if pyperclip:
+                    try:
+                        pyperclip.copy(val)
+                    except _SYSTEM_CLIPBOARD_SYNC_ERRORS:
+                        pass
             return None
             
         return None

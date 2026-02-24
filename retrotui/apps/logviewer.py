@@ -11,6 +11,24 @@ from ..ui.selectable_text import SelectableTextMixin
 from ..ui.window import Window
 from ..utils import normalize_key_code, safe_addstr, theme_attr
 
+_CURSES_ERROR = getattr(curses, "error", Exception)
+_LOG_COLOR_INIT_ERRORS = (
+    AttributeError,
+    OSError,
+    RuntimeError,
+    TypeError,
+    ValueError,
+    _CURSES_ERROR,
+)
+_LOG_COLOR_APPLY_ERRORS = (
+    AttributeError,
+    OSError,
+    RuntimeError,
+    TypeError,
+    ValueError,
+    _CURSES_ERROR,
+)
+
 
 class LogViewerWindow(SelectableTextMixin, Window):
     """Read-only log viewer with follow mode and vim-like search."""
@@ -125,7 +143,7 @@ class LogViewerWindow(SelectableTextMixin, Window):
             init_pair(cls.COLOR_ERROR_PAIR, getattr(curses, "COLOR_RED", 1), -1)
             init_pair(cls.COLOR_WARN_PAIR, getattr(curses, "COLOR_YELLOW", 3), -1)
             init_pair(cls.COLOR_INFO_PAIR, getattr(curses, "COLOR_GREEN", 2), -1)
-        except Exception:
+        except _LOG_COLOR_INIT_ERRORS:
             pass
         cls._log_colors_ready = True
 
@@ -152,7 +170,7 @@ class LogViewerWindow(SelectableTextMixin, Window):
         if callable(color_pair):
             try:
                 return color_pair(pair_id) | curses.A_BOLD
-            except Exception:
+            except _LOG_COLOR_APPLY_ERRORS:
                 return base_attr | curses.A_BOLD
         return base_attr | curses.A_BOLD
 

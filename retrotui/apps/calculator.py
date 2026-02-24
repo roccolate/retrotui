@@ -25,6 +25,13 @@ _ALLOWED_UNARY_OPS = {
     ast.USub: operator.neg,
 }
 
+_CALCULATOR_EVAL_ERRORS = (
+    ArithmeticError,
+    SyntaxError,
+    TypeError,
+    ValueError,
+)
+
 
 def _eval_ast_node(node):
     """Evaluate a parsed AST node with a restricted math-only grammar."""
@@ -143,7 +150,7 @@ class CalculatorWindow(Window):
             self.last_result = result
             self._append_history(f"{expr} = {result}")
             self._set_expression(result)
-        except Exception as exc:
+        except _CALCULATOR_EVAL_ERRORS as exc:
             self._append_history(f"{expr} ! {exc}")
             self.history_index = None
 
@@ -329,4 +336,3 @@ class CalculatorWindow(Window):
         input_w = max(1, bw - len("Expr> "))
         self._ensure_cursor_visible(input_w)
         return None
-

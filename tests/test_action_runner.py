@@ -302,6 +302,31 @@ class ActionRunnerTests(unittest.TestCase):
         self.assertIn("mpv", app.dialog.message)
         self.assertEqual(app.dialog.buttons, ["OK"])
 
+    def test_execute_plugin_action_routes_to_open_plugin(self):
+        app = self._make_app()
+        app.open_plugin = mock.Mock()
+        logger = mock.Mock()
+
+        self.action_runner.execute_app_action(app, "plugin:demo", logger, version="0.3.4")
+
+        app.open_plugin.assert_called_once_with("demo")
+        logger.warning.assert_not_called()
+
+    def test_execute_plugin_action_route_error_is_logged(self):
+        app = self._make_app()
+        app.open_plugin = mock.Mock(side_effect=ValueError("bad plugin route"))
+        logger = mock.Mock()
+
+        self.action_runner.execute_app_action(app, "plugin:demo", logger, version="0.3.4")
+
+        self.assertTrue(
+            any(
+                call.args and "plugin action failed" in str(call.args[0])
+                for call in logger.debug.call_args_list
+            )
+        )
+        logger.warning.assert_called_once_with("Unknown action received: %s", "plugin:demo")
+
     def test_execute_file_manager_spawns_window_with_offset(self):
         app = self._make_app()
         logger = mock.Mock()
@@ -319,6 +344,35 @@ class ActionRunnerTests(unittest.TestCase):
         spawned = app._spawn_window.call_args.args[0]
         self.assertEqual(spawned.kind, "fm")
         self.assertEqual((spawned.x, spawned.y, spawned.w, spawned.h), (12, 7, 70, 24))
+
+    def test_execute_file_manager_uses_default_size_when_terminal_probe_fails(self):
+        app = self._make_app()
+        logger = mock.Mock()
+        # Simulate incomplete curses runtime (no initialized LINES/COLS).
+        original_lines = getattr(self.action_runner.curses, "LINES", None)
+        original_cols = getattr(self.action_runner.curses, "COLS", None)
+        had_lines = hasattr(self.action_runner.curses, "LINES")
+        had_cols = hasattr(self.action_runner.curses, "COLS")
+        if had_lines:
+            delattr(self.action_runner.curses, "LINES")
+        if had_cols:
+            delattr(self.action_runner.curses, "COLS")
+        try:
+            with mock.patch.object(self.action_runner, "FileManagerWindow", _DummyFMWindow):
+                self.action_runner.execute_app_action(
+                    app,
+                    self.actions_mod.AppAction.FILE_MANAGER,
+                    logger,
+                    version="0.3.4",
+                )
+        finally:
+            if had_lines:
+                setattr(self.action_runner.curses, "LINES", original_lines)
+            if had_cols:
+                setattr(self.action_runner.curses, "COLS", original_cols)
+
+        spawned = app._spawn_window.call_args.args[0]
+        self.assertEqual((spawned.w, spawned.h), (70, 24))
 
     def test_execute_file_manager_passes_show_hidden_when_supported(self):
         app = self._make_app()

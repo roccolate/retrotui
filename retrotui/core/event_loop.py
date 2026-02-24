@@ -5,7 +5,22 @@ import logging
 import os
 import time
 
+from ..constants import (
+    TERMINAL_INPUT_TIMEOUT_MS,
+    TERMINAL_LIVE_INPUT_TIMEOUT_MS,
+    TERMINAL_BACKGROUND_INPUT_TIMEOUT_MS,
+)
+
 LOGGER = logging.getLogger(__name__)
+_CURSES_ERROR = getattr(curses, "error", Exception)
+
+_INPUT_TIMEOUT_APPLY_ERRORS = (
+    AttributeError,
+    OSError,
+    TypeError,
+    ValueError,
+    _CURSES_ERROR,
+)
 
 
 def clamp_windows_to_terminal(app):
@@ -18,22 +33,23 @@ def clamp_windows_to_terminal(app):
 
 def draw_frame(app):
     """Render a full frame before reading input."""
-    app._frame_size = app.stdscr.getmaxyx()
+    frame_size = app.stdscr.getmaxyx()
+    app._frame_size = frame_size
+    _, frame_w = frame_size
     app.stdscr.erase()
     app.normalize_window_layers()
-    app.draw_desktop()
-    app.draw_icons()
+    app.draw_desktop(frame_size=frame_size)
+    app.draw_icons(frame_size=frame_size)
 
     if not app.has_background_operation():
         for win in app.windows:
             if getattr(win, "visible", True):
                 win.draw(app.stdscr)
 
-    _, width = app.stdscr.getmaxyx()
-    app.menu.draw_bar(app.stdscr, width)
+    app.menu.draw_bar(app.stdscr, frame_w)
     app.menu.draw_dropdown(app.stdscr)
-    app.draw_taskbar()
-    app.draw_statusbar()
+    app.draw_taskbar(frame_size=frame_size)
+    app.draw_statusbar(frame_size=frame_size)
 
     if app.dialog:
         app.dialog.draw(app.stdscr)
@@ -104,10 +120,55 @@ def dispatch_input(app, key):
 def _has_live_terminals(app):
     """Return True if any window has an active PTY session producing output."""
     for w in app.windows:
+        if not getattr(w, "visible", True):
+            continue
         session = getattr(w, '_session', None)
         if session is not None and getattr(session, 'running', False):
             return True
     return False
+
+
+def _select_input_timeout_ms(app):
+    """Return the target input timeout for the current runtime state."""
+    idle = int(getattr(app, "input_timeout_idle_ms", TERMINAL_INPUT_TIMEOUT_MS))
+    timeout_ms = max(1, idle)
+
+    if _has_live_terminals(app):
+        live = int(
+            getattr(
+                app,
+                "input_timeout_live_terminal_ms",
+                TERMINAL_LIVE_INPUT_TIMEOUT_MS,
+            )
+        )
+        return max(1, live)
+
+    has_background_operation = getattr(app, "has_background_operation", None)
+    if callable(has_background_operation) and bool(has_background_operation()):
+        bg = int(
+            getattr(
+                app,
+                "input_timeout_background_ms",
+                TERMINAL_BACKGROUND_INPUT_TIMEOUT_MS,
+            )
+        )
+        return max(1, min(timeout_ms, bg))
+
+    return timeout_ms
+
+
+def _apply_input_timeout(app, timeout_ms):
+    """Apply stdscr timeout only when it changed."""
+    if getattr(app, "_active_input_timeout_ms", None) == timeout_ms:
+        return
+    setter = getattr(app.stdscr, "timeout", None)
+    if not callable(setter):
+        return
+    try:
+        setter(timeout_ms)
+    except _INPUT_TIMEOUT_APPLY_ERRORS:
+        return
+    app._active_input_timeout_ms = timeout_ms
 
 
 def _profile_enabled():
@@ -203,6 +264,7 @@ def run_app_loop(app):
     try:
         while app.running:
             metrics["loops"] += 1
+            # Keep background progression deterministic: one poll per loop.
             app.poll_background_operation()
             # Always redraw when live terminals may have pending PTY output.
             if _has_live_terminals(app):
@@ -213,6 +275,7 @@ def run_app_loop(app):
                 metrics["draw_time_s"] += time.perf_counter() - draw_start
                 metrics["redraws"] += 1
                 app._dirty = False
+            _apply_input_timeout(app, _select_input_timeout_ms(app))
             input_start = time.perf_counter()
             key = read_input_key(app.stdscr)
             metrics["input_wait_time_s"] += time.perf_counter() - input_start
@@ -226,7 +289,6 @@ def run_app_loop(app):
                 app._dirty = True
                 metrics["dispatched_events"] += 1
             metrics["dispatch_time_s"] += time.perf_counter() - dispatch_start
-            app.poll_background_operation()
             _emit_runtime_metrics(metrics, final=False)
     finally:
         _emit_runtime_metrics(metrics, final=True)

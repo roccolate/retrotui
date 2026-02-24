@@ -4,6 +4,18 @@ import logging
 from ..constants import TASKBAR_TITLE_MAX_LEN, BOTTOM_BARS_HEIGHT
 
 LOGGER = logging.getLogger(__name__)
+_WINDOW_CLOSE_HOOK_ERRORS = (
+    ArithmeticError,
+    AssertionError,
+    AttributeError,
+    LookupError,
+    NameError,
+    OSError,
+    RuntimeError,
+    SyntaxError,
+    TypeError,
+    ValueError,
+)
 
 
 class WindowManager:
@@ -49,11 +61,16 @@ class WindowManager:
 
     def close_window(self, win):
         """Close a window."""
+        if getattr(self._app, "_active_window_menu_owner", None) is win:
+            menu = getattr(win, "window_menu", None)
+            if menu is not None:
+                menu.active = False
+            self._app._active_window_menu_owner = None
         closer = getattr(win, 'close', None)
         if callable(closer):
             try:
                 closer()
-            except Exception:  # pragma: no cover - defensive window cleanup path
+            except _WINDOW_CLOSE_HOOK_ERRORS:  # pragma: no cover - defensive window cleanup path
                 LOGGER.debug('Window close hook failed for %r', win, exc_info=True)
         self.windows.remove(win)
         self._layers_dirty = True

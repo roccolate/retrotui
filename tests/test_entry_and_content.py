@@ -8,6 +8,8 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+from _support import make_repo_tmpdir
+
 
 def _fake_curses_module() -> types.ModuleType:
     fake = types.ModuleType("curses")
@@ -107,6 +109,7 @@ class EntryPointTests(unittest.TestCase):
         with (
             mock.patch.object(mod.curses, "wrapper", side_effect=RuntimeError("boom")),
             mock.patch.object(mod.curses, "endwin", return_value=None) as endwin,
+            mock.patch.object(mod, "_write_crash_report", return_value=Path("crash.log")) as crash_writer,
             mock.patch("builtins.print") as print_mock,
             mock.patch("traceback.print_exc") as traceback_mock,
         ):
@@ -114,9 +117,11 @@ class EntryPointTests(unittest.TestCase):
 
         self.assertEqual(rc, 1)
         endwin.assert_called_once_with()
+        crash_writer.assert_called_once()
         traceback_mock.assert_called_once_with()
         joined_prints = " ".join(str(call.args[0]) for call in print_mock.call_args_list if call.args)
         self.assertIn("boom", joined_prints)
+        self.assertIn("Crash log saved to:", joined_prints)
 
     def test_run_ignores_endwin_error_on_unhandled_exception(self):
         mod = _load_main_module()
@@ -124,6 +129,7 @@ class EntryPointTests(unittest.TestCase):
         with (
             mock.patch.object(mod.curses, "wrapper", side_effect=RuntimeError("boom")),
             mock.patch.object(mod.curses, "endwin", side_effect=mod.curses.error("endwin fail")) as endwin,
+            mock.patch.object(mod, "_write_crash_report", return_value=None) as crash_writer,
             mock.patch("builtins.print"),
             mock.patch("traceback.print_exc") as traceback_mock,
         ):
@@ -131,7 +137,34 @@ class EntryPointTests(unittest.TestCase):
 
         self.assertEqual(rc, 1)
         endwin.assert_called_once_with()
+        crash_writer.assert_called_once()
         traceback_mock.assert_called_once_with()
+
+    def test_write_crash_report_persists_when_directory_is_writable(self):
+        mod = _load_main_module()
+        tmpdir = make_repo_tmpdir(prefix="_tmp_entry_")
+        self.addCleanup(tmpdir.cleanup)
+        logs_dir = Path(tmpdir.name)
+
+        with mock.patch.object(mod, "_default_crash_log_dir", return_value=logs_dir):
+            report = mod._write_crash_report(RuntimeError("boom"), "traceback line\n")
+
+        self.assertIsNotNone(report)
+        self.assertTrue(report.exists())
+        content = report.read_text(encoding="utf-8")
+        self.assertIn("RuntimeError('boom')", content)
+        self.assertIn("traceback line", content)
+
+    def test_write_crash_report_returns_none_when_directory_creation_fails(self):
+        mod = _load_main_module()
+
+        with (
+            mock.patch.object(mod, "_default_crash_log_dir", return_value=Path("FALLBACK")),
+            mock.patch.object(Path, "mkdir", side_effect=OSError("denied")),
+        ):
+            report = mod._write_crash_report(RuntimeError("boom"), "traceback line\n")
+
+        self.assertIsNone(report)
 
     def test_main_cli_delegates_to_run(self):
         mod = _load_main_module()

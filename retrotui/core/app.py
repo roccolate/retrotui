@@ -11,6 +11,8 @@ import time
 from ..constants import (
     ICONS, ICONS_ASCII, BINARY_DETECT_CHUNK_SIZE,
     TERMINAL_INPUT_TIMEOUT_MS,
+    TERMINAL_LIVE_INPUT_TIMEOUT_MS,
+    TERMINAL_BACKGROUND_INPUT_TIMEOUT_MS,
     WELCOME_WIN_WIDTH, WELCOME_WIN_HEIGHT,
 )
 from ..utils import (
@@ -60,6 +62,7 @@ from .dialog_dispatch import DialogDispatcher
 from .bootstrap import (
     configure_terminal,
     disable_flow_control,
+    detect_mouse_backend,
     enable_mouse_support,
     disable_mouse_support,
 )
@@ -69,6 +72,39 @@ from .window_manager import WindowManager
 LOGGER = logging.getLogger(__name__)
 
 APP_VERSION = '0.9.2'
+_CURSES_ERROR = getattr(curses, "error", Exception)
+_CONFIG_PERSIST_ERRORS = (OSError, UnicodeError, ValueError, TypeError)
+_INPUT_ROUTE_ERRORS = (
+    AttributeError,
+    LookupError,
+    OSError,
+    TypeError,
+    ValueError,
+    _CURSES_ERROR,
+)
+_PLUGIN_DISCOVERY_IMPORT_ERRORS = (
+    ImportError,
+    ModuleNotFoundError,
+    AttributeError,
+    OSError,
+    RuntimeError,
+    TypeError,
+    ValueError,
+)
+_RUNTIME_ISOLATION_ERRORS = (
+    ArithmeticError,
+    AssertionError,
+    AttributeError,
+    ImportError,
+    LookupError,
+    NameError,
+    OSError,
+    RuntimeError,
+    SyntaxError,
+    TypeError,
+    ValueError,
+    _CURSES_ERROR,
+)
 
 class RetroTUI:
     """Main application class."""
@@ -218,7 +254,9 @@ class RetroTUI:
         self.running = True
         self._pending_sigint = False
         self._prev_sigint_handler = None
+        self._prev_signal_handlers = {}
         self._sigint_handler_installed = False
+        self._shutdown_signal = None
         self.window_mgr = WindowManager(self)
         self.use_unicode = check_unicode_support()
         self.config = load_config()
@@ -256,33 +294,20 @@ class RetroTUI:
         self._last_icon_click_ts = 0.0
         self.double_click_interval = None
         self._mouse_norm = None
+        self._active_window_menu_owner = None
         self.drag_drop = DragDropManager(self)
         # Movable desktop icon positions: mapping icon_key -> (x, y)
         self._icon_mgr = IconPositionManager(self)
         self._background_operation = None
         self._file_ops = FileOperationManager(self)
         self._dialog_dispatcher = DialogDispatcher(self)
-        
-        # Plugin discovery and registration (optional; failures should not crash)
-        try:
-            from ..plugins.loader import discover_plugins, load_plugin
+        self.input_timeout_idle_ms = TERMINAL_INPUT_TIMEOUT_MS
+        self.input_timeout_live_terminal_ms = TERMINAL_LIVE_INPUT_TIMEOUT_MS
+        self.input_timeout_background_ms = TERMINAL_BACKGROUND_INPUT_TIMEOUT_MS
+        self.mouse_backend = detect_mouse_backend()
 
-            self._plugins = {}
-            for manifest in discover_plugins():
-                try:
-                    app_class = load_plugin(manifest)
-                    if app_class:
-                        plugin_info = manifest.get('plugin', {})
-                        pid = plugin_info.get('id')
-                        if pid:
-                            self._plugins[pid] = {
-                                'class': app_class,
-                                'manifest': manifest,
-                            }
-                except Exception:
-                    LOGGER.debug('failed to load plugin manifest', exc_info=True)
-        except Exception:
-            LOGGER.debug('plugin discovery unavailable', exc_info=True)
+        # Plugin discovery and registration (optional; failures should not crash).
+        self._load_plugins_runtime()
         # Setup terminal
         configure_terminal(stdscr, timeout_ms=TERMINAL_INPUT_TIMEOUT_MS)
         self._validate_terminal_size()
@@ -315,9 +340,71 @@ class RetroTUI:
         # load persisted icon positions (if any)
         try:
             self._load_icon_positions()
-        except Exception:
+        except _CONFIG_PERSIST_ERRORS:
             # don't fail startup on parse errors
             LOGGER.debug('failed to load icon positions', exc_info=True)
+
+    def _load_plugins_runtime(self):
+        """Discover and register plugins (best effort; never crash startup)."""
+        self._plugins = {}
+        try:
+            from ..plugins.loader import discover_plugins, load_plugin
+        except _PLUGIN_DISCOVERY_IMPORT_ERRORS:
+            LOGGER.debug('plugin discovery unavailable', exc_info=True)
+            return
+
+        for manifest in discover_plugins():
+            self._register_plugin_manifest(manifest, load_plugin)
+
+    def _register_plugin_manifest(self, manifest, load_plugin):
+        """Register one plugin manifest with defensive isolation."""
+        try:
+            app_class = load_plugin(manifest)
+        except _RUNTIME_ISOLATION_ERRORS:
+            LOGGER.debug('failed to load plugin manifest', exc_info=True)
+            return
+        if not app_class:
+            return
+        plugin_info = manifest.get('plugin', {})
+        pid = plugin_info.get('id')
+        if not pid:
+            return
+        self._plugins[pid] = {
+            'class': app_class,
+            'manifest': manifest,
+        }
+
+    def _close_window_safely(self, win):
+        """Run window close hook without allowing cleanup-time crashes."""
+        closer = getattr(win, 'close', None)
+        if not callable(closer):
+            return
+        try:
+            closer()
+        except _RUNTIME_ISOLATION_ERRORS:  # pragma: no cover - defensive cleanup path
+            LOGGER.debug('Window cleanup failed for %r', win, exc_info=True)
+
+    def _invoke_callable_action(self, action):
+        """Execute callable actions with failure isolation."""
+        try:
+            return action()
+        except _RUNTIME_ISOLATION_ERRORS:
+            LOGGER.debug('callable action failed', exc_info=True)
+            return None
+
+    def _build_plugin_window(self, info, plugin_id):
+        """Instantiate plugin window object from manifest metadata."""
+        manifest = info.get('manifest', {}).get('plugin', {})
+        win_config = manifest.get('window', {})
+        w = int(win_config.get('default_width', 40))
+        h = int(win_config.get('default_height', 15))
+        try:
+            cls = info.get('class')
+            x, y = self._next_window_offset(8, 3)
+            return cls(manifest.get('name', plugin_id), x, y, w, h)
+        except _RUNTIME_ISOLATION_ERRORS:
+            LOGGER.debug('failed to open plugin %s', plugin_id, exc_info=True)
+            return None
 
     def _get_hidden_icon_labels(self):
         """Return set of lowercased hidden icon labels from config."""
@@ -380,7 +467,7 @@ class RetroTUI:
         path = save_config(self.config)
         try:
             self._save_icon_positions(path)
-        except Exception:
+        except _CONFIG_PERSIST_ERRORS:
             LOGGER.debug('failed to save icon positions', exc_info=True)
         return path
 
@@ -399,7 +486,8 @@ class RetroTUI:
         if self.context_menu and self.context_menu.active:
             try:
                 action = self.context_menu.handle_click(mx, my)
-            except Exception:
+            except _INPUT_ROUTE_ERRORS:
+                LOGGER.debug('context menu click handler failed', exc_info=True)
                 action = None
             if action is not None:
                 self.execute_action(action)
@@ -424,7 +512,8 @@ class RetroTUI:
             if callable(handler):
                 try:
                     res = _invoke_mouse_handler(handler, mx, my, bstate)
-                except Exception:
+                except _INPUT_ROUTE_ERRORS:
+                    LOGGER.debug('window right-click handler failed', exc_info=True)
                     res = None
 
                 # If window handled it (returned True or ActionResult), we stop.
@@ -441,7 +530,8 @@ class RetroTUI:
         # Desktop hook
         try:
             return bool(self._handle_desktop_right_click(mx, my, bstate))
-        except Exception:
+        except _INPUT_ROUTE_ERRORS:
+            LOGGER.debug('desktop right-click handler failed', exc_info=True)
             return False
 
     def _handle_desktop_right_click(self, mx, my, bstate):
@@ -514,12 +604,7 @@ class RetroTUI:
                         self.BACKGROUND_OPERATION_JOIN_TIMEOUT,
                     )
         for win in list(self.windows):
-            closer = getattr(win, 'close', None)
-            if callable(closer):
-                try:
-                    closer()
-                except Exception:  # pragma: no cover - defensive cleanup path
-                    LOGGER.debug('Window cleanup failed for %r', win, exc_info=True)
+            self._close_window_safely(win)
         disable_mouse_support()
 
     def _install_runtime_signal_handlers(self):
@@ -528,31 +613,69 @@ class RetroTUI:
             return
         if threading.current_thread() is not threading.main_thread():
             return
+        planned = []
+        sigint = getattr(signal, "SIGINT", None)
+        if sigint is not None:
+            planned.append((sigint, self._handle_sigint))
+        for name in ("SIGTERM", "SIGHUP"):
+            sig = getattr(signal, name, None)
+            if sig is not None:
+                planned.append((sig, self._handle_shutdown_signal))
+
+        prev_handlers = {}
         try:
-            self._prev_sigint_handler = signal.getsignal(signal.SIGINT)
-            signal.signal(signal.SIGINT, self._handle_sigint)
-            self._sigint_handler_installed = True
+            for sig, _handler in planned:
+                prev_handlers[sig] = signal.getsignal(sig)
+            for sig, handler in planned:
+                signal.signal(sig, handler)
         except (AttributeError, ValueError, OSError):
+            # Best-effort rollback when installation fails halfway.
+            for sig, prev in prev_handlers.items():
+                try:
+                    signal.signal(sig, prev)
+                except (AttributeError, ValueError, OSError):
+                    continue
+            self._prev_signal_handlers = {}
             self._prev_sigint_handler = None
             self._sigint_handler_installed = False
+            return
+
+        self._prev_signal_handlers = prev_handlers
+        self._prev_sigint_handler = prev_handlers.get(sigint)
+        self._sigint_handler_installed = bool(prev_handlers)
 
     def _restore_runtime_signal_handlers(self):
         """Restore process signal handlers changed for runtime."""
         if not getattr(self, '_sigint_handler_installed', False):
             return
-        try:
-            prev = getattr(self, '_prev_sigint_handler', None)
+        prev_handlers = dict(getattr(self, "_prev_signal_handlers", {}) or {})
+        sigint = getattr(signal, "SIGINT", None)
+        if sigint is not None and sigint not in prev_handlers:
+            prev = getattr(self, "_prev_sigint_handler", None)
             if prev is not None:
-                signal.signal(signal.SIGINT, self._prev_sigint_handler)
-        except (AttributeError, ValueError, OSError):
-            pass
-        finally:
-            self._prev_sigint_handler = None
-            self._sigint_handler_installed = False
+                prev_handlers[sigint] = prev
+
+        for sig, prev in prev_handlers.items():
+            if prev is None:
+                continue
+            try:
+                signal.signal(sig, prev)
+            except (AttributeError, ValueError, OSError):
+                continue
+
+        self._prev_signal_handlers = {}
+        self._prev_sigint_handler = None
+        self._sigint_handler_installed = False
+        self._shutdown_signal = None
 
     def _handle_sigint(self, _signum, _frame):
         """Queue SIGINT as in-app Ctrl+C key instead of terminating session."""
         self._pending_sigint = True
+
+    def _handle_shutdown_signal(self, signum, _frame):
+        """Request a clean shutdown on external termination signals."""
+        self._shutdown_signal = signum
+        self.running = False
 
     def _consume_pending_sigint(self):
         """Return queued Ctrl+C key when SIGINT was received."""
@@ -561,21 +684,29 @@ class RetroTUI:
             return '\x03'
         return None
 
-    def draw_desktop(self):
+    def draw_desktop(self, frame_size=None):
         """Draw the desktop background pattern."""
-        return draw_desktop(self)
+        if frame_size is None:
+            return draw_desktop(self)
+        return draw_desktop(self, frame_size=frame_size)
 
-    def draw_icons(self):
+    def draw_icons(self, frame_size=None):
         """Draw desktop icons (3x4 art + label)."""
-        return draw_icons(self)
+        if frame_size is None:
+            return draw_icons(self)
+        return draw_icons(self, frame_size=frame_size)
 
-    def draw_taskbar(self):
+    def draw_taskbar(self, frame_size=None):
         """Draw taskbar row with minimized window buttons."""
-        return draw_taskbar(self)
+        if frame_size is None:
+            return draw_taskbar(self)
+        return draw_taskbar(self, frame_size=frame_size)
 
-    def draw_statusbar(self):
+    def draw_statusbar(self, frame_size=None):
         """Draw the bottom status bar."""
-        return draw_statusbar(self, APP_VERSION)
+        if frame_size is None:
+            return draw_statusbar(self, APP_VERSION)
+        return draw_statusbar(self, APP_VERSION, frame_size=frame_size)
 
     def get_icon_screen_pos(self, index):
         """Return (x, y) for icon at index, checking persisted positions then default grid."""
@@ -626,17 +757,9 @@ class RetroTUI:
         if not info:
             LOGGER.debug('plugin not found: %s', plugin_id)
             return
-        manifest = info.get('manifest', {}).get('plugin', {})
-        win_config = info.get('manifest', {}).get('plugin', {}).get('window', {})
-        w = int(win_config.get('default_width', 40))
-        h = int(win_config.get('default_height', 15))
-        try:
-            cls = info.get('class')
-            x, y = self._next_window_offset(8, 3)
-            win = cls(manifest.get('name', plugin_id), x, y, w, h)
+        win = self._build_plugin_window(info, plugin_id)
+        if win is not None:
             self._spawn_window(win)
-        except Exception:
-            LOGGER.debug('failed to open plugin %s', plugin_id, exc_info=True)
 
     def _next_window_offset(self, base_x, base_y, step_x=2, step_y=1):
         """Return staggered window coordinates based on open window count."""
@@ -648,11 +771,7 @@ class RetroTUI:
         LOGGER.debug('execute_action: %s', action)
 
         if callable(action):
-            try:
-                result = action()
-            except Exception:
-                LOGGER.debug('callable action failed', exc_info=True)
-                return
+            result = self._invoke_callable_action(action)
             if result is None:
                 return
             if hasattr(result, 'type'):
