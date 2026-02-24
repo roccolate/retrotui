@@ -807,12 +807,15 @@ class FileManagerWindow(Window):
         
         now = time.time()
         is_double = False
+        explicit_double = bool(
+            bstate is not None and (bstate & getattr(curses, 'BUTTON1_DOUBLE_CLICKED', 0))
+        )
         
         if clicked_pane == 1:
              new_sel = self.secondary_scroll_offset + list_idx
              if 0 <= new_sel < len(self.secondary_entries):
                  click_id = 10000 + new_sel
-                 if click_id == self.last_click_index and (now - self.last_click_time < 0.5):
+                 if explicit_double or (click_id == self.last_click_index and (now - self.last_click_time < 0.5)):
                      is_double = True
                  self.last_click_time = now
                  self.last_click_index = click_id
@@ -825,7 +828,7 @@ class FileManagerWindow(Window):
              new_sel = self.scroll_offset + list_idx
              if 0 <= new_sel < len(self.entries):
                  click_id = new_sel
-                 if click_id == self.last_click_index and (now - self.last_click_time < 0.5):
+                 if explicit_double or (click_id == self.last_click_index and (now - self.last_click_time < 0.5)):
                      is_double = True
                  self.last_click_time = now
                  self.last_click_index = click_id

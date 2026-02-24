@@ -20,6 +20,7 @@ def _install_fake_curses():
     fake.KEY_NPAGE = 338
     fake.KEY_BACKSPACE = 263
     fake.KEY_DC = 330
+    fake.BUTTON1_DOUBLE_CLICKED = 0x0008
     fake.A_BOLD = 1
     fake.A_REVERSE = 2
     fake.error = Exception
@@ -336,6 +337,24 @@ class WindowLogicTests(unittest.TestCase):
             dir_result = win.activate_selected()
             self.assertEqual(dir_result.type, self.actions_mod.ActionType.REFRESH)
             self.assertEqual(pathlib.Path(win.current_path), folder.resolve())
+        finally:
+            shutil.rmtree(root, ignore_errors=True)
+
+    def test_filemanager_explicit_double_click_activates_selected_entry(self):
+        root = _make_tmp_dir('dblclick')
+        try:
+            file_path = root / 'data.txt'
+            file_path.write_text('abc', encoding='utf-8', newline='\n')
+            win = self.filemanager_mod.FileManagerWindow(0, 0, 50, 14, start_path=str(root))
+            file_idx = next(i for i, e in enumerate(win.entries) if e.name == 'data.txt')
+            bx, by, _, _ = win.body_rect()
+            y = by + win._header_lines() + (file_idx - win.scroll_offset)
+
+            result = win.handle_click(bx + 1, y, bstate=sys.modules['curses'].BUTTON1_DOUBLE_CLICKED)
+
+            self.assertEqual(result.__class__.__name__, 'ActionResult')
+            self.assertEqual(result.type, self.actions_mod.ActionType.OPEN_FILE)
+            self.assertEqual(pathlib.Path(result.payload), file_path.resolve())
         finally:
             shutil.rmtree(root, ignore_errors=True)
 

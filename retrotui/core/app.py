@@ -453,11 +453,11 @@ class RetroTUI:
             # Icon menu
             # Select the icon first
             self.selected_icon = icon_idx
-            
+            icon = self.icons[icon_idx]
             items = [
-                {'label': 'Open', 'action': self.icons[icon_idx].get('action')},
+                {'label': 'Open', 'action': icon.get('action')},
                 {'separator': True},
-                {'label': 'Properties', 'action': None}, # Placeholder
+                {'label': 'Properties', 'action': lambda selected_icon=icon: self._show_icon_properties(selected_icon)},
             ]
         else:
             # Desktop menu
@@ -475,6 +475,21 @@ class RetroTUI:
         self.context_menu = ContextMenu(self.theme)
         self.context_menu.show(mx, my, items)
         return True
+
+    def _show_icon_properties(self, icon):
+        """Show a simple properties dialog for a desktop icon."""
+        label = str(icon.get('label', 'Unknown'))
+        category = str(icon.get('category', 'Apps'))
+        action = icon.get('action')
+        action_name = getattr(action, 'value', None) or str(action)
+        message = (
+            f'Name: {label}\n'
+            f'Category: {category}\n'
+            f'Action: {action_name}\n'
+            f'RetroTUI: {APP_VERSION}'
+        )
+        self.dialog = Dialog(f'{label} Properties', message, ['OK'], width=54)
+        return None
 
     def _validate_terminal_size(self):
         """Fail fast when terminal is too small for the base desktop layout."""
@@ -631,6 +646,20 @@ class RetroTUI:
         """Execute a menu/icon action."""
         action = self._normalize_action(action)
         LOGGER.debug('execute_action: %s', action)
+
+        if callable(action):
+            try:
+                result = action()
+            except Exception:
+                LOGGER.debug('callable action failed', exc_info=True)
+                return
+            if result is None:
+                return
+            if hasattr(result, 'type'):
+                self._dispatch_window_result(result, self.get_active_window())
+                return
+            self.execute_action(result)
+            return
 
         # 1. Try delegating to the active window first (for context menu / internal actions)
         active_win = self.get_active_window()

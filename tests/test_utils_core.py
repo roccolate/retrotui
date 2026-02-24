@@ -130,11 +130,26 @@ class UtilsCoreTests(unittest.TestCase):
         self.assertEqual(safe_addstr.call_count, 4)
 
     def test_check_unicode_support_handles_encoding_failures(self):
-        with mock.patch("retrotui.utils.locale.getpreferredencoding", return_value="utf-8"):
+        fake_stdout_utf8 = types.SimpleNamespace(encoding="utf-8")
+        with (
+            mock.patch.object(self.utils.sys, "stdout", fake_stdout_utf8),
+            mock.patch("retrotui.utils.locale.getpreferredencoding", return_value="utf-8"),
+        ):
             self.assertTrue(self.utils.check_unicode_support())
 
-        with mock.patch("retrotui.utils.locale.getpreferredencoding", return_value="ascii"):
+        fake_stdout_ascii = types.SimpleNamespace(encoding="ascii")
+        with (
+            mock.patch.object(self.utils.sys, "stdout", fake_stdout_ascii),
+            mock.patch("retrotui.utils.locale.getpreferredencoding", return_value="ascii"),
+        ):
             self.assertFalse(self.utils.check_unicode_support())
+
+    def test_check_unicode_support_honors_force_env_overrides(self):
+        with mock.patch.dict("retrotui.utils.os.environ", {"RETROTUI_FORCE_ASCII": "1"}, clear=False):
+            self.assertFalse(self.utils.check_unicode_support())
+
+        with mock.patch.dict("retrotui.utils.os.environ", {"RETROTUI_FORCE_UNICODE": "1"}, clear=False):
+            self.assertTrue(self.utils.check_unicode_support())
 
     def test_get_system_info_with_uname_and_meminfo(self):
         fake_uname = types.SimpleNamespace(
