@@ -103,6 +103,21 @@ class RenderingTests(unittest.TestCase):
 
         safe_addstr.assert_not_called()
 
+    def test_draw_icons_prefers_symbol_when_present(self):
+        stdscr = types.SimpleNamespace(getmaxyx=mock.Mock(return_value=(20, 80)))
+        app = types.SimpleNamespace(
+            stdscr=stdscr,
+            selected_icon=-1,
+            icons=[{"symbol": "[D]", "art": ["[]"], "label": "Files"}],
+            get_icon_screen_pos=lambda idx: (3, 3),
+        )
+
+        with mock.patch.object(self.rendering, "safe_addstr") as safe_addstr:
+            self.rendering.draw_icons(app)
+
+        self.assertTrue(any(call.args[3] == "[D]" for call in safe_addstr.call_args_list))
+        self.assertFalse(any(call.args[3] == "[]" for call in safe_addstr.call_args_list))
+
     def test_draw_taskbar_no_minimized_windows_no_output(self):
         stdscr = types.SimpleNamespace(getmaxyx=mock.Mock(return_value=(20, 80)))
         app = types.SimpleNamespace(

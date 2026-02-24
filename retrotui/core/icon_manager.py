@@ -40,6 +40,15 @@ class IconPositionManager:
         """Return True when a desktop icon drag is in progress."""
         return self.dragging_icon >= 0
 
+    @staticmethod
+    def _position_key_for(icon):
+        """Return stable persistence key for one icon entry."""
+        key = icon.get("position_key")
+        if isinstance(key, str) and key.strip():
+            return key.strip()
+        label = icon.get("label")
+        return str(label).strip()
+
     def start_drag(self, icon_idx, mx, my):
         """Begin dragging icon at *icon_idx* from mouse position (mx, my)."""
         self.dragging_icon = icon_idx
@@ -55,7 +64,9 @@ class IconPositionManager:
         icon_idx = self.dragging_icon
         if not (0 <= icon_idx < len(icons)):
             return
-        icon_key = icons[icon_idx].get('label')
+        icon_key = self._position_key_for(icons[icon_idx])
+        if not icon_key:
+            return
         new_x = max(0, mx - self.drag_offset_x)
         new_y = max(0, my - self.drag_offset_y)
         self.positions[icon_key] = (new_x, new_y)
@@ -133,42 +144,74 @@ class IconPositionManager:
         cfg_path.parent.mkdir(parents=True, exist_ok=True)
         cfg_path.write_text('\n'.join(out_lines) + '\n', encoding='utf-8', newline='\n')
 
+    def _read_terminal_height(self):
+        """Return current terminal height with a safe fallback."""
+        try:
+            h, _ = self._app.stdscr.getmaxyx()
+        except _ICON_TERMINAL_SIZE_ERRORS:
+            h = ICON_FALLBACK_TERMINAL_HEIGHT
+        return h
+
+    @staticmethod
+    def _grid_slot_position(index, *, terminal_height):
+        """Return default desktop grid position for zero-based slot *index*."""
+        start_x = ICON_DEFAULT_START_X
+        start_y = ICON_DEFAULT_START_Y
+        spacing_x = ICON_DEFAULT_SPACING_X
+        spacing_y = ICON_DEFAULT_SPACING_Y
+        max_y = terminal_height - ICON_GRID_BOTTOM_MARGIN
+        icons_per_col = max(1, (max_y - start_y) // spacing_y)
+        col = index // icons_per_col
+        row = index % icons_per_col
+        return (start_x + col * spacing_x, start_y + row * spacing_y)
+
+    def sort_positions(self):
+        """Sort icons by label and rewrite persisted positions using default grid slots."""
+        icons = list(getattr(self._app, "icons", ()) or ())
+        ordered = sorted(
+            enumerate(icons),
+            key=lambda pair: (str(pair[1].get("label", "")).strip().lower(), pair[0]),
+        )
+        terminal_height = self._read_terminal_height()
+
+        positions = {}
+        for slot, (_index, icon) in enumerate(ordered):
+            key = self._position_key_for(icon)
+            if not key:
+                continue
+            positions[key] = self._grid_slot_position(slot, terminal_height=terminal_height)
+
+        self.positions = positions
+        try:
+            self._app.persist_config()
+        except _ICON_PERSIST_ERRORS:
+            pass
+        return positions
+
     def get_screen_pos(self, index):
         """Return (x, y) for icon at index, checking persisted positions then default grid."""
         icons = self._app.icons
         if not (0 <= index < len(icons)):
             return (0, 0)
 
-        key_label = icons[index].get('label')
+        key_label = self._position_key_for(icons[index])
         if key_label in self.positions:
             return self.positions[key_label]
-
-        # Default vertical layout with wrapping
-        start_x = ICON_DEFAULT_START_X
-        start_y = ICON_DEFAULT_START_Y
-        spacing_x = ICON_DEFAULT_SPACING_X
-        spacing_y = ICON_DEFAULT_SPACING_Y
-
-        try:
-            h, _ = self._app.stdscr.getmaxyx()
-        except _ICON_TERMINAL_SIZE_ERRORS:
-            h = ICON_FALLBACK_TERMINAL_HEIGHT
-
-        max_y = h - ICON_GRID_BOTTOM_MARGIN
-        icons_per_col = max(1, (max_y - start_y) // spacing_y)
-        col = index // icons_per_col
-        row = index % icons_per_col
-        
-        return (start_x + col * spacing_x, start_y + row * spacing_y)
+        return self._grid_slot_position(index, terminal_height=self._read_terminal_height())
 
     def get_icon_at(self, mx, my):
         """Return icon index at mouse position, or -1."""
         icons = self._app.icons
         for i, icon in enumerate(icons):
             x, y = self.get_screen_pos(i)
-            art = icon.get('art', [])
-            w = max(len(line) for line in art) if art else 8
-            h = len(art) + 1  # +1 for label
+            symbol = icon.get("symbol")
+            if isinstance(symbol, str) and symbol:
+                w = max(3, len(symbol))
+                h = 2  # symbol + label
+            else:
+                art = icon.get('art', [])
+                w = max(len(line) for line in art) if art else 8
+                h = len(art) + 1  # +1 for label
 
             if y <= my < y + h and x <= mx < x + w:
                 return i
