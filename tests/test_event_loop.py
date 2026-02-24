@@ -66,6 +66,7 @@ class EventLoopTests(unittest.TestCase):
             cleanup=mock.Mock(),
             running=True,
             _install_runtime_signal_handlers=mock.Mock(),
+            _consume_pending_signal_key=mock.Mock(return_value=None),
             _consume_pending_sigint=mock.Mock(return_value=None),
             input_timeout_idle_ms=500,
             input_timeout_live_terminal_ms=33,
@@ -231,8 +232,26 @@ class EventLoopTests(unittest.TestCase):
         app.stdscr.timeout.assert_called_with(self.event_loop.TERMINAL_INPUT_TIMEOUT_MS)
         app.cleanup.assert_called_once_with()
 
-    def test_run_app_loop_consumes_pending_sigint_when_no_key(self):
+    def test_run_app_loop_consumes_pending_signal_key_when_no_key(self):
         app = self._make_app()
+        app._consume_pending_signal_key.return_value = "\x1a"
+
+        with mock.patch.object(self.event_loop, "draw_frame"):
+            with mock.patch.object(self.event_loop, "read_input_key", return_value=None):
+                def _dispatch_once(target, key):
+                    target.handle_key(key)
+                    target.running = False
+
+                with mock.patch.object(self.event_loop, "dispatch_input", side_effect=_dispatch_once):
+                    self.event_loop.run_app_loop(app)
+
+        app._consume_pending_signal_key.assert_called_once_with()
+        app._consume_pending_sigint.assert_not_called()
+        app.handle_key.assert_called_once_with("\x1a")
+
+    def test_run_app_loop_falls_back_to_legacy_sigint_consumer(self):
+        app = self._make_app()
+        app._consume_pending_signal_key = None
         app._consume_pending_sigint.return_value = "\x03"
 
         with mock.patch.object(self.event_loop, "draw_frame"):

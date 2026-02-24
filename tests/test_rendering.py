@@ -54,7 +54,7 @@ class RenderingTests(unittest.TestCase):
         first_call = safe_addstr.call_args_list[0].args
         self.assertEqual(first_call[1], 1)
         self.assertEqual(first_call[2], 0)
-        self.assertEqual(len(first_call[3]), 39)
+        self.assertEqual(len(first_call[3]), 40)
         self.assertEqual(
             first_call[4], self.curses.color_pair(self.rendering.C_DESKTOP)
         )

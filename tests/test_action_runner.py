@@ -103,6 +103,26 @@ class _DummyCalculatorWindow:
         self.h = h
 
 
+class _DummyDesktopIconManagerWindow:
+    def __init__(self, x, y, w, h, app):
+        self.kind = "desktop_icons"
+        self.x = x
+        self.y = y
+        self.w = w
+        self.h = h
+        self.app = app
+
+
+class _DummyMenuEditorWindow:
+    def __init__(self, x, y, w, h, app):
+        self.kind = "menu_editor"
+        self.x = x
+        self.y = y
+        self.w = w
+        self.h = h
+        self.app = app
+
+
 class _DummyLogViewerWindow:
     def __init__(self, x, y, w, h):
         self.kind = "log"
@@ -524,6 +544,50 @@ class ActionRunnerTests(unittest.TestCase):
         app._next_window_offset.assert_called_once_with(22, 4)
         spawned = app._spawn_window.call_args.args[0]
         self.assertEqual(spawned.kind, "settings")
+        self.assertIs(spawned.app, app)
+
+    def test_execute_desktop_icon_manager_spawns_editor_window(self):
+        app = self._make_app()
+        logger = mock.Mock()
+
+        dummy_module = types.SimpleNamespace(
+            DesktopIconManagerWindow=_DummyDesktopIconManagerWindow,
+            MenuEditorWindow=_DummyMenuEditorWindow,
+        )
+        with mock.patch.dict(sys.modules, {"retrotui.apps.app_manager": dummy_module}):
+            self.action_runner.execute_app_action(
+                app,
+                self.actions_mod.AppAction.DESKTOP_ICON_MANAGER,
+                logger,
+                version="0.9.2",
+            )
+
+        app._next_window_offset.assert_called_once_with(22, 6)
+        spawned = app._spawn_window.call_args.args[0]
+        self.assertEqual(spawned.kind, "desktop_icons")
+        self.assertEqual((spawned.w, spawned.h), (72, 22))
+        self.assertIs(spawned.app, app)
+
+    def test_execute_menu_editor_spawns_editor_window(self):
+        app = self._make_app()
+        logger = mock.Mock()
+
+        dummy_module = types.SimpleNamespace(
+            DesktopIconManagerWindow=_DummyDesktopIconManagerWindow,
+            MenuEditorWindow=_DummyMenuEditorWindow,
+        )
+        with mock.patch.dict(sys.modules, {"retrotui.apps.app_manager": dummy_module}):
+            self.action_runner.execute_app_action(
+                app,
+                self.actions_mod.AppAction.MENU_EDITOR,
+                logger,
+                version="0.9.2",
+            )
+
+        app._next_window_offset.assert_called_once_with(20, 5)
+        spawned = app._spawn_window.call_args.args[0]
+        self.assertEqual(spawned.kind, "menu_editor")
+        self.assertEqual((spawned.w, spawned.h), (76, 22))
         self.assertIs(spawned.app, app)
 
     def test_execute_calculator_spawns_calculator_window(self):

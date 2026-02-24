@@ -161,7 +161,7 @@ class WindowManager:
         buttons = []
         for label, win in stats.get("minimized", ()):
             btn_w = len(label) + 2  # [label]
-            if x + btn_w >= width - 1:
+            if x + btn_w > width:
                 break
             buttons.append((x, x + btn_w, label, win))
             x += btn_w + 1

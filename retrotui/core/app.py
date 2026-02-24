@@ -253,6 +253,7 @@ class RetroTUI:
         self.stdscr = stdscr
         self.running = True
         self._pending_sigint = False
+        self._pending_signal_keys = []
         self._prev_sigint_handler = None
         self._prev_signal_handlers = {}
         self._sigint_handler_installed = False
@@ -261,8 +262,8 @@ class RetroTUI:
         self.use_unicode = check_unicode_support()
         self.config = load_config()
         self.theme_name = self.config.theme
-        self.refresh_icons()
         self._plugins = {}
+        self.refresh_icons()
         self._rebuild_global_menu()
         self.context_menu = None
         self.dialog = None
@@ -337,34 +338,41 @@ class RetroTUI:
             from ..plugins.loader import discover_plugins, load_plugin
         except _PLUGIN_DISCOVERY_IMPORT_ERRORS:
             LOGGER.debug('plugin discovery unavailable', exc_info=True)
+            self.refresh_icons()
             self._rebuild_global_menu()
             return
 
         for manifest in discover_plugins():
             self._register_plugin_manifest(manifest, load_plugin)
+        self.refresh_icons()
         self._rebuild_global_menu()
 
     def _build_plugin_menu_items(self):
         """Build dynamic plugin entries as menu tuples ``(label, action)``."""
+        hidden_menu_items = self._get_hidden_menu_keys()
         entries = []
         for plugin_id, info in (getattr(self, "_plugins", None) or {}).items():
             plugin_info = (info.get("manifest", {}) or {}).get("plugin", {}) or {}
             name = str(plugin_info.get("name") or plugin_id)
-            entries.append((name, f"plugin:{plugin_id}"))
+            action = f"plugin:{plugin_id}"
+            item_key = self._menu_item_visibility_key(name, action)
+            if item_key in hidden_menu_items:
+                continue
+            entries.append((name, action))
         entries.sort(key=lambda item: (item[0].lower(), item[1]))
         return entries
 
     def _build_global_menu_items(self):
         """Return global menu items with hidden-label filtering and plugin section."""
-        hidden_labels = self._get_hidden_icon_labels()
+        hidden_menu_items = self._get_hidden_menu_keys()
         from ..ui.menu import DEFAULT_GLOBAL_ITEMS
 
         filtered_menu_items = {}
         for category, items in DEFAULT_GLOBAL_ITEMS.items():
             filtered_items = []
             for label, action in items:
-                base_label = label.split("  ")[0]  # Strip shortcut hints like "Exit  Ctrl+Q"
-                if base_label.lower() not in hidden_labels:
+                item_key = self._menu_item_visibility_key(label, action)
+                if item_key not in hidden_menu_items:
                     filtered_items.append((label, action))
             if filtered_items:
                 filtered_menu_items[category] = filtered_items
@@ -450,10 +458,110 @@ class RetroTUI:
             LOGGER.debug('failed to open plugin %s', plugin_id, exc_info=True)
             return None
 
+    @staticmethod
+    def _split_config_csv(raw):
+        """Return lowercased non-empty comma-separated tokens from *raw* string."""
+        if not isinstance(raw, str):
+            return set()
+        return {token.strip().lower() for token in raw.split(",") if token.strip()}
+
+    @staticmethod
+    def _menu_item_visibility_key(label, action):
+        """Return stable visibility key for one global menu item."""
+        if isinstance(action, AppAction):
+            return action.value.lower()
+        if isinstance(action, str):
+            return action.lower()
+        base_label = str(label or "").split("  ")[0].strip().lower()
+        return base_label
+
+    def _icon_visibility_key(self, icon):
+        """Return stable visibility key for one desktop icon entry."""
+        hide_key = icon.get("hide_key")
+        if isinstance(hide_key, str) and hide_key.strip():
+            return hide_key.strip().lower()
+        return str(icon.get("label", "")).strip().lower()
+
+    def _plugin_icon_art(self, plugin_name):
+        """Build compact 3x4 icon art for plugin desktop entries."""
+        token = ''.join(ch for ch in str(plugin_name) if ch.isalnum())[:2].upper()
+        if not token:
+            token = "PL"
+        if len(token) == 1:
+            token += " "
+        if self.use_unicode:
+            return ["┌──┐", f"│{token}│", "└──┘"]
+        return ["+--+", f"|{token}|", "+--+"]
+
+    def _build_plugin_icons(self):
+        """Return plugin entries as desktop icons."""
+        icons = []
+        for plugin_id, info in (getattr(self, "_plugins", None) or {}).items():
+            plugin_info = (info.get("manifest", {}) or {}).get("plugin", {}) or {}
+            name = str(plugin_info.get("name") or plugin_id)
+            icons.append(
+                {
+                    "label": name,
+                    "action": f"plugin:{plugin_id}",
+                    "art": self._plugin_icon_art(name),
+                    "category": "Plugins",
+                    "hide_key": f"plugin:{plugin_id}",
+                }
+            )
+        icons.sort(key=lambda item: (item.get("label", "").lower(), item.get("action", "")))
+        return icons
+
+    def _build_desktop_icon_catalog(self):
+        """Return full desktop icon catalog (apps, games, plugins)."""
+        base_icons = ICONS if self.use_unicode else ICONS_ASCII
+        catalog = [dict(icon) for icon in base_icons]
+        catalog.extend(self._build_plugin_icons())
+        return catalog
+
+    def _build_menu_editor_catalog(self):
+        """Return editable menu entries (apps, games, plugins) with stable keys."""
+        from ..ui.menu import DEFAULT_GLOBAL_ITEMS
+
+        entries = []
+        for category, items in DEFAULT_GLOBAL_ITEMS.items():
+            for label, action in items:
+                if action is None:
+                    continue
+                base_label = str(label).split("  ")[0].strip()
+                entries.append(
+                    {
+                        "category": category,
+                        "label": base_label,
+                        "action": action,
+                        "key": self._menu_item_visibility_key(base_label, action),
+                    }
+                )
+
+        for plugin_id, info in (getattr(self, "_plugins", None) or {}).items():
+            plugin_info = (info.get("manifest", {}) or {}).get("plugin", {}) or {}
+            name = str(plugin_info.get("name") or plugin_id)
+            action = f"plugin:{plugin_id}"
+            entries.append(
+                {
+                    "category": "Plugins",
+                    "label": name,
+                    "action": action,
+                    "key": self._menu_item_visibility_key(name, action),
+                }
+            )
+
+        entries.sort(key=lambda item: (item["category"].lower(), item["label"].lower()))
+        return entries
+
     def _get_hidden_icon_labels(self):
-        """Return set of lowercased hidden icon labels from config."""
-        raw = getattr(self.config, 'hidden_icons', "").strip()
-        return {x.strip().lower() for x in raw.split(",")} if raw else set()
+        """Return set of lowercased hidden desktop icon keys from config."""
+        raw = getattr(self.config, 'hidden_icons', "")
+        return self._split_config_csv(raw)
+
+    def _get_hidden_menu_keys(self):
+        """Return set of lowercased hidden global menu item keys from config."""
+        raw = getattr(self.config, 'hidden_menu_items', "")
+        return self._split_config_csv(raw)
 
     def apply_theme(self, theme_name):
         """Apply a theme immediately to current runtime."""
@@ -463,8 +571,9 @@ class RetroTUI:
 
     def refresh_icons(self):
         """Rebuild desktop icons list based on config and unicode support."""
-        base_icons = ICONS if self.use_unicode else ICONS_ASCII
-        self.icons = [icon for icon in base_icons if icon["label"].lower() not in self._get_hidden_icon_labels()]
+        hidden_keys = self._get_hidden_icon_labels()
+        catalog = self._build_desktop_icon_catalog()
+        self.icons = [icon for icon in catalog if self._icon_visibility_key(icon) not in hidden_keys]
 
     def apply_preferences(self, *, show_hidden=None, word_wrap_default=None, sunday_first=None, apply_to_open_windows=False):
         """Apply runtime preferences used by app windows and defaults."""
@@ -507,6 +616,7 @@ class RetroTUI:
             sunday_first=self.default_sunday_first,
             show_welcome=self.show_welcome,
             hidden_icons=getattr(self.config, 'hidden_icons', ""),
+            hidden_menu_items=getattr(self.config, 'hidden_menu_items', ""),
         )
         path = save_config(self.config)
         try:
@@ -599,6 +709,9 @@ class RetroTUI:
                 {'label': 'New Terminal', 'action': AppAction.TERMINAL},
                 {'label': 'New Notepad', 'action': AppAction.NOTEPAD},
                 {'separator': True},
+                {'label': 'Desktop Icons', 'action': AppAction.DESKTOP_ICON_MANAGER},
+                {'label': 'Menu Editor', 'action': AppAction.MENU_EDITOR},
+                {'separator': True},
                 {'label': 'Theme', 'action': AppAction.SETTINGS},
                 {'label': 'Settings', 'action': AppAction.SETTINGS},
                 {'separator': True},
@@ -664,6 +777,9 @@ class RetroTUI:
         sigbreak = getattr(signal, "SIGBREAK", None)
         if sigbreak is not None:
             planned.append((sigbreak, self._handle_sigint))
+        sigtstp = getattr(signal, "SIGTSTP", None)
+        if sigtstp is not None:
+            planned.append((sigtstp, self._handle_sigtstp))
         for name in ("SIGTERM", "SIGHUP"):
             sig = getattr(signal, name, None)
             if sig is not None:
@@ -708,16 +824,52 @@ class RetroTUI:
 
     def _handle_sigint(self, _signum, _frame):
         """Queue SIGINT as in-app Ctrl+C key instead of terminating session."""
-        self._pending_sigint = True
+        self._queue_pending_signal_key('\x03')
+
+    def _handle_sigtstp(self, _signum, _frame):
+        """Queue SIGTSTP as in-app Ctrl+Z key instead of suspending session."""
+        self._queue_pending_signal_key('\x1a')
+
+    def _queue_pending_signal_key(self, key):
+        """Queue one pending control key generated by runtime signal handlers."""
+        if not isinstance(key, str) or len(key) != 1:
+            return
+        queue = getattr(self, "_pending_signal_keys", None)
+        if not isinstance(queue, list):
+            queue = []
+            self._pending_signal_keys = queue
+        queue.append(key)
+        if key == '\x03':
+            self._pending_sigint = True
 
     def _handle_shutdown_signal(self, signum, _frame):
         """Request a clean shutdown on external termination signals."""
         self._shutdown_signal = signum
         self.running = False
 
+    def _consume_pending_signal_key(self):
+        """Return next queued control key generated by signal handlers."""
+        queue = getattr(self, "_pending_signal_keys", None)
+        if isinstance(queue, list) and queue:
+            key = queue.pop(0)
+            if key == '\x03':
+                self._pending_sigint = any(item == '\x03' for item in queue)
+            return key
+        if getattr(self, "_pending_sigint", False):
+            self._pending_sigint = False
+            return '\x03'
+        return None
+
     def _consume_pending_sigint(self):
-        """Return queued Ctrl+C key when SIGINT was received."""
-        if getattr(self, '_pending_sigint', False):
+        """Compatibility wrapper: return queued Ctrl+C key when available."""
+        queue = getattr(self, "_pending_signal_keys", None)
+        if isinstance(queue, list) and queue:
+            for idx, key in enumerate(queue):
+                if key == '\x03':
+                    del queue[idx]
+                    self._pending_sigint = any(item == '\x03' for item in queue)
+                    return '\x03'
+        if getattr(self, "_pending_sigint", False):
             self._pending_sigint = False
             return '\x03'
         return None

@@ -1,0 +1,11 @@
+[plugin]
+id = "starwars-ascii"
+name = "Star Wars ASCII"
+version = "0.1.0"
+description = "Stream the full Star Wars ASCII movie over telnet."
+menu_category = "Entertainment"
+
+[plugin.window]
+default_width = 96
+default_height = 28
+resizable = true

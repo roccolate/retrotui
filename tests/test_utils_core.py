@@ -148,14 +148,14 @@ class UtilsCoreTests(unittest.TestCase):
             addnstr=mock.Mock(),
         )
         self.utils.safe_addstr(win, 1, 1, "hello", 0)
-        win.addnstr.assert_called_once_with(1, 1, "hello", 8, 0)
+        win.addnstr.assert_called_once_with(1, 1, "hello", 9, 0)
 
         win.addnstr.reset_mock()
         self.utils.safe_addstr(win, -1, 1, "x", 0)
         self.utils.safe_addstr(win, 1, 10, "x", 0)
         self.assertFalse(win.addnstr.called)
-        self.utils.safe_addstr(win, 1, 9, "x", 0)  # max_len <= 0 branch
-        self.assertFalse(win.addnstr.called)
+        self.utils.safe_addstr(win, 1, 9, "x", 0)  # last-column draw is now allowed
+        win.addnstr.assert_called_once_with(1, 9, "x", 1, 0)
 
         win_error = types.SimpleNamespace(
             getmaxyx=mock.Mock(return_value=(5, 10)),
@@ -163,6 +163,17 @@ class UtilsCoreTests(unittest.TestCase):
         )
         # Should not raise.
         self.utils.safe_addstr(win_error, 1, 1, "hello", 0)
+
+    def test_safe_addstr_retries_with_one_less_cell_on_curses_error(self):
+        win = types.SimpleNamespace(
+            getmaxyx=mock.Mock(return_value=(5, 10)),
+            addnstr=mock.Mock(side_effect=[self.utils.curses.error("edge"), None]),
+        )
+
+        self.utils.safe_addstr(win, 4, 0, "abcdefghij", 0)
+
+        self.assertEqual(win.addnstr.call_args_list[0].args, (4, 0, "abcdefghij", 10, 0))
+        self.assertEqual(win.addnstr.call_args_list[1].args, (4, 0, "abcdefghij", 9, 0))
 
     def test_normalize_key_code_variants(self):
         self.assertEqual(self.utils.normalize_key_code(123), 123)

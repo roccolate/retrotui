@@ -210,13 +210,20 @@ def safe_addstr(win, y, x, text, attr=0):
     h, w = res
     if y >= h or x >= w:
         return
-    max_len = w - x - 1
+    max_len = w - x
     if max_len <= 0:
         return
     try:
         win.addnstr(y, x, text, max_len, attr)
     except curses.error:
-        pass
+        # Some curses backends still reject writes that touch lower-right cell.
+        # Retry with one cell less only for this call.
+        if max_len <= 1:
+            return
+        try:
+            win.addnstr(y, x, text, max_len - 1, attr)
+        except curses.error:
+            pass
 
 def normalize_key_code(key):
     """Normalize keys from get_wch()/getch() into comparable integer codes."""

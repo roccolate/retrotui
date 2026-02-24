@@ -30,6 +30,7 @@ Compatibility flags:
 
 - `inferred_motion`: true when drag motion is inferred by delta + button state.
 - `inferred_right_click`: true when right click is inferred (not explicitly clicked).
+- `button1_pressed_raw`: true only when backend reports `BUTTON1_PRESSED` in raw mask.
 - `button1_pressed`, `button1_released`, `button1_clicked`, `button1_double`, `button1_down`.
 
 ## Cross-Backend Rules

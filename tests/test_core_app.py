@@ -181,7 +181,7 @@ class CoreAppTests(unittest.TestCase):
 
         with (
             mock.patch.object(self.app_mod, "check_unicode_support", return_value=True),
-            mock.patch.object(self.app_mod, "load_config", return_value=types.SimpleNamespace(theme="win31", show_hidden=False, word_wrap_default=False, sunday_first=False, show_welcome=True, hidden_icons="")),
+            mock.patch.object(self.app_mod, "load_config", return_value=types.SimpleNamespace(theme="win31", show_hidden=False, word_wrap_default=False, sunday_first=False, show_welcome=True, hidden_icons="", hidden_menu_items="")),
             mock.patch.object(self.app_mod, "configure_terminal") as configure_terminal,
             mock.patch.object(self.app_mod, "disable_flow_control") as disable_flow_control,
             mock.patch.object(self.app_mod, "enable_mouse_support", return_value=(11, 22, 33)),
@@ -207,7 +207,8 @@ class CoreAppTests(unittest.TestCase):
         self.assertEqual(app.menu, fake_menu)
         self.assertEqual(app.windows, [fake_window])
         self.assertTrue(fake_window.active)
-        self.assertEqual(app.icons, self.app_mod.ICONS)
+        self.assertGreaterEqual(len(app.icons), len(self.app_mod.ICONS))
+        self.assertTrue(all(icon in app.icons for icon in self.app_mod.ICONS))
 
     def test_init_uses_ascii_icons_when_unicode_not_supported(self):
         stdscr = types.SimpleNamespace(getmaxyx=lambda: (30, 120))
@@ -223,7 +224,7 @@ class CoreAppTests(unittest.TestCase):
 
         with (
             mock.patch.object(self.app_mod, "check_unicode_support", return_value=False),
-            mock.patch.object(self.app_mod, "load_config", return_value=types.SimpleNamespace(theme="win31", show_hidden=False, word_wrap_default=False, sunday_first=False, show_welcome=True, hidden_icons="")),
+            mock.patch.object(self.app_mod, "load_config", return_value=types.SimpleNamespace(theme="win31", show_hidden=False, word_wrap_default=False, sunday_first=False, show_welcome=True, hidden_icons="", hidden_menu_items="")),
             mock.patch.object(self.app_mod, "configure_terminal"),
             mock.patch.object(self.app_mod, "disable_flow_control"),
             mock.patch.object(self.app_mod, "enable_mouse_support", return_value=(1, 2, 3)),
@@ -234,7 +235,8 @@ class CoreAppTests(unittest.TestCase):
         ):
             app = self.app_mod.RetroTUI(stdscr)
 
-        self.assertEqual(app.icons, self.app_mod.ICONS_ASCII)
+        self.assertGreaterEqual(len(app.icons), len(self.app_mod.ICONS_ASCII))
+        self.assertTrue(all(icon in app.icons for icon in self.app_mod.ICONS_ASCII))
 
     def test_cleanup_delegates_to_bootstrap_helper(self):
         app = self._make_app()
@@ -438,7 +440,7 @@ class CoreAppTests(unittest.TestCase):
 
     def test_build_global_menu_items_adds_sorted_plugins_section(self):
         app = self._make_app()
-        app.config = types.SimpleNamespace(hidden_icons="")
+        app.config = types.SimpleNamespace(hidden_icons="", hidden_menu_items="")
         app._plugins = {
             "zeta": {"manifest": {"plugin": {"id": "zeta", "name": "Zeta Tool"}}},
             "alpha": {"manifest": {"plugin": {"id": "alpha", "name": "Alpha Tool"}}},
@@ -454,13 +456,45 @@ class CoreAppTests(unittest.TestCase):
 
     def test_build_global_menu_items_shows_placeholder_when_no_plugins(self):
         app = self._make_app()
-        app.config = types.SimpleNamespace(hidden_icons="")
+        app.config = types.SimpleNamespace(hidden_icons="", hidden_menu_items="")
         app._plugins = {}
 
         menu_items = app._build_global_menu_items()
 
         self.assertIn("Plugins", menu_items)
         self.assertEqual(menu_items["Plugins"], [("(No plugins installed)", None)])
+
+    def test_build_global_menu_items_hides_entries_using_menu_keys(self):
+        app = self._make_app()
+        app.config = types.SimpleNamespace(hidden_icons="", hidden_menu_items="calculator,plugin:alpha")
+        app._plugins = {
+            "alpha": {"manifest": {"plugin": {"id": "alpha", "name": "Alpha Tool"}}},
+            "beta": {"manifest": {"plugin": {"id": "beta", "name": "Beta Tool"}}},
+        }
+
+        menu_items = app._build_global_menu_items()
+
+        apps_labels = [label for label, _ in menu_items.get("Apps", [])]
+        self.assertNotIn("Calculator", apps_labels)
+        self.assertEqual(menu_items["Plugins"], [("Beta Tool", "plugin:beta")])
+
+    def test_refresh_icons_includes_plugins_and_honors_hidden_keys(self):
+        app = self._make_app()
+        app.use_unicode = True
+        app.config = types.SimpleNamespace(hidden_icons="files,plugin:alpha", hidden_menu_items="")
+        app._plugins = {
+            "alpha": {"manifest": {"plugin": {"id": "alpha", "name": "Alpha Tool"}}},
+            "beta": {"manifest": {"plugin": {"id": "beta", "name": "Beta Tool"}}},
+        }
+
+        app.refresh_icons()
+        labels = [icon.get("label") for icon in app.icons]
+        actions = [icon.get("action") for icon in app.icons]
+
+        self.assertNotIn("Files", labels)
+        self.assertNotIn("Alpha Tool", labels)
+        self.assertIn("Beta Tool", labels)
+        self.assertIn("plugin:beta", actions)
 
     def test_dispatch_open_file_calls_file_viewer(self):
         app = self._make_app()
@@ -990,7 +1024,7 @@ class CoreAppTests(unittest.TestCase):
         app.default_show_hidden = True
         app.default_word_wrap = False
         app.default_sunday_first = True
-        app.config = types.SimpleNamespace(hidden_icons="some_apps")
+        app.config = types.SimpleNamespace(hidden_icons="some_apps", hidden_menu_items="some_menu")
 
         with mock.patch.object(self.app_mod, "save_config", return_value="/tmp/config.toml") as save_config:
             result = app.persist_config()
@@ -1008,7 +1042,7 @@ class CoreAppTests(unittest.TestCase):
         app.default_show_hidden = False
         app.default_word_wrap = False
         app.default_sunday_first = False
-        app.config = types.SimpleNamespace(hidden_icons="")
+        app.config = types.SimpleNamespace(hidden_icons="", hidden_menu_items="")
         app._save_icon_positions = mock.Mock(side_effect=ValueError("bad icons"))
 
         with mock.patch.object(self.app_mod, "save_config", return_value="/tmp/config.toml"):
@@ -1451,6 +1485,9 @@ class CoreAppTests(unittest.TestCase):
         sigbreak = getattr(self.app_mod.signal, "SIGBREAK", None)
         if sigbreak is not None:
             expected_signals.append(sigbreak)
+        sigtstp = getattr(self.app_mod.signal, "SIGTSTP", None)
+        if sigtstp is not None:
+            expected_signals.append(sigtstp)
         sigterm = getattr(self.app_mod.signal, "SIGTERM", None)
         if sigterm is not None:
             expected_signals.append(sigterm)
@@ -1478,6 +1515,10 @@ class CoreAppTests(unittest.TestCase):
                         sigbreak_handler = installed[sigbreak]
                         self.assertIs(getattr(sigbreak_handler, "__self__", None), app)
                         self.assertEqual(getattr(sigbreak_handler, "__name__", ""), "_handle_sigint")
+                    if sigtstp is not None:
+                        sigtstp_handler = installed[sigtstp]
+                        self.assertIs(getattr(sigtstp_handler, "__self__", None), app)
+                        self.assertEqual(getattr(sigtstp_handler, "__name__", ""), "_handle_sigtstp")
                     if sigterm is not None:
                         sigterm_handler = installed[sigterm]
                         self.assertIs(getattr(sigterm_handler, "__self__", None), app)
@@ -1544,11 +1585,30 @@ class CoreAppTests(unittest.TestCase):
     def test_handle_sigint_queue_and_consume_once(self):
         app = self._make_app()
         app._pending_sigint = False
+        app._pending_signal_keys = []
 
         app._handle_sigint(None, None)
 
         self.assertEqual(app._consume_pending_sigint(), "\x03")
         self.assertIsNone(app._consume_pending_sigint())
+
+    def test_handle_sigtstp_queue_and_consume_signal_key(self):
+        app = self._make_app()
+        app._pending_sigint = False
+        app._pending_signal_keys = []
+
+        app._handle_sigtstp(None, None)
+
+        self.assertEqual(app._consume_pending_signal_key(), "\x1a")
+        self.assertIsNone(app._consume_pending_signal_key())
+
+    def test_consume_pending_sigint_ignores_non_sigint_signal_keys(self):
+        app = self._make_app()
+        app._pending_sigint = False
+        app._pending_signal_keys = ["\x1a"]
+
+        self.assertIsNone(app._consume_pending_sigint())
+        self.assertEqual(app._pending_signal_keys, ["\x1a"])
 
     def test_restore_runtime_signal_handlers_clears_state_on_signal_error(self):
         app = self._make_app()
@@ -1796,6 +1856,32 @@ class CoreAppTests(unittest.TestCase):
         properties_action()
         self.assertIsNotNone(app.dialog)
         self.assertEqual(app.dialog.title, "Notepad Properties")
+
+    def test_desktop_context_menu_includes_icon_and_menu_editors(self):
+        app = self._make_app()
+        app.theme = object()
+        app.context_menu = None
+        app.get_icon_at = mock.Mock(return_value=-1)
+
+        with mock.patch("retrotui.ui.context_menu.ContextMenu") as context_menu_cls:
+            context_menu = context_menu_cls.return_value
+            handled = app._handle_desktop_right_click(12, 8, 0)
+            shown_items = context_menu.show.call_args.args[2]
+
+        self.assertTrue(handled)
+        label_to_action = {
+            item["label"]: item["action"]
+            for item in shown_items
+            if isinstance(item, dict) and "label" in item and "action" in item
+        }
+        self.assertEqual(
+            label_to_action.get("Desktop Icons"),
+            self.actions_mod.AppAction.DESKTOP_ICON_MANAGER,
+        )
+        self.assertEqual(
+            label_to_action.get("Menu Editor"),
+            self.actions_mod.AppAction.MENU_EDITOR,
+        )
 
 
 if __name__ == "__main__":
