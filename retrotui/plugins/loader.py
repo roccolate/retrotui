@@ -35,8 +35,57 @@ except _PLUGIN_IMPORT_ERRORS:
     except _PLUGIN_IMPORT_ERRORS:
         tomllib = None  # type: ignore
 
+_DEFAULT_PLUGIN_DIR = os.path.join(os.path.expanduser("~"), ".config", "retrotui", "plugins")
+PLUGIN_DIR = _DEFAULT_PLUGIN_DIR
 
-PLUGIN_DIR = os.path.join(os.path.expanduser("~"), ".config", "retrotui", "plugins")
+
+def _repo_examples_plugin_dir():
+    """Return repo-local bundled examples/plugins path when available."""
+    return str(Path(__file__).resolve().parents[2] / "examples" / "plugins")
+
+
+def _iter_plugin_dirs():
+    """Yield plugin directories in discovery priority order."""
+    seen = set()
+
+    # Explicit runtime override (single directory).
+    forced = str(os.environ.get("RETROTUI_PLUGIN_DIR", "") or "").strip()
+    if forced:
+        norm = os.path.normcase(os.path.normpath(forced))
+        if norm not in seen:
+            seen.add(norm)
+            yield forced
+
+    # Optional multi-directory override using OS path separator.
+    path_list = str(os.environ.get("RETROTUI_PLUGIN_PATH", "") or "").strip()
+    if path_list:
+        for raw in path_list.split(os.pathsep):
+            candidate = raw.strip()
+            if not candidate:
+                continue
+            norm = os.path.normcase(os.path.normpath(candidate))
+            if norm in seen:
+                continue
+            seen.add(norm)
+            yield candidate
+
+    # Primary user plugin directory.
+    primary = str(PLUGIN_DIR or "").strip()
+    if primary:
+        norm = os.path.normcase(os.path.normpath(primary))
+        if norm not in seen:
+            seen.add(norm)
+            yield primary
+
+    # Bundled examples: include when using default plugin dir to keep
+    # built-in plugins visible out of the box. User plugins still win on
+    # duplicate ids because primary is yielded first.
+    if primary and os.path.normcase(os.path.normpath(primary)) == os.path.normcase(os.path.normpath(_DEFAULT_PLUGIN_DIR)):
+        bundled = _repo_examples_plugin_dir()
+        norm = os.path.normcase(os.path.normpath(bundled))
+        if bundled and norm not in seen:
+            seen.add(norm)
+            yield bundled
 
 
 def discover_plugins():
@@ -45,46 +94,54 @@ def discover_plugins():
     Returns list of dicts (manifest) with added key '_path' pointing to plugin folder.
     """
     plugins = []
-    if not os.path.isdir(PLUGIN_DIR):
-        return plugins
+    seen_ids = set()
+    for plugin_dir in _iter_plugin_dirs():
+        if not os.path.isdir(plugin_dir):
+            continue
+        for entry in os.scandir(plugin_dir):
+            if not entry.is_dir():
+                continue
+            manifest_path = os.path.join(entry.path, "plugin.toml")
+            if not os.path.exists(manifest_path):
+                continue
 
-    for entry in os.scandir(PLUGIN_DIR):
-        if not entry.is_dir():
-            continue
-        manifest_path = os.path.join(entry.path, "plugin.toml")
-        if not os.path.exists(manifest_path):
-            continue
+            try:
+                if tomllib is None:
+                    # Graceful fallback: parse minimal TOML manually (only basic key=values)
+                    with open(manifest_path, "r", encoding="utf-8") as f:
+                        content = f.read()
+                    # Fallback: try to extract the [plugin] table using a naive approach
+                    manifest = {"plugin": {}}
+                    current = None
+                    for line in content.splitlines():
+                        line = line.strip()
+                        if not line or line.startswith("#"):
+                            continue
+                        if line.startswith("[") and line.endswith("]"):
+                            current = line.strip("[]").strip()
+                            if current not in manifest:
+                                manifest[current] = {}
+                            continue
+                        if "=" in line and current:
+                            k, v = line.split("=", 1)
+                            k = k.strip()
+                            v = v.strip().strip('"')
+                            manifest[current][k] = v
+                else:
+                    with open(manifest_path, "rb") as f:
+                        manifest = tomllib.load(f)
 
-        try:
-            if tomllib is None:
-                # Graceful fallback: parse minimal TOML manually (only basic key=values)
-                with open(manifest_path, "r", encoding="utf-8") as f:
-                    content = f.read()
-                # Fallback: try to extract the [plugin] table using a naive approach
-                manifest = {"plugin": {}}
-                current = None
-                for line in content.splitlines():
-                    line = line.strip()
-                    if not line or line.startswith("#"):
+                plugin_id = str((manifest.get("plugin", {}) or {}).get("id") or "").strip()
+                if plugin_id:
+                    plugin_key = plugin_id.lower()
+                    if plugin_key in seen_ids:
                         continue
-                    if line.startswith("[") and line.endswith("]"):
-                        current = line.strip("[]").strip()
-                        if current not in manifest:
-                            manifest[current] = {}
-                        continue
-                    if "=" in line and current:
-                        k, v = line.split("=", 1)
-                        k = k.strip()
-                        v = v.strip().strip('"')
-                        manifest[current][k] = v
-            else:
-                with open(manifest_path, "rb") as f:
-                    manifest = tomllib.load(f)
-            manifest["_path"] = entry.path
-            plugins.append(manifest)
-        except _PLUGIN_DISCOVERY_PARSE_ERRORS:
-            # Skip malformed plugins silently
-            continue
+                    seen_ids.add(plugin_key)
+                manifest["_path"] = entry.path
+                plugins.append(manifest)
+            except _PLUGIN_DISCOVERY_PARSE_ERRORS:
+                # Skip malformed plugins silently
+                continue
 
     return plugins
 

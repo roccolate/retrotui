@@ -43,6 +43,9 @@ def normalize_mouse_payload(app, event):
     b3_clicked = getattr(curses, "BUTTON3_CLICKED", 0)
     b3_pressed = getattr(curses, "BUTTON3_PRESSED", 0)
     b3_released = getattr(curses, "BUTTON3_RELEASED", 0)
+    b2_clicked = getattr(curses, "BUTTON2_CLICKED", 0)
+    b2_pressed = getattr(curses, "BUTTON2_PRESSED", 0)
+    b2_released = getattr(curses, "BUTTON2_RELEASED", 0)
     b4_pressed = getattr(curses, "BUTTON4_PRESSED", 0)
     b4_clicked = getattr(curses, "BUTTON4_CLICKED", 0)
     b5_pressed = getattr(curses, "BUTTON5_PRESSED", 0)
@@ -61,10 +64,17 @@ def normalize_mouse_payload(app, event):
         inferred_motion = (mx, my) != tuple(last_pos)
 
     # Some terminals/backends report right-click via PRESSED/RELEASED instead of CLICKED.
-    right_click = bool(bstate & (b3_clicked | b3_pressed | b3_released))
+    right_mask_b3 = b3_clicked | b3_pressed | b3_released
+    right_mask_b2 = b2_clicked | b2_pressed | b2_released
+    right_click = bool(bstate & right_mask_b3)
     inferred_right_click = False
-    if not (bstate & b3_clicked) and backend == "gpm" and (bstate & (b3_pressed | b3_released)):
-        inferred_right_click = True
+    if backend == "gpm":
+        # Linux console/GPM streams may map right-click to BUTTON2_*.
+        # Keep BUTTON3_* as primary semantics, then infer from BUTTON2_*.
+        if not right_click and right_mask_b2 and bool(bstate & right_mask_b2):
+            inferred_right_click = True
+        elif not (bstate & b3_clicked) and bool(bstate & (b3_pressed | b3_released)):
+            inferred_right_click = True
 
     is_click_like = bool(
         bstate
