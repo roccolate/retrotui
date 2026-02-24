@@ -310,6 +310,72 @@ class DesktopIconManagerWindow(_BaseSelectionEditorWindow):
         self.app.refresh_icons()
 
 
+class IconsWindow(DesktopIconManagerWindow):
+    """Standalone Icons app: icon style + desktop icon visibility."""
+
+    STYLE_OPTIONS = (
+        ("default", "Classic"),
+        ("retro_01", "Retro 0.1"),
+    )
+
+    def __init__(self, x, y, w, h, app):
+        super().__init__(x, y, w, h, app)
+        self.title = "Icons"
+        self._help_text = "Choose icon style and which desktop icons are visible."
+        self._status_text = "Tip: F2 or S toggles icon style."
+        current = str(getattr(app, "icon_style", "default") or "default").strip().lower()
+        self._style_index = 0
+        for idx, (key, _) in enumerate(self.STYLE_OPTIONS):
+            if key == current:
+                self._style_index = idx
+                break
+
+    def _cycle_style(self, delta=1):
+        self._style_index = (self._style_index + delta) % len(self.STYLE_OPTIONS)
+
+    def _apply_selected_style(self):
+        style_key = self.STYLE_OPTIONS[self._style_index][0]
+        setter = getattr(self.app, "set_icon_style", None)
+        if callable(setter):
+            setter(style_key)
+        else:
+            self.app.icon_style = style_key
+            refresher = getattr(self.app, "refresh_icons", None)
+            if callable(refresher):
+                refresher()
+
+    def draw(self, stdscr):
+        super().draw(stdscr)
+        body_attr = theme_attr("window_body")
+        _key, style_label = self.STYLE_OPTIONS[self._style_index]
+        style_text = f" Style: {style_label}  (F2/S: Change)"
+        safe_addstr(
+            stdscr,
+            self.y + 3,
+            self.x + 2,
+            style_text.ljust(self.w - 4)[: self.w - 4],
+            body_attr,
+        )
+
+    def handle_key(self, key):
+        key_code = normalize_key_code(key)
+        if key_code in (getattr(curses, "KEY_F2", -1), ord("s"), ord("S")):
+            self._cycle_style(1)
+            return None
+        return super().handle_key(key)
+
+    def _activate_button(self):
+        result = super()._activate_button()
+        if self.selected_button != 0:
+            return result
+        if result is not None and getattr(result, "type", None) == ActionType.SAVE_ERROR:
+            return result
+        self._apply_selected_style()
+        self.app.persist_config()
+        self.app.refresh_icons()
+        return result
+
+
 class MenuEditorWindow(_BaseSelectionEditorWindow):
     """Global menu visibility editor (apps, games, plugins)."""
 
@@ -347,4 +413,3 @@ class MenuEditorWindow(_BaseSelectionEditorWindow):
 
 class AppManagerWindow(DesktopIconManagerWindow):
     """Backwards-compatible alias for old action routes/tests."""
-

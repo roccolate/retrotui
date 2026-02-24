@@ -31,6 +31,7 @@ class AppConfig:
     word_wrap_default: bool = False
     sunday_first: bool = False
     show_welcome: bool = True
+    icon_style: str = "default"
     hidden_icons: str = ""
     hidden_menu_items: str = ""
 
@@ -116,6 +117,9 @@ def _normalize_config(raw: dict) -> AppConfig:
     word_wrap_default = _coerce_bool(ui.get("word_wrap_default"), default=False)
     sunday_first = _coerce_bool(ui.get("sunday_first"), default=False)
     show_welcome = _coerce_bool(ui.get("show_welcome"), default=True)
+    icon_style = str(ui.get("icon_style", "default")).strip().lower() or "default"
+    if icon_style not in ("default", "retro_01"):
+        icon_style = "default"
     hidden_icons = str(ui.get("hidden_icons", "")).strip()
     hidden_menu_items = str(ui.get("hidden_menu_items", "")).strip()
     return AppConfig(
@@ -124,6 +128,7 @@ def _normalize_config(raw: dict) -> AppConfig:
         word_wrap_default=word_wrap_default,
         sunday_first=sunday_first,
         show_welcome=show_welcome,
+        icon_style=icon_style,
         hidden_icons=hidden_icons,
         hidden_menu_items=hidden_menu_items,
     )
@@ -149,6 +154,7 @@ def serialize_config(config: AppConfig) -> str:
         f"word_wrap_default = {'true' if config.word_wrap_default else 'false'}\n"
         f"sunday_first = {'true' if config.sunday_first else 'false'}\n"
         f"show_welcome = {'true' if config.show_welcome else 'false'}\n"
+        f'icon_style = "{config.icon_style}"\n'
         f'hidden_icons = "{config.hidden_icons}"\n'
         f'hidden_menu_items = "{config.hidden_menu_items}"\n'
     )

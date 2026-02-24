@@ -43,6 +43,7 @@ DEFAULT_GLOBAL_ITEMS = {
         ('Control Panel', AppAction.CONTROL_PANEL),
         ('Preferences', AppAction.SETTINGS),
         ('Desktop Icons', AppAction.DESKTOP_ICON_MANAGER),
+        ('Icons', AppAction.ICONS),
         ('Menu Editor', AppAction.MENU_EDITOR),
     ],
     'Help': [

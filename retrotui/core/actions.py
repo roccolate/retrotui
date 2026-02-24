@@ -86,6 +86,7 @@ class AppAction(str, Enum):
     WIFI_MANAGER = "wifi_manager"
     APP_MANAGER = "app_manager"
     DESKTOP_ICON_MANAGER = "desktop_icon_manager"
+    ICONS = "icons"
     MENU_EDITOR = "menu_editor"
     MARKDOWN_VIEWER = "markdown_viewer"
     SYSTEM_MONITOR = "system_monitor"

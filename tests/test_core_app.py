@@ -1879,6 +1879,10 @@ class CoreAppTests(unittest.TestCase):
             self.actions_mod.AppAction.DESKTOP_ICON_MANAGER,
         )
         self.assertEqual(
+            label_to_action.get("Icons"),
+            self.actions_mod.AppAction.ICONS,
+        )
+        self.assertEqual(
             label_to_action.get("Menu Editor"),
             self.actions_mod.AppAction.MENU_EDITOR,
         )

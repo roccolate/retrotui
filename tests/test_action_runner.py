@@ -123,6 +123,16 @@ class _DummyMenuEditorWindow:
         self.app = app
 
 
+class _DummyIconsWindow:
+    def __init__(self, x, y, w, h, app):
+        self.kind = "icons_app"
+        self.x = x
+        self.y = y
+        self.w = w
+        self.h = h
+        self.app = app
+
+
 class _DummyLogViewerWindow:
     def __init__(self, x, y, w, h):
         self.kind = "log"
@@ -552,6 +562,7 @@ class ActionRunnerTests(unittest.TestCase):
 
         dummy_module = types.SimpleNamespace(
             DesktopIconManagerWindow=_DummyDesktopIconManagerWindow,
+            IconsWindow=_DummyIconsWindow,
             MenuEditorWindow=_DummyMenuEditorWindow,
         )
         with mock.patch.dict(sys.modules, {"retrotui.apps.app_manager": dummy_module}):
@@ -568,12 +579,36 @@ class ActionRunnerTests(unittest.TestCase):
         self.assertEqual((spawned.w, spawned.h), (72, 22))
         self.assertIs(spawned.app, app)
 
+    def test_execute_icons_app_spawns_icons_window(self):
+        app = self._make_app()
+        logger = mock.Mock()
+
+        dummy_module = types.SimpleNamespace(
+            DesktopIconManagerWindow=_DummyDesktopIconManagerWindow,
+            IconsWindow=_DummyIconsWindow,
+            MenuEditorWindow=_DummyMenuEditorWindow,
+        )
+        with mock.patch.dict(sys.modules, {"retrotui.apps.app_manager": dummy_module}):
+            self.action_runner.execute_app_action(
+                app,
+                self.actions_mod.AppAction.ICONS,
+                logger,
+                version="0.9.2",
+            )
+
+        app._next_window_offset.assert_called_once_with(22, 6)
+        spawned = app._spawn_window.call_args.args[0]
+        self.assertEqual(spawned.kind, "icons_app")
+        self.assertEqual((spawned.w, spawned.h), (72, 22))
+        self.assertIs(spawned.app, app)
+
     def test_execute_menu_editor_spawns_editor_window(self):
         app = self._make_app()
         logger = mock.Mock()
 
         dummy_module = types.SimpleNamespace(
             DesktopIconManagerWindow=_DummyDesktopIconManagerWindow,
+            IconsWindow=_DummyIconsWindow,
             MenuEditorWindow=_DummyMenuEditorWindow,
         )
         with mock.patch.dict(sys.modules, {"retrotui.apps.app_manager": dummy_module}):
