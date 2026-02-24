@@ -854,6 +854,37 @@ class MouseRouterTests(unittest.TestCase):
         )
         app._dispatch_window_result.assert_called_once_with("drag-result", win)
 
+    def test_handle_window_mouse_drag_with_active_selection_is_captured_outside_window(self):
+        app = self._make_app()
+        win = self._make_window(
+            contains=mock.Mock(return_value=False),
+            handle_mouse_drag=mock.Mock(return_value="drag-selection"),
+            window_menu=types.SimpleNamespace(active=False, handle_hover=mock.Mock(return_value=False)),
+        )
+        setattr(win, "_mouse_selecting", True)
+        app.windows = [win]
+        norm = {
+            "is_click_like": False,
+            "button1_pressed": True,
+            "button1_clicked": False,
+            "button1_double": False,
+            "is_motion": True,
+            "scroll_up": False,
+            "scroll_down": False,
+        }
+
+        handled = self.mouse_router.handle_window_mouse(
+            app,
+            99,
+            99,
+            self.curses.REPORT_MOUSE_POSITION | self.curses.BUTTON1_PRESSED,
+            norm=norm,
+        )
+
+        self.assertTrue(handled)
+        win.handle_mouse_drag.assert_called_once()
+        app._dispatch_window_result.assert_called_once_with("drag-selection", win)
+
     def test_handle_mouse_event_inferred_drag_sets_pressed_for_drag_handler(self):
         app = self._make_app()
         app.button1_pressed = True
@@ -1004,6 +1035,50 @@ class MouseRouterTests(unittest.TestCase):
         )
 
         app._handle_desktop_mouse.assert_called_once_with(12, 5, self.curses.BUTTON1_CLICKED)
+
+    def test_handle_mouse_event_window_drag_capture_preempts_top_bar_click(self):
+        app = self._make_app()
+        app._dragging_win = self._make_window(dragging=True, drag_offset_x=0, drag_offset_y=0)
+        app._handle_drag_resize_mouse.return_value = True
+        app.menu.handle_click.return_value = "about"
+
+        self.mouse_router.handle_mouse_event(
+            app, (0, 3, 0, 0, self.curses.BUTTON1_PRESSED)
+        )
+
+        app._handle_drag_resize_mouse.assert_called_once_with(3, 0, self.curses.BUTTON1_PRESSED)
+        app.menu.handle_click.assert_not_called()
+        app.execute_action.assert_not_called()
+
+    def test_handle_mouse_event_icon_drag_capture_routes_directly_to_desktop(self):
+        app = self._make_app()
+        app._icon_mgr = types.SimpleNamespace(is_dragging=True)
+        app._handle_desktop_mouse.return_value = True
+
+        self.mouse_router.handle_mouse_event(
+            app, (0, 15, 8, 0, self.curses.BUTTON1_PRESSED)
+        )
+
+        app._handle_desktop_mouse.assert_called_once_with(15, 8, self.curses.BUTTON1_PRESSED)
+        app._handle_window_mouse.assert_not_called()
+
+    def test_handle_mouse_event_selection_capture_routes_to_window_before_desktop(self):
+        app = self._make_app()
+        selecting = self._make_window(contains=mock.Mock(return_value=False))
+        setattr(selecting, "_mouse_selecting", True)
+        app.windows = [selecting]
+        app._handle_window_mouse.return_value = True
+        app._handle_desktop_mouse.return_value = False
+
+        self.mouse_router.handle_mouse_event(
+            app,
+            (0, 40, 20, 0, self.curses.REPORT_MOUSE_POSITION | self.curses.BUTTON1_PRESSED),
+        )
+
+        app._handle_window_mouse.assert_called_once_with(
+            40, 20, self.curses.REPORT_MOUSE_POSITION | self.curses.BUTTON1_PRESSED
+        )
+        app._handle_desktop_mouse.assert_not_called()
 
     def test_handle_mouse_event_click_outside_windows_clears_text_selection(self):
         app = self._make_app()
