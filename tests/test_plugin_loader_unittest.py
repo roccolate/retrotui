@@ -73,7 +73,10 @@ class PluginLoaderUnitTests(unittest.TestCase):
         self.loader._DEFAULT_PLUGIN_DIR = str(missing_default)
         self.loader.PLUGIN_DIR = str(missing_default)
 
-        with mock.patch.object(self.loader, "_repo_examples_plugin_dir", return_value=str(examples)):
+        with (
+            mock.patch.object(self.loader, "_repo_examples_plugin_dir", return_value=str(examples)),
+            mock.patch.object(self.loader, "_cwd_examples_plugin_dir", return_value=str(root / "nope")),
+        ):
             manifests = self.loader.discover_plugins()
 
         self.assertEqual(len(manifests), 1)
@@ -92,11 +95,35 @@ class PluginLoaderUnitTests(unittest.TestCase):
         self.loader._DEFAULT_PLUGIN_DIR = str(empty_default)
         self.loader.PLUGIN_DIR = str(empty_default)
 
-        with mock.patch.object(self.loader, "_repo_examples_plugin_dir", return_value=str(examples)):
+        with (
+            mock.patch.object(self.loader, "_repo_examples_plugin_dir", return_value=str(examples)),
+            mock.patch.object(self.loader, "_cwd_examples_plugin_dir", return_value=str(root / "nope")),
+        ):
             manifests = self.loader.discover_plugins()
 
         self.assertEqual(len(manifests), 1)
         self.assertEqual(manifests[0].get("plugin", {}).get("id"), "bundled")
+
+    def test_discover_plugins_uses_cwd_examples_fallback_when_repo_path_missing(self):
+        tmpdir = make_repo_tmpdir(prefix="_tmp_plugin_loader_")
+        self.addCleanup(tmpdir.cleanup)
+        root = Path(tmpdir.name)
+        examples = root / "examples" / "plugins"
+        examples.mkdir(parents=True)
+        self._create_plugin(examples, "cwd-bundled")
+
+        missing_default = root / "missing-default"
+        self.loader._DEFAULT_PLUGIN_DIR = str(missing_default)
+        self.loader.PLUGIN_DIR = str(missing_default)
+
+        with (
+            mock.patch.object(self.loader, "_repo_examples_plugin_dir", return_value=str(root / "nope")),
+            mock.patch.object(self.loader, "_cwd_examples_plugin_dir", return_value=str(examples)),
+        ):
+            manifests = self.loader.discover_plugins()
+
+        self.assertEqual(len(manifests), 1)
+        self.assertEqual(manifests[0].get("plugin", {}).get("id"), "cwd-bundled")
 
 
 if __name__ == "__main__":

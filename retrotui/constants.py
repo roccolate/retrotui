@@ -78,7 +78,7 @@ ICONS = [
         "action": AppAction.DESKTOP_ICON_MANAGER,
         "art": ["\u250c\u2500\u2500\u2510", "\u2502DT\u2502", "\u2514\u2500\u2500\u2518"],
         "category": "Apps",
-        "hide_key": "icons",
+        "hide_key": "desktop",
         "position_key": "Icons",
     },
     {
@@ -121,7 +121,7 @@ ICONS_ASCII = [
         "action": AppAction.DESKTOP_ICON_MANAGER,
         "art": ["+--+", "|DT|", "+--+"],
         "category": "Apps",
-        "hide_key": "icons",
+        "hide_key": "desktop",
         "position_key": "Icons",
     },
     {
