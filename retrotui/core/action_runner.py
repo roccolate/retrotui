@@ -230,10 +230,16 @@ def execute_app_action(app, action, logger, *, version: str) -> None:
         app._spawn_window(SettingsWindow(offset_x, offset_y, 56, 18, app))
         return
 
-    if action == AppAction.APP_MANAGER:
-        from ..apps.app_manager import AppManagerWindow
+    if action in (AppAction.APP_MANAGER, AppAction.DESKTOP_ICON_MANAGER):
+        from ..apps.app_manager import DesktopIconManagerWindow
         offset_x, offset_y = app._next_window_offset(22, 6)
-        app._spawn_window(AppManagerWindow(offset_x, offset_y, 46, 18, app))
+        app._spawn_window(DesktopIconManagerWindow(offset_x, offset_y, 72, 22, app))
+        return
+
+    if action == AppAction.MENU_EDITOR:
+        from ..apps.app_manager import MenuEditorWindow
+        offset_x, offset_y = app._next_window_offset(20, 5)
+        app._spawn_window(MenuEditorWindow(offset_x, offset_y, 76, 22, app))
         return
 
     if action == AppAction.MARKDOWN_VIEWER:

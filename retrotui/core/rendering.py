@@ -80,7 +80,7 @@ def draw_desktop(app, frame_size=None):
     # Reuse cached line when width and pattern haven't changed.
     cache_key = (w, pattern)
     if _desktop_line_cache['key'] != cache_key:
-        _desktop_line_cache['line'] = (pattern * (w // len(pattern) + 1))[: w - 1]
+        _desktop_line_cache['line'] = (pattern * (w // len(pattern) + 1))[:w]
         _desktop_line_cache['key'] = cache_key
     line = _desktop_line_cache['line']
 
@@ -117,7 +117,7 @@ def draw_taskbar(app, frame_size=None):
     attr = theme_attr("taskbar")
     
     # Always clear the taskbar line
-    safe_addstr(app.stdscr, taskbar_y, 0, ' ' * (w - 1), attr)
+    safe_addstr(app.stdscr, taskbar_y, 0, ' ' * w, attr)
     
     window_mgr = getattr(app, "window_mgr", None)
     if window_mgr is not None and hasattr(window_mgr, "taskbar_buttons"):
@@ -133,7 +133,7 @@ def draw_taskbar(app, frame_size=None):
     x = 1
     for label in minimized_labels:
         btn = f'[{label}]'
-        if x + len(btn) >= w - 1:
+        if x + len(btn) > w:
             break
         safe_addstr(app.stdscr, taskbar_y, x, btn, attr | curses.A_BOLD)
         x += len(btn) + 1
@@ -151,7 +151,7 @@ def draw_statusbar(app, version, frame_size=None):
     
     statusbar_y = h - BOTTOM_BARS_HEIGHT + 1  # Last row: below taskbar
     # Draw background
-    safe_addstr(app.stdscr, statusbar_y, 0, ' ' * (w - 1), attr)
+    safe_addstr(app.stdscr, statusbar_y, 0, ' ' * w, attr)
 
     # Draw left text
     safe_addstr(app.stdscr, statusbar_y, 0, left_status, attr)

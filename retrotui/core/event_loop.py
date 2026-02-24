@@ -285,9 +285,13 @@ def run_app_loop(app):
                 key = read_input_key(app.stdscr)
                 metrics["input_wait_time_s"] += time.perf_counter() - input_start
                 if key is None:
-                    consume_sigint = getattr(app, "_consume_pending_sigint", None)
-                    if callable(consume_sigint):
-                        key = consume_sigint()
+                    consume_signal_key = getattr(app, "_consume_pending_signal_key", None)
+                    if callable(consume_signal_key):
+                        key = consume_signal_key()
+                    else:
+                        consume_sigint = getattr(app, "_consume_pending_sigint", None)
+                        if callable(consume_sigint):
+                            key = consume_sigint()
                 _record_input_stats(metrics, key)
                 dispatch_start = time.perf_counter()
                 if dispatch_input(app, key):

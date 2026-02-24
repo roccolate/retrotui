@@ -32,6 +32,7 @@ class AppConfig:
     sunday_first: bool = False
     show_welcome: bool = True
     hidden_icons: str = ""
+    hidden_menu_items: str = ""
 
 
 def default_config_path() -> Path:
@@ -116,6 +117,7 @@ def _normalize_config(raw: dict) -> AppConfig:
     sunday_first = _coerce_bool(ui.get("sunday_first"), default=False)
     show_welcome = _coerce_bool(ui.get("show_welcome"), default=True)
     hidden_icons = str(ui.get("hidden_icons", "")).strip()
+    hidden_menu_items = str(ui.get("hidden_menu_items", "")).strip()
     return AppConfig(
         theme=theme,
         show_hidden=show_hidden,
@@ -123,6 +125,7 @@ def _normalize_config(raw: dict) -> AppConfig:
         sunday_first=sunday_first,
         show_welcome=show_welcome,
         hidden_icons=hidden_icons,
+        hidden_menu_items=hidden_menu_items,
     )
 
 
@@ -147,6 +150,7 @@ def serialize_config(config: AppConfig) -> str:
         f"sunday_first = {'true' if config.sunday_first else 'false'}\n"
         f"show_welcome = {'true' if config.show_welcome else 'false'}\n"
         f'hidden_icons = "{config.hidden_icons}"\n'
+        f'hidden_menu_items = "{config.hidden_menu_items}"\n'
     )
 
 

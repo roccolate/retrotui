@@ -188,6 +188,13 @@ def _clear_window_text_selection(app):
     return cleared_any
 
 
+def _clear_selection_capture_state(app):
+    """Drop transient selection-capture flags after release-like events."""
+    for win in getattr(app, "windows", []):
+        if bool(getattr(win, "_mouse_selecting", False)):
+            win._mouse_selecting = False
+
+
 def _title_bar_hit(win, mx, my, norm=None):
     """Return True when pointer should be treated as a title-bar hit.
 
@@ -220,7 +227,7 @@ def _title_bar_hit(win, mx, my, norm=None):
     return True
 
 
-def _route_selection_drag_owner(app, mx, my, bstate, *, is_mouse_motion, is_button1_pressed):
+def _route_selection_drag_owner(app, mx, my, bstate, *, is_mouse_motion, is_button1_pressed, norm=None):
     """Keep selection drag captured by the window that initiated it.
 
     Without capture, pointer motion outside window bounds can leak into desktop
@@ -234,6 +241,23 @@ def _route_selection_drag_owner(app, mx, my, bstate, *, is_mouse_motion, is_butt
             continue
         if not bool(getattr(win, "_mouse_selecting", False)):
             continue
+
+        contains = getattr(win, "contains", None)
+        pointer_inside = False
+        if callable(contains):
+            try:
+                pointer_inside = bool(contains(mx, my))
+            except _MOUSE_ROUTE_ERRORS:
+                pointer_inside = False
+
+        # On some TTY/tmux streams press state is inferred from stale state.
+        # If pointer already left window and there is no raw press in this event,
+        # release capture to avoid treating whole-screen drags as text selection.
+        raw_pressed = bool((norm or {}).get("button1_pressed_raw"))
+        if not pointer_inside and not raw_pressed:
+            win._mouse_selecting = False
+            return False
+
         drag_handler = getattr(win, "handle_mouse_drag", None)
         if drag_handler is None:
             return True
@@ -394,6 +418,7 @@ def handle_window_mouse(app, mx, my, bstate, norm=None):
         bstate,
         is_mouse_motion=is_mouse_motion,
         is_button1_pressed=is_button1_pressed,
+        norm=norm,
     ):
         return True
 
@@ -587,6 +612,11 @@ def handle_mouse_event(app, event):
         norm.get("button1_clicked") or norm.get("button1_double")
     ) and not norm.get("is_motion"):
         app.button1_pressed = False
+
+    if norm.get("button1_released") or (
+        (norm.get("button1_clicked") or norm.get("button1_double")) and not norm.get("is_motion")
+    ):
+        _clear_selection_capture_state(app)
 
     if app._handle_dialog_mouse(mx, my, bstate):
         return True

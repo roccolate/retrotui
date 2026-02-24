@@ -22,6 +22,7 @@ def test_normalize_mouse_payload_infers_motion_without_report_flag():
     assert result is not None
     assert result["inferred_motion"] is True
     assert result["has_motion"] is True
+    assert result["button1_pressed_raw"] is False
 
 
 def test_normalize_mouse_payload_infers_right_click_for_gpm_press_release():
@@ -152,3 +153,18 @@ def test_normalize_mouse_payload_detects_scroll_down_with_button5_clicked_defaul
     result = mouse_backend.normalize_mouse_payload(app, (0, 3, 4, 0, b5_clicked))
     assert result is not None
     assert result["scroll_down"] is True
+
+
+def test_normalize_mouse_payload_exposes_button1_pressed_raw():
+    app = types.SimpleNamespace(
+        mouse_backend="sgr",
+        _last_mouse_pos=None,
+        button1_pressed=False,
+    )
+    b1_pressed = getattr(mouse_backend.curses, "BUTTON1_PRESSED", 0)
+    if b1_pressed == 0:
+        return
+
+    result = mouse_backend.normalize_mouse_payload(app, (0, 3, 4, 0, b1_pressed))
+    assert result is not None
+    assert result["button1_pressed_raw"] is True

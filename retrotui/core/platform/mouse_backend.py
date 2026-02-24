@@ -52,7 +52,8 @@ def normalize_mouse_payload(app, event):
 
     has_motion = bool(bstate & report_flag)
     last_pos = getattr(app, "_last_mouse_pos", None)
-    button1_down = bool((bstate & b1_pressed) or getattr(app, "button1_pressed", False))
+    button1_pressed_raw = bool(bstate & b1_pressed)
+    button1_down = bool(button1_pressed_raw or getattr(app, "button1_pressed", False))
 
     # In some GPM streams motion flag is absent; infer movement from pointer delta while button1 is down.
     inferred_motion = False
@@ -95,7 +96,8 @@ def normalize_mouse_payload(app, event):
         "inferred_motion": inferred_motion,
         "right_click": right_click_effective,
         "inferred_right_click": inferred_right_click,
-        "button1_pressed": bool(bstate & b1_pressed),
+        "button1_pressed_raw": button1_pressed_raw,
+        "button1_pressed": button1_pressed_raw,
         "button1_released": bool(bstate & b1_released),
         "button1_clicked": bool(bstate & b1_clicked),
         "button1_double": bool(bstate & b1_double),

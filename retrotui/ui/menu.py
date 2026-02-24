@@ -42,7 +42,8 @@ DEFAULT_GLOBAL_ITEMS = {
     'Edit': [
         ('Control Panel', AppAction.CONTROL_PANEL),
         ('Preferences', AppAction.SETTINGS),
-        ('App Manager', AppAction.APP_MANAGER),
+        ('Desktop Icons', AppAction.DESKTOP_ICON_MANAGER),
+        ('Menu Editor', AppAction.MENU_EDITOR),
     ],
     'Help': [
         ('About RetroTUI', AppAction.ABOUT),
