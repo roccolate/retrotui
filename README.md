@@ -36,7 +36,7 @@ RetroTUI trae la nostalgia de los escritorios clásicos a tu terminal Linux. Fun
 *   **Terminal Embebida**: Ejecuta tu shell dentro de una ventana.
 *   **Apps Incluidas**: Explorador de Archivos, Bloc de Notas, Calculadora, Monitor de Procesos, Visor de Logs.
 *   **Temas**: Windows 3.1, DOS, Windows 95, Hacker, Amiga.
-*   **Sin Dependencias**: Solo requiere Python 3.9 estándar.
+*   **Sin Dependencias**: Solo requiere Python 3.10 estándar.
 
 ## Instalación
 
@@ -48,7 +48,7 @@ python3 -m retrotui
 
 ### Requisitos
 *   **Linux/WSL** (Windows nativo no soportado por falta de `curses` completo).
-*   **Python 3.9+**.
+*   **Python 3.10+**.
 *   **Tamaño de terminal**: Al menos 80x24.
 *   **Locale UTF-8** (Recomendado).
 
@@ -101,7 +101,7 @@ RetroTUI brings the nostalgic experience of a classic desktop to your Linux/WSL 
 *   **Embedded Terminal**: Run your shell inside a window.
 *   **Apps**: File Manager, Notepad, Calculator, Process Manager, Log Viewer, Hex Editor.
 *   **Themes**: Switch between Win 3.1, DOS, Win 95, Hacker, and Amiga styles.
-*   **No Dependencies**: Runs on standard Python 3.9+ library.
+*   **No Dependencies**: Runs on standard Python 3.10+ library.
 
 ## Installation
 
@@ -113,7 +113,7 @@ python3 -m retrotui
 
 ### Requirements
 *   **Linux/WSL** (Windows native not supported due to missing `curses`).
-*   **Python 3.9+**.
+*   **Python 3.10+**.
 *   **Terminal size**: At least 80x24.
 *   **UTF-8 Locale** (Recommended).
 
