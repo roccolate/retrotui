@@ -81,7 +81,7 @@ def _supports_constructor_kwarg(constructor, kwarg: str) -> bool:
 _APP_REGISTRY = {
     AppAction.IMAGE_VIEWER:    ("ImageViewerWindow",    84, 26, 14, 3, {}),
     AppAction.HEX_VIEWER:      ("HexViewerWindow",      76, 22, 16, 4, {}),
-    AppAction.TERMINAL:        ("TerminalWindow",        70, 18, 18, 5, {}),
+    AppAction.TERMINAL:        ("TerminalWindow",        80, 24, 18, 5, {}),
     AppAction.TRASH_BIN:       ("TrashWindow",           62, 20, 15, 4, {}),
     AppAction.CALCULATOR:      ("CalculatorWindow",      44, 14, 24, 5, {}),
     AppAction.LOG_VIEWER:      ("LogViewerWindow",       74, 22, 16, 4, {}),
