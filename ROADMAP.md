@@ -1,8 +1,8 @@
-# RetroTUI — Roadmap
+﻿# RetroTUI — Roadmap
 
 **Objetivo:** Un entorno de escritorio estilo Windows 3.1 completamente funcional para la terminal Linux. Sin X11. Sin Wayland. Solo curses, una TTY y vibes.
 
-**Estado actual:** v0.9.0 estable — roadmap definido hasta v1.0 (febrero 2026)
+**Estado actual:** v0.9.2 estable — main ya incluye mejoras post-0.9.2 pendientes de release/tag formal.
 
 ---
 
@@ -224,6 +224,12 @@ Hacer el file manager competitivo con Midnight Commander.
 
 ## Versiones Planificadas
 
+### Reorganización 0.9.x (actualizada)
+
+- La secuencia `v0.9.3` a `v0.9.5` se mantiene como historial de planning original.
+- Se agregan `v0.9.6`, `v0.9.7`, `v0.9.8` como plan activo.
+- `v0.9.9` queda reservado/pending por ahora.
+
 ### v0.9.1 — Ultimate Release ✅
 
 La versión definitiva pre-1.0 con utilidades avanzadas y refinamiento de UX.
@@ -298,6 +304,8 @@ Notas: Implementado en la rama `feature/plugins` (commit `84c3376`). QA: todos l
 
 ### v0.9.3 — Creative & System
 
+Estado: plan legado (congelado por prioridad TTY)
+
 Apps creativas, multimedia y configuración avanzada. Branch: `feature/creative`
 
 **Apps creativas**
@@ -319,6 +327,8 @@ Apps creativas, multimedia y configuración avanzada. Branch: `feature/creative`
 
 ### v0.9.4 — Menú Inicio & Temas Avanzados
 
+Estado: plan legado (congelado por prioridad TTY)
+
 La experiencia de escritorio completa. Branch: `feature/start-menu`
 
 **Menú Inicio**
@@ -338,6 +348,8 @@ La experiencia de escritorio completa. Branch: `feature/start-menu`
 
 ### v0.9.5 — DOS Mode 🐭
 
+Estado: plan legado (congelado por prioridad TTY)
+
 MS-DOS con mouse en RetroTUI. Branch: `feature/dos-mode`
 
 **DOS Shell**
@@ -350,6 +362,54 @@ MS-DOS con mouse en RetroTUI. Branch: `feature/dos-mode`
 - [ ] Mouse passthrough RetroTUI → DOSBox
 - [ ] Lanzar apps DOS clásicas: StarOffice 3.1, WordPerfect, Lotus 1-2-3, Turbo Pascal
 - [ ] Juegos DOS: DOOM, Duke Nukem, Commander Keen
+
+---
+
+### v0.9.6 — TTY Hardening & Plugin UX
+
+Enfoque: cerrar consistencia de input en terminal real y aterrizar UX de plugins.
+
+**TTY / Input**
+- [x] Captura de puntero para drag/resizing/selection/icon drag (evitar fuga de eventos al desktop).
+- [x] Endurecimiento de drag-drop con semántica de mouse normalizada (`is_motion`, `button1_down`).
+- [x] Tamaño por defecto de terminal interna a `80x24`.
+- [x] Mejoras en tooling de diagnóstico (`tools/debug_mouse.py`) con raw + normalized flags.
+- [x] Actualización de matriz de pruebas TTY (`docs/TTY_TEST_MATRIX.md`).
+
+**Plugins**
+- [x] Menú global `Plugins` dinámico con acciones `plugin:<id>`.
+- [x] Placeholder estable cuando no hay plugins instalados.
+- [ ] Iconos dinámicos de plugins en desktop.
+- [ ] Mostrar metadata de plugin en UI (versión/capabilities).
+
+---
+
+### v0.9.7 — Certificación Cross-Terminal
+
+Enfoque: cerrar matriz de compatibilidad real y evidencia reproducible.
+
+- [ ] Ejecutar matriz manual completa: Linux console, tmux, SSH (MobaXterm, Windows Terminal, terminales Linux GUI).
+- [ ] Capturar baseline/post en `docs/baseline/` para rendimiento y estabilidad.
+- [ ] Cerrar gaps de paridad GPM vs SGR en edge-cases de selección/drag/right-click.
+- [ ] Documentar desvíos por terminal y mitigaciones recomendadas.
+
+---
+
+### v0.9.8 — Session Resilience
+
+Enfoque: comportamiento de “sistema” más robusto sin subir complejidad accidental.
+
+- [ ] Restauración mínima de sesión (ventanas, posición, foco).
+- [ ] Soft restart interno sin romper sesión host.
+- [ ] Limpieza adicional de complejidad en `core/app.py` (extraer responsabilidades).
+- [ ] Pulir flujo boot/init/run/shutdown con comportamiento determinista.
+
+---
+
+### v0.9.9 — Reserved (pending)
+
+- [ ] Reservada a propósito para absorber ideas nuevas después de validar `0.9.6-0.9.8`.
+- [ ] No se define alcance todavía.
 
 ---
 
@@ -409,4 +469,4 @@ Estas ideas no tienen versión asignada y se considerarán según prioridad:
 
 ---
 
-*Última actualización: 21 de febrero de 2026*
+*Última actualización: 24 de febrero de 2026*
