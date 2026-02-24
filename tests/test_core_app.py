@@ -1723,7 +1723,7 @@ class CoreAppTests(unittest.TestCase):
         app.windows = [normal, minimized]
         app.set_active_window = mock.Mock()
 
-        handled = app.handle_taskbar_click(2, 28)  # taskbar row = h - 2
+        handled = app.handle_taskbar_click(2, 29)  # taskbar row = h - 1
 
         self.assertTrue(handled)
         minimized.toggle_minimize.assert_called_once_with()
@@ -1735,12 +1735,12 @@ class CoreAppTests(unittest.TestCase):
         app.windows = []
 
         self.assertFalse(app.handle_taskbar_click(2, 10))  # not taskbar row
-        self.assertFalse(app.handle_taskbar_click(2, 28))  # taskbar row but no minimized
+        self.assertFalse(app.handle_taskbar_click(2, 29))  # taskbar row but no minimized
 
         minimized = types.SimpleNamespace(minimized=True, title="One", toggle_minimize=mock.Mock())
         app.windows = [minimized]
         app.set_active_window = mock.Mock()
-        self.assertFalse(app.handle_taskbar_click(119, 28))  # misses button area
+        self.assertFalse(app.handle_taskbar_click(119, 29))  # misses button area
 
     def test_resolve_dialog_result_ignores_invalid_index_or_missing_dialog(self):
         app = self._make_app()

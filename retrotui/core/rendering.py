@@ -71,6 +71,26 @@ def _window_stats(app):
     return stats
 
 
+def _taskbar_buttons(app, width, stats=None):
+    """Return taskbar button layout as `(start_x, end_x, label, win)` tuples."""
+    window_mgr = getattr(app, "window_mgr", None)
+    if window_mgr is not None and hasattr(window_mgr, "taskbar_buttons"):
+        return tuple(window_mgr.taskbar_buttons(width))
+
+    if stats is None:
+        stats = _window_stats(app)
+
+    x = 1
+    buttons = []
+    for label in stats["minimized_labels"]:
+        btn_w = len(label) + 2  # [label]
+        if x + btn_w > width:
+            break
+        buttons.append((x, x + btn_w, label, None))
+        x += btn_w + 1
+    return tuple(buttons)
+
+
 def draw_desktop(app, frame_size=None):
     """Draw the desktop background pattern."""
     h, w = _resolve_frame_size(app, frame_size)
@@ -119,39 +139,27 @@ def draw_taskbar(app, frame_size=None):
     # Always clear the taskbar line
     safe_addstr(app.stdscr, taskbar_y, 0, ' ' * w, attr)
     
-    window_mgr = getattr(app, "window_mgr", None)
-    if window_mgr is not None and hasattr(window_mgr, "taskbar_buttons"):
-        buttons = window_mgr.taskbar_buttons(w)
-        for start_x, _end_x, label, _win in buttons:
-            safe_addstr(app.stdscr, taskbar_y, start_x, f'[{label}]', attr | curses.A_BOLD)
-        return
-
     stats = _window_stats(app)
-    minimized_labels = stats["minimized_labels"]
-    if not minimized_labels:
-        return
-    x = 1
-    for label in minimized_labels:
-        btn = f'[{label}]'
-        if x + len(btn) > w:
-            break
-        safe_addstr(app.stdscr, taskbar_y, x, btn, attr | curses.A_BOLD)
-        x += len(btn) + 1
+    buttons = _taskbar_buttons(app, w, stats=stats)
+    for start_x, _end_x, label, _win in buttons:
+        safe_addstr(app.stdscr, taskbar_y, start_x, f'[{label}]', attr | curses.A_BOLD)
 
 
 def draw_statusbar(app, version, frame_size=None):
-    """Draw the bottom status bar."""
+    """Draw status text on the unified bottom bar without clearing taskbar buttons."""
     h, w = _resolve_frame_size(app, frame_size)
     attr = theme_attr("status")
     stats = _window_stats(app)
     visible = stats["visible"]
     total = stats["total"]
-    
-    left_status = f' RetroTUI v{version} | Windows: {visible}/{total} | Mouse: Enabled'
-    
-    statusbar_y = h - BOTTOM_BARS_HEIGHT + 1  # Last row: below taskbar
-    # Draw background
-    safe_addstr(app.stdscr, statusbar_y, 0, ' ' * w, attr)
+    status_text = f' RetroTUI v{version} | Windows: {visible}/{total} | Mouse: Enabled '
 
-    # Draw left text
-    safe_addstr(app.stdscr, statusbar_y, 0, left_status, attr)
+    statusbar_y = h - BOTTOM_BARS_HEIGHT
+    buttons = _taskbar_buttons(app, w, stats=stats)
+    left_reserved = buttons[-1][1] + 1 if buttons else 0
+
+    status_x = left_reserved + 1
+    max_status_len = w - status_x
+    if max_status_len <= 0:
+        return
+    safe_addstr(app.stdscr, statusbar_y, status_x, status_text[:max_status_len], attr)

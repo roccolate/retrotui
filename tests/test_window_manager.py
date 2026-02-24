@@ -75,7 +75,7 @@ class WindowManagerTests(unittest.TestCase):
         start_x, end_x, _label, _win = buttons[1]
         mx = (start_x + end_x) // 2
 
-        self.assertTrue(wm.handle_taskbar_click(mx, 18))
+        self.assertTrue(wm.handle_taskbar_click(mx, 19))
         self.assertIn("toggle_two", activated)
         self.assertIn(two, activated)
 

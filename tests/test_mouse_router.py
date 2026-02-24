@@ -1342,6 +1342,26 @@ class MouseRouterTests(unittest.TestCase):
         app._handle_window_mouse.assert_not_called()
         app._handle_desktop_mouse.assert_not_called()
 
+    def test_handle_mouse_event_taskbar_priority_over_clock_region(self):
+        app = self._make_app()
+        app.handle_taskbar_click.return_value = True
+
+        # Right side of bottom row overlaps clock hotspot; taskbar must win.
+        self.mouse_router.handle_mouse_event(app, (0, 79, 24, 0, self.curses.BUTTON1_CLICKED))
+
+        app.handle_taskbar_click.assert_called_once_with(79, 24)
+        app.execute_action.assert_not_called()
+
+    def test_handle_mouse_event_clock_region_runs_when_taskbar_not_handled(self):
+        app = self._make_app()
+        app.handle_taskbar_click.return_value = False
+
+        self.mouse_router.handle_mouse_event(app, (0, 79, 24, 0, self.curses.BUTTON1_CLICKED))
+
+        app.execute_action.assert_called_once_with(self.mouse_router.AppAction.CLOCK_CALENDAR)
+        app._handle_window_mouse.assert_not_called()
+        app._handle_desktop_mouse.assert_not_called()
+
     def test_handle_mouse_event_stops_after_drag_resize_handler(self):
         app = self._make_app()
         app._handle_drag_resize_mouse.return_value = True

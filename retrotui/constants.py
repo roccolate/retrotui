@@ -119,7 +119,7 @@ C_ANSI_START = 50
 
 # Layout constants
 MENU_BAR_HEIGHT = 1          # Row 0 is the global menu bar
-BOTTOM_BARS_HEIGHT = 2       # Taskbar + status bar at bottom
+BOTTOM_BARS_HEIGHT = 1       # Unified bottom bar (taskbar + status info)
 TASKBAR_TITLE_MAX_LEN = 15   # Max chars shown in taskbar buttons
 WIN_MIN_WIDTH = 20           # Minimum window width on resize
 WIN_MIN_HEIGHT = 8           # Minimum window height on resize

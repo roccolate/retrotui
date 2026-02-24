@@ -50,7 +50,7 @@ class RenderingTests(unittest.TestCase):
         with mock.patch.object(self.rendering, "safe_addstr") as safe_addstr:
             self.rendering.draw_desktop(app)
 
-        self.assertEqual(safe_addstr.call_count, 8)
+        self.assertEqual(safe_addstr.call_count, 9)
         first_call = safe_addstr.call_args_list[0].args
         self.assertEqual(first_call[1], 1)
         self.assertEqual(first_call[2], 0)
