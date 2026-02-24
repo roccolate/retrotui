@@ -331,6 +331,20 @@ class CoreAppTests(unittest.TestCase):
             version=self.app_mod.APP_VERSION,
         )
 
+    def test_execute_action_invokes_callable_actions(self):
+        app = self._make_app()
+        called = {"ok": False}
+
+        def _action():
+            called["ok"] = True
+            return None
+
+        with mock.patch.object(self.app_mod, "execute_app_action") as runner:
+            app.execute_action(_action)
+
+        self.assertTrue(called["ok"])
+        runner.assert_not_called()
+
     def test_dispatch_open_file_calls_file_viewer(self):
         app = self._make_app()
         app.open_file_viewer = mock.Mock()
@@ -1459,6 +1473,24 @@ class CoreAppTests(unittest.TestCase):
         self.assertTrue(handled)
         app.context_menu.handle_click.assert_called_once_with(10, 10)
         win.handle_right_click.assert_not_called()
+
+    def test_desktop_icon_properties_action_opens_dialog(self):
+        app = self._make_app()
+        app.theme = object()
+        app.context_menu = None
+        app.get_icon_at = mock.Mock(return_value=0)
+        app.icons = [{"label": "Notepad", "category": "Apps", "action": self.actions_mod.AppAction.NOTEPAD}]
+
+        with mock.patch("retrotui.ui.context_menu.ContextMenu") as context_menu_cls:
+            context_menu = context_menu_cls.return_value
+            app._handle_desktop_right_click(12, 8, 0)
+            shown_items = context_menu.show.call_args.args[2]
+
+        properties_action = shown_items[2]["action"]
+        self.assertTrue(callable(properties_action))
+        properties_action()
+        self.assertIsNotNone(app.dialog)
+        self.assertEqual(app.dialog.title, "Notepad Properties")
 
 
 if __name__ == "__main__":

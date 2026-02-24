@@ -17,7 +17,7 @@ from .constants import (
 )
 from .theme import ROLE_TO_PAIR_ID, get_theme
 
-# Cache for theme_attr() lookups — invalidated by init_colors().
+# Cache for theme_attr() lookups - invalidated by init_colors().
 _theme_attr_cache: dict[str, int] = {}
 
 # Provide safe fallbacks for curses constants that may be missing in some test
@@ -178,11 +178,35 @@ def draw_box(win, y, x, h, w, attr=0, double=True):
 
 def check_unicode_support():
     """Check if terminal supports Unicode."""
-    try:
-        '╔'.encode(locale.getpreferredencoding())
-        return True
-    except (UnicodeEncodeError, LookupError):
+    force_ascii = str(os.environ.get('RETROTUI_FORCE_ASCII', '')).strip().lower()
+    if force_ascii in {'1', 'true', 'yes', 'on'}:
         return False
+
+    force_unicode = str(os.environ.get('RETROTUI_FORCE_UNICODE', '')).strip().lower()
+    if force_unicode in {'1', 'true', 'yes', 'on'}:
+        return True
+
+    probe = '\u2554'
+    stdout_encoding = getattr(sys.stdout, 'encoding', None)
+    preferred_encoding = locale.getpreferredencoding(False)
+
+    encodings = []
+    if stdout_encoding:
+        encodings.append(stdout_encoding)
+    if preferred_encoding and preferred_encoding not in encodings:
+        encodings.append(preferred_encoding)
+
+    for enc in encodings:
+        try:
+            probe.encode(enc)
+        except (UnicodeEncodeError, LookupError):
+            continue
+        if os.name == 'nt':
+            norm = str(enc).replace('_', '-').lower()
+            if 'utf-8' not in norm and 'utf8' not in norm:
+                continue
+        return True
+    return False
 
 def get_system_info():
     """Get system information for About dialog."""
