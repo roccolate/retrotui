@@ -59,3 +59,22 @@ def test_normalize_mouse_payload_marks_passive_noop_motion():
     assert result is not None
     assert result["is_motion"] is True
     assert result["is_passive_noop"] is True
+
+
+def test_normalize_mouse_payload_treats_right_press_as_right_click_for_sgr():
+    app = types.SimpleNamespace(
+        mouse_backend="sgr",
+        _last_mouse_pos=None,
+        button1_pressed=False,
+    )
+
+    right_pressed = getattr(mouse_backend.curses, "BUTTON3_PRESSED", 0)
+    if right_pressed == 0:
+        return
+
+    event = (0, 7, 8, 0, right_pressed)
+    result = mouse_backend.normalize_mouse_payload(app, event)
+
+    assert result is not None
+    assert result["right_click"] is True
+    assert result["inferred_right_click"] is False

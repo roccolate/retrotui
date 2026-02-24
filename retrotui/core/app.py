@@ -395,10 +395,19 @@ class RetroTUI:
 
     def handle_right_click(self, mx, my, bstate):
         """Dispatch right-clicks to windows or desktop. Return True if handled."""
-        # Check if right-click is on an existing context menu (unlikely but safe)
+        # If a context menu is already open, let it consume the click first.
         if self.context_menu and self.context_menu.active:
-            # Let the menu handle it or close? Usually clicking outside closes it.
-            pass
+            try:
+                action = self.context_menu.handle_click(mx, my)
+            except Exception:
+                action = None
+            if action is not None:
+                self.execute_action(action)
+                return True
+            # If the menu remains open (e.g., separator click), consume event.
+            is_open = getattr(self.context_menu, "is_open", None)
+            if callable(is_open) and is_open():
+                return True
 
         # Try windows first (topmost)
         for win in reversed(self.windows):
@@ -407,24 +416,24 @@ class RetroTUI:
             contains = getattr(win, 'contains', None)
             if not callable(contains) or not contains(mx, my):
                 continue
-            
-            # Convert screen coordinates to window-relative for the handler
-            # But handle_right_click usually expects screen coords in RetroTUI pattern?
-            # Let's pass screen coords and let window decide.
+
+            # Route subsequent context-menu actions to the clicked window.
+            self.set_active_window(win)
+
             handler = getattr(win, 'handle_right_click', None)
             if callable(handler):
                 try:
                     res = _invoke_mouse_handler(handler, mx, my, bstate)
                 except Exception:
                     res = None
-                
+
                 # If window handled it (returned True or ActionResult), we stop.
                 if isinstance(res, list):
-                     from ..ui.context_menu import ContextMenu
-                     self.context_menu = ContextMenu(self.theme)
-                     self.context_menu.show(mx, my, res)
-                     return True
-                
+                    from ..ui.context_menu import ContextMenu
+                    self.context_menu = ContextMenu(self.theme)
+                    self.context_menu.show(mx, my, res)
+                    return True
+
                 if res:
                     self._dispatch_window_result(res, win)
                     return True
