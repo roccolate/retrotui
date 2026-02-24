@@ -566,6 +566,75 @@ class MouseRouterTests(unittest.TestCase):
         self.assertTrue(handled)
         self.assertFalse(win.dragging)
 
+    def test_handle_window_mouse_title_press_gpm_tolerates_one_row_below(self):
+        app = self._make_app()
+        win = self._make_window(
+            x=10,
+            y=5,
+            w=24,
+            on_title_bar=mock.Mock(return_value=False),
+            window_menu=None,
+        )
+        app.windows = [win]
+        norm = {
+            "backend": "gpm",
+            "is_click_like": True,
+            "button1_pressed": True,
+            "button1_clicked": False,
+            "button1_double": False,
+            "is_motion": False,
+            "scroll_up": False,
+            "scroll_down": False,
+        }
+
+        handled = self.mouse_router.handle_window_mouse(
+            app,
+            12,
+            6,  # one row below title (y+1)
+            self.curses.BUTTON1_PRESSED,
+            norm=norm,
+        )
+
+        self.assertTrue(handled)
+        self.assertTrue(win.dragging)
+        self.assertEqual(win.drag_offset_x, 2)
+        self.assertEqual(win.drag_offset_y, 1)
+
+    def test_handle_window_mouse_title_press_gpm_tolerance_respects_control_zone(self):
+        app = self._make_app()
+        win = self._make_window(
+            x=10,
+            y=5,
+            w=24,
+            on_title_bar=mock.Mock(return_value=False),
+            window_menu=None,
+            on_minimize_button=mock.Mock(return_value=False),
+        )
+        app.windows = [win]
+        norm = {
+            "backend": "gpm",
+            "is_click_like": True,
+            "button1_pressed": True,
+            "button1_clicked": False,
+            "button1_double": False,
+            "is_motion": False,
+            "scroll_up": False,
+            "scroll_down": False,
+        }
+        # Inside right-side title controls reserved zone.
+        mx_controls = win.x + win.w - 9
+
+        handled = self.mouse_router.handle_window_mouse(
+            app,
+            mx_controls,
+            6,
+            self.curses.BUTTON1_PRESSED,
+            norm=norm,
+        )
+
+        self.assertFalse(getattr(win, "dragging"))
+        self.assertFalse(handled)
+
     def test_handle_window_mouse_title_single_click_activates_only(self):
         app = self._make_app()
         win = self._make_window(on_title_bar=mock.Mock(return_value=True))

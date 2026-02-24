@@ -188,6 +188,38 @@ def _clear_window_text_selection(app):
     return cleared_any
 
 
+def _title_bar_hit(win, mx, my, norm=None):
+    """Return True when pointer should be treated as a title-bar hit.
+
+    In some TTY/GPM streams the reported y coordinate lands one row below
+    the visual title bar. We accept that offset only for gpm/fallback backends
+    and only on windows without a menu bar to avoid menu-row ambiguity.
+    """
+    on_title = getattr(win, "on_title_bar", None)
+    if callable(on_title) and on_title(mx, my):
+        return True
+
+    if norm is None:
+        return False
+    backend = str(norm.get("backend") or "").lower()
+    if backend not in {"gpm", "fallback"}:
+        return False
+    if getattr(win, "window_menu", None) is not None:
+        return False
+
+    wx = int(getattr(win, "x", 0))
+    wy = int(getattr(win, "y", 0))
+    ww = int(getattr(win, "w", 0))
+    if ww <= 0 or my != wy + 1:
+        return False
+    if mx < wx + 1 or mx > wx + ww - 2:
+        return False
+    min_btn_offset = int(getattr(win, "MIN_BTN_OFFSET", 10))
+    if mx >= wx + ww - min_btn_offset:
+        return False
+    return True
+
+
 def _is_button1_click_event(bstate):
     """Return True for discrete button-1 click-like events (not motion reports)."""
     if bstate & _REPORT_MOUSE_POSITION:
@@ -339,7 +371,7 @@ def handle_window_mouse(app, mx, my, bstate, norm=None):
                 app.set_active_window(win)
                 return True
 
-        if (is_button1_pressed or is_button1_clicked or is_button1_double) and win.on_title_bar(mx, my):
+        if (is_button1_pressed or is_button1_clicked or is_button1_double) and _title_bar_hit(win, mx, my, norm=norm):
             if is_button1_double:
                 app.set_active_window(win)
                 h, w = app.stdscr.getmaxyx()

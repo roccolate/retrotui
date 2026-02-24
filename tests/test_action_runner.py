@@ -473,7 +473,7 @@ class ActionRunnerTests(unittest.TestCase):
         app._next_window_offset.assert_called_once_with(18, 5)
         spawned = app._spawn_window.call_args.args[0]
         self.assertEqual(spawned.kind, "term")
-        self.assertEqual((spawned.x, spawned.y, spawned.w, spawned.h), (12, 7, 70, 18))
+        self.assertEqual((spawned.x, spawned.y, spawned.w, spawned.h), (12, 7, 80, 24))
 
     def test_execute_image_viewer_spawns_image_window(self):
         app = self._make_app()
