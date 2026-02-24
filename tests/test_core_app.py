@@ -436,6 +436,32 @@ class CoreAppTests(unittest.TestCase):
             )
         )
 
+    def test_build_global_menu_items_adds_sorted_plugins_section(self):
+        app = self._make_app()
+        app.config = types.SimpleNamespace(hidden_icons="")
+        app._plugins = {
+            "zeta": {"manifest": {"plugin": {"id": "zeta", "name": "Zeta Tool"}}},
+            "alpha": {"manifest": {"plugin": {"id": "alpha", "name": "Alpha Tool"}}},
+        }
+
+        menu_items = app._build_global_menu_items()
+
+        self.assertIn("Plugins", menu_items)
+        self.assertEqual(
+            menu_items["Plugins"],
+            [("Alpha Tool", "plugin:alpha"), ("Zeta Tool", "plugin:zeta")],
+        )
+
+    def test_build_global_menu_items_shows_placeholder_when_no_plugins(self):
+        app = self._make_app()
+        app.config = types.SimpleNamespace(hidden_icons="")
+        app._plugins = {}
+
+        menu_items = app._build_global_menu_items()
+
+        self.assertIn("Plugins", menu_items)
+        self.assertEqual(menu_items["Plugins"], [("(No plugins installed)", None)])
+
     def test_dispatch_open_file_calls_file_viewer(self):
         app = self._make_app()
         app.open_file_viewer = mock.Mock()

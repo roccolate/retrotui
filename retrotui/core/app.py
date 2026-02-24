@@ -262,22 +262,8 @@ class RetroTUI:
         self.config = load_config()
         self.theme_name = self.config.theme
         self.refresh_icons()
-        
-        # Build Start Menu with hidden apps filtered out
-        hidden_labels = self._get_hidden_icon_labels()
-        from ..ui.menu import DEFAULT_GLOBAL_ITEMS, Menu
-        
-        filtered_menu_items = {}
-        for category, items in DEFAULT_GLOBAL_ITEMS.items():
-            filtered_items = []
-            for item in items:
-                label = item[0].split("  ")[0] # Strip shortcuts like "Exit  Ctrl+Q"
-                if label.lower() not in hidden_labels:
-                    filtered_items.append(item)
-            if filtered_items: # Only add category if it's not empty
-                filtered_menu_items[category] = filtered_items
-                
-        self.menu = Menu(filtered_menu_items)
+        self._plugins = {}
+        self._rebuild_global_menu()
         self.context_menu = None
         self.dialog = None
         self.selected_icon = -1
@@ -351,10 +337,68 @@ class RetroTUI:
             from ..plugins.loader import discover_plugins, load_plugin
         except _PLUGIN_DISCOVERY_IMPORT_ERRORS:
             LOGGER.debug('plugin discovery unavailable', exc_info=True)
+            self._rebuild_global_menu()
             return
 
         for manifest in discover_plugins():
             self._register_plugin_manifest(manifest, load_plugin)
+        self._rebuild_global_menu()
+
+    def _build_plugin_menu_items(self):
+        """Build dynamic plugin entries as menu tuples ``(label, action)``."""
+        entries = []
+        for plugin_id, info in (getattr(self, "_plugins", None) or {}).items():
+            plugin_info = (info.get("manifest", {}) or {}).get("plugin", {}) or {}
+            name = str(plugin_info.get("name") or plugin_id)
+            entries.append((name, f"plugin:{plugin_id}"))
+        entries.sort(key=lambda item: (item[0].lower(), item[1]))
+        return entries
+
+    def _build_global_menu_items(self):
+        """Return global menu items with hidden-label filtering and plugin section."""
+        hidden_labels = self._get_hidden_icon_labels()
+        from ..ui.menu import DEFAULT_GLOBAL_ITEMS
+
+        filtered_menu_items = {}
+        for category, items in DEFAULT_GLOBAL_ITEMS.items():
+            filtered_items = []
+            for label, action in items:
+                base_label = label.split("  ")[0]  # Strip shortcut hints like "Exit  Ctrl+Q"
+                if base_label.lower() not in hidden_labels:
+                    filtered_items.append((label, action))
+            if filtered_items:
+                filtered_menu_items[category] = filtered_items
+
+        plugin_items = self._build_plugin_menu_items()
+        if not plugin_items:
+            plugin_items = [("(No plugins installed)", None)]
+        filtered_menu_items["Plugins"] = plugin_items
+
+        return filtered_menu_items
+
+    def _rebuild_global_menu(self):
+        """Rebuild global menu preserving previous selection when possible."""
+        from ..ui.menu import Menu
+
+        previous = getattr(self, "menu", None)
+        was_active = bool(getattr(previous, "active", False))
+        selected_menu = int(getattr(previous, "selected_menu", 0) or 0)
+        selected_item = int(getattr(previous, "selected_item", 0) or 0)
+
+        menu = Menu(self._build_global_menu_items())
+        menu_names = list(getattr(menu, "menu_names", ()) or ())
+        if was_active and menu_names:
+            menu.active = True
+            menu.selected_menu = max(0, min(selected_menu, len(menu_names) - 1))
+            current_items = list(
+                (getattr(menu, "items", {}) or {}).get(menu_names[menu.selected_menu], ())
+            )
+            if current_items:
+                menu.selected_item = max(0, min(selected_item, len(current_items) - 1))
+            else:
+                menu.selected_item = 0
+
+        self.menu = menu
 
     def _register_plugin_manifest(self, manifest, load_plugin):
         """Register one plugin manifest with defensive isolation."""
