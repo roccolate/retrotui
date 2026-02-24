@@ -220,6 +220,59 @@ def _title_bar_hit(win, mx, my, norm=None):
     return True
 
 
+def _route_selection_drag_owner(app, mx, my, bstate, *, is_mouse_motion, is_button1_pressed):
+    """Keep selection drag captured by the window that initiated it.
+
+    Without capture, pointer motion outside window bounds can leak into desktop
+    routing (icon/desktop selection) while selecting text in app windows.
+    """
+    if not (is_mouse_motion and is_button1_pressed):
+        return False
+
+    for win in reversed(app.windows):
+        if not getattr(win, "visible", False):
+            continue
+        if not bool(getattr(win, "_mouse_selecting", False)):
+            continue
+        drag_handler = getattr(win, "handle_mouse_drag", None)
+        if drag_handler is None:
+            return True
+        drag_result = _invoke_mouse_handler(drag_handler, mx, my, bstate)
+        app._dispatch_window_result(drag_result, win)
+        return True
+    return False
+
+
+def _pointer_capture_owner(app):
+    """Return currently captured pointer owner as `(kind, owner)` or `(None, None)`."""
+    dragging = getattr(app, "_dragging_win", None)
+    if dragging is not None:
+        return ("window_drag", dragging)
+
+    resizing = getattr(app, "_resizing_win", None)
+    if resizing is not None:
+        return ("window_resize", resizing)
+
+    drag_drop = getattr(app, "drag_drop", None)
+    if drag_drop is not None and getattr(drag_drop, "payload", None) is not None:
+        return ("file_drag", drag_drop)
+
+    icon_mgr = getattr(app, "_icon_mgr", None)
+    if icon_mgr is not None and bool(getattr(icon_mgr, "is_dragging", False)):
+        return ("icon_drag", icon_mgr)
+
+    # Selection capture applies only while primary button is physically down.
+    if not bool(getattr(app, "button1_pressed", False)):
+        return (None, None)
+    for win in reversed(getattr(app, "windows", ())):
+        if not getattr(win, "visible", False):
+            continue
+        if bool(getattr(win, "_mouse_selecting", False)):
+            return ("window_selection", win)
+
+    return (None, None)
+
+
 def _is_button1_click_event(bstate):
     """Return True for discrete button-1 click-like events (not motion reports)."""
     if bstate & _REPORT_MOUSE_POSITION:
@@ -317,6 +370,16 @@ def handle_window_mouse(app, mx, my, bstate, norm=None):
         is_mouse_motion = bool(bstate & _REPORT_MOUSE_POSITION)
         scroll_up = bool(bstate & _BUTTON4_PRESSED)
         scroll_down = bool(bstate & app.scroll_down_mask)
+
+    if _route_selection_drag_owner(
+        app,
+        mx,
+        my,
+        bstate,
+        is_mouse_motion=is_mouse_motion,
+        is_button1_pressed=is_button1_pressed,
+    ):
+        return True
 
     active_menu_owner = _get_active_window_menu_owner(app)
     if is_mouse_motion and active_menu_owner is not None:
@@ -521,6 +584,16 @@ def handle_mouse_event(app, event):
                 handled = False
             if handled:
                 return True
+
+    capture_kind, _capture_owner = _pointer_capture_owner(app)
+    if capture_kind in {"window_drag", "window_resize"}:
+        if app._handle_drag_resize_mouse(mx, my, bstate):
+            return True
+    elif capture_kind == "window_selection":
+        if app._handle_window_mouse(mx, my, bstate):
+            return True
+    elif capture_kind == "icon_drag":
+        return bool(app._handle_desktop_mouse(mx, my, bstate))
 
     if handle_file_drag_drop_mouse(app, mx, my, bstate):
         return True
