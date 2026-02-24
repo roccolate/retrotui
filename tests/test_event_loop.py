@@ -122,6 +122,13 @@ class EventLoopTests(unittest.TestCase):
 
         self.assertIsNone(key)
 
+    def test_read_input_key_maps_keyboard_interrupt_to_ctrl_c(self):
+        stdscr = types.SimpleNamespace(get_wch=mock.Mock(side_effect=KeyboardInterrupt()))
+
+        key = self.event_loop.read_input_key(stdscr)
+
+        self.assertEqual(key, "\x03")
+
     def test_dispatch_input_routes_mouse_event(self):
         app = self._make_app()
 
@@ -238,6 +245,25 @@ class EventLoopTests(unittest.TestCase):
                     self.event_loop.run_app_loop(app)
 
         app._consume_pending_sigint.assert_called_once_with()
+        app.handle_key.assert_called_once_with("\x03")
+
+    def test_run_app_loop_converts_keyboard_interrupt_into_ctrl_c_key(self):
+        app = self._make_app()
+
+        with mock.patch.object(self.event_loop, "draw_frame"):
+            with mock.patch.object(self.event_loop, "read_input_key", side_effect=[None, "a"]):
+                state = {"raised": False}
+
+                def _dispatch(target, key):
+                    if not state["raised"]:
+                        state["raised"] = True
+                        raise KeyboardInterrupt()
+                    target.running = False
+                    return False
+
+                with mock.patch.object(self.event_loop, "dispatch_input", side_effect=_dispatch):
+                    self.event_loop.run_app_loop(app)
+
         app.handle_key.assert_called_once_with("\x03")
 
 

@@ -67,6 +67,9 @@ def read_input_key(stdscr):
     """Read one key from curses, returning None on timeout/no input."""
     try:
         return stdscr.get_wch()
+    except KeyboardInterrupt:
+        # Treat host Ctrl+C as an in-app control key to avoid abrupt exit.
+        return "\x03"
     except curses.error:
         return None
 
@@ -263,33 +266,40 @@ def run_app_loop(app):
         install_handlers()
     try:
         while app.running:
-            metrics["loops"] += 1
-            # Keep background progression deterministic: one poll per loop.
-            app.poll_background_operation()
-            # Always redraw when live terminals may have pending PTY output.
-            if _has_live_terminals(app):
-                app._dirty = True
-            if getattr(app, '_dirty', True):
-                draw_start = time.perf_counter()
-                draw_frame(app)
-                metrics["draw_time_s"] += time.perf_counter() - draw_start
-                metrics["redraws"] += 1
-                app._dirty = False
-            _apply_input_timeout(app, _select_input_timeout_ms(app))
-            input_start = time.perf_counter()
-            key = read_input_key(app.stdscr)
-            metrics["input_wait_time_s"] += time.perf_counter() - input_start
-            if key is None:
-                consume_sigint = getattr(app, "_consume_pending_sigint", None)
-                if callable(consume_sigint):
-                    key = consume_sigint()
-            _record_input_stats(metrics, key)
-            dispatch_start = time.perf_counter()
-            if dispatch_input(app, key):
+            try:
+                metrics["loops"] += 1
+                # Keep background progression deterministic: one poll per loop.
+                app.poll_background_operation()
+                # Always redraw when live terminals may have pending PTY output.
+                if _has_live_terminals(app):
+                    app._dirty = True
+                if getattr(app, '_dirty', True):
+                    draw_start = time.perf_counter()
+                    draw_frame(app)
+                    metrics["draw_time_s"] += time.perf_counter() - draw_start
+                    metrics["redraws"] += 1
+                    app._dirty = False
+                _apply_input_timeout(app, _select_input_timeout_ms(app))
+                input_start = time.perf_counter()
+                key = read_input_key(app.stdscr)
+                metrics["input_wait_time_s"] += time.perf_counter() - input_start
+                if key is None:
+                    consume_sigint = getattr(app, "_consume_pending_sigint", None)
+                    if callable(consume_sigint):
+                        key = consume_sigint()
+                _record_input_stats(metrics, key)
+                dispatch_start = time.perf_counter()
+                if dispatch_input(app, key):
+                    app._dirty = True
+                    metrics["dispatched_events"] += 1
+                metrics["dispatch_time_s"] += time.perf_counter() - dispatch_start
+                _emit_runtime_metrics(metrics, final=False)
+            except KeyboardInterrupt:
+                # Fallback safety net for terminals that still surface Ctrl+C as host interrupt.
+                app.handle_key("\x03")
                 app._dirty = True
                 metrics["dispatched_events"] += 1
-            metrics["dispatch_time_s"] += time.perf_counter() - dispatch_start
-            _emit_runtime_metrics(metrics, final=False)
+                continue
     finally:
         _emit_runtime_metrics(metrics, final=True)
         app.cleanup()
