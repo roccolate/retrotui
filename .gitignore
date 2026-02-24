@@ -31,3 +31,7 @@ tests/_mkdir_py_*
 /coverage*.txt
 /test_output.txt
 /tests_output.txt
+/tmp*/
+
+# Local Codex/Claude workspace state
+/.claude/
