@@ -114,20 +114,33 @@ def draw_icons(app, frame_size=None):
     for idx, icon in enumerate(app.icons):
         # Use dynamic position helper
         x, y = app.get_icon_screen_pos(idx)
-        
+
+        symbol = icon.get("symbol")
+        if isinstance(symbol, str) and symbol:
+            art_lines = [symbol]
+        else:
+            art = icon.get("art", ())
+            art_lines = [str(line) for line in art] if isinstance(art, (list, tuple)) else []
+            if not art_lines:
+                art_lines = ["[]"]
+
+        art_height = len(art_lines)
+        art_width = max((len(line) for line in art_lines), default=2)
+        render_height = max(ICON_ART_HEIGHT, art_height)
+
         # Clip if off-screen (y)
-        if y + ICON_ART_HEIGHT >= h - BOTTOM_BARS_HEIGHT:
+        if y + render_height >= h - BOTTOM_BARS_HEIGHT:
             continue
 
         is_selected = idx == app.selected_icon
         attr = theme_attr("icon_selected" if is_selected else "icon")
         if is_selected:
             attr |= curses.A_BOLD
-            
-        for row, line in enumerate(icon['art']):
+
+        for row, line in enumerate(art_lines):
             safe_addstr(app.stdscr, y + row, x, line, attr)
-        label = icon['label'].center(len(icon['art'][0]))
-        safe_addstr(app.stdscr, y + ICON_ART_HEIGHT, x, label, attr)
+        label = str(icon.get("label", "")).center(max(art_width, 2))
+        safe_addstr(app.stdscr, y + render_height, x, label, attr)
 
 
 def draw_taskbar(app, frame_size=None):

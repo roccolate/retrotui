@@ -711,6 +711,7 @@ class RetroTUI:
                 {'separator': True},
                 {'label': 'Desktop Icons', 'action': AppAction.DESKTOP_ICON_MANAGER},
                 {'label': 'Menu Editor', 'action': AppAction.MENU_EDITOR},
+                {'label': 'Sort Icons (A-Z)', 'action': self.sort_desktop_icons},
                 {'separator': True},
                 {'label': 'Theme', 'action': AppAction.SETTINGS},
                 {'label': 'Settings', 'action': AppAction.SETTINGS},
@@ -736,6 +737,12 @@ class RetroTUI:
             f'RetroTUI: {APP_VERSION}'
         )
         self.dialog = Dialog(f'{label} Properties', message, ['OK'], width=54)
+        return None
+
+    def sort_desktop_icons(self):
+        """Sort desktop icons alphabetically and persist the updated grid positions."""
+        self._get_icon_mgr().sort_positions()
+        self.selected_icon = -1
         return None
 
     def _validate_terminal_size(self):

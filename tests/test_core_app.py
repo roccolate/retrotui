@@ -1882,6 +1882,19 @@ class CoreAppTests(unittest.TestCase):
             label_to_action.get("Menu Editor"),
             self.actions_mod.AppAction.MENU_EDITOR,
         )
+        self.assertTrue(callable(label_to_action.get("Sort Icons (A-Z)")))
+
+    def test_sort_desktop_icons_delegates_to_icon_manager(self):
+        app = self._make_app()
+        app.selected_icon = 3
+        icon_mgr = types.SimpleNamespace(sort_positions=mock.Mock(return_value={"A": (3, 3)}))
+
+        with mock.patch.object(app, "_get_icon_mgr", return_value=icon_mgr):
+            result = app.sort_desktop_icons()
+
+        self.assertIsNone(result)
+        icon_mgr.sort_positions.assert_called_once_with()
+        self.assertEqual(app.selected_icon, -1)
 
 
 if __name__ == "__main__":
