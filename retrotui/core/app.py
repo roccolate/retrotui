@@ -72,6 +72,8 @@ from .window_manager import WindowManager
 LOGGER = logging.getLogger(__name__)
 
 APP_VERSION = '0.9.2'
+ICON_STYLE_DEFAULT = "default"
+ICON_STYLE_RETRO_01 = "retro_01"
 _CURSES_ERROR = getattr(curses, "error", Exception)
 _CONFIG_PERSIST_ERRORS = (OSError, UnicodeError, ValueError, TypeError)
 _INPUT_ROUTE_ERRORS = (
@@ -274,6 +276,7 @@ class RetroTUI:
         self.default_word_wrap = bool(self.config.word_wrap_default)
         self.default_sunday_first = bool(self.config.sunday_first)
         self.show_welcome = bool(self.config.show_welcome)
+        self.icon_style = self._normalize_icon_style(getattr(self.config, "icon_style", ICON_STYLE_DEFAULT))
         self._dirty = True  # Render flag: redraw only when True
         self._dragging_win = None   # O(1) drag tracking
         self._resizing_win = None   # O(1) resize tracking
@@ -563,6 +566,58 @@ class RetroTUI:
         raw = getattr(self.config, 'hidden_menu_items', "")
         return self._split_config_csv(raw)
 
+    @staticmethod
+    def _normalize_icon_style(style):
+        """Return supported icon style key."""
+        normalized = str(style or ICON_STYLE_DEFAULT).strip().lower()
+        if normalized in (ICON_STYLE_DEFAULT, ICON_STYLE_RETRO_01):
+            return normalized
+        return ICON_STYLE_DEFAULT
+
+    def _styled_icon_entry(self, icon):
+        """Return style-adjusted icon entry for current desktop icon style."""
+        style = self._normalize_icon_style(getattr(self, "icon_style", ICON_STYLE_DEFAULT))
+        if style != ICON_STYLE_RETRO_01:
+            return dict(icon)
+
+        styled = dict(icon)
+        action = styled.get("action")
+        key = getattr(action, "value", action)
+        key = str(key or "").lower()
+        retro_symbols = {
+            AppAction.FILE_MANAGER.value: ":D",
+            AppAction.NOTEPAD.value: ":|",
+            AppAction.TERMINAL.value: ">:",
+            AppAction.SETTINGS.value: "8)",
+            AppAction.ABOUT.value: "i)",
+            AppAction.CALCULATOR.value: "+)",
+            AppAction.IMAGE_VIEWER.value: "[]",
+            AppAction.PROCESS_MANAGER.value: "[]",
+            AppAction.LOG_VIEWER.value: "[]",
+            AppAction.CHARMAP.value: "Aa",
+            AppAction.CLIPBOARD.value: "[]",
+            AppAction.WIFI_MANAGER.value: "))",
+            AppAction.DESKTOP_ICON_MANAGER.value: "DT",
+            AppAction.ICONS.value: ":)",
+            AppAction.MENU_EDITOR.value: "MN",
+        }
+        symbol = retro_symbols.get(key)
+        if symbol is None and key.startswith("plugin:"):
+            symbol = ":)"
+        if symbol:
+            styled["symbol"] = symbol
+            token = symbol[:2].ljust(2)
+            if self.use_unicode:
+                styled["art"] = ["╭──╮", f"│{token}│", "╰──╯"]
+            else:
+                styled["art"] = ["+--+", f"|{token}|", "+--+"]
+        return styled
+
+    def set_icon_style(self, style):
+        """Set desktop icon style and refresh icon catalog."""
+        self.icon_style = self._normalize_icon_style(style)
+        self.refresh_icons()
+
     def apply_theme(self, theme_name):
         """Apply a theme immediately to current runtime."""
         self.theme = get_theme(theme_name)
@@ -573,7 +628,8 @@ class RetroTUI:
         """Rebuild desktop icons list based on config and unicode support."""
         hidden_keys = self._get_hidden_icon_labels()
         catalog = self._build_desktop_icon_catalog()
-        self.icons = [icon for icon in catalog if self._icon_visibility_key(icon) not in hidden_keys]
+        visible = [icon for icon in catalog if self._icon_visibility_key(icon) not in hidden_keys]
+        self.icons = [self._styled_icon_entry(icon) for icon in visible]
 
     def apply_preferences(self, *, show_hidden=None, word_wrap_default=None, sunday_first=None, apply_to_open_windows=False):
         """Apply runtime preferences used by app windows and defaults."""
@@ -615,6 +671,7 @@ class RetroTUI:
             word_wrap_default=self.default_word_wrap,
             sunday_first=self.default_sunday_first,
             show_welcome=self.show_welcome,
+            icon_style=self._normalize_icon_style(getattr(self, "icon_style", ICON_STYLE_DEFAULT)),
             hidden_icons=getattr(self.config, 'hidden_icons', ""),
             hidden_menu_items=getattr(self.config, 'hidden_menu_items', ""),
         )
@@ -710,6 +767,7 @@ class RetroTUI:
                 {'label': 'New Notepad', 'action': AppAction.NOTEPAD},
                 {'separator': True},
                 {'label': 'Desktop Icons', 'action': AppAction.DESKTOP_ICON_MANAGER},
+                {'label': 'Icons', 'action': AppAction.ICONS},
                 {'label': 'Menu Editor', 'action': AppAction.MENU_EDITOR},
                 {'label': 'Sort Icons (A-Z)', 'action': self.sort_desktop_icons},
                 {'separator': True},

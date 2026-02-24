@@ -107,6 +107,7 @@ class ThemeAndConfigTests(unittest.TestCase):
         self.assertEqual(normalized.theme, "win95")
         self.assertTrue(normalized.show_hidden)
         self.assertTrue(normalized.word_wrap_default)
+        self.assertEqual(normalized.icon_style, "default")
 
         fallback = self.config._normalize_config({"ui": {"theme": "invalid", "show_hidden": "no", "word_wrap_default": "0"}})
         self.assertEqual(fallback.theme, self.theme.DEFAULT_THEME)
@@ -123,12 +124,13 @@ class ThemeAndConfigTests(unittest.TestCase):
         with mock.patch.object(
             Path,
             "read_text",
-            return_value='[ui]\ntheme = "hacker"\nshow_hidden = true\nword_wrap_default = false\n',
+            return_value='[ui]\ntheme = "hacker"\nshow_hidden = true\nword_wrap_default = false\nicon_style = "retro_01"\n',
         ):
             loaded = self.config.load_config(Path("/tmp/config.toml"))
         self.assertEqual(loaded.theme, "hacker")
         self.assertTrue(loaded.show_hidden)
         self.assertFalse(loaded.word_wrap_default)
+        self.assertEqual(loaded.icon_style, "retro_01")
 
     def test_serialize_and_save_config(self):
         config = self.config.AppConfig(theme="amiga", show_hidden=True, word_wrap_default=False)
@@ -136,6 +138,7 @@ class ThemeAndConfigTests(unittest.TestCase):
         self.assertIn('theme = "amiga"', text)
         self.assertIn("show_hidden = true", text)
         self.assertIn("word_wrap_default = false", text)
+        self.assertIn('icon_style = "default"', text)
 
         cfg_file = Path("/tmp/nested/config.toml")
         with (

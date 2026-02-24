@@ -62,6 +62,20 @@ class ConstantsModuleTests(unittest.TestCase):
         self.assertEqual(unicode_desktop.get("hide_key"), "desktop")
         self.assertEqual(unicode_desktop.get("position_key"), "Icons")
 
+    def test_icons_app_icon_points_to_icons_action(self):
+        unicode_icons = next(
+            (icon for icon in self.constants.ICONS if icon.get("label") == "Icons"),
+            None,
+        )
+        ascii_icons = next(
+            (icon for icon in self.constants.ICONS_ASCII if icon.get("label") == "Icons"),
+            None,
+        )
+        self.assertIsNotNone(unicode_icons)
+        self.assertIsNotNone(ascii_icons)
+        self.assertEqual(unicode_icons.get("action"), self.constants.AppAction.ICONS)
+        self.assertEqual(ascii_icons.get("action"), self.constants.AppAction.ICONS)
+
     def test_video_extensions_include_common_formats(self):
         for ext in (".mp4", ".mkv", ".webm", ".avi", ".mov"):
             self.assertIn(ext, self.constants.VIDEO_EXTENSIONS)

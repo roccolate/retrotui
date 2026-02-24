@@ -236,6 +236,12 @@ def execute_app_action(app, action, logger, *, version: str) -> None:
         app._spawn_window(DesktopIconManagerWindow(offset_x, offset_y, 72, 22, app))
         return
 
+    if action == AppAction.ICONS:
+        from ..apps.app_manager import IconsWindow
+        offset_x, offset_y = app._next_window_offset(22, 6)
+        app._spawn_window(IconsWindow(offset_x, offset_y, 72, 22, app))
+        return
+
     if action == AppAction.MENU_EDITOR:
         from ..apps.app_manager import MenuEditorWindow
         offset_x, offset_y = app._next_window_offset(20, 5)
