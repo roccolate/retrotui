@@ -57,6 +57,12 @@ Run RetroTUI:
 python -m retrotui
 ```
 
+Optional mouse diagnostics (recommended when drag/click behavior differs by terminal):
+
+```bash
+python tools/debug_mouse.py
+```
+
 Perform each test for 2-3 minutes and mark PASS/FAIL:
 
 - [ ] Open/close windows repeatedly (10+ cycles)
@@ -75,6 +81,7 @@ Perform each test for 2-3 minutes and mark PASS/FAIL:
 - [ ] Paste paths/text (`Ctrl+V`) in Terminal and Notepad
 - [ ] Terminal resize redraw is stable (no corruption)
 - [ ] Exit and relaunch RetroTUI cleanly 5 times
+- [ ] Mouse debugger reports expected raw flags and normalized semantics during click/drag
 
 ## 5) Result Log Template
 
