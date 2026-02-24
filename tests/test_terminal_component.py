@@ -588,6 +588,36 @@ class TerminalComponentTests(unittest.TestCase):
         self.assertIsNone(win.handle_key(self.curses.KEY_F6))
         self.assertIsNone(win.handle_key(self.curses.KEY_F7))
 
+    def test_handle_key_ctrl_c_copies_when_selection_exists(self):
+        win = self._make_window()
+        win.window_menu = types.SimpleNamespace(active=False)
+        win._session = _FakeSession()
+
+        with (
+            mock.patch.object(win, "has_selection", return_value=True),
+            mock.patch.object(win, "_copy_selection") as copy_selection,
+            mock.patch.object(win, "_send_interrupt") as send_interrupt,
+        ):
+            self.assertIsNone(win.handle_key(3))
+
+        copy_selection.assert_called_once_with()
+        send_interrupt.assert_not_called()
+
+    def test_handle_key_ctrl_c_interrupts_without_selection(self):
+        win = self._make_window()
+        win.window_menu = types.SimpleNamespace(active=False)
+        win._session = _FakeSession()
+
+        with (
+            mock.patch.object(win, "has_selection", return_value=False),
+            mock.patch.object(win, "_copy_selection") as copy_selection,
+            mock.patch.object(win, "_send_interrupt") as send_interrupt,
+        ):
+            self.assertIsNone(win.handle_key(3))
+
+        send_interrupt.assert_called_once_with()
+        copy_selection.assert_not_called()
+
     def test_terminal_selection_drag_and_copy_f8(self):
         win = self._make_window()
         win.window_menu = None

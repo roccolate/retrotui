@@ -617,28 +617,22 @@ class RetroTUI:
         sigint = getattr(signal, "SIGINT", None)
         if sigint is not None:
             planned.append((sigint, self._handle_sigint))
+        sigbreak = getattr(signal, "SIGBREAK", None)
+        if sigbreak is not None:
+            planned.append((sigbreak, self._handle_sigint))
         for name in ("SIGTERM", "SIGHUP"):
             sig = getattr(signal, name, None)
             if sig is not None:
                 planned.append((sig, self._handle_shutdown_signal))
 
         prev_handlers = {}
-        try:
-            for sig, _handler in planned:
-                prev_handlers[sig] = signal.getsignal(sig)
-            for sig, handler in planned:
+        for sig, handler in planned:
+            try:
+                previous = signal.getsignal(sig)
                 signal.signal(sig, handler)
-        except (AttributeError, ValueError, OSError):
-            # Best-effort rollback when installation fails halfway.
-            for sig, prev in prev_handlers.items():
-                try:
-                    signal.signal(sig, prev)
-                except (AttributeError, ValueError, OSError):
-                    continue
-            self._prev_signal_handlers = {}
-            self._prev_sigint_handler = None
-            self._sigint_handler_installed = False
-            return
+                prev_handlers[sig] = previous
+            except (AttributeError, ValueError, OSError):
+                continue
 
         self._prev_signal_handlers = prev_handlers
         self._prev_sigint_handler = prev_handlers.get(sigint)

@@ -1422,6 +1422,9 @@ class CoreAppTests(unittest.TestCase):
         app._sigint_handler_installed = False
 
         expected_signals = [self.app_mod.signal.SIGINT]
+        sigbreak = getattr(self.app_mod.signal, "SIGBREAK", None)
+        if sigbreak is not None:
+            expected_signals.append(sigbreak)
         sigterm = getattr(self.app_mod.signal, "SIGTERM", None)
         if sigterm is not None:
             expected_signals.append(sigterm)
@@ -1445,6 +1448,10 @@ class CoreAppTests(unittest.TestCase):
                     sigint_handler = installed[self.app_mod.signal.SIGINT]
                     self.assertIs(getattr(sigint_handler, "__self__", None), app)
                     self.assertEqual(getattr(sigint_handler, "__name__", ""), "_handle_sigint")
+                    if sigbreak is not None:
+                        sigbreak_handler = installed[sigbreak]
+                        self.assertIs(getattr(sigbreak_handler, "__self__", None), app)
+                        self.assertEqual(getattr(sigbreak_handler, "__name__", ""), "_handle_sigint")
                     if sigterm is not None:
                         sigterm_handler = installed[sigterm]
                         self.assertIs(getattr(sigterm_handler, "__self__", None), app)
@@ -1478,18 +1485,19 @@ class CoreAppTests(unittest.TestCase):
         setsig.assert_not_called()
         self.assertTrue(app._sigint_handler_installed)
 
-    def test_runtime_signal_handler_install_rolls_back_on_partial_failure(self):
+    def test_runtime_signal_handler_install_skips_failing_signal(self):
         app = self._make_app()
         app._pending_sigint = False
         app._prev_sigint_handler = None
         app._prev_signal_handlers = {}
         app._sigint_handler_installed = False
 
-        failed = {"value": False}
+        failing_sig = getattr(self.app_mod.signal, "SIGTERM", None)
+        if failing_sig is None:
+            self.skipTest("SIGTERM not available on this platform")
 
-        def _setsig(_sig, handler):
-            if callable(handler) and not failed["value"]:
-                failed["value"] = True
+        def _setsig(sig, _handler):
+            if sig == failing_sig:
                 raise OSError("boom")
             return None
 
@@ -1502,11 +1510,10 @@ class CoreAppTests(unittest.TestCase):
                 with mock.patch.object(self.app_mod.signal, "signal", side_effect=_setsig) as setsig:
                     app._install_runtime_signal_handlers()
 
-        # One failing install call + rollback restore calls.
-        self.assertGreaterEqual(setsig.call_count, 2)
-        self.assertFalse(app._sigint_handler_installed)
-        self.assertEqual(app._prev_signal_handlers, {})
-        self.assertIsNone(app._prev_sigint_handler)
+        self.assertGreaterEqual(setsig.call_count, 1)
+        self.assertTrue(app._sigint_handler_installed)
+        self.assertIn(self.app_mod.signal.SIGINT, app._prev_signal_handlers)
+        self.assertNotIn(failing_sig, app._prev_signal_handlers)
 
     def test_handle_sigint_queue_and_consume_once(self):
         app = self._make_app()

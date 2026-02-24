@@ -601,6 +601,14 @@ class TerminalWindow(SelectableTextMixin, Window):
             self._copy_selection()
             return None
 
+        if key_code == 3:
+            # Copy selected text on Ctrl+C; otherwise behave as terminal interrupt.
+            if self.has_selection():
+                self._copy_selection()
+            else:
+                self._send_interrupt()
+            return None
+
         if key_code == getattr(curses, 'KEY_PPAGE', -1):
             _, text_rows = self._text_area_size()
             self.handle_scroll('up', max(1, text_rows - 1))
