@@ -205,6 +205,61 @@ class MouseRouterTests(unittest.TestCase):
         )
         self.assertFalse(handled)
 
+    def test_handle_file_drag_drop_mouse_uses_normalized_motion_without_raw_flags(self):
+        app = self._make_app()
+        payload = {"type": "file_path", "path": "/tmp/demo.txt"}
+        source = self._make_window()
+        target = self._make_window(
+            contains=mock.Mock(return_value=True),
+            open_path=mock.Mock(return_value=None),
+        )
+        app.windows = [source, target]
+        app.drag_drop.payload = payload
+        app.drag_drop.source_window = source
+
+        norm = {
+            "is_motion": True,
+            "button1_down": True,
+            "button1_released": False,
+            "button1_clicked": False,
+            "button1_double": False,
+        }
+        handled = self.mouse_router.handle_file_drag_drop_mouse(app, 9, 6, 0, norm=norm)
+
+        self.assertTrue(handled)
+        self.assertIs(app.drag_drop.target_window, target)
+
+    def test_handle_file_drag_drop_mouse_ignores_click_stop_while_motion_is_active(self):
+        app = self._make_app()
+        payload = {"type": "file_path", "path": "/tmp/demo.txt"}
+        source = self._make_window()
+        target = self._make_window(
+            contains=mock.Mock(return_value=True),
+            open_path=mock.Mock(return_value=None),
+        )
+        app.windows = [source, target]
+        app.drag_drop.payload = payload
+        app.drag_drop.source_window = source
+
+        norm = {
+            "is_motion": True,
+            "button1_down": True,
+            "button1_released": False,
+            "button1_clicked": True,
+            "button1_double": False,
+        }
+        handled = self.mouse_router.handle_file_drag_drop_mouse(
+            app,
+            9,
+            6,
+            self.curses.BUTTON1_CLICKED,
+            norm=norm,
+        )
+
+        self.assertTrue(handled)
+        self.assertIsNotNone(app.drag_drop.payload)
+        target.open_path.assert_not_called()
+
     def test_handle_mouse_event_returns_after_file_drag_drop(self):
         app = self._make_app()
 
@@ -283,6 +338,41 @@ class MouseRouterTests(unittest.TestCase):
             9,
             7,
             self.curses.BUTTON1_PRESSED,
+        )
+
+        self.assertTrue(handled)
+        self.assertTrue(win.dragging)
+        self.assertEqual(win.x, 8)
+        self.assertEqual(win.y, 6)
+
+    def test_handle_drag_resize_mouse_ignores_click_stop_while_motion_norm_active(self):
+        app = self._make_app()
+        win = types.SimpleNamespace(
+            dragging=True,
+            drag_offset_x=1,
+            drag_offset_y=1,
+            resizing=False,
+            resize_edge=None,
+            w=10,
+            h=5,
+            x=0,
+            y=0,
+            apply_resize=mock.Mock(),
+        )
+        app.windows = [win]
+        app._dragging_win = win
+        app._mouse_norm = {
+            "is_motion": True,
+            "button1_released": False,
+            "button1_clicked": True,
+            "button1_double": False,
+        }
+
+        handled = self.mouse_router.handle_drag_resize_mouse(
+            app,
+            9,
+            7,
+            self.curses.BUTTON1_CLICKED,
         )
 
         self.assertTrue(handled)
@@ -909,6 +999,39 @@ class MouseRouterTests(unittest.TestCase):
         self.mouse_router.handle_mouse_event(app, (0, 6, 6, 0, 0))
 
         self.assertTrue(win.handle_mouse_drag.called)
+
+    def test_handle_mouse_event_motion_click_like_does_not_clear_button1_pressed(self):
+        app = self._make_app()
+        app.button1_pressed = True
+        norm = {
+            "mx": 6,
+            "my": 6,
+            "bstate": self.curses.REPORT_MOUSE_POSITION | self.curses.BUTTON1_CLICKED,
+            "backend": "gpm",
+            "has_motion": True,
+            "inferred_motion": False,
+            "right_click": False,
+            "inferred_right_click": False,
+            "button1_pressed": False,
+            "button1_released": False,
+            "button1_clicked": True,
+            "button1_double": False,
+            "button1_down": True,
+            "is_drag": True,
+            "is_motion": True,
+            "is_click_like": True,
+            "scroll_up": False,
+            "scroll_down": False,
+            "is_passive_noop": False,
+        }
+
+        with mock.patch.object(self.mouse_router, "normalize_mouse_payload", return_value=norm):
+            self.mouse_router.handle_mouse_event(
+                app,
+                (0, 6, 6, 0, self.curses.REPORT_MOUSE_POSITION | self.curses.BUTTON1_CLICKED),
+            )
+
+        self.assertTrue(app.button1_pressed)
 
     def test_handle_window_mouse_scroll_paths(self):
         app = self._make_app()
