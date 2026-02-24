@@ -83,19 +83,27 @@ class DragDropManager:
             if callable(dispatcher):
                 dispatcher(result, target)
 
-    def handle_mouse(self, mx, my, bstate):
+    def handle_mouse(self, mx, my, bstate, norm=None):
         """Handle file drag-and-drop between windows. Returns True if event was consumed."""
         report_flag = getattr(curses, 'REPORT_MOUSE_POSITION', 0)
         pressed_flag = getattr(curses, 'BUTTON1_PRESSED', 0)
 
-        is_motion = bool(bstate & report_flag)
-        button_down = bool((bstate & pressed_flag) or getattr(self._app, 'button1_pressed', False))
-        move_drag = is_motion and button_down
+        if norm is not None:
+            is_motion = bool(norm.get('is_motion'))
+            button_down = bool(norm.get('button1_down'))
+            is_release_like = bool(norm.get('button1_released'))
+            if not is_release_like and not is_motion:
+                is_release_like = bool(norm.get('button1_clicked') or norm.get('button1_double'))
+            stop_drag = is_release_like
+        else:
+            is_motion = bool(bstate & report_flag)
+            button_down = bool((bstate & pressed_flag) or getattr(self._app, 'button1_pressed', False))
+            stop_drag = bool(bstate & getattr(curses, 'BUTTON1_RELEASED', 0))
+            if not stop_drag:
+                inferred_stop = getattr(self._app, 'stop_drag_flags', 0) & ~pressed_flag & ~report_flag
+                stop_drag = bool(bstate & inferred_stop)
 
-        stop_drag = bool(bstate & getattr(curses, 'BUTTON1_RELEASED', 0))
-        if not stop_drag:
-            inferred_stop = getattr(self._app, 'stop_drag_flags', 0) & ~pressed_flag & ~report_flag
-            stop_drag = bool(bstate & inferred_stop)
+        move_drag = is_motion and button_down
 
         if self.payload is not None:
             if stop_drag:

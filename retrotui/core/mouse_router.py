@@ -280,6 +280,19 @@ def _is_button1_click_event(bstate):
     return bool(bstate & _BUTTON1_CLICK_MASK)
 
 
+def _is_release_like_stop_event(app, bstate, norm=None):
+    """Return True when drag/resize/file-drop should stop for current mouse event."""
+    if norm is not None:
+        if bool(norm.get("button1_released")):
+            return True
+        if not bool(norm.get("is_motion")) and bool(
+            norm.get("button1_clicked") or norm.get("button1_double")
+        ):
+            return True
+        return False
+    return bool(bstate & getattr(app, "stop_drag_flags", 0))
+
+
 def _is_desktop_double_click(app, icon_idx, bstate):
     """Detect double-click for desktop icons with a time-based fallback."""
     if bstate & _BUTTON1_DOUBLE_CLICKED:
@@ -298,17 +311,20 @@ def _is_desktop_double_click(app, icon_idx, bstate):
     return is_double
 
 
-def handle_file_drag_drop_mouse(app, mx, my, bstate):
+def handle_file_drag_drop_mouse(app, mx, my, bstate, norm=None):
     """Handle file drag-and-drop between windows."""
-    return app.drag_drop.handle_mouse(mx, my, bstate)
+    if norm is None:
+        norm = getattr(app, "_mouse_norm", None)
+    return app.drag_drop.handle_mouse(mx, my, bstate, norm=norm)
 
 
 def handle_drag_resize_mouse(app, mx, my, bstate):
     """Handle active drag or resize operations (O(1) via tracked pointers)."""
+    norm = getattr(app, "_mouse_norm", None)
     # Drag tracking
     dragging = app._dragging_win
     if dragging is not None:
-        if bstate & app.stop_drag_flags:
+        if _is_release_like_stop_event(app, bstate, norm=norm):
             dragging.dragging = False
             app._dragging_win = None
             return True
@@ -322,7 +338,7 @@ def handle_drag_resize_mouse(app, mx, my, bstate):
     # Resize tracking
     resizing = app._resizing_win
     if resizing is not None:
-        if bstate & app.stop_drag_flags:
+        if _is_release_like_stop_event(app, bstate, norm=norm):
             resizing.resizing = False
             resizing.resize_edge = None
             app._resizing_win = None
@@ -567,7 +583,9 @@ def handle_mouse_event(app, event):
         app.button1_pressed = True
     elif norm.get("button1_released"):
         app.button1_pressed = False
-    elif norm.get("button1_clicked"):
+    elif (
+        norm.get("button1_clicked") or norm.get("button1_double")
+    ) and not norm.get("is_motion"):
         app.button1_pressed = False
 
     if app._handle_dialog_mouse(mx, my, bstate):
@@ -592,10 +610,12 @@ def handle_mouse_event(app, event):
     elif capture_kind == "window_selection":
         if app._handle_window_mouse(mx, my, bstate):
             return True
+    elif capture_kind == "file_drag":
+        return bool(handle_file_drag_drop_mouse(app, mx, my, bstate, norm=norm))
     elif capture_kind == "icon_drag":
         return bool(app._handle_desktop_mouse(mx, my, bstate))
 
-    if handle_file_drag_drop_mouse(app, mx, my, bstate):
+    if handle_file_drag_drop_mouse(app, mx, my, bstate, norm=norm):
         return True
 
     if my == 0 and norm.get("is_click_like"):
