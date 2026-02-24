@@ -698,6 +698,31 @@ class MouseRouterTests(unittest.TestCase):
         )
         app._dispatch_window_result.assert_called_once_with("drag-result", win)
 
+    def test_handle_mouse_event_inferred_drag_sets_pressed_for_drag_handler(self):
+        app = self._make_app()
+        app.button1_pressed = True
+        win = self._make_window(
+            contains=mock.Mock(return_value=True),
+            handle_mouse_drag=mock.Mock(return_value="drag-result"),
+            window_menu=types.SimpleNamespace(active=False, handle_hover=mock.Mock(return_value=False)),
+        )
+        app.windows = [win]
+        app._handle_window_mouse = mock.Mock(
+            side_effect=lambda mx, my, bstate: self.mouse_router.handle_window_mouse(
+                app,
+                mx,
+                my,
+                bstate,
+                norm=getattr(app, "_mouse_norm", None),
+            )
+        )
+
+        # No REPORT_MOUSE_POSITION / BUTTON1_PRESSED bits in bstate; movement infers drag.
+        self.mouse_router.handle_mouse_event(app, (0, 5, 5, 0, 0))
+        self.mouse_router.handle_mouse_event(app, (0, 6, 6, 0, 0))
+
+        self.assertTrue(win.handle_mouse_drag.called)
+
     def test_handle_window_mouse_scroll_paths(self):
         app = self._make_app()
         win = self._make_window(contains=mock.Mock(return_value=True))

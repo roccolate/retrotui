@@ -9,13 +9,13 @@ Construir RetroTUI como entorno de usuario completo sobre Linux TTY/fbcon, sin d
 - Evitar cambios grandes sin medicion (siempre medir antes/despues).
 
 ## Fase 0 - Baseline y observabilidad
-Estado: `pending`
+Estado: `active`
 
 ### Tareas
 - [ ] Definir metrica base: tiempo de arranque, redraws/segundo, uso CPU en idle, uso RAM.
-- [ ] Activar logs estructurados bajo `RETROTUI_DEBUG`.
-- [ ] Agregar un modo de profiling liviano (contadores de loop/eventos/redraw).
-- [ ] Guardar reportes de baseline en `docs/` (no en raiz).
+- [x] Activar logs estructurados bajo `RETROTUI_DEBUG`.
+- [x] Agregar un modo de profiling liviano (contadores de loop/eventos/redraw).
+- [x] Guardar reportes de baseline en `docs/` (no en raiz).
 
 ### Criterios de salida
 - [ ] Puedes comparar rendimiento antes/despues de cada optimizacion.

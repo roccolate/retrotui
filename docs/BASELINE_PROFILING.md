@@ -1,0 +1,65 @@
+# RetroTUI Baseline Profiling
+
+This guide defines a repeatable baseline for Fase 0 metrics.
+
+## Scope
+
+Capture at least:
+
+- Startup time (`boot_ms`)
+- Event loop redraw behavior (`redraw_ratio`)
+- Approximate idle wait time (`input_wait_ms`)
+- CPU and RAM from host process monitor
+
+## Enable Instrumentation
+
+Set env vars before launch:
+
+```bash
+export RETROTUI_DEBUG=1
+export RETROTUI_PROFILE=1
+export RETROTUI_PROFILE_INTERVAL=5
+```
+
+PowerShell:
+
+```powershell
+$env:RETROTUI_DEBUG='1'
+$env:RETROTUI_PROFILE='1'
+$env:RETROTUI_PROFILE_INTERVAL='5'
+```
+
+## What to Collect
+
+Look for log lines:
+
+- `startup boot_ms=...`
+- `profile ... redraw_ratio=...`
+- `profile_final ... redraw_ratio=...`
+
+And record host stats manually:
+
+- CPU `%` in idle (no interaction for 60s)
+- RAM footprint in idle
+
+## Baseline Table (Template)
+
+| Date | Host | Terminal | Boot ms | Redraw ratio | CPU idle % | RAM idle MB | Notes |
+|---|---|---|---:|---:|---:|---:|---|
+| YYYY-MM-DD | machine-name | linux tty / tmux / ssh |  |  |  |  |  |
+| YYYY-MM-DD | machine-name | linux tty / tmux / ssh |  |  |  |  |  |
+
+## Recommended Run Protocol
+
+1. Cold start RetroTUI and wait 10s.
+2. Leave idle 60s.
+3. Perform a fixed interaction script (open file manager, open notepad, move window).
+4. Exit and save logs.
+
+## Storage
+
+Store captured logs and filled tables under:
+
+- `docs/baseline/`
+
+Use one file per environment and date.

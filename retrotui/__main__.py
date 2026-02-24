@@ -5,7 +5,10 @@ import curses
 import locale
 import logging
 import os
+import time
 from .core.app import RetroTUI
+
+LOGGER = logging.getLogger(__name__)
 
 # Ensure UTF-8
 try:
@@ -16,11 +19,21 @@ except locale.Error:
 if os.environ.get('RETROTUI_DEBUG'):
     logging.basicConfig(
         level=logging.DEBUG,
-        format='[%(levelname)s] %(name)s: %(message)s'
+        format='ts=%(asctime)s level=%(levelname)s logger=%(name)s msg="%(message)s"'
     )
 
 def main(stdscr):
+    boot_start = time.perf_counter()
     app = RetroTUI(stdscr)
+    boot_ms = (time.perf_counter() - boot_start) * 1000.0
+    if os.environ.get('RETROTUI_DEBUG') or os.environ.get('RETROTUI_PROFILE'):
+        LOGGER.debug(
+            "startup boot_ms=%.2f use_unicode=%s windows=%d icons=%d",
+            boot_ms,
+            getattr(app, 'use_unicode', None),
+            len(getattr(app, 'windows', [])),
+            len(getattr(app, 'icons', [])),
+        )
     app.run()
 
 def run():
