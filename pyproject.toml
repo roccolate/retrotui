@@ -7,7 +7,7 @@ name = "retrotui"
 version = "0.9.2"
 description = "RetroTUI desktop environment for terminal"
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 authors = [
   { name = "RetroTUI contributors" }
 ]
