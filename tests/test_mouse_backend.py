@@ -45,6 +45,29 @@ def test_normalize_mouse_payload_infers_right_click_for_gpm_press_release():
     assert result["right_click"] is True
 
 
+def test_normalize_mouse_payload_infers_right_click_for_gpm_button2_mapping():
+    app = types.SimpleNamespace(
+        mouse_backend="gpm",
+        _last_mouse_pos=None,
+        button1_pressed=False,
+    )
+
+    right_button2 = (
+        getattr(mouse_backend.curses, "BUTTON2_PRESSED", 0)
+        or getattr(mouse_backend.curses, "BUTTON2_CLICKED", 0)
+        or getattr(mouse_backend.curses, "BUTTON2_RELEASED", 0)
+    )
+    if right_button2 == 0:
+        return
+
+    event = (0, 5, 6, 0, right_button2)
+    result = mouse_backend.normalize_mouse_payload(app, event)
+
+    assert result is not None
+    assert result["inferred_right_click"] is True
+    assert result["right_click"] is True
+
+
 def test_normalize_mouse_payload_marks_passive_noop_motion():
     app = types.SimpleNamespace(
         mouse_backend="sgr",

@@ -11,9 +11,11 @@ class PluginLoaderUnitTests(unittest.TestCase):
     def setUp(self):
         self.loader = importlib.import_module("retrotui.plugins.loader")
         self._orig_plugin_dir = self.loader.PLUGIN_DIR
+        self._orig_default_plugin_dir = self.loader._DEFAULT_PLUGIN_DIR
 
     def tearDown(self):
         self.loader.PLUGIN_DIR = self._orig_plugin_dir
+        self.loader._DEFAULT_PLUGIN_DIR = self._orig_default_plugin_dir
 
     def _create_plugin(self, root: Path, plugin_id: str) -> Path:
         plugin_dir = root / plugin_id
@@ -58,6 +60,43 @@ class PluginLoaderUnitTests(unittest.TestCase):
             manifests = self.loader.discover_plugins()
 
         self.assertEqual(manifests, [])
+
+    def test_discover_plugins_uses_repo_examples_fallback_when_default_missing(self):
+        tmpdir = make_repo_tmpdir(prefix="_tmp_plugin_loader_")
+        self.addCleanup(tmpdir.cleanup)
+        root = Path(tmpdir.name)
+        examples = root / "examples"
+        examples.mkdir()
+        self._create_plugin(examples, "bundled")
+
+        missing_default = root / "missing-default"
+        self.loader._DEFAULT_PLUGIN_DIR = str(missing_default)
+        self.loader.PLUGIN_DIR = str(missing_default)
+
+        with mock.patch.object(self.loader, "_repo_examples_plugin_dir", return_value=str(examples)):
+            manifests = self.loader.discover_plugins()
+
+        self.assertEqual(len(manifests), 1)
+        self.assertEqual(manifests[0].get("plugin", {}).get("id"), "bundled")
+
+    def test_discover_plugins_uses_repo_examples_when_default_exists_but_empty(self):
+        tmpdir = make_repo_tmpdir(prefix="_tmp_plugin_loader_")
+        self.addCleanup(tmpdir.cleanup)
+        root = Path(tmpdir.name)
+        examples = root / "examples"
+        examples.mkdir()
+        self._create_plugin(examples, "bundled")
+
+        empty_default = root / "empty-default"
+        empty_default.mkdir()
+        self.loader._DEFAULT_PLUGIN_DIR = str(empty_default)
+        self.loader.PLUGIN_DIR = str(empty_default)
+
+        with mock.patch.object(self.loader, "_repo_examples_plugin_dir", return_value=str(examples)):
+            manifests = self.loader.discover_plugins()
+
+        self.assertEqual(len(manifests), 1)
+        self.assertEqual(manifests[0].get("plugin", {}).get("id"), "bundled")
 
 
 if __name__ == "__main__":
