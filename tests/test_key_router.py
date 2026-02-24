@@ -50,6 +50,7 @@ class KeyRouterTests(unittest.TestCase):
                 selected_item=7,
                 handle_key=mock.Mock(return_value=None),
             ),
+            context_menu=None,
             windows=[],
             get_active_window=mock.Mock(return_value=None),
             execute_action=mock.Mock(),
@@ -154,6 +155,18 @@ class KeyRouterTests(unittest.TestCase):
         self.assertTrue(handled)
         self.assertFalse(app.menu.active)
 
+    def test_handle_menu_hotkeys_escape_returns_false_when_no_menu_layer_open(self):
+        app = self._make_app()
+        app.menu.active = False
+        app._active_window_menu_owner = None
+        app.get_active_window.return_value = types.SimpleNamespace(
+            window_menu=types.SimpleNamespace(active=False)
+        )
+
+        handled = self.key_router.handle_menu_hotkeys(app, 27)
+
+        self.assertFalse(handled)
+
     def test_handle_global_menu_key_executes_selected_action(self):
         app = self._make_app()
         app.menu.active = True
@@ -247,16 +260,47 @@ class KeyRouterTests(unittest.TestCase):
         app._cycle_focus.assert_not_called()
         app._handle_active_window_key.assert_not_called()
 
-    def test_handle_key_event_ctrl_q_exits_early(self):
+    def test_handle_key_event_ctrl_q_exits_when_no_menu_layers_are_open(self):
         app = self._make_app()
 
         self.key_router.handle_key_event(app, 17)
 
         app.execute_action.assert_called_once_with(self.actions_mod.AppAction.EXIT)
-        app._handle_menu_hotkeys.assert_not_called()
-        app._handle_global_menu_key.assert_not_called()
+        app._handle_menu_hotkeys.assert_called_once()
+        app._handle_global_menu_key.assert_called_once()
         app._cycle_focus.assert_not_called()
         app._handle_active_window_key.assert_not_called()
+
+    def test_handle_key_event_ctrl_q_closes_global_menu_before_exit(self):
+        app = self._make_app()
+        app.menu.active = True
+
+        self.key_router.handle_key_event(app, 17)
+
+        self.assertFalse(app.menu.active)
+        app.execute_action.assert_not_called()
+
+    def test_handle_key_event_ctrl_q_closes_tracked_window_menu_before_exit(self):
+        app = self._make_app()
+        tracked_menu = types.SimpleNamespace(active=True)
+        tracked = types.SimpleNamespace(window_menu=tracked_menu)
+        app._active_window_menu_owner = tracked
+
+        self.key_router.handle_key_event(app, 17)
+
+        self.assertFalse(tracked_menu.active)
+        self.assertIsNone(app._active_window_menu_owner)
+        app.execute_action.assert_not_called()
+
+    def test_handle_key_event_ctrl_q_closes_context_menu_before_exit(self):
+        app = self._make_app()
+        context_menu = types.SimpleNamespace(is_open=mock.Mock(return_value=True), hide=mock.Mock())
+        app.context_menu = context_menu
+
+        self.key_router.handle_key_event(app, 17)
+
+        context_menu.hide.assert_called_once_with()
+        app.execute_action.assert_not_called()
 
     def test_handle_key_event_tab_cycles_focus(self):
         app = self._make_app()
@@ -302,6 +346,14 @@ class KeyRouterTests(unittest.TestCase):
         self.key_router.handle_key_event(app, "z")
 
         app._handle_active_window_key.assert_called_once_with("z")
+
+    def test_handle_key_event_escape_without_open_menus_reaches_active_window(self):
+        app = self._make_app()
+        app._handle_menu_hotkeys.return_value = False
+
+        self.key_router.handle_key_event(app, 27)
+
+        app._handle_active_window_key.assert_called_once_with(27)
 
 
 if __name__ == "__main__":

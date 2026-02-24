@@ -35,6 +35,15 @@ def _resolve_frame_size(app, frame_size):
 
 def _window_stats(app):
     """Return cached per-frame window stats used by taskbar/statusbar."""
+    window_mgr = getattr(app, "window_mgr", None)
+    if window_mgr is not None and hasattr(window_mgr, "window_stats"):
+        stats = window_mgr.window_stats()
+        return {
+            "total": int(stats.get("total", 0)),
+            "visible": int(stats.get("visible", 0)),
+            "minimized_labels": list(stats.get("minimized_labels", ())),
+        }
+
     cycle = getattr(app, "_render_cycle_id", None)
     cache_cycle = getattr(app, "_render_stats_cycle_id", None)
     cached = getattr(app, "_render_window_stats", None)

@@ -199,6 +199,29 @@ class RenderingTests(unittest.TestCase):
         stdscr.getmaxyx.assert_not_called()
         self.assertGreaterEqual(safe_addstr.call_count, 1)
 
+    def test_draw_statusbar_uses_window_manager_stats_when_available(self):
+        stdscr = types.SimpleNamespace(getmaxyx=mock.Mock(return_value=(20, 80)))
+        window_mgr = types.SimpleNamespace(
+            window_stats=mock.Mock(
+                return_value={
+                    "total": 3,
+                    "visible": 2,
+                    "minimized_labels": ("Notes",),
+                }
+            )
+        )
+        app = types.SimpleNamespace(
+            stdscr=stdscr,
+            window_mgr=window_mgr,
+        )
+
+        with mock.patch.object(self.rendering, "safe_addstr") as safe_addstr:
+            self.rendering.draw_statusbar(app, "0.3.4")
+
+        window_mgr.window_stats.assert_called_once_with()
+        all_text = "".join(str(call.args[3]) for call in safe_addstr.call_args_list if len(call.args) > 3)
+        self.assertIn("Windows: 2/3", all_text)
+
     def test_taskbar_and_statusbar_share_window_stats_cache_per_render_cycle(self):
         class _CountingWindows(list):
             def __init__(self, *items):

@@ -79,6 +79,34 @@ class WindowManagerTests(unittest.TestCase):
         self.assertIn("toggle_two", activated)
         self.assertIn(two, activated)
 
+    def test_window_stats_and_taskbar_share_single_iteration_per_render_cycle(self):
+        class _CountingWindows(list):
+            def __init__(self, *items):
+                super().__init__(items)
+                self.iter_calls = 0
+
+            def __iter__(self):
+                self.iter_calls += 1
+                return super().__iter__()
+
+        app = SimpleNamespace(
+            _render_cycle_id=12,
+            stdscr=SimpleNamespace(getmaxyx=lambda: (20, 80)),
+        )
+        wm = WindowManager(app)
+        wm.windows = _CountingWindows(
+            SimpleNamespace(minimized=True, visible=True, title="One"),
+            SimpleNamespace(minimized=False, visible=False, title="Two"),
+        )
+
+        stats = wm.window_stats()
+        buttons = wm.taskbar_buttons(80)
+
+        self.assertEqual(stats["total"], 2)
+        self.assertEqual(stats["visible"], 1)
+        self.assertEqual(len(buttons), 1)
+        self.assertEqual(wm.windows.iter_calls, 1)
+
 
 if __name__ == "__main__":
     unittest.main()

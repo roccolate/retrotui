@@ -35,6 +35,56 @@ def _close_tracked_window_menu(app):
     return True
 
 
+def _close_context_menu(app):
+    """Close global context menu when open."""
+    ctx = getattr(app, "context_menu", None)
+    if not ctx:
+        return False
+    is_open = getattr(ctx, "is_open", None)
+    if callable(is_open):
+        if not is_open():
+            return False
+    elif not getattr(ctx, "active", False):
+        return False
+
+    hide = getattr(ctx, "hide", None)
+    if callable(hide):
+        hide()
+    else:
+        ctx.active = False
+    return True
+
+
+def _has_any_open_menu_layer(app):
+    """Return True when global/window/context menu overlays are currently open."""
+    if bool(getattr(getattr(app, "menu", None), "active", False)):
+        return True
+    if _get_active_window_menu_owner(app) is not None:
+        return True
+    ctx = getattr(app, "context_menu", None)
+    if not ctx:
+        return False
+    is_open = getattr(ctx, "is_open", None)
+    if callable(is_open):
+        return bool(is_open())
+    return bool(getattr(ctx, "active", False))
+
+
+def _handle_ctrl_q(app):
+    """Apply global Ctrl+Q policy with menu-layer safety."""
+    # Close transient layers first to avoid accidental session exits.
+    if _close_context_menu(app):
+        return True
+    if _close_tracked_window_menu(app):
+        return True
+    if bool(getattr(getattr(app, "menu", None), "active", False)):
+        app.menu.active = False
+        return True
+
+    app.execute_action(AppAction.EXIT)
+    return True
+
+
 def handle_menu_hotkeys(app, key_code):
     """Handle F10 and Escape interactions for menus."""
     if key_code is None:
@@ -67,6 +117,8 @@ def handle_menu_hotkeys(app, key_code):
         return True
 
     if key_code == 27:
+        if _close_context_menu(app):
+            return True
         if _close_tracked_window_menu(app):
             return True
         active_win = app.get_active_window()
@@ -74,9 +126,11 @@ def handle_menu_hotkeys(app, key_code):
             active_win.window_menu.active = False
             if getattr(app, "_active_window_menu_owner", None) is active_win:
                 app._active_window_menu_owner = None
-        elif app.menu.active:
+            return True
+        if app.menu.active:
             app.menu.active = False
-        return True
+            return True
+        return False
 
     return False
 
@@ -136,14 +190,14 @@ def handle_key_event(app, key):
     if app._handle_dialog_key(key):
         return
 
-    if key_code == 17:  # Ctrl+Q
-        app.execute_action(AppAction.EXIT)
-        return
-
     if app._handle_menu_hotkeys(key_code):
         return
 
     if app._handle_global_menu_key(key_code):
+        return
+
+    if key_code == 17:  # Ctrl+Q
+        _handle_ctrl_q(app)
         return
 
     if key_code == 9:  # Tab
