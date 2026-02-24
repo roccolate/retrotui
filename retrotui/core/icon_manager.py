@@ -13,6 +13,10 @@ from ..constants import (
 
 LOGGER = logging.getLogger(__name__)
 
+_ICON_PERSIST_ERRORS = (AttributeError, OSError, TypeError, ValueError)
+_ICON_PARSE_ERRORS = (TypeError, ValueError)
+_ICON_TERMINAL_SIZE_ERRORS = (AttributeError, OSError, TypeError, ValueError)
+
 
 class IconPositionManager:
     """Manages desktop icon positions including persistence to TOML config."""
@@ -63,7 +67,7 @@ class IconPositionManager:
         self.drag_offset_y = 0
         try:
             self._app.persist_config()
-        except Exception:
+        except _ICON_PERSIST_ERRORS:
             pass
 
     def load(self, cfg_path):
@@ -91,7 +95,7 @@ class IconPositionManager:
             try:
                 x_str, y_str = val.split(',')
                 icons[key] = (int(x_str.strip()), int(y_str.strip()))
-            except Exception:
+            except _ICON_PARSE_ERRORS:
                 continue
         self.positions = icons
         return icons
@@ -147,7 +151,7 @@ class IconPositionManager:
 
         try:
             h, _ = self._app.stdscr.getmaxyx()
-        except Exception:
+        except _ICON_TERMINAL_SIZE_ERRORS:
             h = ICON_FALLBACK_TERMINAL_HEIGHT
 
         max_y = h - ICON_GRID_BOTTOM_MARGIN

@@ -134,7 +134,12 @@ CLOCK_CLICK_REGION_WIDTH = 8  # Width of clock area in status bar
 BINARY_DETECT_CHUNK_SIZE = 1024  # Bytes read to detect binary files
 
 # Terminal / input constants
+# Idle timeout keeps CPU low when the desktop is mostly static.
 TERMINAL_INPUT_TIMEOUT_MS = 500  # Curses input timeout in milliseconds
+# Live terminal windows need lower latency for smooth shell output/input.
+TERMINAL_LIVE_INPUT_TIMEOUT_MS = 33  # ~30 FPS polling cadence
+# Background workers (progress dialogs) benefit from faster updates than idle mode.
+TERMINAL_BACKGROUND_INPUT_TIMEOUT_MS = 120
 MOUSE_SCROLL_DOWN_FALLBACK = 0x200000  # Fallback mask for BUTTON5_PRESSED (scroll down)
 
 # Welcome window dimensions

@@ -28,7 +28,11 @@ def normalize_mouse_payload(app, event):
     # Backend hint: explicit app override wins; Linux console defaults to GPM-like.
     backend = getattr(app, "mouse_backend", None)
     if not backend:
-        backend = "gpm" if os.environ.get("TERM") == "linux" else "sgr"
+        forced_backend = (os.environ.get("RETROTUI_MOUSE_BACKEND") or "").strip().lower()
+        if forced_backend in {"gpm", "sgr"}:
+            backend = forced_backend
+        else:
+            backend = "gpm" if os.environ.get("TERM") == "linux" else "sgr"
 
     has_motion = bool(bstate & report_flag)
     last_pos = getattr(app, "_last_mouse_pos", None)

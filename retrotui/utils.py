@@ -19,6 +19,32 @@ from .theme import ROLE_TO_PAIR_ID, get_theme
 
 # Cache for theme_attr() lookups - invalidated by init_colors().
 _theme_attr_cache: dict[str, int] = {}
+_CURSES_ERROR = getattr(curses, "error", Exception)
+_CURSES_SETATTR_ERRORS = (
+    AttributeError,
+    OSError,
+    RuntimeError,
+    TypeError,
+    ValueError,
+)
+_THEME_ATTR_ERRORS = (
+    AttributeError,
+    LookupError,
+    OSError,
+    RuntimeError,
+    TypeError,
+    ValueError,
+    _CURSES_ERROR,
+)
+_SAFE_ADDSTR_PROBE_ERRORS = (
+    AttributeError,
+    OSError,
+    RuntimeError,
+    TypeError,
+    ValueError,
+)
+_TRUTHY_ENV_VALUES = {"1", "true", "yes", "on"}
+_COLOR_MODE_VALUES = {"auto", "base", "256"}
 
 # Provide safe fallbacks for curses constants that may be missing in some test
 # environments (for example when tests inject a fake `curses` module or on
@@ -55,8 +81,62 @@ for _name, _val in _CURSES_FALLBACKS.items():
     if not hasattr(curses, _name):
         try:
             setattr(curses, _name, _val)
-        except Exception:
+        except _CURSES_SETATTR_ERRORS:
             pass
+
+
+def _resolve_color_mode():
+    """Return normalized color mode: auto, base, or 256."""
+    raw = str(os.environ.get("RETROTUI_COLOR_MODE", "auto")).strip().lower()
+    if raw in _COLOR_MODE_VALUES:
+        return raw
+    if raw in {"8", "16", "ansi"}:
+        return "base"
+    if raw in {"xterm-256color", "xterm256"}:
+        return "256"
+    return "auto"
+
+
+def _terminal_color_count():
+    """Return reported terminal color count, defaulting to 0 on probe errors."""
+    try:
+        return int(getattr(curses, "COLORS", 0) or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _can_change_terminal_palette():
+    """Return True when curses reports palette redefinition support."""
+    probe = getattr(curses, "can_change_color", None)
+    if not callable(probe):
+        return False
+    try:
+        return bool(probe())
+    except _THEME_ATTR_ERRORS:
+        return False
+
+
+def _select_theme_pair_map(theme):
+    """Select base/256 pair map according to capabilities and env override."""
+    mode = _resolve_color_mode()
+    supports_256 = bool(theme.pairs_256 and _terminal_color_count() >= 256)
+    use_256 = supports_256 and mode != "base"
+
+    if use_256:
+        pair_map = theme.pairs_256
+        if pair_map:
+            return pair_map, True
+
+    return theme.pairs_base, False
+
+
+def _should_apply_custom_colors(theme, using_256):
+    """Return True when custom palette remapping should be applied."""
+    if not using_256 or not theme.custom_colors:
+        return False
+    # Disabled by default for cross-terminal consistency.
+    raw = str(os.environ.get("RETROTUI_APPLY_CUSTOM_COLORS", "")).strip().lower()
+    return raw in _TRUTHY_ENV_VALUES
 
 
 def init_colors(theme_key_or_obj=None):
@@ -71,18 +151,11 @@ def init_colors(theme_key_or_obj=None):
     else:
         theme = theme_key_or_obj
 
-    use_extended = bool(
-        theme.custom_colors
-        and theme.pairs_256
-        and curses.can_change_color()
-        and curses.COLORS >= 256
-    )
-    if use_extended:
+    pair_map, using_256 = _select_theme_pair_map(theme)
+
+    if _should_apply_custom_colors(theme, using_256) and _can_change_terminal_palette():
         for color_id, rgb in theme.custom_colors.items():
             curses.init_color(color_id, *rgb)
-        pair_map = theme.pairs_256_win32 if sys.platform == 'win32' and getattr(theme, 'pairs_256_win32', None) else theme.pairs_256
-    else:
-        pair_map = theme.pairs_base_win32 if sys.platform == 'win32' and getattr(theme, 'pairs_base_win32', None) else theme.pairs_base
 
     for role, pair_id in ROLE_TO_PAIR_ID.items():
         fg, bg = pair_map[role]
@@ -105,7 +178,7 @@ def theme_attr(role):
         return cached
     try:
         attr = curses.color_pair(ROLE_TO_PAIR_ID[role])
-    except Exception:
+    except _THEME_ATTR_ERRORS:
         # curses may not be initialized in some test environments; fall back to 0
         attr = 0
     _theme_attr_cache[role] = attr
@@ -124,7 +197,7 @@ def safe_addstr(win, y, x, text, attr=0):
             # If the returned object is itself callable (a Mock), call it.
             if callable(res):
                 res = res()
-        except Exception:
+        except _SAFE_ADDSTR_PROBE_ERRORS:
             res = None
         if not isinstance(res, (list, tuple)):
             # Try to extract common attributes as a last resort
@@ -132,7 +205,7 @@ def safe_addstr(win, y, x, text, attr=0):
                 h = int(getattr(res, 'h', None) or getattr(res, 'rows', None) or getattr(res, 'height', None))
                 w = int(getattr(res, 'w', None) or getattr(res, 'cols', None) or getattr(res, 'width', None))
                 res = (h, w)
-            except Exception:
+            except _SAFE_ADDSTR_PROBE_ERRORS:
                 return
     h, w = res
     if y >= h or x >= w:

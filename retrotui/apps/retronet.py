@@ -13,6 +13,40 @@ from ..ui.window import Window
 from ..utils import safe_addstr, theme_attr, normalize_key_code
 from ..core.actions import ActionResult, ActionType
 
+_CURSES_ERROR = getattr(curses, "error", Exception)
+_URL_SANITIZE_ERRORS = (
+    AttributeError,
+    LookupError,
+    OSError,
+    RuntimeError,
+    TypeError,
+    ValueError,
+    UnicodeError,
+)
+_RETRONET_FETCH_ERRORS = (
+    ArithmeticError,
+    AssertionError,
+    AttributeError,
+    ImportError,
+    LookupError,
+    NameError,
+    OSError,
+    RuntimeError,
+    SyntaxError,
+    TypeError,
+    ValueError,
+    UnicodeError,
+    ssl.SSLError,
+    _CURSES_ERROR,
+)
+_RESPONSE_CLOSE_ERRORS = (
+    AttributeError,
+    OSError,
+    RuntimeError,
+    TypeError,
+    ValueError,
+)
+
 @dataclass
 class InteractiveSpan:
     start_x: int
@@ -73,7 +107,7 @@ class RetroNetWindow(Window):
             parts[2] = urllib.parse.quote(parts[2])
             parts[3] = urllib.parse.quote(parts[3], safe='=&')
             return urllib.parse.urlunsplit(parts)
-        except Exception:
+        except _URL_SANITIZE_ERRORS:
             return url
 
     def _load_url(self, url):
@@ -117,10 +151,10 @@ class RetroNetWindow(Window):
             finally:
                 try:
                     response.close()
-                except Exception:
+                except _RESPONSE_CLOSE_ERRORS:
                     pass
                 self.content = self._parse_html(raw_html)
-        except BaseException as e:
+        except _RETRONET_FETCH_ERRORS as e:
             # Use pre-resolved attributes ONLY here
             msg = str(e) if str(e) else "Unknown network error or crash."
             self.content = [

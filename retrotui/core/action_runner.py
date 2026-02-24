@@ -30,6 +30,25 @@ from ..ui.window import Window
 from .actions import AppAction
 from .content import build_about_message, build_help_message
 
+_CURSES_ERROR = getattr(curses, "error", Exception)
+_TERMINAL_SIZE_ERRORS = (
+    AttributeError,
+    OSError,
+    RuntimeError,
+    TypeError,
+    ValueError,
+    _CURSES_ERROR,
+)
+_PLUGIN_ACTION_ROUTE_ERRORS = (
+    AttributeError,
+    LookupError,
+    OSError,
+    RuntimeError,
+    TypeError,
+    ValueError,
+    _CURSES_ERROR,
+)
+
 
 @functools.lru_cache(maxsize=None)
 def _supports_constructor_kwarg(constructor, kwarg: str) -> bool:
@@ -109,7 +128,7 @@ def _spawn_registered_app(app, action, registry) -> bool:
         term_h, term_w = curses.LINES, curses.COLS
         w = min(default_w, term_w - 4)
         h = min(default_h, term_h - 4)
-    except Exception:
+    except _TERMINAL_SIZE_ERRORS:
         w, h = default_w, default_h
 
     offset_x, offset_y = app._next_window_offset(base_x, base_y)
@@ -134,7 +153,7 @@ def execute_app_action(app, action, logger, *, version: str) -> None:
             if callable(opener):
                 opener(plugin_id)
                 return
-    except Exception:
+    except _PLUGIN_ACTION_ROUTE_ERRORS:
         # don't let plugin issues crash the app
         logger.debug('plugin action failed', exc_info=True)
 

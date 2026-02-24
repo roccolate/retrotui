@@ -4,12 +4,35 @@ import sys
 import importlib.util
 from pathlib import Path
 
+_PLUGIN_IMPORT_ERRORS = (
+    ArithmeticError,
+    AssertionError,
+    AttributeError,
+    ImportError,
+    LookupError,
+    NameError,
+    OSError,
+    RuntimeError,
+    SyntaxError,
+    TypeError,
+    ValueError,
+)
+_PLUGIN_DISCOVERY_PARSE_ERRORS = (
+    AttributeError,
+    LookupError,
+    OSError,
+    RuntimeError,
+    TypeError,
+    UnicodeError,
+    ValueError,
+)
+
 try:
     import tomllib  # Python 3.11+
-except Exception:
+except _PLUGIN_IMPORT_ERRORS:
     try:
         import tomli as tomllib  # type: ignore
-    except Exception:
+    except _PLUGIN_IMPORT_ERRORS:
         tomllib = None  # type: ignore
 
 
@@ -59,7 +82,7 @@ def discover_plugins():
                     manifest = tomllib.load(f)
             manifest["_path"] = entry.path
             plugins.append(manifest)
-        except Exception:
+        except _PLUGIN_DISCOVERY_PARSE_ERRORS:
             # Skip malformed plugins silently
             continue
 
@@ -82,18 +105,20 @@ def load_plugin(manifest):
     plugin_id = manifest.get("plugin", {}).get("id")
     try:
         spec = importlib.util.spec_from_file_location(f"retrotui_plugin_{plugin_id}", init_path)
+        if spec is None or getattr(spec, "loader", None) is None:
+            return None
         module = importlib.util.module_from_spec(spec)
         # Do not modify sys.path here; importing the plugin module should
         # work using standard import mechanics. Executing the spec loads
         # the module directly from its file.
         spec.loader.exec_module(module)  # type: ignore
-    except Exception:
+    except _PLUGIN_IMPORT_ERRORS:
         return None
 
     app_class = getattr(module, "Plugin", None) or getattr(module, "App", None)
     if app_class and plugin_id:
         try:
             setattr(app_class, "PLUGIN_ID", plugin_id)
-        except Exception:
+        except _PLUGIN_IMPORT_ERRORS:
             pass
     return app_class

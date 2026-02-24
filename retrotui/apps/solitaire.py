@@ -4,13 +4,24 @@ from __future__ import annotations
 import curses
 import json
 import random
-from typing import List
 from pathlib import Path
 
 from ..ui.window import Window
 from ..ui.menu import WindowMenu
 from ..core.actions import AppAction, ActionResult, ActionType
 from ..utils import safe_addstr, theme_attr
+
+_SOLITAIRE_SCORE_LOAD_ERRORS = (
+    OSError,
+    TypeError,
+    ValueError,
+    json.JSONDecodeError,
+)
+_SOLITAIRE_SCORE_SAVE_ERRORS = (
+    OSError,
+    TypeError,
+    ValueError,
+)
 
 
 class SolitaireWindow(Window):
@@ -38,7 +49,7 @@ class SolitaireWindow(Window):
                     scores = json.load(f)
                     if "best_moves" in scores and isinstance(scores["best_moves"], int):
                         self.best_moves = scores["best_moves"]
-        except Exception:
+        except _SOLITAIRE_SCORE_LOAD_ERRORS:
             pass
 
     def _save_high_scores(self):
@@ -47,7 +58,7 @@ class SolitaireWindow(Window):
             path.parent.mkdir(parents=True, exist_ok=True)
             with open(path, "w", encoding="utf-8") as f:
                 json.dump({"best_moves": self.best_moves}, f)
-        except Exception:
+        except _SOLITAIRE_SCORE_SAVE_ERRORS:
             pass
 
     def _reset_game(self):
@@ -94,8 +105,10 @@ class SolitaireWindow(Window):
         if r == 'J': return 11
         if r == 'Q': return 12
         if r == 'K': return 13
-        try: return int(r)
-        except: return 0
+        try:
+            return int(r)
+        except ValueError:
+            return 0
 
     def _suit(self, card: str) -> str:
         if isinstance(card, tuple): card = card[0]

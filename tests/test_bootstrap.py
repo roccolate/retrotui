@@ -60,6 +60,14 @@ class BootstrapTests(unittest.TestCase):
             sys.modules.pop("termios", None)
         sys.modules.pop("retrotui.core.win_termios", None)
 
+    def setUp(self):
+        self.fake_curses.curs_set.reset_mock()
+        self.fake_curses.noecho.reset_mock()
+        self.fake_curses.cbreak.reset_mock()
+        self.fake_curses.mousemask.reset_mock()
+        self.fake_termios.tcgetattr.reset_mock()
+        self.fake_termios.tcsetattr.reset_mock()
+
     def test_configure_terminal_applies_curses_setup(self):
         stdscr = types.SimpleNamespace(
             keypad=mock.Mock(),
@@ -75,6 +83,22 @@ class BootstrapTests(unittest.TestCase):
         stdscr.keypad.assert_called_once_with(True)
         stdscr.nodelay.assert_called_once_with(False)
         stdscr.timeout.assert_called_once_with(777)
+
+    def test_configure_terminal_ignores_setup_failures(self):
+        stdscr = types.SimpleNamespace(
+            keypad=mock.Mock(side_effect=RuntimeError("keypad")),
+            nodelay=mock.Mock(side_effect=RuntimeError("nodelay")),
+            timeout=mock.Mock(side_effect=RuntimeError("timeout")),
+        )
+        self.fake_curses.curs_set.side_effect = RuntimeError("curs_set")
+        self.fake_curses.noecho.side_effect = RuntimeError("noecho")
+        self.fake_curses.cbreak.side_effect = RuntimeError("cbreak")
+        try:
+            self.bootstrap.configure_terminal(stdscr, timeout_ms=222)
+        finally:
+            self.fake_curses.curs_set.side_effect = None
+            self.fake_curses.noecho.side_effect = None
+            self.fake_curses.cbreak.side_effect = None
 
     def test_disable_flow_control_updates_termios_flags(self):
         self.fake_termios.tcgetattr.reset_mock()
@@ -103,8 +127,9 @@ class BootstrapTests(unittest.TestCase):
         self.assertEqual(self.fake_termios.tcsetattr.call_count, before_calls)
 
     def test_enable_mouse_support_returns_masks(self):
-        with mock.patch("builtins.print") as print_mock:
-            click_flags, stop_drag_flags, scroll_down_mask = self.bootstrap.enable_mouse_support()
+        with mock.patch.dict(self.bootstrap.os.environ, {"TERM": "xterm-256color"}, clear=False):
+            with mock.patch("builtins.print") as print_mock:
+                click_flags, stop_drag_flags, scroll_down_mask = self.bootstrap.enable_mouse_support()
 
         self.fake_curses.mousemask.assert_called_once_with(
             self.fake_curses.ALL_MOUSE_EVENTS | self.fake_curses.REPORT_MOUSE_POSITION
@@ -125,10 +150,34 @@ class BootstrapTests(unittest.TestCase):
         self.assertEqual(print_mock.call_count, 2)
 
     def test_disable_mouse_support_prints_restore_sequences(self):
-        with mock.patch("builtins.print") as print_mock:
-            self.bootstrap.disable_mouse_support()
+        with mock.patch.dict(self.bootstrap.os.environ, {"TERM": "xterm-256color"}, clear=False):
+            with mock.patch("builtins.print") as print_mock:
+                self.bootstrap.disable_mouse_support()
 
         self.assertEqual(print_mock.call_count, 2)
+
+    def test_enable_mouse_support_linux_backend_skips_sgr_sequences(self):
+        with mock.patch.dict(self.bootstrap.os.environ, {"TERM": "linux"}, clear=False):
+            with mock.patch("builtins.print") as print_mock:
+                self.bootstrap.enable_mouse_support()
+        self.assertEqual(print_mock.call_count, 0)
+
+    def test_disable_mouse_support_linux_backend_skips_sgr_sequences(self):
+        with mock.patch.dict(self.bootstrap.os.environ, {"TERM": "linux"}, clear=False):
+            with mock.patch("builtins.print") as print_mock:
+                self.bootstrap.disable_mouse_support()
+        self.assertEqual(print_mock.call_count, 0)
+
+    def test_detect_mouse_backend_prefers_explicit_override(self):
+        with mock.patch.dict(self.bootstrap.os.environ, {"TERM": "linux", "RETROTUI_MOUSE_BACKEND": "sgr"}, clear=False):
+            backend = self.bootstrap.detect_mouse_backend()
+        self.assertEqual(backend, "sgr")
+
+    def test_detect_mouse_backend_defaults_to_gpm_on_linux_console(self):
+        with mock.patch.dict(self.bootstrap.os.environ, {"TERM": "linux"}, clear=False):
+            with mock.patch.dict(self.bootstrap.os.environ, {"RETROTUI_MOUSE_BACKEND": ""}, clear=False):
+                backend = self.bootstrap.detect_mouse_backend()
+        self.assertEqual(backend, "gpm")
 
 
 if __name__ == "__main__":

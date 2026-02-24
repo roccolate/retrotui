@@ -6,6 +6,16 @@ import curses
 
 from ..constants import C_ANSI_START
 
+_CURSES_ERROR = getattr(curses, "error", Exception)
+_ANSI_COLOR_ERRORS = (
+    AttributeError,
+    OSError,
+    RuntimeError,
+    TypeError,
+    ValueError,
+    _CURSES_ERROR,
+)
+
 class AnsiStateMachine:
     """Parses ANSI escape sequences and properly delegates both text attributes and control commands."""
 
@@ -49,7 +59,7 @@ class AnsiStateMachine:
         # (common in headless unit tests). Guard and treat as no-color in that case.
         try:
             has_colors = curses.has_colors()
-        except Exception:
+        except _ANSI_COLOR_ERRORS:
             has_colors = False
 
         if has_colors:
@@ -57,7 +67,7 @@ class AnsiStateMachine:
             if self.fg >= 0 and self.fg <= 7:
                 try:
                     attr |= curses.color_pair(C_ANSI_START + self.fg)
-                except Exception:
+                except _ANSI_COLOR_ERRORS:
                     pass
         
         self.attr = attr

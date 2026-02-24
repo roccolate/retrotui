@@ -166,6 +166,19 @@ class RenderingTests(unittest.TestCase):
         self.assertIn("v0.3.4", all_text)
         self.assertIn("Windows: 1/2", all_text)
 
+    def test_draw_statusbar_uses_explicit_frame_size_without_terminal_query(self):
+        stdscr = types.SimpleNamespace(getmaxyx=mock.Mock(side_effect=AssertionError("unexpected getmaxyx call")))
+        app = types.SimpleNamespace(
+            stdscr=stdscr,
+            windows=[types.SimpleNamespace(visible=True)],
+        )
+
+        with mock.patch.object(self.rendering, "safe_addstr") as safe_addstr:
+            self.rendering.draw_statusbar(app, "0.3.4", frame_size=(20, 80))
+
+        stdscr.getmaxyx.assert_not_called()
+        self.assertGreaterEqual(safe_addstr.call_count, 1)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -5,10 +5,29 @@ import curses
 import locale
 import logging
 import os
+import sys
 import time
+from datetime import datetime
+from pathlib import Path
 from .core.app import RetroTUI
 
 LOGGER = logging.getLogger(__name__)
+_CURSES_ERROR = getattr(curses, "error", Exception)
+_TOP_LEVEL_RUNTIME_ERRORS = (
+    ArithmeticError,
+    AssertionError,
+    AttributeError,
+    ImportError,
+    LookupError,
+    MemoryError,
+    NameError,
+    OSError,
+    RuntimeError,
+    SyntaxError,
+    TypeError,
+    ValueError,
+    _CURSES_ERROR,
+)
 
 # Ensure UTF-8
 try:
@@ -36,6 +55,30 @@ def main(stdscr):
         )
     app.run()
 
+def _default_crash_log_dir() -> Path:
+    """Return the default persistent crash log directory."""
+    return Path.home() / ".config" / "retrotui" / "logs"
+
+def _write_crash_report(exc: Exception, traceback_text: str) -> Path | None:
+    """Persist a crash report and return its path (best effort)."""
+    stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    log_path = _default_crash_log_dir() / f"crash-{stamp}.log"
+    report = (
+        f"timestamp={datetime.now().astimezone().isoformat()}\n"
+        f"error={exc!r}\n"
+        f"python={sys.version.replace(os.linesep, ' ')}\n"
+        f"platform={sys.platform}\n"
+        f"cwd={os.getcwd()}\n"
+        "\ntraceback:\n"
+        f"{traceback_text}"
+    )
+    try:
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        log_path.write_text(report, encoding="utf-8", newline="\n")
+    except OSError:
+        return None
+    return log_path
+
 def run():
     """Run RetroTUI and return process exit code."""
     try:
@@ -44,14 +87,18 @@ def run():
         return 0
     except KeyboardInterrupt:
         return 130
-    except Exception as e:
+    except _TOP_LEVEL_RUNTIME_ERRORS as e:
         # Top-level crash guard is intentionally broad to restore terminal state.
         try:
             curses.endwin()
         except curses.error:
             pass
-        print(f'\nError: {e}')
         import traceback
+        traceback_text = ''.join(traceback.format_exception(type(e), e, e.__traceback__))
+        crash_log_path = _write_crash_report(e, traceback_text)
+        print(f'\nError: {e}')
+        if crash_log_path is not None:
+            print(f'Crash log saved to: {crash_log_path}')
         traceback.print_exc()
         return 1
 

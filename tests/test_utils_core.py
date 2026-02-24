@@ -4,6 +4,7 @@ import os
 import sys
 import types
 import unittest
+from dataclasses import replace
 from unittest import mock
 
 
@@ -49,28 +50,86 @@ class UtilsCoreTests(unittest.TestCase):
         else:
             sys.modules.pop("curses", None)
 
-    def test_init_colors_configures_extended_palette(self):
+    def _pair_for(self, init_pair_mock, pair_id):
+        for call in init_pair_mock.call_args_list:
+            called_pair_id, fg, bg = call.args
+            if called_pair_id == pair_id:
+                return fg, bg
+        self.fail(f"pair {pair_id} was not initialized")
+
+    def test_init_colors_uses_256_pairs_by_default_when_available(self):
         with (
-            mock.patch.object(self.utils.curses, "can_change_color", return_value=True),
+            mock.patch.object(self.utils.curses, "can_change_color", return_value=False),
             mock.patch.object(self.utils.curses, "COLORS", 256),
             mock.patch.object(self.utils.curses, "init_color") as init_color,
             mock.patch.object(self.utils.curses, "init_pair") as init_pair,
         ):
             self.utils.init_colors()
 
-        self.assertEqual(init_color.call_count, 4)
+        init_color.assert_not_called()
+        _, desktop_bg = self._pair_for(init_pair, self.utils.C_DESKTOP)
+        self.assertEqual(desktop_bg, 37)
         self.assertGreaterEqual(init_pair.call_count, 15)
 
-    def test_init_colors_uses_fallback_when_palette_not_customizable(self):
+    def test_init_colors_uses_base_pairs_when_color_count_is_limited(self):
         with (
-            mock.patch.object(self.utils.curses, "can_change_color", return_value=False),
+            mock.patch.object(self.utils.curses, "COLORS", 16),
             mock.patch.object(self.utils.curses, "init_color") as init_color,
             mock.patch.object(self.utils.curses, "init_pair") as init_pair,
         ):
             self.utils.init_colors()
 
         init_color.assert_not_called()
+        _, desktop_bg = self._pair_for(init_pair, self.utils.C_DESKTOP)
+        self.assertEqual(desktop_bg, self.utils.curses.COLOR_CYAN)
         self.assertGreaterEqual(init_pair.call_count, 15)
+
+    def test_init_colors_color_mode_base_forces_base_pairs(self):
+        with (
+            mock.patch.dict("retrotui.utils.os.environ", {"RETROTUI_COLOR_MODE": "base"}, clear=False),
+            mock.patch.object(self.utils.curses, "COLORS", 256),
+            mock.patch.object(self.utils.curses, "init_pair") as init_pair,
+        ):
+            self.utils.init_colors("win31")
+
+        _, desktop_bg = self._pair_for(init_pair, self.utils.C_DESKTOP)
+        self.assertEqual(desktop_bg, self.utils.curses.COLOR_CYAN)
+
+    def test_init_colors_keeps_icon_foreground_white_in_base_and_256(self):
+        with (
+            mock.patch.object(self.utils.curses, "COLORS", 16),
+            mock.patch.object(self.utils.curses, "init_pair") as init_pair_base,
+        ):
+            self.utils.init_colors("win31")
+        icon_fg_base, _ = self._pair_for(init_pair_base, self.utils.C_ICON)
+        self.assertEqual(icon_fg_base, self.utils.curses.COLOR_WHITE)
+
+        with (
+            mock.patch.object(self.utils.curses, "COLORS", 256),
+            mock.patch.object(self.utils.curses, "init_pair") as init_pair_256,
+        ):
+            self.utils.init_colors("win31")
+        icon_fg_256, _ = self._pair_for(init_pair_256, self.utils.C_ICON)
+        self.assertEqual(icon_fg_256, self.utils.curses.COLOR_WHITE)
+
+    def test_init_colors_custom_palette_is_opt_in(self):
+        theme_obj = replace(
+            self.utils.get_theme("win31"),
+            custom_colors={240: (0, 500, 500)},
+        )
+        with (
+            mock.patch.dict(
+                "retrotui.utils.os.environ",
+                {"RETROTUI_APPLY_CUSTOM_COLORS": "1"},
+                clear=False,
+            ),
+            mock.patch.object(self.utils.curses, "can_change_color", return_value=True),
+            mock.patch.object(self.utils.curses, "COLORS", 256),
+            mock.patch.object(self.utils.curses, "init_color") as init_color,
+        ):
+            self.utils.init_colors(theme_obj)
+
+        init_color.assert_called_once_with(240, 0, 500, 500)
 
     def test_init_colors_accepts_theme_key_and_theme_object(self):
         with (

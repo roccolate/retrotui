@@ -59,6 +59,7 @@ class KeyRouterTests(unittest.TestCase):
             _handle_global_menu_key=mock.Mock(return_value=False),
             _cycle_focus=mock.Mock(),
             _handle_active_window_key=mock.Mock(),
+            _active_window_menu_owner=None,
         )
 
     def test_normalize_app_key_maps_newline_string(self):
@@ -99,16 +100,49 @@ class KeyRouterTests(unittest.TestCase):
         self.assertTrue(second)
         self.assertFalse(window_menu.active)
 
+    def test_handle_menu_hotkeys_f10_switches_tracked_window_menu_owner(self):
+        app = self._make_app()
+        previous_menu = types.SimpleNamespace(active=True, selected_menu=3, selected_item=1)
+        previous = types.SimpleNamespace(window_menu=previous_menu)
+        next_menu = types.SimpleNamespace(active=False, selected_menu=9, selected_item=9)
+        next_win = types.SimpleNamespace(window_menu=next_menu)
+        app._active_window_menu_owner = previous
+        app.get_active_window.return_value = next_win
+
+        handled = self.key_router.handle_menu_hotkeys(app, self.curses.KEY_F10)
+
+        self.assertTrue(handled)
+        self.assertFalse(previous_menu.active)
+        self.assertTrue(next_menu.active)
+        self.assertIs(app._active_window_menu_owner, next_win)
+
     def test_handle_menu_hotkeys_escape_closes_window_menu_first(self):
         app = self._make_app()
         window_menu = types.SimpleNamespace(active=True, selected_menu=2, selected_item=5)
-        app.get_active_window.return_value = types.SimpleNamespace(window_menu=window_menu)
+        owner = types.SimpleNamespace(window_menu=window_menu)
+        app._active_window_menu_owner = owner
+        app.get_active_window.return_value = owner
         app.menu.active = True
 
         handled = self.key_router.handle_menu_hotkeys(app, 27)
 
         self.assertTrue(handled)
         self.assertFalse(window_menu.active)
+        self.assertTrue(app.menu.active)
+
+    def test_handle_menu_hotkeys_escape_closes_tracked_window_menu_even_if_not_active(self):
+        app = self._make_app()
+        tracked_menu = types.SimpleNamespace(active=True, selected_menu=1, selected_item=0)
+        tracked = types.SimpleNamespace(window_menu=tracked_menu)
+        app._active_window_menu_owner = tracked
+        app.get_active_window.return_value = types.SimpleNamespace(window_menu=types.SimpleNamespace(active=False))
+        app.menu.active = True
+
+        handled = self.key_router.handle_menu_hotkeys(app, 27)
+
+        self.assertTrue(handled)
+        self.assertFalse(tracked_menu.active)
+        self.assertIsNone(app._active_window_menu_owner)
         self.assertTrue(app.menu.active)
 
     def test_handle_menu_hotkeys_escape_closes_global_menu(self):
@@ -170,13 +204,30 @@ class KeyRouterTests(unittest.TestCase):
 
     def test_handle_active_window_key_dispatches_result(self):
         app = self._make_app()
-        active = types.SimpleNamespace(handle_key=mock.Mock(return_value="result"))
+        active = types.SimpleNamespace(
+            handle_key=mock.Mock(return_value="result"),
+            window_menu=types.SimpleNamespace(active=False),
+        )
         app.get_active_window.return_value = active
 
         self.key_router.handle_active_window_key(app, "k")
 
         active.handle_key.assert_called_once_with("k")
         app._dispatch_window_result.assert_called_once_with("result", active)
+
+    def test_handle_active_window_key_tracks_window_menu_owner_state(self):
+        app = self._make_app()
+        active_menu = types.SimpleNamespace(active=True)
+        active = types.SimpleNamespace(handle_key=mock.Mock(return_value=None), window_menu=active_menu)
+        previous_menu = types.SimpleNamespace(active=True)
+        previous = types.SimpleNamespace(window_menu=previous_menu)
+        app._active_window_menu_owner = previous
+        app.get_active_window.return_value = active
+
+        self.key_router.handle_active_window_key(app, "k")
+
+        self.assertFalse(previous_menu.active)
+        self.assertIs(app._active_window_menu_owner, active)
 
     def test_handle_active_window_key_no_active_window(self):
         app = self._make_app()

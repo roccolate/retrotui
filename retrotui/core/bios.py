@@ -5,6 +5,16 @@ import random
 
 from ..utils import safe_addstr, theme_attr
 
+_CURSES_ERROR = getattr(curses, "error", Exception)
+_BIOS_INPUT_ERRORS = (
+    AttributeError,
+    OSError,
+    RuntimeError,
+    TypeError,
+    ValueError,
+    _CURSES_ERROR,
+)
+
 class BIOS:
     """Handles the boot sequence animation."""
     
@@ -108,8 +118,8 @@ class BIOS:
             key = self.stdscr.getch()
             if key != -1:
                 return True
-        except:
-            pass
+        except _BIOS_INPUT_ERRORS:
+            return False
         return False
 
     def _sleep(self, seconds):

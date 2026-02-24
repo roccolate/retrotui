@@ -8,6 +8,18 @@ from ..ui.dialog import Dialog, InputDialog, ProgressDialog
 from .actions import ActionResult, ActionType
 
 LOGGER = logging.getLogger(__name__)
+_BACKGROUND_WORKER_ERRORS = (
+    ArithmeticError,
+    AssertionError,
+    AttributeError,
+    LookupError,
+    NameError,
+    OSError,
+    RuntimeError,
+    SyntaxError,
+    TypeError,
+    ValueError,
+)
 
 
 class FileOperationManager:
@@ -217,7 +229,7 @@ class FileOperationManager:
         def _runner():
             try:
                 op_state['worker_result'] = worker()
-            except Exception as exc:  # pragma: no cover - defensive worker path
+            except _BACKGROUND_WORKER_ERRORS as exc:  # pragma: no cover - defensive worker path
                 op_state['worker_result'] = ActionResult(ActionType.ERROR, str(exc))
             finally:
                 op_state['done'] = True

@@ -7,9 +7,44 @@ from typing import List
 from ..ui.window import Window
 from ..utils import safe_addstr, theme_attr
 from ..core.clipboard import paste_text, copy_text, clear_clipboard
+_CURSES_ERROR = getattr(curses, "error", Exception)
+_OPTIONAL_PYPERCLIP_IMPORT_ERRORS = (
+    ImportError,
+    ModuleNotFoundError,
+    AttributeError,
+    OSError,
+    RuntimeError,
+    TypeError,
+    ValueError,
+)
+_CLIPBOARD_THEME_ERRORS = (
+    AttributeError,
+    LookupError,
+    OSError,
+    RuntimeError,
+    TypeError,
+    ValueError,
+    _CURSES_ERROR,
+)
+_CLIPBOARD_SYNC_ERRORS = (
+    AttributeError,
+    OSError,
+    RuntimeError,
+    TypeError,
+    ValueError,
+)
+_KEYMAP_RESOLVE_ERRORS = (
+    ImportError,
+    ModuleNotFoundError,
+    AttributeError,
+    OSError,
+    RuntimeError,
+    TypeError,
+    ValueError,
+)
 try:
     import pyperclip
-except Exception:
+except _OPTIONAL_PYPERCLIP_IMPORT_ERRORS:
     pyperclip = None
 
 
@@ -40,7 +75,7 @@ class ClipboardViewerWindow(Window):
                     sel_attr = theme_attr("selected")
                     # combine, but fall back to body_attr if theme_attr is not available
                     attr = body_attr | (sel_attr or 0)
-                except Exception:
+                except _CLIPBOARD_THEME_ERRORS:
                     attr = body_attr
             safe_addstr(stdscr, by + i, bx, item[:bw].ljust(bw), attr)
         if not self.history:
@@ -56,7 +91,7 @@ class ClipboardViewerWindow(Window):
             if pyperclip:
                 try:
                     pyperclip.copy(self.history[idx])
-                except Exception:
+                except _CLIPBOARD_SYNC_ERRORS:
                     pass
             # update selection to clicked item
             self.selected_index = idx
@@ -73,7 +108,7 @@ class ClipboardViewerWindow(Window):
             if pyperclip:
                 try:
                     pyperclip.copy(self.history[0])
-                except Exception:
+                except _CLIPBOARD_SYNC_ERRORS:
                     pass
         # navigation: up/down and enter to copy
         if getattr(key, '__int__', None):
@@ -83,7 +118,7 @@ class ClipboardViewerWindow(Window):
 
                 KEY_UP = _c.KEY_UP
                 KEY_DOWN = _c.KEY_DOWN
-            except Exception:
+            except _KEYMAP_RESOLVE_ERRORS:
                 KEY_UP = -1
                 KEY_DOWN = -2
 
@@ -100,6 +135,6 @@ class ClipboardViewerWindow(Window):
                     if pyperclip:
                         try:
                             pyperclip.copy(self.history[self.selected_index])
-                        except Exception:
+                        except _CLIPBOARD_SYNC_ERRORS:
                             pass
         return None

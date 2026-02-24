@@ -45,6 +45,7 @@ class EventLoopTests(unittest.TestCase):
             noutrefresh=mock.Mock(),
             getmaxyx=mock.Mock(return_value=(25, 80)),
             get_wch=mock.Mock(return_value="a"),
+            timeout=mock.Mock(),
         )
         win = types.SimpleNamespace(draw=mock.Mock(), x=90, y=40, w=20, h=15)
         app = types.SimpleNamespace(
@@ -66,6 +67,9 @@ class EventLoopTests(unittest.TestCase):
             running=True,
             _install_runtime_signal_handlers=mock.Mock(),
             _consume_pending_sigint=mock.Mock(return_value=None),
+            input_timeout_idle_ms=500,
+            input_timeout_live_terminal_ms=33,
+            input_timeout_background_ms=120,
         )
         return app
 
@@ -81,14 +85,15 @@ class EventLoopTests(unittest.TestCase):
 
         self.event_loop.draw_frame(app)
 
+        app.stdscr.getmaxyx.assert_called_once_with()
         app.stdscr.erase.assert_called_once_with()
-        app.draw_desktop.assert_called_once_with()
-        app.draw_icons.assert_called_once_with()
+        app.draw_desktop.assert_called_once_with(frame_size=(25, 80))
+        app.draw_icons.assert_called_once_with(frame_size=(25, 80))
         app.windows[0].draw.assert_called_once_with(app.stdscr)
         app.menu.draw_bar.assert_called_once_with(app.stdscr, 80)
         app.menu.draw_dropdown.assert_called_once_with(app.stdscr)
-        app.draw_taskbar.assert_called_once_with()
-        app.draw_statusbar.assert_called_once_with()
+        app.draw_taskbar.assert_called_once_with(frame_size=(25, 80))
+        app.draw_statusbar.assert_called_once_with(frame_size=(25, 80))
         app.stdscr.noutrefresh.assert_called_once_with()
         self.fake_curses.doupdate.assert_called_once_with()
 
@@ -106,6 +111,7 @@ class EventLoopTests(unittest.TestCase):
 
         self.event_loop.draw_frame(app)
 
+        app.stdscr.getmaxyx.assert_called_once_with()
         app.windows[0].draw.assert_not_called()
         app.menu.draw_bar.assert_called_once_with(app.stdscr, 80)
 
@@ -157,6 +163,48 @@ class EventLoopTests(unittest.TestCase):
 
         app.handle_key.assert_called_once_with("x")
 
+    def test_select_input_timeout_uses_live_terminal_profile_for_visible_pty(self):
+        app = self._make_app()
+        app.windows.append(
+            types.SimpleNamespace(
+                visible=True,
+                _session=types.SimpleNamespace(running=True),
+            )
+        )
+
+        timeout_ms = self.event_loop._select_input_timeout_ms(app)
+
+        self.assertEqual(timeout_ms, self.event_loop.TERMINAL_LIVE_INPUT_TIMEOUT_MS)
+
+    def test_select_input_timeout_uses_background_profile_when_worker_active(self):
+        app = self._make_app()
+        app.has_background_operation.return_value = True
+
+        timeout_ms = self.event_loop._select_input_timeout_ms(app)
+
+        self.assertEqual(timeout_ms, self.event_loop.TERMINAL_BACKGROUND_INPUT_TIMEOUT_MS)
+
+    def test_select_input_timeout_ignores_hidden_terminal_sessions(self):
+        app = self._make_app()
+        app.windows.append(
+            types.SimpleNamespace(
+                visible=False,
+                _session=types.SimpleNamespace(running=True),
+            )
+        )
+
+        timeout_ms = self.event_loop._select_input_timeout_ms(app)
+
+        self.assertEqual(timeout_ms, self.event_loop.TERMINAL_INPUT_TIMEOUT_MS)
+
+    def test_apply_input_timeout_updates_only_when_value_changes(self):
+        app = self._make_app()
+
+        self.event_loop._apply_input_timeout(app, 120)
+        self.event_loop._apply_input_timeout(app, 120)
+
+        app.stdscr.timeout.assert_called_once_with(120)
+
     def test_run_app_loop_runs_once_and_cleans_up(self):
         app = self._make_app()
 
@@ -171,8 +219,9 @@ class EventLoopTests(unittest.TestCase):
 
         draw_mock.assert_called_once_with(app)
         app.handle_key.assert_called_once_with("a")
-        self.assertGreaterEqual(app.poll_background_operation.call_count, 2)
+        app.poll_background_operation.assert_called_once_with()
         app._install_runtime_signal_handlers.assert_called_once_with()
+        app.stdscr.timeout.assert_called_with(self.event_loop.TERMINAL_INPUT_TIMEOUT_MS)
         app.cleanup.assert_called_once_with()
 
     def test_run_app_loop_consumes_pending_sigint_when_no_key(self):

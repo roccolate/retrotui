@@ -34,6 +34,13 @@ class BioTests(unittest.TestCase):
         self.assertFalse(res)
         self.assertGreaterEqual(time.time() - start, 0)
 
+    def test_check_skip_returns_false_when_getch_raises(self):
+        std = DummyStdScr()
+        std.getch = lambda: (_ for _ in ()).throw(RuntimeError("tty read failed"))
+        b = BIOS(std)
+
+        self.assertFalse(b._check_skip())
+
 
 if __name__ == "__main__":
     unittest.main()

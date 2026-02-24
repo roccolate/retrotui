@@ -12,15 +12,61 @@ if os.name == 'nt':
 else:
     import termios
 
+_CURSES_ERROR = getattr(curses, "error", Exception)
+_TERMINAL_SETUP_ERRORS = (
+    AttributeError,
+    OSError,
+    RuntimeError,
+    TypeError,
+    ValueError,
+    _CURSES_ERROR,
+)
+_FLOW_CONTROL_ERRORS = (
+    AttributeError,
+    OSError,
+    RuntimeError,
+    TypeError,
+    ValueError,
+)
+_FLOW_CONTROL_ATTR_ERRORS = (AttributeError, IndexError, TypeError, ValueError)
+_MOUSEMASK_ERRORS = (
+    AttributeError,
+    OSError,
+    RuntimeError,
+    TypeError,
+    ValueError,
+    _CURSES_ERROR,
+)
+
+
+def detect_mouse_backend():
+    """Return normalized mouse backend name for current terminal session."""
+    forced = (os.environ.get("RETROTUI_MOUSE_BACKEND") or "").strip().lower()
+    if forced in {"gpm", "sgr"}:
+        return forced
+    return "gpm" if os.environ.get("TERM") == "linux" else "sgr"
+
 
 def configure_terminal(stdscr, timeout_ms=500):
-    """Apply core curses terminal setup."""
-    curses.curs_set(0)
-    curses.noecho()
-    curses.cbreak()
-    stdscr.keypad(True)
-    stdscr.nodelay(False)
-    stdscr.timeout(timeout_ms)
+    """Apply core curses terminal setup.
+
+    Some terminals/backends only support a subset of curses features.
+    We treat setup as best-effort to avoid failing startup on missing caps.
+    """
+    for fn, args in (
+        (getattr(curses, "curs_set", None), (0,)),
+        (getattr(curses, "noecho", None), ()),
+        (getattr(curses, "cbreak", None), ()),
+        (getattr(stdscr, "keypad", None), (True,)),
+        (getattr(stdscr, "nodelay", None), (False,)),
+        (getattr(stdscr, "timeout", None), (timeout_ms,)),
+    ):
+        if not callable(fn):
+            continue
+        try:
+            fn(*args)
+        except _TERMINAL_SETUP_ERRORS:
+            continue
 
 
 def disable_flow_control(stdin_stream=None):
@@ -28,7 +74,7 @@ def disable_flow_control(stdin_stream=None):
     stream = sys.stdin if stdin_stream is None else stdin_stream
     try:
         fd = stream.fileno()
-    except Exception:
+    except _FLOW_CONTROL_ERRORS:
         return
     # Prefer a `termios` module in sys.modules (tests inject a fake there).
     fallback_mod = sys.modules.get('termios')
@@ -44,12 +90,12 @@ def disable_flow_control(stdin_stream=None):
                 mod = importlib.import_module('termios')
                 tcget = getattr(mod, 'tcgetattr', tcget)
                 tcset = getattr(mod, 'tcsetattr', tcset)
-            except Exception:
+            except (ImportError, ModuleNotFoundError, AttributeError, TypeError, ValueError):
                 return
 
     try:
         attrs = tcget(fd)
-    except Exception:
+    except _FLOW_CONTROL_ERRORS:
         return
 
     try:
@@ -70,13 +116,13 @@ def disable_flow_control(stdin_stream=None):
                 if len(attrs) > 0:
                     attrs[0] &= ~ixon
                     attrs[0] &= ~ixoff
-            except Exception:
+            except _FLOW_CONTROL_ATTR_ERRORS:
                 pass
             try:
                 if len(attrs) > 3:
                     attrs[3] &= ~ixon
                     attrs[3] &= ~ixoff
-            except Exception:
+            except _FLOW_CONTROL_ATTR_ERRORS:
                 pass
 
         tcset(fd, _get_const('TCSANOW', 0), attrs)
@@ -86,31 +132,43 @@ def disable_flow_control(stdin_stream=None):
 
 def enable_mouse_support():
     """Enable curses mouse mask and SGR tracking modes."""
-    curses.mousemask(
-        curses.ALL_MOUSE_EVENTS
-        | curses.REPORT_MOUSE_POSITION
-    )
+    all_mouse_events = getattr(curses, "ALL_MOUSE_EVENTS", 0)
+    report_mouse_position = getattr(curses, "REPORT_MOUSE_POSITION", 0)
+    button1_clicked = getattr(curses, "BUTTON1_CLICKED", 0)
+    button1_pressed = getattr(curses, "BUTTON1_PRESSED", 0)
+    button1_double = getattr(curses, "BUTTON1_DOUBLE_CLICKED", 0)
+    button1_released = getattr(curses, "BUTTON1_RELEASED", 0)
+
+    mousemask_fn = getattr(curses, "mousemask", None)
+    if callable(mousemask_fn):
+        try:
+            mousemask_fn(all_mouse_events | report_mouse_position)
+        except _MOUSEMASK_ERRORS:
+            pass
+
     click_flags = (
-        curses.BUTTON1_CLICKED
-        | curses.BUTTON1_PRESSED
-        | curses.BUTTON1_DOUBLE_CLICKED
+        button1_clicked
+        | button1_pressed
+        | button1_double
     )
     # End drag/resize on release-like events, not on BUTTON1_PRESSED.
     # This keeps TTY/GPM drag streams working where motion is reported with PRESSED.
     stop_drag_flags = (
-        curses.BUTTON1_RELEASED
-        | curses.BUTTON1_CLICKED
-        | curses.BUTTON1_DOUBLE_CLICKED
+        button1_released
+        | button1_clicked
+        | button1_double
     )
     scroll_down_mask = getattr(curses, 'BUTTON5_PRESSED', MOUSE_SCROLL_DOWN_FALLBACK)
 
-    # Use 1002 (button-event tracking) + 1006 (SGR coordinates)
-    print('\033[?1002h', end='', flush=True)
-    print('\033[?1006h', end='', flush=True)
+    if detect_mouse_backend() != "gpm":
+        # Use 1002 (button-event tracking) + 1006 (SGR coordinates)
+        print('\033[?1002h', end='', flush=True)
+        print('\033[?1006h', end='', flush=True)
     return click_flags, stop_drag_flags, scroll_down_mask
 
 
 def disable_mouse_support():
     """Restore terminal mouse tracking modes."""
-    print('\033[?1002l', end='', flush=True)
-    print('\033[?1006l', end='', flush=True)
+    if detect_mouse_backend() != "gpm":
+        print('\033[?1002l', end='', flush=True)
+        print('\033[?1006l', end='', flush=True)

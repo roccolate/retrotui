@@ -11,6 +11,30 @@ def normalize_app_key(key):
     return normalize_key_code(key)
 
 
+def _get_active_window_menu_owner(app):
+    """Return tracked window-menu owner when it is still active."""
+    owner = getattr(app, "_active_window_menu_owner", None)
+    if owner is None:
+        return None
+    menu = getattr(owner, "window_menu", None)
+    if not menu or not getattr(menu, "active", False):
+        app._active_window_menu_owner = None
+        return None
+    return owner
+
+
+def _close_tracked_window_menu(app):
+    """Close tracked window menu and clear owner pointer."""
+    owner = _get_active_window_menu_owner(app)
+    if owner is None:
+        return False
+    menu = getattr(owner, "window_menu", None)
+    if menu is not None:
+        menu.active = False
+    app._active_window_menu_owner = None
+    return True
+
+
 def handle_menu_hotkeys(app, key_code):
     """Handle F10 and Escape interactions for menus."""
     if key_code is None:
@@ -20,23 +44,36 @@ def handle_menu_hotkeys(app, key_code):
         active_win = app.get_active_window()
         if active_win and active_win.window_menu:
             wm = active_win.window_menu
+            previous_owner = _get_active_window_menu_owner(app)
             wm.active = not wm.active
             if wm.active:
                 wm.selected_menu = 0
                 wm.selected_item = 0
+                if previous_owner is not None and previous_owner is not active_win:
+                    previous_menu = getattr(previous_owner, "window_menu", None)
+                    if previous_menu is not None:
+                        previous_menu.active = False
+                app._active_window_menu_owner = active_win
+            elif previous_owner is active_win:
+                app._active_window_menu_owner = None
             return True
         if app.menu.active:
             app.menu.active = False
         else:
+            _close_tracked_window_menu(app)
             app.menu.active = True
             app.menu.selected_menu = 0
             app.menu.selected_item = 0
         return True
 
     if key_code == 27:
+        if _close_tracked_window_menu(app):
+            return True
         active_win = app.get_active_window()
         if active_win and active_win.window_menu and active_win.window_menu.active:
             active_win.window_menu.active = False
+            if getattr(app, "_active_window_menu_owner", None) is active_win:
+                app._active_window_menu_owner = None
         elif app.menu.active:
             app.menu.active = False
         return True
@@ -78,6 +115,18 @@ def handle_active_window_key(app, key):
 
     result = active_win.handle_key(key)
     app._dispatch_window_result(result, active_win)
+
+    # Keep tracked window-menu owner in sync for keyboard-driven open/close.
+    menu = getattr(active_win, "window_menu", None)
+    if menu and getattr(menu, "active", False):
+        previous_owner = _get_active_window_menu_owner(app)
+        if previous_owner is not None and previous_owner is not active_win:
+            previous_menu = getattr(previous_owner, "window_menu", None)
+            if previous_menu is not None:
+                previous_menu.active = False
+        app._active_window_menu_owner = active_win
+    elif getattr(app, "_active_window_menu_owner", None) is active_win:
+        app._active_window_menu_owner = None
 
 
 def handle_key_event(app, key):
