@@ -44,6 +44,11 @@ def _repo_examples_plugin_dir():
     return str(Path(__file__).resolve().parents[2] / "examples" / "plugins")
 
 
+def _cwd_examples_plugin_dir():
+    """Return cwd-local examples/plugins path when available."""
+    return str((Path.cwd() / "examples" / "plugins").resolve())
+
+
 def _iter_plugin_dirs():
     """Yield plugin directories in discovery priority order."""
     seen = set()
@@ -81,11 +86,11 @@ def _iter_plugin_dirs():
     # built-in plugins visible out of the box. User plugins still win on
     # duplicate ids because primary is yielded first.
     if primary and os.path.normcase(os.path.normpath(primary)) == os.path.normcase(os.path.normpath(_DEFAULT_PLUGIN_DIR)):
-        bundled = _repo_examples_plugin_dir()
-        norm = os.path.normcase(os.path.normpath(bundled))
-        if bundled and norm not in seen:
-            seen.add(norm)
-            yield bundled
+        for candidate in (_repo_examples_plugin_dir(), _cwd_examples_plugin_dir()):
+            norm = os.path.normcase(os.path.normpath(candidate))
+            if candidate and norm not in seen:
+                seen.add(norm)
+                yield candidate
 
 
 def discover_plugins():

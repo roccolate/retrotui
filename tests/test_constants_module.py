@@ -59,7 +59,7 @@ class ConstantsModuleTests(unittest.TestCase):
             ascii_desktop.get("action"),
             self.constants.AppAction.DESKTOP_ICON_MANAGER,
         )
-        self.assertEqual(unicode_desktop.get("hide_key"), "icons")
+        self.assertEqual(unicode_desktop.get("hide_key"), "desktop")
         self.assertEqual(unicode_desktop.get("position_key"), "Icons")
 
     def test_video_extensions_include_common_formats(self):
