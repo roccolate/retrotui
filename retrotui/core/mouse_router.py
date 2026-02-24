@@ -660,14 +660,14 @@ def handle_mouse_event(app, event):
     if app._handle_global_menu_mouse(mx, my, bstate):
         return True
 
+    if norm.get("is_click_like") and app.handle_taskbar_click(mx, my):
+        return True
+
     h, w = app.stdscr.getmaxyx()
     if my == h - 1 and mx >= w - CLOCK_CLICK_REGION_WIDTH:
         if norm.get("button1_clicked") or norm.get("button1_double"):
             app.execute_action(AppAction.CLOCK_CALENDAR)
             return True
-
-    if norm.get("is_click_like") and app.handle_taskbar_click(mx, my):
-        return True
 
     if app._handle_window_mouse(mx, my, bstate):
         return True

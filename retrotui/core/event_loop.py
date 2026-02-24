@@ -259,6 +259,34 @@ def _emit_runtime_metrics(metrics, final=False):
     )
 
 
+def _refresh_idle_clock(app):
+    """Refresh only the menu clock while idle, avoiding a full frame redraw."""
+    if getattr(app, "_dirty", False):
+        return False
+
+    frame_size = getattr(app, "_frame_size", None)
+    width = None
+    if isinstance(frame_size, tuple) and len(frame_size) == 2:
+        width = frame_size[1]
+
+    menu = getattr(app, "menu", None)
+    refresh_clock = getattr(menu, "refresh_clock", None)
+    if callable(refresh_clock):
+        try:
+            updated = bool(refresh_clock(app.stdscr, width=width))
+        except _INPUT_TIMEOUT_APPLY_ERRORS:
+            return False
+
+    if not updated:
+        return False
+    try:
+        app.stdscr.noutrefresh()
+        curses.doupdate()
+    except _INPUT_TIMEOUT_APPLY_ERRORS:
+        return False
+    return True
+
+
 def run_app_loop(app):
     """Run main draw/input loop with terminal cleanup on exit."""
     metrics = _ensure_runtime_metrics(app)
@@ -292,6 +320,8 @@ def run_app_loop(app):
                         consume_sigint = getattr(app, "_consume_pending_sigint", None)
                         if callable(consume_sigint):
                             key = consume_sigint()
+                if key is None and _refresh_idle_clock(app):
+                    metrics["redraws"] += 1
                 _record_input_stats(metrics, key)
                 dispatch_start = time.perf_counter()
                 if dispatch_input(app, key):

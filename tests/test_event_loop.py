@@ -54,7 +54,11 @@ class EventLoopTests(unittest.TestCase):
             draw_icons=mock.Mock(),
             draw_taskbar=mock.Mock(),
             draw_statusbar=mock.Mock(),
-            menu=types.SimpleNamespace(draw_bar=mock.Mock(), draw_dropdown=mock.Mock()),
+            menu=types.SimpleNamespace(
+                draw_bar=mock.Mock(),
+                draw_dropdown=mock.Mock(),
+                refresh_clock=mock.Mock(return_value=False),
+            ),
             windows=[win],
             dialog=None,
             context_menu=None,
@@ -71,6 +75,7 @@ class EventLoopTests(unittest.TestCase):
             input_timeout_idle_ms=500,
             input_timeout_live_terminal_ms=33,
             input_timeout_background_ms=120,
+            _dirty=True,
         )
         return app
 
@@ -265,6 +270,29 @@ class EventLoopTests(unittest.TestCase):
 
         app._consume_pending_sigint.assert_called_once_with()
         app.handle_key.assert_called_once_with("\x03")
+
+    def test_run_app_loop_refreshes_only_clock_while_idle(self):
+        app = self._make_app()
+        app._dirty = False
+        app.menu.refresh_clock.side_effect = [True, False]
+        state = {"polls": 0}
+
+        def _poll_twice_then_stop():
+            state["polls"] += 1
+            if state["polls"] >= 2:
+                app.running = False
+
+        app.poll_background_operation.side_effect = _poll_twice_then_stop
+
+        with mock.patch.object(self.event_loop, "draw_frame") as draw_mock:
+            with mock.patch.object(self.event_loop, "read_input_key", return_value=None):
+                with mock.patch.object(self.event_loop, "dispatch_input", return_value=False):
+                    self.event_loop.run_app_loop(app)
+
+        draw_mock.assert_not_called()
+        self.assertEqual(app.menu.refresh_clock.call_count, 2)
+        app.stdscr.noutrefresh.assert_called_once_with()
+        self.fake_curses.doupdate.assert_called_once_with()
 
     def test_run_app_loop_converts_keyboard_interrupt_into_ctrl_c_key(self):
         app = self._make_app()

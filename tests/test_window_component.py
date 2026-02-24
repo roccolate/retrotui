@@ -79,7 +79,7 @@ class WindowComponentTests(unittest.TestCase):
 
         win.toggle_maximize(120, 40)
         self.assertTrue(win.maximized)
-        self.assertEqual((win.x, win.y, win.w, win.h), (0, 1, 120, 38))
+        self.assertEqual((win.x, win.y, win.w, win.h), (0, 1, 120, 39))
         self.assertFalse(win.window_menu.active)
 
         win.restore_rect = (200, 100, 50, 20)

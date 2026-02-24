@@ -425,6 +425,124 @@ class MenuBarTests(unittest.TestCase):
         hover.assert_called_once()
         self.assertTrue(handled)
 
+    def test_draw_bar_skips_clock_when_space_is_tight(self):
+        menu = self.menu_mod.MenuBar(
+            {"VeryLongMenu": [("Open", "open")]},
+            mode="global",
+            show_clock=True,
+            show_logo=False,
+        )
+        stdscr = types.SimpleNamespace(getmaxyx=lambda: (24, 18))
+
+        with (
+            mock.patch.object(self.menu_mod, "safe_addstr") as safe_addstr,
+            mock.patch.object(self.menu_mod.time, "strftime", return_value=" 12:34:56 "),
+        ):
+            menu.draw_bar(stdscr, width=18)
+
+        rendered = [call.args[3] for call in safe_addstr.call_args_list if len(call.args) >= 4]
+        self.assertFalse(any(text == " 12:34:56 " for text in rendered))
+
+    def test_refresh_clock_only_draws_when_second_changes(self):
+        menu = self.menu_mod.MenuBar(
+            {"File": [("Open", "open")]},
+            mode="global",
+            show_clock=True,
+        )
+        stdscr = types.SimpleNamespace(getmaxyx=lambda: (24, 80))
+
+        with (
+            mock.patch.object(self.menu_mod, "safe_addstr") as safe_addstr,
+            mock.patch.object(
+                self.menu_mod.time,
+                "strftime",
+                side_effect=[" 12:00:00 ", " 12:00:00 ", " 12:00:01 "],
+            ),
+        ):
+            first = menu.refresh_clock(stdscr, width=80)
+            second = menu.refresh_clock(stdscr, width=80)
+            third = menu.refresh_clock(stdscr, width=80)
+
+        self.assertTrue(first)
+        self.assertFalse(second)
+        self.assertTrue(third)
+        self.assertEqual(safe_addstr.call_count, 2)
+
+    def test_refresh_clock_returns_false_for_window_menu(self):
+        menu = self.menu_mod.MenuBar(
+            {"File": [("Open", "open")]},
+            mode="window",
+            show_clock=True,
+        )
+        stdscr = types.SimpleNamespace(getmaxyx=lambda: (24, 80))
+
+        with mock.patch.object(self.menu_mod, "safe_addstr") as safe_addstr:
+            refreshed = menu.refresh_clock(stdscr, width=80)
+
+        self.assertFalse(refreshed)
+        safe_addstr.assert_not_called()
+
+    def test_global_dropdown_layout_clamps_to_viewport_width(self):
+        menu = self.menu_mod.MenuBar(
+            {"File": [("Very very long item label", "open")]},
+            mode="global",
+        )
+        menu.active = True
+        stdscr = types.SimpleNamespace(getmaxyx=lambda: (24, 18))
+        menu.draw_bar(stdscr, width=18)
+
+        layout = menu._dropdown_layout()
+        self.assertIsNotNone(layout)
+        x, _, dropdown_w, _ = layout
+        self.assertLessEqual(x - 1 + dropdown_w + 2, 18)
+
+    def test_dropdown_layout_pages_items_by_viewport_height(self):
+        items = [(f"Item{i}", f"a{i}") for i in range(10)]
+        menu = self.menu_mod.MenuBar({"File": items}, mode="global")
+        menu.active = True
+        menu.selected_item = 9
+        stdscr = types.SimpleNamespace(getmaxyx=lambda: (8, 60))
+        menu.draw_bar(stdscr, width=60)
+
+        layout = menu._dropdown_layout()
+        self.assertIsNotNone(layout)
+        _, _, _, visible_items = layout
+        self.assertEqual(len(visible_items), 5)
+        self.assertEqual(visible_items[-1][0], "Item9")
+        self.assertEqual(menu.dropdown_scroll, 5)
+
+    def test_handle_click_uses_scrolled_visible_index(self):
+        items = [(f"Item{i}", f"a{i}") for i in range(10)]
+        menu = self.menu_mod.MenuBar({"File": items}, mode="global")
+        menu.active = True
+        menu.selected_item = 9
+        stdscr = types.SimpleNamespace(getmaxyx=lambda: (8, 60))
+        menu.draw_bar(stdscr, width=60)
+        layout = menu._dropdown_layout()
+        self.assertIsNotNone(layout)
+        x, y, _, _ = layout
+
+        action = menu.handle_click(x, y + 1)
+        self.assertEqual(action, "a5")
+
+    def test_draw_dropdown_renders_scroll_markers_when_paginated(self):
+        items = [(f"Item{i}", f"a{i}") for i in range(10)]
+        menu = self.menu_mod.MenuBar({"File": items}, mode="global")
+        menu.active = True
+        menu.selected_item = 6
+        stdscr = types.SimpleNamespace(getmaxyx=lambda: (8, 60))
+        menu.draw_bar(stdscr, width=60)
+
+        with (
+            mock.patch.object(self.menu_mod, "draw_box"),
+            mock.patch.object(self.menu_mod, "safe_addstr") as safe_addstr,
+        ):
+            menu.draw_dropdown(stdscr)
+
+        rendered = [call.args[3] for call in safe_addstr.call_args_list if len(call.args) >= 4]
+        self.assertIn("^", rendered)
+        self.assertIn("v", rendered)
+
 
 if __name__ == '__main__':
     unittest.main()
