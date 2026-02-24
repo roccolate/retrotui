@@ -35,3 +35,4 @@ tests/_mkdir_py_*
 
 # Local Codex/Claude workspace state
 /.claude/
+/.roadmap/
