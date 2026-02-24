@@ -911,6 +911,35 @@ class MouseRouterTests(unittest.TestCase):
 
         app._handle_desktop_mouse.assert_called_once_with(12, 5, self.curses.BUTTON1_CLICKED)
 
+    def test_handle_mouse_event_click_outside_windows_clears_text_selection(self):
+        app = self._make_app()
+        selection_win = self._make_window(
+            contains=mock.Mock(return_value=False),
+            clear_selection=mock.Mock(),
+            has_selection=mock.Mock(return_value=True),
+            selection_anchor=(0, 0),
+            selection_cursor=(0, 2),
+            _mouse_selecting=True,
+        )
+        app.windows = [selection_win]
+        app._handle_window_mouse = mock.Mock(
+            side_effect=lambda mx, my, bstate: self.mouse_router.handle_window_mouse(
+                app,
+                mx,
+                my,
+                bstate,
+                norm=getattr(app, "_mouse_norm", None),
+            )
+        )
+        app._handle_desktop_mouse = mock.Mock(return_value=False)
+
+        self.mouse_router.handle_mouse_event(
+            app, (0, 40, 20, 0, self.curses.BUTTON1_CLICKED)
+        )
+
+        selection_win.clear_selection.assert_called_once_with()
+        app._handle_desktop_mouse.assert_called_once_with(40, 20, self.curses.BUTTON1_CLICKED)
+
     def test_handle_mouse_event_dialog_has_priority(self):
         app = self._make_app()
         app._handle_dialog_mouse.return_value = True

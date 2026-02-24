@@ -597,6 +597,19 @@ class NotepadComponentTests(unittest.TestCase):
         bx, by, bw, bh = win.body_rect()
         self.assertIsNone(win.handle_click(bx + bw + 5, by + bh + 5))
 
+    def test_handle_click_outside_body_with_button_clears_selection(self):
+        win = self._make_window()
+        win.selection_anchor = (0, 0)
+        win.selection_cursor = (0, 3)
+        win._mouse_selecting = True
+        bx, by, bw, bh = win.body_rect()
+
+        self.assertIsNone(win.handle_click(bx + bw + 5, by + bh + 5, self.curses.BUTTON1_CLICKED))
+
+        self.assertIsNone(win.selection_anchor)
+        self.assertIsNone(win.selection_cursor)
+        self.assertFalse(win._mouse_selecting)
+
     def test_handle_click_wrap_mode_in_range_positions_cursor(self):
         win = self._make_window()
         win.wrap_mode = True
