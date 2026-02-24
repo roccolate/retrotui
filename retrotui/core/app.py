@@ -68,7 +68,7 @@ from .window_manager import WindowManager
 
 LOGGER = logging.getLogger(__name__)
 
-APP_VERSION = '0.9.1'
+APP_VERSION = '0.9.2'
 
 class RetroTUI:
     """Main application class."""

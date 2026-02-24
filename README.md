@@ -26,7 +26,7 @@ RetroTUI trae la nostalgia de los escritorios clásicos a tu terminal Linux. Fun
 ║░░ 💻 ░░░░║  📄 config.json           512B      ║░░░░░░░░░░║
 ║░Terminal░╚══════════════════════════════════════╝░░░░░░░░░░║
 ║░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░║
-║ RetroTUI v0.9.1 │ Windows: 1/1 │ Mouse: Enabled │ Ctrl+Q: Exit║
+║ RetroTUI v0.9.2 │ Windows: 1/1 │ Mouse: Enabled │ Ctrl+Q: Exit║
 ╚══════════════════════════════════════════════════════════════╝
 ```
 

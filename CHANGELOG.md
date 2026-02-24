@@ -4,6 +4,18 @@ Todas las versiones notables de RetroTUI están documentadas aquí.
 
 ---
 
+## [v0.9.2] - 2026-02-24
+
+### Added
+- Baseline profiling guide in `docs/BASELINE_PROFILING.md`.
+- Baseline artifacts directory scaffold in `docs/baseline/`.
+
+### Fixed
+- Mouse routing now preserves left-button pressed state on inferred motion paths, restoring drag text selection in apps like Notepad/Terminal.
+- Added regression coverage for inferred drag behavior in `tests/test_mouse_router.py`.
+
+---
+
 ## [v0.9.1] - 2026-02-18
 
 ### Added
