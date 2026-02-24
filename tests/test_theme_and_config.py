@@ -130,7 +130,7 @@ class ThemeAndConfigTests(unittest.TestCase):
         self.assertEqual(loaded.theme, "hacker")
         self.assertTrue(loaded.show_hidden)
         self.assertFalse(loaded.word_wrap_default)
-        self.assertEqual(loaded.icon_style, "retro_01")
+        self.assertEqual(loaded.icon_style, "mini")
 
     def test_serialize_and_save_config(self):
         config = self.config.AppConfig(theme="amiga", show_hidden=True, word_wrap_default=False)
