@@ -134,6 +134,26 @@ class RenderingTests(unittest.TestCase):
         self.assertTrue(any("[Notes]" in call.args[3] for call in safe_addstr.call_args_list))
         self.assertTrue(any("[Files]" in call.args[3] for call in safe_addstr.call_args_list))
 
+    def test_draw_taskbar_uses_window_manager_taskbar_layout_when_available(self):
+        stdscr = types.SimpleNamespace(getmaxyx=mock.Mock(return_value=(20, 80)))
+        window_mgr = types.SimpleNamespace(
+            taskbar_buttons=mock.Mock(
+                return_value=((1, 8, "Notes", object()), (10, 17, "Files", object()))
+            )
+        )
+        app = types.SimpleNamespace(
+            stdscr=stdscr,
+            windows=[types.SimpleNamespace(minimized=True, title="Legacy")],
+            window_mgr=window_mgr,
+        )
+
+        with mock.patch.object(self.rendering, "safe_addstr") as safe_addstr:
+            self.rendering.draw_taskbar(app)
+
+        window_mgr.taskbar_buttons.assert_called_once_with(80)
+        self.assertTrue(any(call.args[2] == 1 and call.args[3] == "[Notes]" for call in safe_addstr.call_args_list))
+        self.assertTrue(any(call.args[2] == 10 and call.args[3] == "[Files]" for call in safe_addstr.call_args_list))
+
     def test_draw_taskbar_breaks_when_button_does_not_fit(self):
         stdscr = types.SimpleNamespace(getmaxyx=mock.Mock(return_value=(20, 10)))
         app = types.SimpleNamespace(
@@ -178,6 +198,33 @@ class RenderingTests(unittest.TestCase):
 
         stdscr.getmaxyx.assert_not_called()
         self.assertGreaterEqual(safe_addstr.call_count, 1)
+
+    def test_taskbar_and_statusbar_share_window_stats_cache_per_render_cycle(self):
+        class _CountingWindows(list):
+            def __init__(self, *items):
+                super().__init__(items)
+                self.iter_calls = 0
+
+            def __iter__(self):
+                self.iter_calls += 1
+                return super().__iter__()
+
+        windows = _CountingWindows(
+            types.SimpleNamespace(minimized=True, title="Notes", visible=False),
+            types.SimpleNamespace(minimized=False, title="Shell", visible=True),
+        )
+        stdscr = types.SimpleNamespace(getmaxyx=mock.Mock(return_value=(20, 80)))
+        app = types.SimpleNamespace(
+            stdscr=stdscr,
+            windows=windows,
+            _render_cycle_id=7,
+        )
+
+        with mock.patch.object(self.rendering, "safe_addstr"):
+            self.rendering.draw_taskbar(app)
+            self.rendering.draw_statusbar(app, "0.9.2")
+
+        self.assertEqual(windows.iter_calls, 1)
 
 
 if __name__ == "__main__":

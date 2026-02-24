@@ -33,6 +33,35 @@ def _resolve_frame_size(app, frame_size):
     return _frame_size(app)
 
 
+def _window_stats(app):
+    """Return cached per-frame window stats used by taskbar/statusbar."""
+    cycle = getattr(app, "_render_cycle_id", None)
+    cache_cycle = getattr(app, "_render_stats_cycle_id", None)
+    cached = getattr(app, "_render_window_stats", None)
+    if cycle is not None and cache_cycle == cycle and isinstance(cached, dict):
+        return cached
+
+    windows = list(getattr(app, "windows", ()))
+    minimized_labels = []
+    visible_count = 0
+    for win in windows:
+        if getattr(win, "visible", False):
+            visible_count += 1
+        if getattr(win, "minimized", False):
+            title = str(getattr(win, "title", ""))
+            minimized_labels.append(title[:TASKBAR_TITLE_MAX_LEN])
+
+    stats = {
+        "total": len(windows),
+        "visible": visible_count,
+        "minimized_labels": minimized_labels,
+    }
+    if cycle is not None:
+        app._render_window_stats = stats
+        app._render_stats_cycle_id = cycle
+    return stats
+
+
 def draw_desktop(app, frame_size=None):
     """Draw the desktop background pattern."""
     h, w = _resolve_frame_size(app, frame_size)
@@ -81,12 +110,19 @@ def draw_taskbar(app, frame_size=None):
     # Always clear the taskbar line
     safe_addstr(app.stdscr, taskbar_y, 0, ' ' * (w - 1), attr)
     
-    minimized = [win for win in app.windows if win.minimized]
-    if not minimized:
+    window_mgr = getattr(app, "window_mgr", None)
+    if window_mgr is not None and hasattr(window_mgr, "taskbar_buttons"):
+        buttons = window_mgr.taskbar_buttons(w)
+        for start_x, _end_x, label, _win in buttons:
+            safe_addstr(app.stdscr, taskbar_y, start_x, f'[{label}]', attr | curses.A_BOLD)
+        return
+
+    stats = _window_stats(app)
+    minimized_labels = stats["minimized_labels"]
+    if not minimized_labels:
         return
     x = 1
-    for win in minimized:
-        label = win.title[:TASKBAR_TITLE_MAX_LEN]
+    for label in minimized_labels:
         btn = f'[{label}]'
         if x + len(btn) >= w - 1:
             break
@@ -98,9 +134,11 @@ def draw_statusbar(app, version, frame_size=None):
     """Draw the bottom status bar."""
     h, w = _resolve_frame_size(app, frame_size)
     attr = theme_attr("status")
-    visible = sum(1 for win in app.windows if win.visible)
+    stats = _window_stats(app)
+    visible = stats["visible"]
+    total = stats["total"]
     
-    left_status = f' RetroTUI v{version} | Windows: {visible}/{len(app.windows)} | Mouse: Enabled'
+    left_status = f' RetroTUI v{version} | Windows: {visible}/{total} | Mouse: Enabled'
     
     statusbar_y = h - BOTTOM_BARS_HEIGHT + 1  # Last row: below taskbar
     # Draw background

@@ -25,6 +25,7 @@ class WindowManager:
         self._app = app
         self.windows = []
         self._layers_dirty = True
+        self._taskbar_cache = {"key": None, "buttons": ()}
 
     # ------------------------------------------------------------------
     # Window list / activation
@@ -109,22 +110,55 @@ class WindowManager:
     # Taskbar
     # ------------------------------------------------------------------
 
+    def taskbar_buttons(self, width):
+        """Return cached taskbar button layout for minimized windows.
+
+        Each entry is `(start_x, end_x, label, win)` where `end_x` is exclusive.
+        """
+        key = (
+            int(width),
+            tuple(
+                (
+                    id(win),
+                    bool(getattr(win, "minimized", False)),
+                    str(getattr(win, "title", "")),
+                )
+                for win in self.windows
+            ),
+        )
+        cached_key = self._taskbar_cache.get("key")
+        if cached_key == key:
+            return self._taskbar_cache.get("buttons", ())
+
+        x = 1
+        buttons = []
+        for win in self.windows:
+            if not getattr(win, "minimized", False):
+                continue
+            label = str(getattr(win, "title", ""))[:TASKBAR_TITLE_MAX_LEN]
+            btn_w = len(label) + 2  # [label]
+            if x + btn_w >= width - 1:
+                break
+            buttons.append((x, x + btn_w, label, win))
+            x += btn_w + 1
+
+        result = tuple(buttons)
+        self._taskbar_cache["key"] = key
+        self._taskbar_cache["buttons"] = result
+        return result
+
     def handle_taskbar_click(self, mx, my):
         """Handle click on taskbar row. Returns True if handled."""
         h, w = self._app.stdscr.getmaxyx()
         taskbar_y = h - BOTTOM_BARS_HEIGHT
         if my != taskbar_y:
             return False
-        minimized = [win for win in self.windows if win.minimized]
-        if not minimized:
+        buttons = self.taskbar_buttons(w)
+        if not buttons:
             return False
-        x = 1
-        for win in minimized:
-            label = win.title[:TASKBAR_TITLE_MAX_LEN]
-            btn_w = len(label) + 2  # [label]
-            if x <= mx < x + btn_w:
+        for start_x, end_x, _label, win in buttons:
+            if start_x <= mx < end_x:
                 win.toggle_minimize()
                 self._app.set_active_window(win)
                 return True
-            x += btn_w + 1
         return False
