@@ -315,7 +315,9 @@ class IconsWindow(DesktopIconManagerWindow):
 
     STYLE_OPTIONS = (
         ("default", "Classic"),
-        ("retro_01", "Retro 0.1"),
+        ("mini", "Mini"),
+        ("braille", "Braille"),
+        ("codex", "Codex"),
     )
 
     def __init__(self, x, y, w, h, app):
@@ -344,11 +346,32 @@ class IconsWindow(DesktopIconManagerWindow):
             if callable(refresher):
                 refresher()
 
+    def _list_rect(self):
+        """Leave room for style preview above the checkbox list."""
+        list_x = self.x + 2
+        list_y = self.y + 11
+        list_w = max(12, self.w - self.LIST_PADDING)
+        list_h = max(4, self.h - 15)
+        return list_x, list_y, list_w, list_h
+
+    def _preview_symbol(self, style_key):
+        getter = getattr(self.app, "icon_style_preview_symbol", None)
+        if callable(getter):
+            return str(getter(style_key))
+        fallback = {
+            "default": "📁",
+            "mini": ":D",
+            "braille": "⠋⠊",
+            "codex": "⟠F",
+        }
+        return fallback.get(style_key, "[]")
+
     def draw(self, stdscr):
         super().draw(stdscr)
         body_attr = theme_attr("window_body")
+        selected_attr = body_attr | curses.A_REVERSE
         _key, style_label = self.STYLE_OPTIONS[self._style_index]
-        style_text = f" Style: {style_label}  (F2/S: Change)"
+        style_text = f" Style: {style_label}  (F2/S: Change)  |  Enter=Save"
         safe_addstr(
             stdscr,
             self.y + 3,
@@ -356,6 +379,25 @@ class IconsWindow(DesktopIconManagerWindow):
             style_text.ljust(self.w - 4)[: self.w - 4],
             body_attr,
         )
+
+        box_x = self.x + 2
+        box_y = self.y + 4
+        box_w = max(20, self.w - 4)
+        box_h = 5
+        draw_box(stdscr, box_y, box_x, box_h, box_w, body_attr, double=False)
+        safe_addstr(stdscr, box_y, box_x + 2, "Preview", body_attr | curses.A_BOLD)
+
+        preview_styles = ("default", "mini", self.STYLE_OPTIONS[self._style_index][0])
+        preview_labels = ("Classic", "Mini", "Selected")
+        col_w = max(10, (box_w - 2) // 3)
+        for idx, style_key in enumerate(preview_styles):
+            px = box_x + 1 + idx * col_w
+            label = preview_labels[idx]
+            token = self._preview_symbol(style_key)
+            attr = selected_attr if style_key == self.STYLE_OPTIONS[self._style_index][0] else body_attr
+            safe_addstr(stdscr, box_y + 1, px, label.ljust(col_w - 1)[: col_w - 1], attr | curses.A_BOLD)
+            safe_addstr(stdscr, box_y + 2, px, token.ljust(col_w - 1)[: col_w - 1], attr)
+            safe_addstr(stdscr, box_y + 3, px, f"[{style_key}]".ljust(col_w - 1)[: col_w - 1], attr)
 
     def handle_key(self, key):
         key_code = normalize_key_code(key)

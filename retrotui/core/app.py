@@ -73,7 +73,10 @@ LOGGER = logging.getLogger(__name__)
 
 APP_VERSION = '0.9.2'
 ICON_STYLE_DEFAULT = "default"
-ICON_STYLE_RETRO_01 = "retro_01"
+ICON_STYLE_MINI = "mini"
+ICON_STYLE_BRAILLE = "braille"
+ICON_STYLE_CODEX = "codex"
+ICON_STYLE_RETRO_01 = "retro_01"  # Legacy alias kept for backwards compatibility.
 _CURSES_ERROR = getattr(curses, "error", Exception)
 _CONFIG_PERSIST_ERRORS = (OSError, UnicodeError, ValueError, TypeError)
 _INPUT_ROUTE_ERRORS = (
@@ -570,48 +573,86 @@ class RetroTUI:
     def _normalize_icon_style(style):
         """Return supported icon style key."""
         normalized = str(style or ICON_STYLE_DEFAULT).strip().lower()
-        if normalized in (ICON_STYLE_DEFAULT, ICON_STYLE_RETRO_01):
+        if normalized == ICON_STYLE_RETRO_01:
+            return ICON_STYLE_MINI
+        if normalized in (ICON_STYLE_DEFAULT, ICON_STYLE_MINI, ICON_STYLE_BRAILLE, ICON_STYLE_CODEX):
             return normalized
         return ICON_STYLE_DEFAULT
+
+    @staticmethod
+    def _icon_style_variants():
+        """Return per-icon style variants keyed by action/value key."""
+        return {
+            AppAction.FILE_MANAGER.value: {"mini": ":D", "braille": "⠋⠊", "codex": "⟠F"},
+            AppAction.NOTEPAD.value: {"mini": ":|", "braille": "⠝⠏", "codex": "⟠N"},
+            AppAction.ASCII_VIDEO.value: {"mini": "AV", "braille": "⠁⠧", "codex": "⟠V"},
+            AppAction.TERMINAL.value: {"mini": ">:", "braille": "⠞⠍", "codex": "⟠T"},
+            AppAction.CALCULATOR.value: {"mini": "+)", "braille": "⠉⠁", "codex": "⟠C"},
+            AppAction.LOG_VIEWER.value: {"mini": "LG", "braille": "⠇⠛", "codex": "⟠L"},
+            AppAction.PROCESS_MANAGER.value: {"mini": "PS", "braille": "⠏⠎", "codex": "⟠P"},
+            AppAction.CLOCK_CALENDAR.value: {"mini": "CK", "braille": "⠉⠅", "codex": "⟠K"},
+            AppAction.IMAGE_VIEWER.value: {"mini": "IM", "braille": "⠊⠍", "codex": "⟠I"},
+            AppAction.TRASH_BIN.value: {"mini": "TR", "braille": "⠞⠗", "codex": "⟠R"},
+            AppAction.SETTINGS.value: {"mini": "8)", "braille": "⠎⠞", "codex": "⟠S"},
+            AppAction.ABOUT.value: {"mini": "i)", "braille": "⠁⠃", "codex": "⟠A"},
+            AppAction.MINESWEEPER.value: {"mini": "MX", "braille": "⠍⠭", "codex": "⟠M"},
+            AppAction.SOLITAIRE.value: {"mini": "SL", "braille": "⠎⠇", "codex": "⟠$"},
+            AppAction.SNAKE.value: {"mini": "SN", "braille": "⠎⠝", "codex": "⟠Z"},
+            AppAction.CHARMAP.value: {"mini": "CH", "braille": "⠉⠓", "codex": "⟠H"},
+            AppAction.CLIPBOARD.value: {"mini": "CB", "braille": "⠉⠃", "codex": "⟠B"},
+            AppAction.HEX_VIEWER.value: {"mini": "0x", "braille": "⠓⠭", "codex": "⟠X"},
+            AppAction.WIFI_MANAGER.value: {"mini": "))", "braille": "⠺⠋", "codex": "⟠W"},
+            AppAction.DESKTOP_ICON_MANAGER.value: {"mini": "DT", "braille": "⠙⠞", "codex": "⟠D"},
+            AppAction.ICONS.value: {"mini": ":)", "braille": "⠊⠉", "codex": "⟠O"},
+            AppAction.MENU_EDITOR.value: {"mini": "MN", "braille": "⠍⠝", "codex": "⟠E"},
+            AppAction.MARKDOWN_VIEWER.value: {"mini": "MD", "braille": "⠍⠙", "codex": "⟠Y"},
+            AppAction.SYSTEM_MONITOR.value: {"mini": "SM", "braille": "⠎⠍", "codex": "⟠U"},
+            AppAction.CONTROL_PANEL.value: {"mini": "CT", "braille": "⠉⠞", "codex": "⟠Q"},
+            AppAction.TETRIS.value: {"mini": "TT", "braille": "⠞⠞", "codex": "⟠#"},
+            AppAction.RETRONET.value: {"mini": "RN", "braille": "⠗⠝", "codex": "⟠G"},
+        }
+
+    def _style_symbol_for_icon(self, icon, style):
+        """Return style-specific symbol token for one icon."""
+        action = icon.get("action")
+        key = getattr(action, "value", action)
+        key = str(key or "").lower()
+        by_icon = self._icon_style_variants().get(key, {})
+
+        if key.startswith("plugin:"):
+            if style == ICON_STYLE_MINI:
+                return ":)"
+            if style == ICON_STYLE_BRAILLE:
+                return "⠏⠇"
+            if style == ICON_STYLE_CODEX:
+                return "⟠PL"
+            return None
+
+        return by_icon.get(style)
 
     def _styled_icon_entry(self, icon):
         """Return style-adjusted icon entry for current desktop icon style."""
         style = self._normalize_icon_style(getattr(self, "icon_style", ICON_STYLE_DEFAULT))
-        if style != ICON_STYLE_RETRO_01:
+        if style == ICON_STYLE_DEFAULT:
             return dict(icon)
 
         styled = dict(icon)
-        action = styled.get("action")
-        key = getattr(action, "value", action)
-        key = str(key or "").lower()
-        retro_symbols = {
-            AppAction.FILE_MANAGER.value: ":D",
-            AppAction.NOTEPAD.value: ":|",
-            AppAction.TERMINAL.value: ">:",
-            AppAction.SETTINGS.value: "8)",
-            AppAction.ABOUT.value: "i)",
-            AppAction.CALCULATOR.value: "+)",
-            AppAction.IMAGE_VIEWER.value: "[]",
-            AppAction.PROCESS_MANAGER.value: "[]",
-            AppAction.LOG_VIEWER.value: "[]",
-            AppAction.CHARMAP.value: "Aa",
-            AppAction.CLIPBOARD.value: "[]",
-            AppAction.WIFI_MANAGER.value: "))",
-            AppAction.DESKTOP_ICON_MANAGER.value: "DT",
-            AppAction.ICONS.value: ":)",
-            AppAction.MENU_EDITOR.value: "MN",
-        }
-        symbol = retro_symbols.get(key)
-        if symbol is None and key.startswith("plugin:"):
-            symbol = ":)"
+        symbol = self._style_symbol_for_icon(styled, style)
         if symbol:
             styled["symbol"] = symbol
             token = symbol[:2].ljust(2)
-            if self.use_unicode:
+            if self.use_unicode and style in (ICON_STYLE_MINI, ICON_STYLE_CODEX):
                 styled["art"] = ["╭──╮", f"│{token}│", "╰──╯"]
+            elif self.use_unicode and style == ICON_STYLE_BRAILLE:
+                styled["art"] = ["┌──┐", f"│{token}│", "└──┘"]
             else:
                 styled["art"] = ["+--+", f"|{token}|", "+--+"]
         return styled
+
+    def icon_style_preview_symbol(self, style, icon_key=AppAction.FILE_MANAGER.value):
+        """Return one preview symbol token for *style* and *icon_key*."""
+        probe_icon = {"action": icon_key}
+        return self._style_symbol_for_icon(probe_icon, self._normalize_icon_style(style)) or "[]"
 
     def set_icon_style(self, style):
         """Set desktop icon style and refresh icon catalog."""

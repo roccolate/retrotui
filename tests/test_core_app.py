@@ -1024,6 +1024,7 @@ class CoreAppTests(unittest.TestCase):
         app.default_show_hidden = True
         app.default_word_wrap = False
         app.default_sunday_first = True
+        app.icon_style = "retro_01"
         app.config = types.SimpleNamespace(hidden_icons="some_apps", hidden_menu_items="some_menu")
 
         with mock.patch.object(self.app_mod, "save_config", return_value="/tmp/config.toml") as save_config:
@@ -1035,6 +1036,13 @@ class CoreAppTests(unittest.TestCase):
         self.assertTrue(app.config.show_hidden)
         self.assertFalse(app.config.word_wrap_default)
         self.assertTrue(app.config.sunday_first)
+        self.assertEqual(app.config.icon_style, "mini")
+
+    def test_normalize_icon_style_maps_legacy_and_invalid_values(self):
+        self.assertEqual(self.app_mod.RetroTUI._normalize_icon_style("retro_01"), "mini")
+        self.assertEqual(self.app_mod.RetroTUI._normalize_icon_style("MINI"), "mini")
+        self.assertEqual(self.app_mod.RetroTUI._normalize_icon_style("codex"), "codex")
+        self.assertEqual(self.app_mod.RetroTUI._normalize_icon_style("weird"), "default")
 
     def test_persist_config_ignores_icon_save_parse_errors(self):
         app = self._make_app()
