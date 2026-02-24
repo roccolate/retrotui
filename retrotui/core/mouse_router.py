@@ -157,6 +157,37 @@ def _sync_window_menu_owner(app, win):
         app._active_window_menu_owner = None
 
 
+def _clear_window_text_selection(app):
+    """Clear text selection state for windows that expose selection helpers."""
+    cleared_any = False
+    for win in getattr(app, "windows", []):
+        clear_selection = getattr(win, "clear_selection", None)
+        if not callable(clear_selection):
+            continue
+
+        has_state = False
+        has_selection = getattr(win, "has_selection", None)
+        if callable(has_selection):
+            try:
+                has_state = bool(has_selection())
+            except _MOUSE_ROUTE_ERRORS:
+                has_state = False
+
+        if (
+            has_state
+            or getattr(win, "selection_anchor", None) is not None
+            or getattr(win, "selection_cursor", None) is not None
+            or bool(getattr(win, "_mouse_selecting", False))
+        ):
+            try:
+                clear_selection()
+            except _MOUSE_ROUTE_ERRORS:
+                LOGGER.debug("selection clear failed", exc_info=True)
+                continue
+            cleared_any = True
+    return cleared_any
+
+
 def _is_button1_click_event(bstate):
     """Return True for discrete button-1 click-like events (not motion reports)."""
     if bstate & _REPORT_MOUSE_POSITION:
@@ -483,6 +514,10 @@ def handle_mouse_event(app, event):
 
     if app._handle_window_mouse(mx, my, bstate):
         return True
+
+    # Clicking outside all windows should cancel active text selections.
+    if norm.get("button1_pressed") or norm.get("button1_clicked") or norm.get("button1_double"):
+        _clear_window_text_selection(app)
 
     # Passive pointer motion with no button/scroll/click semantics is a no-op.
     if norm.get("is_passive_noop"):

@@ -660,7 +660,18 @@ class NotepadWindow(SelectableTextMixin, Window):
         body_h = bh - 1  # -1 for status bar
 
         if not (bx <= mx < bx + bw and by <= my < by + body_h):
-            self._mouse_selecting = False
+            has_button1 = bool(
+                bstate
+                and (
+                    bstate & curses.BUTTON1_PRESSED
+                    or bstate & curses.BUTTON1_CLICKED
+                    or bstate & curses.BUTTON1_DOUBLE_CLICKED
+                )
+            )
+            if has_button1:
+                self.clear_selection()
+            else:
+                self._mouse_selecting = False
             return None
 
         self._set_cursor_from_screen(mx, my)
