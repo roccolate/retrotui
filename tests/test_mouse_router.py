@@ -889,6 +889,31 @@ class MouseRouterTests(unittest.TestCase):
         self.assertEqual(app.selected_icon, -1)
         self.assertFalse(app.menu.active)
 
+    def test_handle_desktop_mouse_starts_drag_with_button1_down_without_pressed_flag(self):
+        app = self._make_app()
+        app.get_icon_at.return_value = 0
+        icon_mgr = types.SimpleNamespace(
+            is_dragging=False,
+            start_drag=mock.Mock(),
+            update_drag=mock.Mock(),
+            end_drag=mock.Mock(),
+        )
+        app._icon_mgr = icon_mgr
+
+        norm = {
+            "button1_released": False,
+            "button1_pressed": False,
+            "button1_down": True,
+            "is_drag": True,
+            "is_motion": True,
+        }
+
+        handled = self.mouse_router.handle_desktop_mouse(app, 9, 9, 0, norm=norm)
+
+        self.assertTrue(handled)
+        self.assertEqual(app.selected_icon, 0)
+        icon_mgr.start_drag.assert_called_once_with(0, 9, 9)
+
     def test_handle_mouse_event_top_bar_click_executes_action(self):
         app = self._make_app()
         app.menu.handle_click.return_value = "about"

@@ -37,6 +37,18 @@ Look for log lines:
 - `profile ... redraw_ratio=...`
 - `profile_final ... redraw_ratio=...`
 
+Optional extractor (from saved log file):
+
+```bash
+python tools/baseline_extract.py docs/baseline/run.log --terminal "linux-tty"
+```
+
+Compare baseline vs post-change:
+
+```bash
+python tools/baseline_compare.py docs/baseline/before.log docs/baseline/after.log --terminal "linux-tty"
+```
+
 And record host stats manually:
 
 - CPU `%` in idle (no interaction for 60s)

@@ -26,6 +26,7 @@ class WindowManager:
         self.windows = []
         self._layers_dirty = True
         self._taskbar_cache = {"key": None, "buttons": ()}
+        self._window_stats_cache = {"cycle": None, "stats": None}
 
     # ------------------------------------------------------------------
     # Window list / activation
@@ -110,32 +111,55 @@ class WindowManager:
     # Taskbar
     # ------------------------------------------------------------------
 
+    def _current_render_cycle(self):
+        return getattr(self._app, "_render_cycle_id", None)
+
+    def window_stats(self):
+        """Return cached window stats for current render cycle when available."""
+        cycle = self._current_render_cycle()
+        cached_cycle = self._window_stats_cache.get("cycle")
+        cached_stats = self._window_stats_cache.get("stats")
+        if cycle is not None and cached_cycle == cycle and isinstance(cached_stats, dict):
+            return cached_stats
+
+        windows = list(self.windows)
+        minimized = []
+        visible_count = 0
+        for win in windows:
+            if getattr(win, "visible", False):
+                visible_count += 1
+            if getattr(win, "minimized", False):
+                label = str(getattr(win, "title", ""))[:TASKBAR_TITLE_MAX_LEN]
+                minimized.append((label, win))
+
+        stats = {
+            "total": len(windows),
+            "visible": visible_count,
+            "minimized": tuple(minimized),
+            "minimized_labels": tuple(label for label, _ in minimized),
+        }
+        if cycle is not None:
+            self._window_stats_cache["cycle"] = cycle
+            self._window_stats_cache["stats"] = stats
+        return stats
+
     def taskbar_buttons(self, width):
         """Return cached taskbar button layout for minimized windows.
 
         Each entry is `(start_x, end_x, label, win)` where `end_x` is exclusive.
         """
-        key = (
-            int(width),
-            tuple(
-                (
-                    id(win),
-                    bool(getattr(win, "minimized", False)),
-                    str(getattr(win, "title", "")),
-                )
-                for win in self.windows
-            ),
-        )
+        stats = self.window_stats()
+        cycle = self._current_render_cycle()
+        key = (int(width), cycle, stats.get("minimized"))
+        if cycle is None:
+            key = (int(width), stats.get("minimized"))
         cached_key = self._taskbar_cache.get("key")
         if cached_key == key:
             return self._taskbar_cache.get("buttons", ())
 
         x = 1
         buttons = []
-        for win in self.windows:
-            if not getattr(win, "minimized", False):
-                continue
-            label = str(getattr(win, "title", ""))[:TASKBAR_TITLE_MAX_LEN]
+        for label, win in stats.get("minimized", ()):
             btn_w = len(label) + 2  # [label]
             if x + btn_w >= width - 1:
                 break

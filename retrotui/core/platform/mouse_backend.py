@@ -3,6 +3,27 @@
 import curses
 import os
 
+_SUPPORTED_BACKENDS = {"gpm", "sgr"}
+
+
+def resolve_mouse_backend(app, environ=None):
+    """Resolve backend hint as 'gpm', 'sgr', or 'fallback'."""
+    env = os.environ if environ is None else environ
+    app_backend = str(getattr(app, "mouse_backend", "") or "").strip().lower()
+    if app_backend in _SUPPORTED_BACKENDS:
+        return app_backend
+
+    forced_backend = str(env.get("RETROTUI_MOUSE_BACKEND", "") or "").strip().lower()
+    if forced_backend in _SUPPORTED_BACKENDS:
+        return forced_backend
+
+    term = str(env.get("TERM", "") or "").strip().lower()
+    if term == "linux":
+        return "gpm"
+    if term:
+        return "sgr"
+    return "fallback"
+
 
 def normalize_mouse_payload(app, event):
     """Normalize raw curses mouse payload and infer missing semantics when possible.
@@ -23,16 +44,11 @@ def normalize_mouse_payload(app, event):
     b3_pressed = getattr(curses, "BUTTON3_PRESSED", 0)
     b3_released = getattr(curses, "BUTTON3_RELEASED", 0)
     b4_pressed = getattr(curses, "BUTTON4_PRESSED", 0)
+    b4_clicked = getattr(curses, "BUTTON4_CLICKED", 0)
     b5_pressed = getattr(curses, "BUTTON5_PRESSED", 0)
+    b5_clicked = getattr(curses, "BUTTON5_CLICKED", 0)
 
-    # Backend hint: explicit app override wins; Linux console defaults to GPM-like.
-    backend = getattr(app, "mouse_backend", None)
-    if not backend:
-        forced_backend = (os.environ.get("RETROTUI_MOUSE_BACKEND") or "").strip().lower()
-        if forced_backend in {"gpm", "sgr"}:
-            backend = forced_backend
-        else:
-            backend = "gpm" if os.environ.get("TERM") == "linux" else "sgr"
+    backend = resolve_mouse_backend(app)
 
     has_motion = bool(bstate & report_flag)
     last_pos = getattr(app, "_last_mouse_pos", None)
@@ -59,13 +75,13 @@ def normalize_mouse_payload(app, event):
     )
     is_motion = has_motion or inferred_motion
     is_drag = is_motion and button1_down
-    scroll_up = bool(bstate & b4_pressed)
+    scroll_up = bool(bstate & (b4_pressed | b4_clicked))
     scroll_down = bool(
         bstate
         & getattr(
             app,
             "scroll_down_mask",
-            b5_pressed,
+            b5_pressed | b5_clicked,
         )
     )
     right_click_effective = right_click or inferred_right_click

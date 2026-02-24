@@ -93,3 +93,62 @@ def test_normalize_mouse_payload_uses_forced_env_backend_when_app_has_none():
 
     assert result is not None
     assert result["backend"] == "gpm"
+
+
+def test_resolve_mouse_backend_prefers_explicit_app_backend():
+    app = types.SimpleNamespace(mouse_backend="GPM")
+    backend = mouse_backend.resolve_mouse_backend(app, {"TERM": "xterm-256color"})
+    assert backend == "gpm"
+
+
+def test_resolve_mouse_backend_uses_env_override_when_app_backend_invalid():
+    app = types.SimpleNamespace(mouse_backend="legacy")
+    backend = mouse_backend.resolve_mouse_backend(
+        app,
+        {"RETROTUI_MOUSE_BACKEND": "sgr", "TERM": "linux"},
+    )
+    assert backend == "sgr"
+
+
+def test_resolve_mouse_backend_defaults_to_gpm_on_linux_console():
+    app = types.SimpleNamespace()
+    backend = mouse_backend.resolve_mouse_backend(app, {"TERM": "linux"})
+    assert backend == "gpm"
+
+
+def test_resolve_mouse_backend_returns_fallback_when_no_hints():
+    app = types.SimpleNamespace(mouse_backend="")
+    backend = mouse_backend.resolve_mouse_backend(app, {})
+    assert backend == "fallback"
+
+
+def test_normalize_mouse_payload_detects_scroll_up_with_button4_clicked():
+    app = types.SimpleNamespace(
+        mouse_backend="sgr",
+        _last_mouse_pos=None,
+        button1_pressed=False,
+    )
+
+    b4_clicked = getattr(mouse_backend.curses, "BUTTON4_CLICKED", 0)
+    if b4_clicked == 0:
+        return
+
+    result = mouse_backend.normalize_mouse_payload(app, (0, 3, 4, 0, b4_clicked))
+    assert result is not None
+    assert result["scroll_up"] is True
+
+
+def test_normalize_mouse_payload_detects_scroll_down_with_button5_clicked_default_mask():
+    app = types.SimpleNamespace(
+        mouse_backend="sgr",
+        _last_mouse_pos=None,
+        button1_pressed=False,
+    )
+
+    b5_clicked = getattr(mouse_backend.curses, "BUTTON5_CLICKED", 0)
+    if b5_clicked == 0:
+        return
+
+    result = mouse_backend.normalize_mouse_payload(app, (0, 3, 4, 0, b5_clicked))
+    assert result is not None
+    assert result["scroll_down"] is True

@@ -390,11 +390,13 @@ def handle_desktop_mouse(app, mx, my, bstate, norm=None):
     if norm is not None:
         is_button1_released = bool(norm.get("button1_released"))
         is_button1_pressed = bool(norm.get("button1_pressed"))
+        is_button1_down = bool(norm.get("button1_down"))
         is_drag_motion = bool(norm.get("is_drag"))
         is_mouse_motion = bool(norm.get("is_motion"))
     else:
         is_button1_released = bool(bstate & _BUTTON1_RELEASED)
         is_button1_pressed = bool(bstate & _BUTTON1_PRESSED)
+        is_button1_down = is_button1_pressed or bool(getattr(app, "button1_pressed", False))
         is_drag_motion = bool(bstate & _BUTTON1_PRESSED) or bool(
             (bstate & _REPORT_MOUSE_POSITION) and getattr(app, 'button1_pressed', False)
         )
@@ -421,7 +423,7 @@ def handle_desktop_mouse(app, mx, my, bstate, norm=None):
 
     # Single click or drag start
     if icon_idx >= 0:
-        if is_button1_pressed:
+        if is_button1_pressed or (is_button1_down and is_drag_motion):
             app.selected_icon = icon_idx
             if icon_mgr is not None:
                 icon_mgr.start_drag(icon_idx, mx, my)
