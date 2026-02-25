@@ -634,7 +634,10 @@ class RetroTUI:
         """Return style-adjusted icon entry for current desktop icon style."""
         style = self._normalize_icon_style(getattr(self, "icon_style", ICON_STYLE_DEFAULT))
         if style == ICON_STYLE_DEFAULT:
-            return dict(icon)
+            # Default style is the classic 3-line grid icon set.
+            styled = dict(icon)
+            styled.pop("symbol", None)
+            return styled
 
         styled = dict(icon)
         symbol = self._style_symbol_for_icon(styled, style)
@@ -660,14 +663,14 @@ class RetroTUI:
                 action_key = getattr(action, "value", action)
                 if str(action_key or "").lower() != target_key:
                     continue
-                symbol = icon.get("symbol")
-                if isinstance(symbol, str) and symbol:
-                    return symbol
                 art = icon.get("art") or []
                 if len(art) >= 2 and isinstance(art[1], str):
                     mid = art[1].strip("| ").strip()
                     if mid:
                         return mid
+                symbol = icon.get("symbol")
+                if isinstance(symbol, str) and symbol:
+                    return symbol
             return "[]"
         probe_icon = {"action": icon_key}
         return self._style_symbol_for_icon(probe_icon, normalized) or "[]"

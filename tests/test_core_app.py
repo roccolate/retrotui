@@ -208,7 +208,9 @@ class CoreAppTests(unittest.TestCase):
         self.assertEqual(app.windows, [fake_window])
         self.assertTrue(fake_window.active)
         self.assertGreaterEqual(len(app.icons), len(self.app_mod.ICONS))
-        self.assertTrue(all(icon in app.icons for icon in self.app_mod.ICONS))
+        expected = {(icon.get("label"), icon.get("action")) for icon in self.app_mod.ICONS}
+        current = {(icon.get("label"), icon.get("action")) for icon in app.icons}
+        self.assertTrue(expected.issubset(current))
 
     def test_init_uses_ascii_icons_when_unicode_not_supported(self):
         stdscr = types.SimpleNamespace(getmaxyx=lambda: (30, 120))
@@ -236,7 +238,9 @@ class CoreAppTests(unittest.TestCase):
             app = self.app_mod.RetroTUI(stdscr)
 
         self.assertGreaterEqual(len(app.icons), len(self.app_mod.ICONS_ASCII))
-        self.assertTrue(all(icon in app.icons for icon in self.app_mod.ICONS_ASCII))
+        expected = {(icon.get("label"), icon.get("action")) for icon in self.app_mod.ICONS_ASCII}
+        current = {(icon.get("label"), icon.get("action")) for icon in app.icons}
+        self.assertTrue(expected.issubset(current))
 
     def test_cleanup_delegates_to_bootstrap_helper(self):
         app = self._make_app()
@@ -1043,6 +1047,19 @@ class CoreAppTests(unittest.TestCase):
         self.assertEqual(self.app_mod.RetroTUI._normalize_icon_style("MINI"), "mini")
         self.assertEqual(self.app_mod.RetroTUI._normalize_icon_style("codex"), "codex")
         self.assertEqual(self.app_mod.RetroTUI._normalize_icon_style("weird"), "default")
+
+    def test_default_icon_style_uses_classic_grid_without_symbol(self):
+        app = self._make_app()
+        app.icon_style = "default"
+        icon = {
+            "label": "Files",
+            "action": self.actions_mod.AppAction.FILE_MANAGER,
+            "symbol": "📁",
+            "art": ["┌──┐", "│FL│", "└──┘"],
+        }
+        styled = app._styled_icon_entry(icon)
+        self.assertNotIn("symbol", styled)
+        self.assertEqual(styled.get("art"), icon["art"])
 
     def test_persist_config_ignores_icon_save_parse_errors(self):
         app = self._make_app()
