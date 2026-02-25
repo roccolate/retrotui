@@ -651,8 +651,26 @@ class RetroTUI:
 
     def icon_style_preview_symbol(self, style, icon_key=AppAction.FILE_MANAGER.value):
         """Return one preview symbol token for *style* and *icon_key*."""
+        normalized = self._normalize_icon_style(style)
+        if normalized == ICON_STYLE_DEFAULT:
+            base_icons = ICONS if getattr(self, "use_unicode", True) else ICONS_ASCII
+            target_key = str(icon_key or "").lower()
+            for icon in base_icons:
+                action = icon.get("action")
+                action_key = getattr(action, "value", action)
+                if str(action_key or "").lower() != target_key:
+                    continue
+                symbol = icon.get("symbol")
+                if isinstance(symbol, str) and symbol:
+                    return symbol
+                art = icon.get("art") or []
+                if len(art) >= 2 and isinstance(art[1], str):
+                    mid = art[1].strip("| ").strip()
+                    if mid:
+                        return mid
+            return "[]"
         probe_icon = {"action": icon_key}
-        return self._style_symbol_for_icon(probe_icon, self._normalize_icon_style(style)) or "[]"
+        return self._style_symbol_for_icon(probe_icon, normalized) or "[]"
 
     def set_icon_style(self, style):
         """Set desktop icon style and refresh icon catalog."""
