@@ -366,10 +366,22 @@ class IconsWindow(DesktopIconManagerWindow):
         }
         return fallback.get(style_key, "[]")
 
+    def _icon_list_symbol(self, action):
+        style_key = self.STYLE_OPTIONS[self._style_index][0]
+        getter = getattr(self.app, "icon_style_preview_symbol", None)
+        action_key = getattr(action, "value", action)
+        if callable(getter):
+            return str(getter(style_key, action_key))
+        return "[]"
+
     def draw(self, stdscr):
-        super().draw(stdscr)
+        if not self.visible:
+            return
+
+        Window.draw(self, stdscr)
         body_attr = theme_attr("window_body")
         selected_attr = body_attr | curses.A_REVERSE
+        bold_attr = body_attr | curses.A_BOLD
         _key, style_label = self.STYLE_OPTIONS[self._style_index]
         style_text = f" Style: {style_label}  (F2/S: Change)  |  Enter=Save"
         safe_addstr(
@@ -399,23 +411,135 @@ class IconsWindow(DesktopIconManagerWindow):
             safe_addstr(stdscr, box_y + 2, px, token.ljust(col_w - 1)[: col_w - 1], attr)
             safe_addstr(stdscr, box_y + 3, px, f"[{style_key}]".ljust(col_w - 1)[: col_w - 1], attr)
 
+        # Tabs
+        tab_y = self.y + 9
+        tab_x = self.x + 2
+        self._tab_ranges = []
+        for idx, cat in enumerate(self.categories):
+            tab = f" {cat} "
+            attr = selected_attr if (self.active and self.in_list and idx == self.active_cat_idx) else bold_attr
+            safe_addstr(stdscr, tab_y, tab_x, tab, attr)
+            self._tab_ranges.append((tab_x, tab_x + len(tab), idx))
+            tab_x += len(tab) + 1
+
+        # Icon list (no checkboxes)
+        list_x, list_y, list_w, list_h = self._list_rect()
+        draw_box(stdscr, list_y - 1, list_x - 1, list_h + 2, list_w + 2, body_attr, double=False)
+        category = self._current_category()
+        items = self.choices.get(category, []) if category else []
+        offset = self.offsets.get(category, 0) if category else 0
+        selected_idx = self.sel_indices.get(category, 0) if category else 0
+        catalog = {str(entry.get("label", "")): entry for entry in self._iter_catalog_entries()}
+
+        for row in range(list_h):
+            idx = offset + row
+            if idx < len(items):
+                label, _value, _checked = items[idx]
+                entry = catalog.get(label, {})
+                symbol = self._icon_list_symbol(entry.get("action"))
+                text = f" {symbol:<4} {label}"
+                is_focused = self.in_list and self.active and idx == selected_idx
+                attr = selected_attr if is_focused else body_attr
+                safe_addstr(stdscr, list_y + row, list_x, text.ljust(list_w)[:list_w], attr)
+            else:
+                safe_addstr(stdscr, list_y + row, list_x, " " * list_w, body_attr)
+
+        if len(items) > list_h:
+            sb_x = list_x + list_w - 1
+            thumb = int(offset / max(1, len(items) - list_h) * (list_h - 1))
+            for row in range(list_h):
+                ch = "█" if row == thumb else "░"
+                safe_addstr(stdscr, list_y + row, sb_x, ch, theme_attr("scrollbar"))
+
+        # Buttons
+        btn_y = self.y + self.h - 2
+        total_w = sum(len(btn) + 4 for btn in self.buttons) + (len(self.buttons) - 1) * 2
+        btn_x = self.x + max(0, (self.w - total_w) // 2)
+        self._btn_ranges = []
+        for idx, text in enumerate(self.buttons):
+            label = f"[ {text} ]"
+            attr = theme_attr("button_selected") if (self.active and not self.in_list and idx == self.selected_button) else theme_attr("button")
+            safe_addstr(stdscr, btn_y, btn_x, label, attr)
+            self._btn_ranges.append((btn_x, btn_x + len(label), idx))
+            btn_x += len(label) + 2
+
     def handle_key(self, key):
         key_code = normalize_key_code(key)
         if key_code in (getattr(curses, "KEY_F2", -1), ord("s"), ord("S")):
             self._cycle_style(1)
             return None
-        return super().handle_key(key)
+        if key_code == 27:
+            return ActionResult(ActionType.EXECUTE, AppAction.CLOSE_WINDOW)
+        if key_code == 9:  # Tab
+            self.in_list = not self.in_list
+            return None
+        if self.in_list and key_code in (curses.KEY_LEFT, curses.KEY_RIGHT):
+            if key_code == curses.KEY_LEFT:
+                self.active_cat_idx = max(0, self.active_cat_idx - 1)
+            else:
+                self.active_cat_idx = min(len(self.categories) - 1, self.active_cat_idx + 1)
+            return None
+        if not self.in_list and key_code in (curses.KEY_LEFT, curses.KEY_RIGHT):
+            if key_code == curses.KEY_LEFT:
+                self.selected_button = max(0, self.selected_button - 1)
+            else:
+                self.selected_button = min(len(self.buttons) - 1, self.selected_button + 1)
+            return None
+        if key_code == curses.KEY_UP:
+            if not self.in_list:
+                self.in_list = True
+                return None
+            self._move_selection(-1)
+            return None
+        if key_code == curses.KEY_DOWN:
+            if not self.in_list:
+                self.in_list = True
+                return None
+            self._move_selection(1)
+            return None
+        if key_code in (10, 13, curses.KEY_ENTER):
+            if not self.in_list:
+                return self._activate_button()
+            return None
+        if key_code == 32 and not self.in_list:
+            return self._activate_button()
+        return None
+
+    def handle_click(self, mx, my):
+        if my == self.y + 9:
+            for start_x, end_x, idx in self._tab_ranges:
+                if start_x <= mx < end_x:
+                    self.in_list = True
+                    self.active_cat_idx = idx
+                    return True
+
+        list_x, list_y, list_w, list_h = self._list_rect()
+        if list_x <= mx < list_x + list_w and list_y <= my < list_y + list_h:
+            category = self._current_category()
+            if category is None:
+                return True
+            click_idx = self.offsets[category] + (my - list_y)
+            items = self.choices.get(category, [])
+            if click_idx < len(items):
+                self.in_list = True
+                self.sel_indices[category] = click_idx
+            return True
+
+        if my == self.y + self.h - 2:
+            for start_x, end_x, idx in self._btn_ranges:
+                if start_x <= mx < end_x:
+                    self.in_list = False
+                    self.selected_button = idx
+                    return self._activate_button()
+        return False
 
     def _activate_button(self):
-        result = super()._activate_button()
         if self.selected_button != 0:
-            return result
-        if result is not None and getattr(result, "type", None) == ActionType.SAVE_ERROR:
-            return result
+            return ActionResult(ActionType.EXECUTE, AppAction.CLOSE_WINDOW)
         self._apply_selected_style()
         self.app.persist_config()
         self.app.refresh_icons()
-        return result
+        return ActionResult(ActionType.EXECUTE, AppAction.CLOSE_WINDOW)
 
 
 class MenuEditorWindow(_BaseSelectionEditorWindow):

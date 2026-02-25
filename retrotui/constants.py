@@ -84,7 +84,7 @@ ICONS = [
     {
         "label": "Icons",
         "action": AppAction.ICONS,
-        "art": ["\u256d\u2500\u2500\u256e", "\u2502:)\u2502", "\u2570\u2500\u2500\u256f"],
+        "art": ["\u250c\u2500\u2500\u2510", "\u2502IC\u2502", "\u2514\u2500\u2500\u2518"],
         "category": "Apps",
         "hide_key": "icons_app",
         "position_key": "IconsApp",
@@ -129,7 +129,7 @@ ICONS_ASCII = [
     {
         "label": "Icons",
         "action": AppAction.ICONS,
-        "art": ["+--+", "|:)|", "+--+"],
+        "art": ["+--+", "|IC|", "+--+"],
         "category": "Apps",
         "hide_key": "icons_app",
         "position_key": "IconsApp",
