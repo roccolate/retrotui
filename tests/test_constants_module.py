@@ -25,7 +25,7 @@ class ConstantsModuleTests(unittest.TestCase):
             sys.modules.pop("curses", None)
 
     def test_package_exposes_version(self):
-        self.assertEqual(self.package.__version__, "0.9.2")
+        self.assertEqual(self.package.__version__, "0.9.3")
 
     def test_icons_and_ascii_icons_are_aligned(self):
         self.assertEqual(len(self.constants.ICONS), len(self.constants.ICONS_ASCII))
@@ -143,7 +143,7 @@ class ConstantsModuleTests(unittest.TestCase):
 
         exec(compile(source, str(source_path), "exec"), namespace)
 
-        self.assertEqual(namespace.get("__version__"), "0.9.2")
+        self.assertEqual(namespace.get("__version__"), "0.9.3")
 
 
 if __name__ == "__main__":

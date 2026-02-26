@@ -94,6 +94,7 @@ def _taskbar_buttons(app, width, stats=None):
 def draw_desktop(app, frame_size=None):
     """Draw the desktop background pattern."""
     h, w = _resolve_frame_size(app, frame_size)
+    bounds = (h, w)
     attr = theme_attr("desktop")
     pattern = getattr(getattr(app, "theme", None), "desktop_pattern", DESKTOP_PATTERN)
 
@@ -105,12 +106,13 @@ def draw_desktop(app, frame_size=None):
     line = _desktop_line_cache['line']
 
     for row in range(MENU_BAR_HEIGHT, h - BOTTOM_BARS_HEIGHT + 1):
-        safe_addstr(app.stdscr, row, 0, line, attr)
+        safe_addstr(app.stdscr, row, 0, line, attr, _bounds=bounds)
 
 
 def draw_icons(app, frame_size=None):
     """Draw desktop icons (3x4 art + label)."""
-    h, _ = _resolve_frame_size(app, frame_size)
+    h, w = _resolve_frame_size(app, frame_size)
+    bounds = (h, w)
     for idx, icon in enumerate(app.icons):
         # Use dynamic position helper
         x, y = app.get_icon_screen_pos(idx)
@@ -138,24 +140,25 @@ def draw_icons(app, frame_size=None):
             attr |= curses.A_BOLD
 
         for row, line in enumerate(art_lines):
-            safe_addstr(app.stdscr, y + row, x, line, attr)
+            safe_addstr(app.stdscr, y + row, x, line, attr, _bounds=bounds)
         label = str(icon.get("label", "")).center(max(art_width, 2))
-        safe_addstr(app.stdscr, y + render_height, x, label, attr)
+        safe_addstr(app.stdscr, y + render_height, x, label, attr, _bounds=bounds)
 
 
 def draw_taskbar(app, frame_size=None):
     """Draw taskbar row with minimized window buttons."""
     h, w = _resolve_frame_size(app, frame_size)
+    bounds = (h, w)
     taskbar_y = h - BOTTOM_BARS_HEIGHT
     attr = theme_attr("taskbar")
-    
+
     # Always clear the taskbar line
-    safe_addstr(app.stdscr, taskbar_y, 0, ' ' * w, attr)
-    
+    safe_addstr(app.stdscr, taskbar_y, 0, ' ' * w, attr, _bounds=bounds)
+
     stats = _window_stats(app)
     buttons = _taskbar_buttons(app, w, stats=stats)
     for start_x, _end_x, label, _win in buttons:
-        safe_addstr(app.stdscr, taskbar_y, start_x, f'[{label}]', attr | curses.A_BOLD)
+        safe_addstr(app.stdscr, taskbar_y, start_x, f'[{label}]', attr | curses.A_BOLD, _bounds=bounds)
 
 
 def draw_statusbar(app, version, frame_size=None):
@@ -175,4 +178,4 @@ def draw_statusbar(app, version, frame_size=None):
     max_status_len = w - status_x
     if max_status_len <= 0:
         return
-    safe_addstr(app.stdscr, statusbar_y, status_x, status_text[:max_status_len], attr)
+    safe_addstr(app.stdscr, statusbar_y, status_x, status_text[:max_status_len], attr, _bounds=(h, w))

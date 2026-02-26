@@ -109,7 +109,7 @@ from .context_menu_handler import (
 
 LOGGER = logging.getLogger(__name__)
 
-APP_VERSION = '0.9.2'
+APP_VERSION = '0.9.3'
 _CONFIG_PERSIST_ERRORS = (OSError, UnicodeError, ValueError, TypeError)
 _RUNTIME_ISOLATION_ERRORS = (
     ArithmeticError,
