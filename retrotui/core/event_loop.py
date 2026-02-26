@@ -36,7 +36,7 @@ def draw_frame(app):
     frame_size = app.stdscr.getmaxyx()
     app._render_cycle_id = int(getattr(app, "_render_cycle_id", 0)) + 1
     app._frame_size = frame_size
-    _, frame_w = frame_size
+    frame_h, frame_w = frame_size
     app.stdscr.erase()
     app.normalize_window_layers()
     app.draw_desktop(frame_size=frame_size)

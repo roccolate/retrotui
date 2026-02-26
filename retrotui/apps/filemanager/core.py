@@ -1,6 +1,7 @@
 """
 Core data structures and helpers for File Manager.
 """
+import os
 import unicodedata
 
 def _cell_width(ch):
@@ -58,3 +59,60 @@ class FileEntry:
             return f'{self.size / 1024:.1f}K'
         else:
             return f'{self.size}B'
+
+
+class PaneState:
+    """Mutable state for one file-manager pane (primary or secondary).
+
+    Holds the directory listing, selection cursor, and scroll position.
+    Two ``PaneState`` instances eliminate the duplicated ``secondary_*``
+    attributes that used to live directly on ``FileManagerWindow``.
+    """
+
+    __slots__ = (
+        'path', 'entries', 'content', 'selected_index',
+        'scroll_offset', 'error_message',
+    )
+
+    def __init__(self, path):
+        self.path = path
+        self.entries = []
+        self.content = []
+        self.selected_index = 0
+        self.scroll_offset = 0
+        self.error_message = None
+
+    def navigate_to(self, path):
+        real = os.path.realpath(path)
+        if os.path.isdir(real):
+            self.path = real
+
+    def navigate_parent(self):
+        parent = os.path.dirname(self.path)
+        if parent != self.path:
+            self.navigate_to(parent)
+
+    def clamp(self):
+        """Clamp selected_index and scroll_offset to valid ranges."""
+        if self.entries:
+            self.selected_index = min(
+                self.selected_index, len(self.entries) - 1,
+            )
+        else:
+            self.selected_index = 0
+        max_scroll = max(0, len(self.content) - 1)
+        self.scroll_offset = max(0, min(self.scroll_offset, max_scroll))
+
+    def select_by_name(self, name, display_h):
+        """Move selection to entry with *name*.  Returns True if found."""
+        for i, entry in enumerate(self.entries):
+            if entry.name == name:
+                self.selected_index = i
+                if self.selected_index >= display_h:
+                    self.scroll_offset = max(
+                        0, self.selected_index - display_h + 1,
+                    )
+                else:
+                    self.scroll_offset = 0
+                return True
+        return False

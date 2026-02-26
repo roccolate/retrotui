@@ -229,11 +229,11 @@ class TrashComponentTests(unittest.TestCase):
         finally:
             shutil.rmtree(root, ignore_errors=True)
 
-    def test_undo_last_delete_is_not_supported(self):
+    def test_undo_delete_with_nothing_to_undo(self):
         root = _make_tmp_dir("undo")
         try:
             win = self._make_window(root)
-            result = win.undo_last_delete()
+            result = win.undo_delete()
             self.assertEqual(result.type, self.actions_mod.ActionType.ERROR)
         finally:
             shutil.rmtree(root, ignore_errors=True)

@@ -111,14 +111,6 @@ LOGGER = logging.getLogger(__name__)
 
 APP_VERSION = '0.9.2'
 _CONFIG_PERSIST_ERRORS = (OSError, UnicodeError, ValueError, TypeError)
-_INPUT_ROUTE_ERRORS = (
-    AttributeError,
-    LookupError,
-    OSError,
-    TypeError,
-    ValueError,
-    _CURSES_ERROR,
-)
 _RUNTIME_ISOLATION_ERRORS = (
     ArithmeticError,
     AssertionError,

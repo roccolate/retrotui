@@ -133,7 +133,7 @@ class FileManagerExtraTests(unittest.TestCase):
         shutil.move(src, candidate)
         self.win._last_trash_move = {"source": src, "trash": candidate}
 
-        out = self.win.undo_last_delete()
+        out = self.win.undo_delete()
         self.assertEqual(out.type, self.ActionType.REFRESH)
         self.assertTrue(os.path.exists(src))
         self.assertFalse(os.path.exists(candidate))

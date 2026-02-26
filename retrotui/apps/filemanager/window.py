@@ -9,8 +9,8 @@ from ...ui.window import Window
 from ...ui.menu import WindowMenu
 from ...core.actions import ActionResult, ActionType, AppAction
 from ...utils import safe_addstr, check_unicode_support, theme_attr, normalize_key_code
-from ...constants import WIN_MIN_WIDTH, WIN_MIN_HEIGHT
-from .core import FileEntry, _fit_text_to_cells, _cell_width
+from ...constants import WIN_MIN_WIDTH, WIN_MIN_HEIGHT, DEFAULT_DOUBLE_CLICK_INTERVAL
+from .core import FileEntry, PaneState, _fit_text_to_cells, _cell_width
 from .operations import (
     _trash_base_dir, perform_copy, perform_move, perform_delete, perform_undo,
     create_directory, create_file, _is_long_file_operation, next_trash_path
@@ -116,17 +116,64 @@ class FileManagerWindow(Window):
         self._preview_cache = {'key': None, 'lines': []}
         self.dual_pane_enabled = self.w >= self.DUAL_PANE_MIN_WIDTH
         self.active_pane = 0
-        self.secondary_path = self.current_path
-        self.secondary_entries = []
-        self.secondary_content = []
-        self.secondary_selected_index = 0
-        self.secondary_scroll_offset = 0
-        self.secondary_error_message = None
+        self._secondary = PaneState(self.current_path)
         self.last_click_time = 0
         self.last_click_index = -1
         self._rebuild_content()
         if self.dual_pane_enabled:
             self._rebuild_secondary_content()
+
+    # -- Backward-compatible accessors for secondary pane state -----------
+
+    @property
+    def secondary_path(self):
+        return self._secondary.path
+
+    @secondary_path.setter
+    def secondary_path(self, value):
+        self._secondary.path = value
+
+    @property
+    def secondary_entries(self):
+        return self._secondary.entries
+
+    @secondary_entries.setter
+    def secondary_entries(self, value):
+        self._secondary.entries = value
+
+    @property
+    def secondary_content(self):
+        return self._secondary.content
+
+    @secondary_content.setter
+    def secondary_content(self, value):
+        self._secondary.content = value
+
+    @property
+    def secondary_selected_index(self):
+        return self._secondary.selected_index
+
+    @secondary_selected_index.setter
+    def secondary_selected_index(self, value):
+        self._secondary.selected_index = value
+
+    @property
+    def secondary_scroll_offset(self):
+        return self._secondary.scroll_offset
+
+    @secondary_scroll_offset.setter
+    def secondary_scroll_offset(self, value):
+        self._secondary.scroll_offset = value
+
+    @property
+    def secondary_error_message(self):
+        return self._secondary.error_message
+
+    @secondary_error_message.setter
+    def secondary_error_message(self, value):
+        self._secondary.error_message = value
+
+    # -- End backward-compatible accessors ----------------------------------
 
     @staticmethod
     def _dual_pane_min_width():
@@ -271,16 +318,16 @@ class FileManagerWindow(Window):
 
         return entries, content, error_message
 
+    def _rebuild_pane(self, pane):
+        """Rebuild a PaneState's listing from its current path."""
+        entries, content, error = self._build_listing(pane.path)
+        pane.entries = entries
+        pane.content = content
+        pane.error_message = error
+        pane.clamp()
+
     def _rebuild_secondary_content(self):
-        entries, content, error = self._build_listing(self.secondary_path)
-        self.secondary_entries = entries
-        self.secondary_content = content
-        self.secondary_error_message = error
-        if self.secondary_entries:
-            self.secondary_selected_index = min(self.secondary_selected_index, len(self.secondary_entries) - 1)
-        else:
-            self.secondary_selected_index = 0
-        self.secondary_scroll_offset = max(0, min(self.secondary_scroll_offset, max(0, len(self.secondary_content) - 1)))
+        self._rebuild_pane(self._secondary)
 
     def _rebuild_content(self):
         old_selection = self._selected_entry()
@@ -349,13 +396,14 @@ class FileManagerWindow(Window):
                       self.scroll_offset = max(0, self.selected_index - display_h + 1)
                  break
 
+    def _active_pane_state(self):
+        """Return the PaneState-like object for the active pane."""
+        return self._secondary if self.active_pane == 1 else self
+
     def _selected_entry(self):
-        if self.active_pane == 1:
-            if 0 <= self.secondary_selected_index < len(self.secondary_entries):
-                return self.secondary_entries[self.secondary_selected_index]
-            return None
-        if 0 <= self.selected_index < len(self.entries):
-            return self.entries[self.selected_index]
+        pane = self._active_pane_state()
+        if 0 <= pane.selected_index < len(pane.entries):
+            return pane.entries[pane.selected_index]
         return None
 
     def selected_entry_for_operation(self):
@@ -382,16 +430,12 @@ class FileManagerWindow(Window):
         return ActionResult(ActionType.OPEN_FILE, entry.full_path)
 
     def _secondary_navigate_to(self, path):
-        real_path = os.path.realpath(path)
-        if os.path.isdir(real_path):
-            self.secondary_path = real_path
-            self._rebuild_secondary_content()
+        self._secondary.navigate_to(path)
+        self._rebuild_pane(self._secondary)
 
     def _secondary_navigate_parent(self):
-        parent = os.path.dirname(self.secondary_path)
-        if parent == self.secondary_path:
-            return None
-        self._secondary_navigate_to(parent)
+        self._secondary.navigate_parent()
+        self._rebuild_pane(self._secondary)
 
     # --- Actions ---
 
@@ -423,25 +467,17 @@ class FileManagerWindow(Window):
     def undo_delete(self):
         return self.perform_undo_delete()
 
-    def undo_last_delete(self):
-        """Alias for tests."""
-        return self.undo_delete()
+    def _active_base_path(self):
+        """Return the directory path of the currently active pane."""
+        return self._active_pane_state().path if self.active_pane == 1 else self.current_path
 
     def create_directory(self, name):
-        if self.active_pane == 1:
-            base = self.secondary_path
-        else:
-            base = self.current_path
-        res = create_directory(base, name)
+        res = create_directory(self._active_base_path(), name)
         self._rebuild_content()
         return res
 
     def create_file(self, name):
-        if self.active_pane == 1:
-            base = self.secondary_path
-        else:
-            base = self.current_path
-        res = create_file(base, name)
+        res = create_file(self._active_base_path(), name)
         self._rebuild_content()
         return res
 
@@ -574,10 +610,8 @@ class FileManagerWindow(Window):
         if not source or source.name == '..':
             return ActionResult(ActionType.ERROR, 'No item selected.')
         
-        if self.active_pane == 0:
-            dest_dir = self.secondary_path
-        else:
-            dest_dir = self.current_path
+        # Destination is the *other* pane
+        dest_dir = self.current_path if self.active_pane == 1 else self._secondary.path
             
         if move:
             dest_path = os.path.join(dest_dir, source.name)
@@ -623,7 +657,7 @@ class FileManagerWindow(Window):
 
     def set_bookmark(self, slot, path=None):
         if path is None:
-            path = self.secondary_path if self.active_pane == 1 else self.current_path
+            path = self._active_base_path()
         res = set_bookmark(self.bookmarks, slot, path)
         return ActionResult(ActionType.REFRESH) if res is None else res
 
@@ -685,9 +719,10 @@ class FileManagerWindow(Window):
             self.content, self.scroll_offset, self.selected_index, self.error_message,
             is_active=(self.active_pane == 0)
         )
+        s = self._secondary
         self._draw_pane_contents(
-            stdscr, 1, mid_x + 1, by, pane2_w, bh, 
-            self.secondary_content, self.secondary_scroll_offset, self.secondary_selected_index, self.secondary_error_message,
+            stdscr, 1, mid_x + 1, by, pane2_w, bh,
+            s.content, s.scroll_offset, s.selected_index, s.error_message,
             is_active=(self.active_pane == 1)
         )
 
@@ -699,7 +734,7 @@ class FileManagerWindow(Window):
             return theme_attr('window_body')
         if entry_obj.is_dir:
             return theme_attr('file_directory')
-        if getattr(entry_obj, 'size', 0) > 0 and (entry_obj.size & 0x111):
+        if getattr(entry_obj, 'size', 0) > 0 and (entry_obj.size & 0o111):
             try:
                 if os.access(entry_obj.full_path, os.X_OK):
                     return theme_attr('window_body') | curses.A_BOLD
@@ -736,8 +771,8 @@ class FileManagerWindow(Window):
              
              is_sel = (idx == selected)
 
-             entries_src = self.entries if pane_id == 0 else self.secondary_entries
-             entry_obj = entries_src[idx] if 0 <= idx < len(entries_src) else None
+             pane = self if pane_id == 0 else self._secondary
+             entry_obj = pane.entries[idx] if 0 <= idx < len(pane.entries) else None
 
              attr = self._entry_display_attr(entry_obj, is_sel, is_active)
 
@@ -745,14 +780,14 @@ class FileManagerWindow(Window):
 
     def handle_scroll(self, direction, amount=3):
         if self.active_pane == 1:
+            s = self._secondary
             if direction == 'up':
-                self.secondary_scroll_offset = max(0, self.secondary_scroll_offset - amount)
+                s.scroll_offset = max(0, s.scroll_offset - amount)
             else:
-                max_scroll = max(0, len(self.secondary_entries) - 1)
-                self.secondary_scroll_offset = min(max_scroll, self.secondary_scroll_offset + amount)
+                max_scroll = max(0, len(s.entries) - 1)
+                s.scroll_offset = min(max_scroll, s.scroll_offset + amount)
             return True
-        else:
-            return super().handle_scroll(direction, amount)
+        return super().handle_scroll(direction, amount)
 
     def handle_click(self, mx, my, bstate=None):
         self._pending_drag_payload = None  # Clear any previous pending drag
@@ -793,11 +828,11 @@ class FileManagerWindow(Window):
              new_sel = self.secondary_scroll_offset + list_idx
              if 0 <= new_sel < len(self.secondary_entries):
                  click_id = 10000 + new_sel
-                 if explicit_double or (click_id == self.last_click_index and (now - self.last_click_time < 0.5)):
+                 if explicit_double or (click_id == self.last_click_index and (now - self.last_click_time < DEFAULT_DOUBLE_CLICK_INTERVAL)):
                      is_double = True
                  self.last_click_time = now
                  self.last_click_index = click_id
-                 
+
                  self.secondary_selected_index = new_sel
                  if is_double:
                      return self.activate_selected()
@@ -806,11 +841,11 @@ class FileManagerWindow(Window):
              new_sel = self.scroll_offset + list_idx
              if 0 <= new_sel < len(self.entries):
                  click_id = new_sel
-                 if explicit_double or (click_id == self.last_click_index and (now - self.last_click_time < 0.5)):
+                 if explicit_double or (click_id == self.last_click_index and (now - self.last_click_time < DEFAULT_DOUBLE_CLICK_INTERVAL)):
                      is_double = True
                  self.last_click_time = now
                  self.last_click_index = click_id
-                 
+
                  self.selected_index = new_sel
                  
                  # Check for drag start
@@ -839,16 +874,11 @@ class FileManagerWindow(Window):
 
         row = my - by
         if row >= self._header_lines():
-            if clicked_pane == 0:
-                self.active_pane = 0
-                new_idx = self.scroll_offset + (row - self._header_lines())
-                if 0 <= new_idx < len(self.entries):
-                    self.selected_index = new_idx
-            else:
-                 self.active_pane = 1
-                 new_idx = self.secondary_scroll_offset + (row - self._header_lines())
-                 if 0 <= new_idx < len(self.secondary_entries):
-                     self.secondary_selected_index = new_idx
+            self.active_pane = clicked_pane
+            pane = self._active_pane_state()
+            new_idx = pane.scroll_offset + (row - self._header_lines())
+            if 0 <= new_idx < len(pane.entries):
+                pane.selected_index = new_idx
 
         entry = self.selected_entry_for_operation()
         
@@ -876,19 +906,13 @@ class FileManagerWindow(Window):
 
     def _handle_pane_navigation(self, key):
         """Handle arrow/page/home/end navigation for the active pane."""
-        if self.active_pane == 1:
-            entries = self.secondary_entries
-            selected = self.secondary_selected_index
-            scroll = self.secondary_scroll_offset
-        else:
-            entries = self.entries
-            selected = self.selected_index
-            scroll = self.scroll_offset
-
-        count = len(entries)
+        pane = self._active_pane_state()
+        count = len(pane.entries)
         if count == 0:
             return None
 
+        selected = pane.selected_index
+        scroll = pane.scroll_offset
         new_selected = selected
         new_scroll = scroll
 
@@ -918,13 +942,8 @@ class FileManagerWindow(Window):
         else:
             return None  # Not a navigation key
 
-        # Write back to the appropriate pane
-        if self.active_pane == 1:
-            self.secondary_selected_index = new_selected
-            self.secondary_scroll_offset = new_scroll
-        else:
-            self.selected_index = new_selected
-            self.scroll_offset = new_scroll
+        pane.selected_index = new_selected
+        pane.scroll_offset = new_scroll
 
         return ActionResult(ActionType.REFRESH)
 
@@ -968,12 +987,11 @@ class FileManagerWindow(Window):
         return None
 
     def handle_key(self, key):
-        key_code = normalize_key_code(key)
-
+        norm_key = normalize_key_code(key)
 
         # Window menu keyboard handling
         if self.window_menu and self.window_menu.active:
-            action = self.window_menu.handle_key(key_code)
+            action = self.window_menu.handle_key(norm_key)
             if action:
                 return self.execute_action(action)
             return None
@@ -992,8 +1010,6 @@ class FileManagerWindow(Window):
         fkey_result = self._handle_fkey(key)
         if fkey_result is not None:
             return fkey_result
-
-        norm_key = normalize_key_code(key)
 
         # Shortcuts for specific letters (case-insensitive via ASCII values)
         letter_result = self._handle_letter_shortcut(norm_key)
@@ -1026,10 +1042,6 @@ class FileManagerWindow(Window):
 
     def handle_tab_key(self):
         """Handle Tab key for pane switching (active window hook)."""
-        return self._handle_tab_switch()
-
-    def _handle_tab_switch(self):
-        """Internal tab handling logic."""
         if self.dual_pane_enabled:
             self.active_pane = 1 - self.active_pane
             return ActionResult(ActionType.REFRESH)

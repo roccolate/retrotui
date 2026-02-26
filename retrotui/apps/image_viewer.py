@@ -196,22 +196,7 @@ class ImageViewerWindow(Window):
     def _play_video(self):
         if not self.is_video or not self.filepath:
              return
-        # We need a stdscr to play. Passing None might fail if play_ascii_video expects it for refresh.
-        # But Window has no access to global stdscr directly? 
-        # Actually play_ascii_video(stdscr, ...) 
-        # AppAction.ASCII_VIDEO usually runs in ActionRunner which lacks stdscr too.
-        # Wait, play_ascii_video calls curses.def_prog_mode() / endwin().
-        # It takes stdscr as first arg to refresh it at the end.
-        # We can pass curses.stdscr if available? Or import curses.
-        # Window doesn't store stdscr. render() gets it.
-        # We'll use curses.initscr() - NO, that re-inits.
-        # We can pass None to play_ascii_video and handle refresh differently?
-        # utils.py: if stdscr: stdscr.refresh()
-        # So passing None is safe if we don't crash.
-        
-        # We will request the app to play it via action? 
-        # No, simpler to call it here. Window methods run in EventLoop which has stdscr but doesn't pass it to handle_key.
-        # Let's try passing None. The event loop redraws everything next frame anyway.
+        # stdscr=None is safe — the event loop redraws next frame
         success, err = play_ascii_video(None, self.filepath)
         if not success:
              self.status_message = f"Error: {err}"
