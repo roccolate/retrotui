@@ -13,13 +13,13 @@ from .constants import (
     C_MENU_SEL, C_WIN_BORDER, C_WIN_TITLE_INV, C_WIN_BODY, C_BUTTON,
     C_BUTTON_SEL, C_DIALOG, C_STATUS, C_ICON_SEL, C_SCROLLBAR, C_FM_SELECTED,
     C_FM_DIR, C_TASKBAR, BOX_TL, BOX_TR, BOX_BL, BOX_BR, BOX_H, BOX_V,
-    SB_TL, SB_TR, SB_BL, SB_BR, SB_H, SB_V, VIDEO_EXTENSIONS
+    SB_TL, SB_TR, SB_BL, SB_BR, SB_H, SB_V, VIDEO_EXTENSIONS,
+    _CURSES_ERROR,
 )
 from .theme import ROLE_TO_PAIR_ID, get_theme
 
 # Cache for theme_attr() lookups - invalidated by init_colors().
 _theme_attr_cache: dict[str, int] = {}
-_CURSES_ERROR = getattr(curses, "error", Exception)
 _CURSES_SETATTR_ERRORS = (
     AttributeError,
     OSError,

@@ -115,7 +115,7 @@ class RetroNetTests(unittest.TestCase):
 
     @mock.patch('urllib.request.urlopen')
     def test_fetch_thread_error(self, mock_urlopen):
-        mock_urlopen.side_effect = Exception("Net Error")
+        mock_urlopen.side_effect = OSError("Net Error")
         
         self.win._fetch_thread("http://test.com")
         self.assertFalse(self.win.is_loading)

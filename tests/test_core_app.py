@@ -287,10 +287,10 @@ class CoreAppTests(unittest.TestCase):
             self.assertEqual(app.draw_taskbar(), "taskbar")
             self.assertEqual(app.draw_statusbar(), "status")
 
-        draw_desktop.assert_called_once_with(app)
-        draw_icons.assert_called_once_with(app)
-        draw_taskbar.assert_called_once_with(app)
-        draw_statusbar.assert_called_once_with(app, self.app_mod.APP_VERSION)
+        draw_desktop.assert_called_once_with(app, frame_size=None)
+        draw_icons.assert_called_once_with(app, frame_size=None)
+        draw_taskbar.assert_called_once_with(app, frame_size=None)
+        draw_statusbar.assert_called_once_with(app, self.app_mod.APP_VERSION, frame_size=None)
 
     def test_draw_wrappers_forward_optional_frame_size(self):
         app = self._make_app()
@@ -841,7 +841,8 @@ class CoreAppTests(unittest.TestCase):
         app.get_icon_at = mock.Mock(return_value=0)
         app.execute_action = mock.Mock()
 
-        with mock.patch.object(self.app_mod.time, "monotonic", side_effect=[10.0, 10.2]):
+        mouse_router_mod = importlib.import_module("retrotui.core.mouse_router")
+        with mock.patch.object(mouse_router_mod.time, "monotonic", side_effect=[10.0, 10.2]):
             app.handle_mouse((0, 10, 6, 0, self.curses.BUTTON1_CLICKED))
             app.handle_mouse((0, 10, 6, 0, self.curses.BUTTON1_CLICKED))
 
@@ -1444,7 +1445,8 @@ class CoreAppTests(unittest.TestCase):
             "thread": None,
         }
 
-        with mock.patch.object(self.app_mod.time, "monotonic", return_value=2.0):
+        file_ops_mod = importlib.import_module("retrotui.core.file_operations")
+        with mock.patch.object(file_ops_mod.time, "monotonic", return_value=2.0):
             app.poll_background_operation()
 
         progress_dialog.set_elapsed.assert_called_once_with(1.0)
@@ -1467,7 +1469,8 @@ class CoreAppTests(unittest.TestCase):
             "thread": None,
         }
 
-        with mock.patch.object(self.app_mod.time, "monotonic", return_value=12.5):
+        file_ops_mod = importlib.import_module("retrotui.core.file_operations")
+        with mock.patch.object(file_ops_mod.time, "monotonic", return_value=12.5):
             app.poll_background_operation()
 
         progress_dialog.set_elapsed.assert_called_once_with(2.5)

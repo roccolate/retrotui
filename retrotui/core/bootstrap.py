@@ -4,15 +4,13 @@ import curses
 import sys
 import os
 
-from ..constants import MOUSE_SCROLL_DOWN_FALLBACK
+from ..constants import MOUSE_SCROLL_DOWN_FALLBACK, _CURSES_ERROR
 
 # Platform-aware termios import
 if os.name == 'nt':
     from . import win_termios as termios
 else:
     import termios
-
-_CURSES_ERROR = getattr(curses, "error", Exception)
 _TERMINAL_SETUP_ERRORS = (
     AttributeError,
     OSError,

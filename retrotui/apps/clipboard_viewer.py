@@ -7,7 +7,7 @@ from typing import List
 from ..ui.window import Window
 from ..utils import safe_addstr, theme_attr
 from ..core.clipboard import paste_text, copy_text, clear_clipboard
-_CURSES_ERROR = getattr(curses, "error", Exception)
+from ..constants import _CURSES_ERROR
 _OPTIONAL_PYPERCLIP_IMPORT_ERRORS = (
     ImportError,
     ModuleNotFoundError,

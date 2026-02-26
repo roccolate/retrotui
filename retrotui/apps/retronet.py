@@ -12,8 +12,7 @@ from typing import List, Tuple
 from ..ui.window import Window
 from ..utils import safe_addstr, theme_attr, normalize_key_code
 from ..core.actions import ActionResult, ActionType
-
-_CURSES_ERROR = getattr(curses, "error", Exception)
+from ..constants import _CURSES_ERROR
 _URL_SANITIZE_ERRORS = (
     AttributeError,
     LookupError,

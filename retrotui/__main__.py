@@ -10,9 +10,9 @@ import time
 from datetime import datetime
 from pathlib import Path
 from .core.app import RetroTUI
+from .constants import _CURSES_ERROR
 
 LOGGER = logging.getLogger(__name__)
-_CURSES_ERROR = getattr(curses, "error", Exception)
 _TOP_LEVEL_RUNTIME_ERRORS = (
     ArithmeticError,
     AssertionError,

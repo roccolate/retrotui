@@ -10,8 +10,7 @@ from ..ui.menu import WindowMenu
 from ..ui.selectable_text import SelectableTextMixin
 from ..ui.window import Window
 from ..utils import normalize_key_code, safe_addstr, theme_attr
-
-_CURSES_ERROR = getattr(curses, "error", Exception)
+from ..constants import _CURSES_ERROR
 _LOG_COLOR_INIT_ERRORS = (
     AttributeError,
     OSError,
