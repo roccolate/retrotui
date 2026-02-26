@@ -89,12 +89,16 @@ class CoreAppTests(unittest.TestCase):
             "retrotui.core.rendering",
             "retrotui.core.event_loop",
             "retrotui.core.bootstrap",
+            "retrotui.core.viewer",
+            "retrotui.core.plugin_manager",
             "retrotui.core.app",
         ):
             sys.modules.pop(mod_name, None)
 
         cls.actions_mod = importlib.import_module("retrotui.core.actions")
         cls.app_mod = importlib.import_module("retrotui.core.app")
+        cls.viewer_mod = importlib.import_module("retrotui.core.viewer")
+        cls.plugin_mod = importlib.import_module("retrotui.core.plugin_manager")
         cls.curses = sys.modules["curses"]
 
     @classmethod
@@ -117,6 +121,8 @@ class CoreAppTests(unittest.TestCase):
             "retrotui.core.rendering",
             "retrotui.core.event_loop",
             "retrotui.core.bootstrap",
+            "retrotui.core.viewer",
+            "retrotui.core.plugin_manager",
             "retrotui.core.app",
         ):
             sys.modules.pop(mod_name, None)
@@ -413,7 +419,7 @@ class CoreAppTests(unittest.TestCase):
         app._spawn_window = mock.Mock()
         app._next_window_offset = mock.Mock(return_value=(8, 3))
 
-        with mock.patch.object(self.app_mod.LOGGER, "debug") as log_debug:
+        with mock.patch.object(self.plugin_mod.LOGGER, "debug") as log_debug:
             app.open_plugin("demo")
 
         app._spawn_window.assert_not_called()
@@ -430,7 +436,7 @@ class CoreAppTests(unittest.TestCase):
         load_plugin = mock.Mock(side_effect=ValueError("bad manifest"))
         manifest = {"plugin": {"id": "demo"}}
 
-        with mock.patch.object(self.app_mod.LOGGER, "debug") as log_debug:
+        with mock.patch.object(self.plugin_mod.LOGGER, "debug") as log_debug:
             app._register_plugin_manifest(manifest, load_plugin)
 
         load_plugin.assert_called_once_with(manifest)
@@ -1081,8 +1087,8 @@ class CoreAppTests(unittest.TestCase):
         app.stdscr = types.SimpleNamespace(getmaxyx=lambda: (30, 120))
 
         with (
-            mock.patch.object(self.app_mod, "is_video_file", return_value=True),
-            mock.patch.object(self.app_mod, "play_ascii_video", return_value=(False, "mpv missing")),
+            mock.patch.object(self.viewer_mod, "is_video_file", return_value=True),
+            mock.patch.object(self.viewer_mod, "_play_ascii_video_backend", return_value=(False, "mpv missing")),
         ):
             app.open_file_viewer("/tmp/demo.mp4")
 
@@ -1093,12 +1099,12 @@ class CoreAppTests(unittest.TestCase):
     def test_play_ascii_video_helper_success_and_error(self):
         app = self._make_app()
 
-        with mock.patch.object(self.app_mod, "play_ascii_video", return_value=(True, None)) as player:
+        with mock.patch.object(self.viewer_mod, "_play_ascii_video_backend", return_value=(True, None)) as player:
             app._play_ascii_video("/tmp/demo.mp4")
         player.assert_called_once_with(app.stdscr, "/tmp/demo.mp4", subtitle_path=None)
         self.assertIsNone(app.dialog)
 
-        with mock.patch.object(self.app_mod, "play_ascii_video", return_value=(False, "backend error")):
+        with mock.patch.object(self.viewer_mod, "_play_ascii_video_backend", return_value=(False, "backend error")):
             app._play_ascii_video("/tmp/demo.mp4", subtitle_path="/tmp/demo.srt")
         self.assertIsNotNone(app.dialog)
         self.assertEqual(app.dialog.title, "ASCII Video Error")
@@ -1118,22 +1124,22 @@ class CoreAppTests(unittest.TestCase):
         self.assertEqual(result.type, self.actions_mod.ActionType.ERROR)
         self.assertIn("cannot be empty", result.payload)
 
-        with mock.patch.object(self.app_mod.os.path, "isfile", return_value=False):
+        with mock.patch.object(self.viewer_mod.os.path, "isfile", return_value=False):
             result = app._handle_video_path_input("/tmp/missing.mp4")
         self.assertEqual(result.type, self.actions_mod.ActionType.ERROR)
         self.assertIn("not found", result.payload)
 
         with (
-            mock.patch.object(self.app_mod.os.path, "isfile", return_value=True),
-            mock.patch.object(self.app_mod, "is_video_file", return_value=False),
+            mock.patch.object(self.viewer_mod.os.path, "isfile", return_value=True),
+            mock.patch.object(self.viewer_mod, "is_video_file", return_value=False),
         ):
             result = app._handle_video_path_input("/tmp/demo.txt")
         self.assertEqual(result.type, self.actions_mod.ActionType.ERROR)
         self.assertIn("Unsupported video format", result.payload)
 
         with (
-            mock.patch.object(self.app_mod.os.path, "isfile", return_value=True),
-            mock.patch.object(self.app_mod, "is_video_file", return_value=True),
+            mock.patch.object(self.viewer_mod.os.path, "isfile", return_value=True),
+            mock.patch.object(self.viewer_mod, "is_video_file", return_value=True),
         ):
             result = app._handle_video_path_input("/tmp/demo.mp4")
         self.assertIsNone(result)
@@ -1143,24 +1149,23 @@ class CoreAppTests(unittest.TestCase):
 
     def test_handle_subtitle_path_input_validation_and_playback(self):
         app = self._make_app()
-        app._play_ascii_video = mock.Mock()
 
-        with mock.patch.object(self.app_mod.os.path, "isfile", return_value=False):
+        with mock.patch.object(self.viewer_mod.os.path, "isfile", return_value=False):
             result = app._handle_subtitle_path_input("/tmp/demo.mp4", "/tmp/missing.srt")
         self.assertEqual(result.type, self.actions_mod.ActionType.ERROR)
         self.assertIn("Subtitle file not found", result.payload)
-        app._play_ascii_video.assert_not_called()
 
-        app._play_ascii_video.reset_mock()
-        with mock.patch.object(self.app_mod.os.path, "isfile", return_value=True):
+        with (
+            mock.patch.object(self.viewer_mod.os.path, "isfile", return_value=True),
+            mock.patch.object(self.viewer_mod, "_play_ascii_video_backend", return_value=(True, None)),
+        ):
             result = app._handle_subtitle_path_input("/tmp/demo.mp4", "/tmp/demo.srt")
         self.assertIsNone(result)
-        app._play_ascii_video.assert_called_once()
 
-        app._play_ascii_video.reset_mock()
-        result = app._handle_subtitle_path_input("/tmp/demo.mp4", "")
+        with mock.patch.object(self.viewer_mod, "_play_ascii_video_backend", return_value=(True, None)) as player:
+            result = app._handle_subtitle_path_input("/tmp/demo.mp4", "")
         self.assertIsNone(result)
-        app._play_ascii_video.assert_called_once_with("/tmp/demo.mp4", subtitle_path=None)
+        player.assert_called_once_with(app.stdscr, "/tmp/demo.mp4", subtitle_path=None)
 
     def test_open_file_viewer_binary_file_spawns_hex_viewer(self):
         app = self._make_app()
@@ -1169,9 +1174,9 @@ class CoreAppTests(unittest.TestCase):
         app._spawn_window = mock.Mock()
 
         with (
-            mock.patch.object(self.app_mod, "is_video_file", return_value=False),
+            mock.patch.object(self.viewer_mod, "is_video_file", return_value=False),
             mock.patch("builtins.open", mock.mock_open(read_data=b"\x00\x01binary")),
-            mock.patch.object(self.app_mod, "HexViewerWindow") as hex_cls,
+            mock.patch.object(self.viewer_mod, "HexViewerWindow") as hex_cls,
         ):
             app.open_file_viewer("/tmp/bin.dat")
 
@@ -1185,9 +1190,9 @@ class CoreAppTests(unittest.TestCase):
         app._spawn_window = mock.Mock()
 
         with (
-            mock.patch.object(self.app_mod, "is_video_file", return_value=False),
+            mock.patch.object(self.viewer_mod, "is_video_file", return_value=False),
             mock.patch("builtins.open", side_effect=OSError("cannot read")),
-            mock.patch.object(self.app_mod, "NotepadWindow") as notepad_cls,
+            mock.patch.object(self.viewer_mod, "NotepadWindow") as notepad_cls,
         ):
             app.open_file_viewer("/tmp/readme.txt")
 
@@ -1200,9 +1205,9 @@ class CoreAppTests(unittest.TestCase):
         app._spawn_window = mock.Mock()
 
         with (
-            mock.patch.object(self.app_mod, "is_video_file", return_value=False),
+            mock.patch.object(self.viewer_mod, "is_video_file", return_value=False),
             mock.patch("builtins.open", mock.mock_open(read_data=b"plain text")),
-            mock.patch.object(self.app_mod, "NotepadWindow") as notepad_cls,
+            mock.patch.object(self.viewer_mod, "NotepadWindow") as notepad_cls,
         ):
             app.open_file_viewer("/tmp/readme.txt")
 
@@ -1216,8 +1221,8 @@ class CoreAppTests(unittest.TestCase):
         app._spawn_window = mock.Mock()
 
         with (
-            mock.patch.object(self.app_mod, "is_video_file", return_value=False),
-            mock.patch.object(self.app_mod, "LogViewerWindow") as log_cls,
+            mock.patch.object(self.viewer_mod, "is_video_file", return_value=False),
+            mock.patch.object(self.viewer_mod, "LogViewerWindow") as log_cls,
         ):
             app.open_file_viewer("/var/log/syslog.log")
 
@@ -1231,8 +1236,8 @@ class CoreAppTests(unittest.TestCase):
         app._spawn_window = mock.Mock()
 
         with (
-            mock.patch.object(self.app_mod, "is_video_file", return_value=False),
-            mock.patch.object(self.app_mod, "ImageViewerWindow") as image_cls,
+            mock.patch.object(self.viewer_mod, "is_video_file", return_value=False),
+            mock.patch.object(self.viewer_mod, "ImageViewerWindow") as image_cls,
         ):
             image_cls.IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif"}
             app.open_file_viewer("/tmp/demo.png")

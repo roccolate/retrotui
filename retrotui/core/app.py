@@ -1,7 +1,6 @@
 """
 Main RetroTUI Application Class.
 """
-import os
 import curses
 import logging
 import signal
@@ -9,25 +8,16 @@ import threading
 import time
 
 from ..constants import (
-    ICONS, ICONS_ASCII, BINARY_DETECT_CHUNK_SIZE,
+    ICONS, ICONS_ASCII,
     TERMINAL_INPUT_TIMEOUT_MS,
     TERMINAL_LIVE_INPUT_TIMEOUT_MS,
     TERMINAL_BACKGROUND_INPUT_TIMEOUT_MS,
     WELCOME_WIN_WIDTH, WELCOME_WIN_HEIGHT,
 )
-from ..utils import (
-    check_unicode_support, init_colors,
-    is_video_file, play_ascii_video
-)
+from ..utils import check_unicode_support, init_colors
 from ..theme import get_theme
-from ..ui.menu import Menu
 from ..ui.dialog import Dialog, InputDialog, ProgressDialog
 from ..ui.window import Window
-from ..apps.notepad import NotepadWindow
-from ..apps.logviewer import LogViewerWindow
-from ..apps.image_viewer import ImageViewerWindow
-from ..apps.hexviewer import HexViewerWindow
-from ..apps.markdown_viewer import MarkdownViewerWindow
 from .config import AppConfig, load_config, save_config
 from .actions import ActionResult, ActionType, AppAction
 from .action_runner import execute_app_action
@@ -66,17 +56,55 @@ from .bootstrap import (
     enable_mouse_support,
     disable_mouse_support,
 )
-
 from .window_manager import WindowManager
+from .icon_styles import (
+    ICON_STYLE_DEFAULT,
+    ICON_STYLE_MINI,
+    ICON_STYLE_BRAILLE,
+    ICON_STYLE_CODEX,
+    ICON_STYLE_RETRO_01,
+    normalize_icon_style,
+    icon_style_variants as _icon_style_variants,
+    style_symbol_for_icon as _style_symbol_for_icon,
+    styled_icon_entry as _styled_icon_entry,
+    icon_style_preview_symbol as _icon_style_preview_symbol,
+    icon_visibility_key as _icon_visibility_key,
+    get_hidden_icon_labels as _get_hidden_icon_labels,
+    split_config_csv as _split_config_csv,
+    plugin_icon_art as _plugin_icon_art,
+    build_plugin_icons as _build_plugin_icons,
+    build_desktop_icon_catalog as _build_desktop_icon_catalog,
+    refresh_icons as _refresh_icons,
+)
+from .signal_handler import (
+    install_runtime_signal_handlers,
+    restore_runtime_signal_handlers,
+    queue_pending_signal_key,
+    consume_pending_signal_key,
+    consume_pending_sigint,
+)
+from .plugin_manager import (
+    load_plugins_runtime,
+    register_plugin_manifest,
+    build_plugin_menu_items,
+    build_plugin_window,
+    open_plugin as _open_plugin,
+)
+from .menu_builder import (
+    menu_item_visibility_key as _menu_item_visibility_key,
+    get_hidden_menu_keys as _get_hidden_menu_keys,
+    build_global_menu_items,
+    rebuild_global_menu,
+    build_menu_editor_catalog,
+)
+from .viewer import (
+    show_url_dialog as _show_url_dialog,
+    show_video_open_dialog as _show_video_open_dialog,
+)
 
 LOGGER = logging.getLogger(__name__)
 
 APP_VERSION = '0.9.2'
-ICON_STYLE_DEFAULT = "default"
-ICON_STYLE_MINI = "mini"
-ICON_STYLE_BRAILLE = "braille"
-ICON_STYLE_CODEX = "codex"
-ICON_STYLE_RETRO_01 = "retro_01"  # Legacy alias kept for backwards compatibility.
 _CURSES_ERROR = getattr(curses, "error", Exception)
 _CONFIG_PERSIST_ERRORS = (OSError, UnicodeError, ValueError, TypeError)
 _INPUT_ROUTE_ERRORS = (
@@ -86,15 +114,6 @@ _INPUT_ROUTE_ERRORS = (
     TypeError,
     ValueError,
     _CURSES_ERROR,
-)
-_PLUGIN_DISCOVERY_IMPORT_ERRORS = (
-    ImportError,
-    ModuleNotFoundError,
-    AttributeError,
-    OSError,
-    RuntimeError,
-    TypeError,
-    ValueError,
 )
 _RUNTIME_ISOLATION_ERRORS = (
     ArithmeticError,
@@ -273,13 +292,13 @@ class RetroTUI:
         self.context_menu = None
         self.dialog = None
         self.selected_icon = -1
-        
+
         self.theme = get_theme(self.theme_name)
         self.default_show_hidden = bool(self.config.show_hidden)
         self.default_word_wrap = bool(self.config.word_wrap_default)
         self.default_sunday_first = bool(self.config.sunday_first)
         self.show_welcome = bool(self.config.show_welcome)
-        self.icon_style = self._normalize_icon_style(getattr(self.config, "icon_style", ICON_STYLE_DEFAULT))
+        self.icon_style = normalize_icon_style(getattr(self.config, "icon_style", ICON_STYLE_DEFAULT))
         self._dirty = True  # Render flag: redraw only when True
         self._dragging_win = None   # O(1) drag tracking
         self._resizing_win = None   # O(1) resize tracking
@@ -317,7 +336,7 @@ class RetroTUI:
             welcome_content = build_welcome_content(APP_VERSION)
             win = Window('Welcome to RetroTUI', w // 2 - WELCOME_WIN_WIDTH // 2, h // 2 - WELCOME_WIN_HEIGHT // 2, WELCOME_WIN_WIDTH, WELCOME_WIN_HEIGHT,
                           content=welcome_content)
-            
+
             # Custom handler to process "Don't show again"
             def _welcome_handle_key(key):
                 if getattr(curses, "KEY_F9", -1) == key or key == "KEY_F9":
@@ -337,100 +356,63 @@ class RetroTUI:
             # don't fail startup on parse errors
             LOGGER.debug('failed to load icon positions', exc_info=True)
 
+    # ------------------------------------------------------------------
+    # Plugin system (delegates to plugin_manager module)
+    # ------------------------------------------------------------------
+
     def _load_plugins_runtime(self):
         """Discover and register plugins (best effort; never crash startup)."""
-        self._plugins = {}
-        try:
-            from ..plugins.loader import discover_plugins, load_plugin
-        except _PLUGIN_DISCOVERY_IMPORT_ERRORS:
-            LOGGER.debug('plugin discovery unavailable', exc_info=True)
-            self.refresh_icons()
-            self._rebuild_global_menu()
-            return
+        load_plugins_runtime(self)
 
-        for manifest in discover_plugins():
-            self._register_plugin_manifest(manifest, load_plugin)
-        self.refresh_icons()
-        self._rebuild_global_menu()
+    def _register_plugin_manifest(self, manifest, load_plugin_fn):
+        """Register one plugin manifest with defensive isolation."""
+        register_plugin_manifest(self, manifest, load_plugin_fn)
 
     def _build_plugin_menu_items(self):
         """Build dynamic plugin entries as menu tuples ``(label, action)``."""
-        hidden_menu_items = self._get_hidden_menu_keys()
-        entries = []
-        for plugin_id, info in (getattr(self, "_plugins", None) or {}).items():
-            plugin_info = (info.get("manifest", {}) or {}).get("plugin", {}) or {}
-            name = str(plugin_info.get("name") or plugin_id)
-            action = f"plugin:{plugin_id}"
-            item_key = self._menu_item_visibility_key(name, action)
-            if item_key in hidden_menu_items:
-                continue
-            entries.append((name, action))
-        entries.sort(key=lambda item: (item[0].lower(), item[1]))
-        return entries
+        return build_plugin_menu_items(self)
+
+    def _build_plugin_window(self, info, plugin_id):
+        """Instantiate plugin window object from manifest metadata."""
+        return build_plugin_window(self, info, plugin_id)
+
+    def open_plugin(self, plugin_id):
+        """Instantiate and open a plugin window by id."""
+        _open_plugin(self, plugin_id)
+
+    # ------------------------------------------------------------------
+    # Menu building (delegates to menu_builder module)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _split_config_csv(raw):
+        """Return lowercased non-empty comma-separated tokens from *raw* string."""
+        return _split_config_csv(raw)
+
+    @staticmethod
+    def _menu_item_visibility_key(label, action):
+        """Return stable visibility key for one global menu item."""
+        return _menu_item_visibility_key(label, action)
+
+    def _get_hidden_menu_keys(self):
+        """Return set of lowercased hidden global menu item keys from config."""
+        return _get_hidden_menu_keys(self.config)
 
     def _build_global_menu_items(self):
         """Return global menu items with hidden-label filtering and plugin section."""
-        hidden_menu_items = self._get_hidden_menu_keys()
-        from ..ui.menu import DEFAULT_GLOBAL_ITEMS
-
-        filtered_menu_items = {}
-        for category, items in DEFAULT_GLOBAL_ITEMS.items():
-            filtered_items = []
-            for label, action in items:
-                item_key = self._menu_item_visibility_key(label, action)
-                if item_key not in hidden_menu_items:
-                    filtered_items.append((label, action))
-            if filtered_items:
-                filtered_menu_items[category] = filtered_items
-
-        plugin_items = self._build_plugin_menu_items()
-        if not plugin_items:
-            plugin_items = [("(No plugins installed)", None)]
-        filtered_menu_items["Plugins"] = plugin_items
-
-        return filtered_menu_items
+        return build_global_menu_items(self)
 
     def _rebuild_global_menu(self):
         """Rebuild global menu preserving previous selection when possible."""
-        from ..ui.menu import Menu
+        rebuild_global_menu(self)
 
-        previous = getattr(self, "menu", None)
-        was_active = bool(getattr(previous, "active", False))
-        selected_menu = int(getattr(previous, "selected_menu", 0) or 0)
-        selected_item = int(getattr(previous, "selected_item", 0) or 0)
+    def _build_menu_editor_catalog(self):
+        """Return editable menu entries (apps, games, plugins) with stable keys."""
+        return build_menu_editor_catalog(self)
 
-        menu = Menu(self._build_global_menu_items())
-        menu_names = list(getattr(menu, "menu_names", ()) or ())
-        if was_active and menu_names:
-            menu.active = True
-            menu.selected_menu = max(0, min(selected_menu, len(menu_names) - 1))
-            current_items = list(
-                (getattr(menu, "items", {}) or {}).get(menu_names[menu.selected_menu], ())
-            )
-            if current_items:
-                menu.selected_item = max(0, min(selected_item, len(current_items) - 1))
-            else:
-                menu.selected_item = 0
-
-        self.menu = menu
-
-    def _register_plugin_manifest(self, manifest, load_plugin):
-        """Register one plugin manifest with defensive isolation."""
-        try:
-            app_class = load_plugin(manifest)
-        except _RUNTIME_ISOLATION_ERRORS:
-            LOGGER.debug('failed to load plugin manifest', exc_info=True)
-            return
-        if not app_class:
-            return
-        plugin_info = manifest.get('plugin', {})
-        pid = plugin_info.get('id')
-        if not pid:
-            return
-        self._plugins[pid] = {
-            'class': app_class,
-            'manifest': manifest,
-        }
+    # ------------------------------------------------------------------
+    # Icon system (delegates to icon_styles module)
+    # ------------------------------------------------------------------
 
     def _close_window_safely(self, win):
         """Run window close hook without allowing cleanup-time crashes."""
@@ -450,248 +432,74 @@ class RetroTUI:
             LOGGER.debug('callable action failed', exc_info=True)
             return None
 
-    def _build_plugin_window(self, info, plugin_id):
-        """Instantiate plugin window object from manifest metadata."""
-        manifest = info.get('manifest', {}).get('plugin', {})
-        win_config = manifest.get('window', {})
-        w = int(win_config.get('default_width', 40))
-        h = int(win_config.get('default_height', 15))
-        try:
-            cls = info.get('class')
-            x, y = self._next_window_offset(8, 3)
-            return cls(manifest.get('name', plugin_id), x, y, w, h)
-        except _RUNTIME_ISOLATION_ERRORS:
-            LOGGER.debug('failed to open plugin %s', plugin_id, exc_info=True)
-            return None
-
-    @staticmethod
-    def _split_config_csv(raw):
-        """Return lowercased non-empty comma-separated tokens from *raw* string."""
-        if not isinstance(raw, str):
-            return set()
-        return {token.strip().lower() for token in raw.split(",") if token.strip()}
-
-    @staticmethod
-    def _menu_item_visibility_key(label, action):
-        """Return stable visibility key for one global menu item."""
-        if isinstance(action, AppAction):
-            return action.value.lower()
-        if isinstance(action, str):
-            return action.lower()
-        base_label = str(label or "").split("  ")[0].strip().lower()
-        return base_label
-
-    def _icon_visibility_key(self, icon):
-        """Return stable visibility key for one desktop icon entry."""
-        hide_key = icon.get("hide_key")
-        if isinstance(hide_key, str) and hide_key.strip():
-            return hide_key.strip().lower()
-        return str(icon.get("label", "")).strip().lower()
-
-    def _plugin_icon_art(self, plugin_name):
-        """Build compact 3x4 icon art for plugin desktop entries."""
-        token = ''.join(ch for ch in str(plugin_name) if ch.isalnum())[:2].upper()
-        if not token:
-            token = "PL"
-        if len(token) == 1:
-            token += " "
-        if self.use_unicode:
-            return ["┌──┐", f"│{token}│", "└──┘"]
-        return ["+--+", f"|{token}|", "+--+"]
-
-    def _build_plugin_icons(self):
-        """Return plugin entries as desktop icons."""
-        icons = []
-        for plugin_id, info in (getattr(self, "_plugins", None) or {}).items():
-            plugin_info = (info.get("manifest", {}) or {}).get("plugin", {}) or {}
-            name = str(plugin_info.get("name") or plugin_id)
-            icons.append(
-                {
-                    "label": name,
-                    "action": f"plugin:{plugin_id}",
-                    "art": self._plugin_icon_art(name),
-                    "category": "Plugins",
-                    "hide_key": f"plugin:{plugin_id}",
-                }
-            )
-        icons.sort(key=lambda item: (item.get("label", "").lower(), item.get("action", "")))
-        return icons
-
-    def _build_desktop_icon_catalog(self):
-        """Return full desktop icon catalog (apps, games, plugins)."""
-        base_icons = ICONS if self.use_unicode else ICONS_ASCII
-        catalog = [dict(icon) for icon in base_icons]
-        catalog.extend(self._build_plugin_icons())
-        return catalog
-
-    def _build_menu_editor_catalog(self):
-        """Return editable menu entries (apps, games, plugins) with stable keys."""
-        from ..ui.menu import DEFAULT_GLOBAL_ITEMS
-
-        entries = []
-        for category, items in DEFAULT_GLOBAL_ITEMS.items():
-            for label, action in items:
-                if action is None:
-                    continue
-                base_label = str(label).split("  ")[0].strip()
-                entries.append(
-                    {
-                        "category": category,
-                        "label": base_label,
-                        "action": action,
-                        "key": self._menu_item_visibility_key(base_label, action),
-                    }
-                )
-
-        for plugin_id, info in (getattr(self, "_plugins", None) or {}).items():
-            plugin_info = (info.get("manifest", {}) or {}).get("plugin", {}) or {}
-            name = str(plugin_info.get("name") or plugin_id)
-            action = f"plugin:{plugin_id}"
-            entries.append(
-                {
-                    "category": "Plugins",
-                    "label": name,
-                    "action": action,
-                    "key": self._menu_item_visibility_key(name, action),
-                }
-            )
-
-        entries.sort(key=lambda item: (item["category"].lower(), item["label"].lower()))
-        return entries
-
-    def _get_hidden_icon_labels(self):
-        """Return set of lowercased hidden desktop icon keys from config."""
-        raw = getattr(self.config, 'hidden_icons', "")
-        return self._split_config_csv(raw)
-
-    def _get_hidden_menu_keys(self):
-        """Return set of lowercased hidden global menu item keys from config."""
-        raw = getattr(self.config, 'hidden_menu_items', "")
-        return self._split_config_csv(raw)
-
     @staticmethod
     def _normalize_icon_style(style):
         """Return supported icon style key."""
-        normalized = str(style or ICON_STYLE_DEFAULT).strip().lower()
-        if normalized == ICON_STYLE_RETRO_01:
-            return ICON_STYLE_MINI
-        if normalized in (ICON_STYLE_DEFAULT, ICON_STYLE_MINI, ICON_STYLE_BRAILLE, ICON_STYLE_CODEX):
-            return normalized
-        return ICON_STYLE_DEFAULT
+        return normalize_icon_style(style)
 
     @staticmethod
     def _icon_style_variants():
         """Return per-icon style variants keyed by action/value key."""
-        return {
-            AppAction.FILE_MANAGER.value: {"mini": ":D", "braille": "⠋⠊", "codex": "⟠F"},
-            AppAction.NOTEPAD.value: {"mini": ":|", "braille": "⠝⠏", "codex": "⟠N"},
-            AppAction.ASCII_VIDEO.value: {"mini": "AV", "braille": "⠁⠧", "codex": "⟠V"},
-            AppAction.TERMINAL.value: {"mini": ">:", "braille": "⠞⠍", "codex": "⟠T"},
-            AppAction.CALCULATOR.value: {"mini": "+)", "braille": "⠉⠁", "codex": "⟠C"},
-            AppAction.LOG_VIEWER.value: {"mini": "LG", "braille": "⠇⠛", "codex": "⟠L"},
-            AppAction.PROCESS_MANAGER.value: {"mini": "PS", "braille": "⠏⠎", "codex": "⟠P"},
-            AppAction.CLOCK_CALENDAR.value: {"mini": "CK", "braille": "⠉⠅", "codex": "⟠K"},
-            AppAction.IMAGE_VIEWER.value: {"mini": "IM", "braille": "⠊⠍", "codex": "⟠I"},
-            AppAction.TRASH_BIN.value: {"mini": "TR", "braille": "⠞⠗", "codex": "⟠R"},
-            AppAction.SETTINGS.value: {"mini": "8)", "braille": "⠎⠞", "codex": "⟠S"},
-            AppAction.ABOUT.value: {"mini": "i)", "braille": "⠁⠃", "codex": "⟠A"},
-            AppAction.MINESWEEPER.value: {"mini": "MX", "braille": "⠍⠭", "codex": "⟠M"},
-            AppAction.SOLITAIRE.value: {"mini": "SL", "braille": "⠎⠇", "codex": "⟠$"},
-            AppAction.SNAKE.value: {"mini": "SN", "braille": "⠎⠝", "codex": "⟠Z"},
-            AppAction.CHARMAP.value: {"mini": "CH", "braille": "⠉⠓", "codex": "⟠H"},
-            AppAction.CLIPBOARD.value: {"mini": "CB", "braille": "⠉⠃", "codex": "⟠B"},
-            AppAction.HEX_VIEWER.value: {"mini": "0x", "braille": "⠓⠭", "codex": "⟠X"},
-            AppAction.WIFI_MANAGER.value: {"mini": "))", "braille": "⠺⠋", "codex": "⟠W"},
-            AppAction.DESKTOP_ICON_MANAGER.value: {"mini": "DT", "braille": "⠙⠞", "codex": "⟠D"},
-            AppAction.ICONS.value: {"mini": ":)", "braille": "⠊⠉", "codex": "⟠O"},
-            AppAction.MENU_EDITOR.value: {"mini": "MN", "braille": "⠍⠝", "codex": "⟠E"},
-            AppAction.MARKDOWN_VIEWER.value: {"mini": "MD", "braille": "⠍⠙", "codex": "⟠Y"},
-            AppAction.SYSTEM_MONITOR.value: {"mini": "SM", "braille": "⠎⠍", "codex": "⟠U"},
-            AppAction.CONTROL_PANEL.value: {"mini": "CT", "braille": "⠉⠞", "codex": "⟠Q"},
-            AppAction.TETRIS.value: {"mini": "TT", "braille": "⠞⠞", "codex": "⟠#"},
-            AppAction.RETRONET.value: {"mini": "RN", "braille": "⠗⠝", "codex": "⟠G"},
-        }
+        return _icon_style_variants()
 
     def _style_symbol_for_icon(self, icon, style):
         """Return style-specific symbol token for one icon."""
-        action = icon.get("action")
-        key = getattr(action, "value", action)
-        key = str(key or "").lower()
-        by_icon = self._icon_style_variants().get(key, {})
-
-        if key.startswith("plugin:"):
-            if style == ICON_STYLE_MINI:
-                return ":)"
-            if style == ICON_STYLE_BRAILLE:
-                return "⠏⠇"
-            if style == ICON_STYLE_CODEX:
-                return "⟠PL"
-            return None
-
-        return by_icon.get(style)
+        return _style_symbol_for_icon(icon, style)
 
     def _styled_icon_entry(self, icon):
         """Return style-adjusted icon entry for current desktop icon style."""
-        style = self._normalize_icon_style(getattr(self, "icon_style", ICON_STYLE_DEFAULT))
-        if style == ICON_STYLE_DEFAULT:
-            # Default style is the classic 3-line grid icon set.
-            styled = dict(icon)
-            styled.pop("symbol", None)
-            return styled
-
-        styled = dict(icon)
-        symbol = self._style_symbol_for_icon(styled, style)
-        if symbol:
-            styled["symbol"] = symbol
-            token = symbol[:2].ljust(2)
-            if self.use_unicode and style in (ICON_STYLE_MINI, ICON_STYLE_CODEX):
-                styled["art"] = ["╭──╮", f"│{token}│", "╰──╯"]
-            elif self.use_unicode and style == ICON_STYLE_BRAILLE:
-                styled["art"] = ["┌──┐", f"│{token}│", "└──┘"]
-            else:
-                styled["art"] = ["+--+", f"|{token}|", "+--+"]
-        return styled
+        return _styled_icon_entry(
+            icon,
+            getattr(self, "icon_style", ICON_STYLE_DEFAULT),
+            getattr(self, "use_unicode", True),
+        )
 
     def icon_style_preview_symbol(self, style, icon_key=AppAction.FILE_MANAGER.value):
         """Return one preview symbol token for *style* and *icon_key*."""
-        normalized = self._normalize_icon_style(style)
-        if normalized == ICON_STYLE_DEFAULT:
-            base_icons = ICONS if getattr(self, "use_unicode", True) else ICONS_ASCII
-            target_key = str(icon_key or "").lower()
-            for icon in base_icons:
-                action = icon.get("action")
-                action_key = getattr(action, "value", action)
-                if str(action_key or "").lower() != target_key:
-                    continue
-                art = icon.get("art") or []
-                if len(art) >= 2 and isinstance(art[1], str):
-                    mid = art[1].strip("| ").strip()
-                    if mid:
-                        return mid
-                symbol = icon.get("symbol")
-                if isinstance(symbol, str) and symbol:
-                    return symbol
-            return "[]"
-        probe_icon = {"action": icon_key}
-        return self._style_symbol_for_icon(probe_icon, normalized) or "[]"
+        return _icon_style_preview_symbol(
+            style,
+            icon_key,
+            getattr(self, "use_unicode", True),
+        )
 
     def set_icon_style(self, style):
         """Set desktop icon style and refresh icon catalog."""
-        self.icon_style = self._normalize_icon_style(style)
+        self.icon_style = normalize_icon_style(style)
         self.refresh_icons()
+
+    def _icon_visibility_key(self, icon):
+        """Return stable visibility key for one desktop icon entry."""
+        return _icon_visibility_key(icon)
+
+    def _get_hidden_icon_labels(self):
+        """Return set of lowercased hidden desktop icon keys from config."""
+        return _get_hidden_icon_labels(self.config)
+
+    def _plugin_icon_art(self, plugin_name):
+        """Build compact 3x4 icon art for plugin desktop entries."""
+        return _plugin_icon_art(plugin_name, self.use_unicode)
+
+    def _build_plugin_icons(self):
+        """Return plugin entries as desktop icons."""
+        return _build_plugin_icons(getattr(self, "_plugins", None), self.use_unicode)
+
+    def _build_desktop_icon_catalog(self):
+        """Return full desktop icon catalog (apps, games, plugins)."""
+        return _build_desktop_icon_catalog(getattr(self, "_plugins", None), self.use_unicode)
+
+    def refresh_icons(self):
+        """Rebuild desktop icons list based on config and unicode support."""
+        _refresh_icons(self)
+
+    # ------------------------------------------------------------------
+    # Theme & preferences
+    # ------------------------------------------------------------------
 
     def apply_theme(self, theme_name):
         """Apply a theme immediately to current runtime."""
         self.theme = get_theme(theme_name)
         self.theme_name = self.theme.key
         init_colors(self.theme)
-
-    def refresh_icons(self):
-        """Rebuild desktop icons list based on config and unicode support."""
-        hidden_keys = self._get_hidden_icon_labels()
-        catalog = self._build_desktop_icon_catalog()
-        visible = [icon for icon in catalog if self._icon_visibility_key(icon) not in hidden_keys]
-        self.icons = [self._styled_icon_entry(icon) for icon in visible]
 
     def apply_preferences(self, *, show_hidden=None, word_wrap_default=None, sunday_first=None, apply_to_open_windows=False):
         """Apply runtime preferences used by app windows and defaults."""
@@ -733,7 +541,7 @@ class RetroTUI:
             word_wrap_default=self.default_word_wrap,
             sunday_first=self.default_sunday_first,
             show_welcome=self.show_welcome,
-            icon_style=self._normalize_icon_style(getattr(self, "icon_style", ICON_STYLE_DEFAULT)),
+            icon_style=normalize_icon_style(getattr(self, "icon_style", ICON_STYLE_DEFAULT)),
             hidden_icons=getattr(self.config, 'hidden_icons', ""),
             hidden_menu_items=getattr(self.config, 'hidden_menu_items', ""),
         )
@@ -752,6 +560,10 @@ class RetroTUI:
         from .config import default_config_path
         path = cfg_path if cfg_path is not None else default_config_path()
         self._icon_mgr.save(path)
+
+    # ------------------------------------------------------------------
+    # Right-click handling
+    # ------------------------------------------------------------------
 
     def handle_right_click(self, mx, my, bstate):
         """Dispatch right-clicks to windows or desktop. Return True if handled."""
@@ -865,6 +677,10 @@ class RetroTUI:
         self.selected_icon = -1
         return None
 
+    # ------------------------------------------------------------------
+    # Terminal validation & lifecycle
+    # ------------------------------------------------------------------
+
     def _validate_terminal_size(self):
         """Fail fast when terminal is too small for the base desktop layout."""
         h, w = self.stdscr.getmaxyx()
@@ -891,83 +707,29 @@ class RetroTUI:
             self._close_window_safely(win)
         disable_mouse_support()
 
+    # ------------------------------------------------------------------
+    # Signal handling (delegates to signal_handler module)
+    # ------------------------------------------------------------------
+
     def _install_runtime_signal_handlers(self):
         """Install runtime signal handlers (main thread only)."""
-        if getattr(self, '_sigint_handler_installed', False):
-            return
-        if threading.current_thread() is not threading.main_thread():
-            return
-        planned = []
-        sigint = getattr(signal, "SIGINT", None)
-        if sigint is not None:
-            planned.append((sigint, self._handle_sigint))
-        sigbreak = getattr(signal, "SIGBREAK", None)
-        if sigbreak is not None:
-            planned.append((sigbreak, self._handle_sigint))
-        sigtstp = getattr(signal, "SIGTSTP", None)
-        if sigtstp is not None:
-            planned.append((sigtstp, self._handle_sigtstp))
-        for name in ("SIGTERM", "SIGHUP"):
-            sig = getattr(signal, name, None)
-            if sig is not None:
-                planned.append((sig, self._handle_shutdown_signal))
-
-        prev_handlers = {}
-        for sig, handler in planned:
-            try:
-                previous = signal.getsignal(sig)
-                signal.signal(sig, handler)
-                prev_handlers[sig] = previous
-            except (AttributeError, ValueError, OSError):
-                continue
-
-        self._prev_signal_handlers = prev_handlers
-        self._prev_sigint_handler = prev_handlers.get(sigint)
-        self._sigint_handler_installed = bool(prev_handlers)
+        install_runtime_signal_handlers(self)
 
     def _restore_runtime_signal_handlers(self):
         """Restore process signal handlers changed for runtime."""
-        if not getattr(self, '_sigint_handler_installed', False):
-            return
-        prev_handlers = dict(getattr(self, "_prev_signal_handlers", {}) or {})
-        sigint = getattr(signal, "SIGINT", None)
-        if sigint is not None and sigint not in prev_handlers:
-            prev = getattr(self, "_prev_sigint_handler", None)
-            if prev is not None:
-                prev_handlers[sigint] = prev
-
-        for sig, prev in prev_handlers.items():
-            if prev is None:
-                continue
-            try:
-                signal.signal(sig, prev)
-            except (AttributeError, ValueError, OSError):
-                continue
-
-        self._prev_signal_handlers = {}
-        self._prev_sigint_handler = None
-        self._sigint_handler_installed = False
-        self._shutdown_signal = None
+        restore_runtime_signal_handlers(self)
 
     def _handle_sigint(self, _signum, _frame):
         """Queue SIGINT as in-app Ctrl+C key instead of terminating session."""
-        self._queue_pending_signal_key('\x03')
+        queue_pending_signal_key(self, '\x03')
 
     def _handle_sigtstp(self, _signum, _frame):
         """Queue SIGTSTP as in-app Ctrl+Z key instead of suspending session."""
-        self._queue_pending_signal_key('\x1a')
+        queue_pending_signal_key(self, '\x1a')
 
     def _queue_pending_signal_key(self, key):
         """Queue one pending control key generated by runtime signal handlers."""
-        if not isinstance(key, str) or len(key) != 1:
-            return
-        queue = getattr(self, "_pending_signal_keys", None)
-        if not isinstance(queue, list):
-            queue = []
-            self._pending_signal_keys = queue
-        queue.append(key)
-        if key == '\x03':
-            self._pending_sigint = True
+        queue_pending_signal_key(self, key)
 
     def _handle_shutdown_signal(self, signum, _frame):
         """Request a clean shutdown on external termination signals."""
@@ -976,30 +738,15 @@ class RetroTUI:
 
     def _consume_pending_signal_key(self):
         """Return next queued control key generated by signal handlers."""
-        queue = getattr(self, "_pending_signal_keys", None)
-        if isinstance(queue, list) and queue:
-            key = queue.pop(0)
-            if key == '\x03':
-                self._pending_sigint = any(item == '\x03' for item in queue)
-            return key
-        if getattr(self, "_pending_sigint", False):
-            self._pending_sigint = False
-            return '\x03'
-        return None
+        return consume_pending_signal_key(self)
 
     def _consume_pending_sigint(self):
         """Compatibility wrapper: return queued Ctrl+C key when available."""
-        queue = getattr(self, "_pending_signal_keys", None)
-        if isinstance(queue, list) and queue:
-            for idx, key in enumerate(queue):
-                if key == '\x03':
-                    del queue[idx]
-                    self._pending_sigint = any(item == '\x03' for item in queue)
-                    return '\x03'
-        if getattr(self, "_pending_sigint", False):
-            self._pending_sigint = False
-            return '\x03'
-        return None
+        return consume_pending_sigint(self)
+
+    # ------------------------------------------------------------------
+    # Drawing (delegates to rendering module)
+    # ------------------------------------------------------------------
 
     def draw_desktop(self, frame_size=None):
         """Draw the desktop background pattern."""
@@ -1024,6 +771,10 @@ class RetroTUI:
         if frame_size is None:
             return draw_statusbar(self, APP_VERSION)
         return draw_statusbar(self, APP_VERSION, frame_size=frame_size)
+
+    # ------------------------------------------------------------------
+    # Icon position & window management
+    # ------------------------------------------------------------------
 
     def get_icon_screen_pos(self, index):
         """Return (x, y) for icon at index, checking persisted positions then default grid."""
@@ -1066,21 +817,13 @@ class RetroTUI:
         self.windows.append(win)
         self.set_active_window(win)
 
-    def open_plugin(self, plugin_id):
-        """Instantiate and open a plugin window by id."""
-        if not getattr(self, '_plugins', None):
-            return
-        info = self._plugins.get(plugin_id)
-        if not info:
-            LOGGER.debug('plugin not found: %s', plugin_id)
-            return
-        win = self._build_plugin_window(info, plugin_id)
-        if win is not None:
-            self._spawn_window(win)
-
     def _next_window_offset(self, base_x, base_y, step_x=2, step_y=1):
         """Return staggered window coordinates based on open window count."""
         return self.window_mgr._next_window_offset(base_x, base_y, step_x, step_y)
+
+    # ------------------------------------------------------------------
+    # Action execution
+    # ------------------------------------------------------------------
 
     def execute_action(self, action):
         """Execute a menu/icon action."""
@@ -1108,118 +851,41 @@ class RetroTUI:
         # 2. Fallback to global/app-level actions
         execute_app_action(self, action, LOGGER, version=APP_VERSION)
 
-    # Margin subtracted from screen dimensions when sizing viewer windows.
-    _WINDOW_MARGIN = 4
-
-    def _detect_viewer_type(self, filepath):
-        """Determine the appropriate viewer for a file.
-
-        Returns a tuple ``(WindowClass, base_x, base_y, max_w, max_h, extra_kwargs)``.
-        """
-        lower_path = filepath.lower()
-        ext = os.path.splitext(lower_path)[1]
-
-        _LOG_EXTENSIONS = {'.log', '.out', '.err'}
-        if ext in _LOG_EXTENSIONS or '/log/' in lower_path or '\\log\\' in lower_path:
-            return (LogViewerWindow, 16, 4, 74, 22, {})
-
-        if ext in ImageViewerWindow.IMAGE_EXTENSIONS:
-            return (ImageViewerWindow, 14, 3, 84, 26, {})
-
-        if ext == '.md':
-            return (MarkdownViewerWindow, 18, 3, 70, 25, {})
-
-        # Content-based detection: null bytes indicate a binary file.
-        try:
-            with open(filepath, 'rb') as f:
-                chunk = f.read(BINARY_DETECT_CHUNK_SIZE)
-                if b'\x00' in chunk:
-                    return (HexViewerWindow, 12, 3, 92, 26, {})
-        except OSError:
-            pass
-
-        # Default: plain-text viewer.
-        return (
-            NotepadWindow,
-            18, 3, 70, 25,
-            {'wrap_default': getattr(self, 'default_word_wrap', False)},
-        )
+    # ------------------------------------------------------------------
+    # File viewers (delegates to viewer module)
+    # ------------------------------------------------------------------
 
     def open_file_viewer(self, filepath):
         """Open file in the best available viewer."""
-        if is_video_file(filepath):
-            self._play_ascii_video(filepath)
-            return
-
-        cls, base_x, base_y, max_w, max_h, extra_kwargs = self._detect_viewer_type(filepath)
-        h, w = self.stdscr.getmaxyx()
-        ox, oy = self._next_window_offset(base_x, base_y)
-        win = cls(
-            ox, oy,
-            min(max_w, w - self._WINDOW_MARGIN),
-            min(max_h, h - self._WINDOW_MARGIN),
-            filepath=filepath,
-            **extra_kwargs,
-        )
-        self._spawn_window(win)
+        from .viewer import open_file_viewer as _open_file_viewer
+        _open_file_viewer(self, filepath)
 
     def _play_ascii_video(self, filepath, subtitle_path=None):
         """Run ASCII video playback and surface backend errors in a dialog."""
-        success, error = play_ascii_video(self.stdscr, filepath, subtitle_path=subtitle_path)
-        if not success:
-            self.dialog = Dialog('ASCII Video Error', error, ['OK'], width=58)
+        from .viewer import play_ascii_video as _play_video
+        _play_video(self, filepath, subtitle_path=subtitle_path)
 
     def show_url_dialog(self, source_win, default_url=None):
         """Show input dialog for web URLs."""
-        from ..ui.dialog import InputDialog
-        # If payload is provided, use it; otherwise fallback to current window url if available
-        initial = default_url or getattr(source_win, 'url', '')
-        dialog = InputDialog('RetroNet Explorer', 'Enter URL:', initial_value=initial, width=64)
-        dialog.callback = source_win.open_path
-        self.dialog = dialog
+        _show_url_dialog(self, source_win, default_url=default_url)
 
     def show_video_open_dialog(self):
         """Open dialog flow to play a video path without using File Manager."""
-        dialog = InputDialog('Open Video', 'Enter video path:', width=64)
-        dialog.callback = self._handle_video_path_input
-        self.dialog = dialog
+        _show_video_open_dialog(self)
 
     def _handle_video_path_input(self, filepath):
         """Validate selected video path and request optional subtitle path."""
-        raw_path = str(filepath or '').strip()
-        if not raw_path:
-            return ActionResult(ActionType.ERROR, 'Video path cannot be empty.')
-        video_path = os.path.abspath(os.path.expanduser(raw_path))
-        if not os.path.isfile(video_path):
-            return ActionResult(ActionType.ERROR, f'Video file not found:\n{video_path}')
-        if not is_video_file(video_path):
-            return ActionResult(ActionType.ERROR, f'Unsupported video format:\n{video_path}')
-
-        dialog = InputDialog(
-            'Subtitles (Optional)',
-            'Enter subtitle path (.srt/.ass/.vtt) or leave empty:',
-            width=70,
-        )
-        dialog.callback = (
-            lambda subtitle_path, selected_video=video_path: self._handle_subtitle_path_input(
-                selected_video,
-                subtitle_path,
-            )
-        )
-        self.dialog = dialog
-        return None
+        from .viewer import handle_video_path_input as _handle_vpi
+        return _handle_vpi(self, filepath)
 
     def _handle_subtitle_path_input(self, video_path, subtitle_path):
         """Validate optional subtitle path and start playback."""
-        subtitle = str(subtitle_path or '').strip()
-        if subtitle:
-            subtitle = os.path.abspath(os.path.expanduser(subtitle))
-            if not os.path.isfile(subtitle):
-                return ActionResult(ActionType.ERROR, f'Subtitle file not found:\n{subtitle}')
-        else:
-            subtitle = None
-        self._play_ascii_video(video_path, subtitle_path=subtitle)
-        return None
+        from .viewer import handle_subtitle_path_input as _handle_spi
+        return _handle_spi(self, video_path, subtitle_path)
+
+    # ------------------------------------------------------------------
+    # Dialog & input routing
+    # ------------------------------------------------------------------
 
     def get_active_window(self):
         """Return the active window, if any."""
