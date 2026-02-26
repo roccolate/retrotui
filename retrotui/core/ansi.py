@@ -4,9 +4,7 @@ ANSI Escape Sequence Parser for RetroTUI.
 import curses
 
 
-from ..constants import C_ANSI_START
-
-_CURSES_ERROR = getattr(curses, "error", Exception)
+from ..constants import C_ANSI_START, _CURSES_ERROR
 _ANSI_COLOR_ERRORS = (
     AttributeError,
     OSError,

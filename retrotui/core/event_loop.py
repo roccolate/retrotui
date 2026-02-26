@@ -9,10 +9,10 @@ from ..constants import (
     TERMINAL_INPUT_TIMEOUT_MS,
     TERMINAL_LIVE_INPUT_TIMEOUT_MS,
     TERMINAL_BACKGROUND_INPUT_TIMEOUT_MS,
+    _CURSES_ERROR,
 )
 
 LOGGER = logging.getLogger(__name__)
-_CURSES_ERROR = getattr(curses, "error", Exception)
 
 _INPUT_TIMEOUT_APPLY_ERRORS = (
     AttributeError,

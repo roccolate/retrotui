@@ -167,19 +167,6 @@ class FileManagerWindow(Window):
             return idx
         return -1
 
-    def _drag_payload_for_entry(self, entry):
-        if entry is None or entry.name == '..' or entry.is_dir:
-            return None
-        return {
-            'type': 'file_path',
-            'path': entry.full_path,
-            'name': entry.name,
-        }
-
-    def _set_pending_drag(self, payload, mx, my):
-        self._pending_drag_payload = payload
-        self._pending_drag_origin = (mx, my)
-
     def clear_pending_drag(self):
         self._pending_drag_payload = None
         self._pending_drag_origin = None
@@ -200,8 +187,13 @@ class FileManagerWindow(Window):
         self.clear_pending_drag()
         return payload
 
-    def _invalidate_preview_cache(self):
-        self._preview_cache = {'key': None, 'lines': []}
+    def _preview_stat_key(self, path):
+        try:
+            st = os.stat(path)
+        except OSError:
+            return (path, None, None)
+        mtime_ns = getattr(st, 'st_mtime_ns', int(st.st_mtime * 1_000_000_000))
+        return (path, mtime_ns, st.st_size)
 
     def _panel_layout(self):
         bx, _, bw, _ = self.body_rect()
@@ -214,28 +206,6 @@ class FileManagerWindow(Window):
         separator_x = bx + list_w
         preview_x = separator_x + 1
         return list_w, separator_x, preview_x, preview_w
-
-    def _preview_stat_key(self, path):
-        try:
-            st = os.stat(path)
-        except OSError:
-            return (path, None, None)
-        mtime_ns = getattr(st, 'st_mtime_ns', int(st.st_mtime * 1_000_000_000))
-        return (path, mtime_ns, st.st_size)
-
-    def _entry_preview_lines(self, entry, max_lines, max_cols=0):
-        if max_lines <= 0:
-            return []
-        if entry is None or entry.name == '..':
-             return get_preview_lines(entry, max_lines, max_cols)
-
-        cache_key = self._preview_stat_key(entry.full_path)
-        if self._preview_cache['key'] == cache_key:
-            return self._preview_cache['lines'][:max_lines]
-
-        lines = get_preview_lines(entry, max_lines, max_cols)
-        self._preview_cache = {'key': cache_key, 'lines': list(lines)}
-        return lines
 
     def _preview_lines(self, max_lines, max_cols=0):
         if max_lines <= 0:
@@ -550,7 +520,7 @@ class FileManagerWindow(Window):
         """Build drag payload for an entry."""
         if not entry or entry.name == '..' or entry.is_dir:
             return None
-        return {'type': 'file', 'path': entry.full_path, 'name': entry.name}
+        return {'type': 'file_path', 'path': entry.full_path, 'name': entry.name}
 
     def _set_pending_drag(self, payload, x, y):
         """Record start of a potential drag operation."""

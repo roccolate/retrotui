@@ -8,8 +8,7 @@ from ..core.actions import ActionResult, ActionType, AppAction
 from ..ui.menu import WindowMenu
 from ..ui.window import Window
 from ..utils import normalize_key_code, safe_addstr, theme_attr
-
-_CURSES_ERROR = getattr(curses, "error", Exception)
+from ..constants import _CURSES_ERROR
 _CLOCK_CHIME_ERRORS = (
     _CURSES_ERROR,
     OSError,

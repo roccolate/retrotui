@@ -29,8 +29,7 @@ from ..ui.dialog import Dialog
 from ..ui.window import Window
 from .actions import AppAction
 from .content import build_about_message, build_help_message
-
-_CURSES_ERROR = getattr(curses, "error", Exception)
+from ..constants import _CURSES_ERROR
 _TERMINAL_SIZE_ERRORS = (
     AttributeError,
     OSError,

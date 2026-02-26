@@ -1,49 +1,49 @@
-"""Mouse routing helpers for RetroTUI."""
+"""Mouse event routing for RetroTUI.
+
+Routing functions that dispatch mouse events to windows, desktop, menus,
+and drag/resize handlers. Utility helpers live in ``mouse_utils``.
+"""
 
 import curses
-import inspect
 import logging
+
+from ..constants import MENU_BAR_HEIGHT, CLOCK_CLICK_REGION_WIDTH
+from .actions import AppAction
+from .platform.mouse_backend import normalize_mouse_payload
+from .mouse_utils import (
+    # Re-export everything so existing importers and tests still work.
+    _MOUSE_ROUTE_ERRORS,
+    _BUTTON1_CLICKED,
+    _BUTTON1_PRESSED,
+    _BUTTON1_RELEASED,
+    _BUTTON1_DOUBLE_CLICKED,
+    _REPORT_MOUSE_POSITION,
+    _BUTTON1_CLICK_MASK,
+    _HANDLER_ARITY_CACHE,
+    _handler_cache_key,
+    _handler_accepts_bstate,
+    _invoke_mouse_handler,
+    _get_active_window_menu_owner,
+    _close_tracked_window_menu,
+    _sync_window_menu_owner,
+    _clear_window_text_selection,
+    _clear_selection_capture_state,
+    _title_bar_hit,
+    _route_selection_drag_owner,
+    _pointer_capture_owner,
+    _is_button1_click_event,
+    _is_release_like_stop_event,
+    _is_desktop_double_click,
+)
+
+# Keep time and inspect importable from this module for test compatibility.
+import inspect  # noqa: F401 — re-exported for test mocking
 import os
 import time
 
-from ..constants import (
-    DEFAULT_DOUBLE_CLICK_INTERVAL,
-    MENU_BAR_HEIGHT,
-    CLOCK_CLICK_REGION_WIDTH,
-)
-from .actions import AppAction
-from .platform.mouse_backend import normalize_mouse_payload
-
 LOGGER = logging.getLogger(__name__)
-_CURSES_ERROR = getattr(curses, "error", Exception)
 
-_MOUSE_ROUTE_ERRORS = (
-    AttributeError,
-    LookupError,
-    OSError,
-    TypeError,
-    ValueError,
-    _CURSES_ERROR,
-)
-
-# Module-level curses constant masks (resolved once at import time).
-_BUTTON1_CLICKED = getattr(curses, 'BUTTON1_CLICKED', 0)
-_BUTTON1_PRESSED = getattr(curses, 'BUTTON1_PRESSED', 0)
-_BUTTON1_RELEASED = getattr(curses, 'BUTTON1_RELEASED', 0)
-_BUTTON1_DOUBLE_CLICKED = getattr(curses, 'BUTTON1_DOUBLE_CLICKED', 0)
-_BUTTON3_PRESSED = getattr(curses, 'BUTTON3_PRESSED', 0)
-_BUTTON3_CLICKED = getattr(curses, 'BUTTON3_CLICKED', 0)
-_BUTTON3_RELEASED = getattr(curses, 'BUTTON3_RELEASED', 0)
-_REPORT_MOUSE_POSITION = getattr(curses, 'REPORT_MOUSE_POSITION', 0)
-_BUTTON4_PRESSED = getattr(curses, 'BUTTON4_PRESSED', 0)
-
-_BUTTON1_CLICK_MASK = _BUTTON1_CLICKED | _BUTTON1_PRESSED | _BUTTON1_DOUBLE_CLICKED
-_BUTTON3_MASK = _BUTTON3_PRESSED | _BUTTON3_CLICKED | _BUTTON3_RELEASED
-
-# Cache for inspect.signature arity checks keyed by stable callable identity.
-_HANDLER_ARITY_CACHE: dict = {}
-
-# Enable detailed mouse normalization traces only when debug mode is explicitly on.
+# Tracing state — kept here (not in mouse_utils) for test mocking compatibility.
 _TRACE_MOUSE = bool(os.environ.get("RETROTUI_DEBUG"))
 _TRACE_MOUSE_MIN_INTERVAL = float(os.environ.get("RETROTUI_MOUSE_TRACE_MIN_INTERVAL", "0.05"))
 _TRACE_MOUSE_LAST_TS = {"value": 0.0}
@@ -80,259 +80,12 @@ def _trace_mouse_normalization(raw_event, norm, adjusted_bstate):
     )
 
 
-def _handler_cache_key(handler):
-    """Return a stable key for callable arity cache lookups."""
-    bound_func = getattr(handler, "__func__", None)
-    if bound_func is not None:
-        owner = getattr(handler, "__self__", None)
-        return (bound_func, getattr(owner, "__class__", None))
-    return handler
-
-
-def _handler_accepts_bstate(handler):
-    """Return True if handler accepts 3+ positional args (mx, my, bstate)."""
-    cache_key = _handler_cache_key(handler)
-    cached = _HANDLER_ARITY_CACHE.get(cache_key)
-    if cached is not None:
-        return cached
-    try:
-        params = list(inspect.signature(handler).parameters.values())
-    except (TypeError, ValueError):
-        _HANDLER_ARITY_CACHE[cache_key] = False
-        return False
-    positional = 0
-    for p in params:
-        if p.kind == inspect.Parameter.VAR_POSITIONAL:
-            _HANDLER_ARITY_CACHE[cache_key] = True
-            return True
-        if p.kind in (inspect.Parameter.POSITIONAL_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD):
-            positional += 1
-    result = positional >= 3
-    _HANDLER_ARITY_CACHE[cache_key] = result
-    return result
-
-
-def _invoke_mouse_handler(handler, mx, my, bstate):
-    """Call mouse handlers with backward-compatible signature support."""
-    if _handler_accepts_bstate(handler):
-        return handler(mx, my, bstate)
-    return handler(mx, my)
-
-
-def _get_active_window_menu_owner(app):
-    """Return tracked window-menu owner when its menu is currently active."""
-    owner = getattr(app, "_active_window_menu_owner", None)
-    if owner is None:
-        return None
-    menu = getattr(owner, "window_menu", None)
-    if not menu or not getattr(menu, "active", False):
-        app._active_window_menu_owner = None
-        return None
-    if not getattr(owner, "visible", False):
-        menu.active = False
-        app._active_window_menu_owner = None
-        return None
-    return owner
-
-
-def _close_tracked_window_menu(app, *, except_win=None):
-    """Close tracked window menu unless it belongs to *except_win*."""
-    owner = _get_active_window_menu_owner(app)
-    if owner is None or owner is except_win:
-        return False
-    menu = getattr(owner, "window_menu", None)
-    if menu is not None:
-        menu.active = False
-    app._active_window_menu_owner = None
-    return True
-
-
-def _sync_window_menu_owner(app, win):
-    """Update tracked owner based on clicked/handled window menu state."""
-    menu = getattr(win, "window_menu", None)
-    if menu and getattr(menu, "active", False):
-        _close_tracked_window_menu(app, except_win=win)
-        app._active_window_menu_owner = win
-    elif getattr(app, "_active_window_menu_owner", None) is win:
-        app._active_window_menu_owner = None
-
-
-def _clear_window_text_selection(app):
-    """Clear text selection state for windows that expose selection helpers."""
-    cleared_any = False
-    for win in getattr(app, "windows", []):
-        clear_selection = getattr(win, "clear_selection", None)
-        if not callable(clear_selection):
-            continue
-
-        has_state = False
-        has_selection = getattr(win, "has_selection", None)
-        if callable(has_selection):
-            try:
-                has_state = bool(has_selection())
-            except _MOUSE_ROUTE_ERRORS:
-                has_state = False
-
-        if (
-            has_state
-            or getattr(win, "selection_anchor", None) is not None
-            or getattr(win, "selection_cursor", None) is not None
-            or bool(getattr(win, "_mouse_selecting", False))
-        ):
-            try:
-                clear_selection()
-            except _MOUSE_ROUTE_ERRORS:
-                LOGGER.debug("selection clear failed", exc_info=True)
-                continue
-            cleared_any = True
-    return cleared_any
-
-
-def _clear_selection_capture_state(app):
-    """Drop transient selection-capture flags after release-like events."""
-    for win in getattr(app, "windows", []):
-        if bool(getattr(win, "_mouse_selecting", False)):
-            win._mouse_selecting = False
-
-
-def _title_bar_hit(win, mx, my, norm=None):
-    """Return True when pointer should be treated as a title-bar hit.
-
-    In some TTY/GPM streams the reported y coordinate lands one row below
-    the visual title bar. We accept that offset only for gpm/fallback backends
-    and only on windows without a menu bar to avoid menu-row ambiguity.
-    """
-    on_title = getattr(win, "on_title_bar", None)
-    if callable(on_title) and on_title(mx, my):
-        return True
-
-    if norm is None:
-        return False
-    backend = str(norm.get("backend") or "").lower()
-    if backend not in {"gpm", "fallback"}:
-        return False
-    if getattr(win, "window_menu", None) is not None:
-        return False
-
-    wx = int(getattr(win, "x", 0))
-    wy = int(getattr(win, "y", 0))
-    ww = int(getattr(win, "w", 0))
-    if ww <= 0 or my != wy + 1:
-        return False
-    if mx < wx + 1 or mx > wx + ww - 2:
-        return False
-    min_btn_offset = int(getattr(win, "MIN_BTN_OFFSET", 10))
-    if mx >= wx + ww - min_btn_offset:
-        return False
-    return True
-
-
-def _route_selection_drag_owner(app, mx, my, bstate, *, is_mouse_motion, is_button1_pressed, norm=None):
-    """Keep selection drag captured by the window that initiated it.
-
-    Without capture, pointer motion outside window bounds can leak into desktop
-    routing (icon/desktop selection) while selecting text in app windows.
-    """
-    if not (is_mouse_motion and is_button1_pressed):
-        return False
-
-    for win in reversed(app.windows):
-        if not getattr(win, "visible", False):
-            continue
-        if not bool(getattr(win, "_mouse_selecting", False)):
-            continue
-
-        contains = getattr(win, "contains", None)
-        pointer_inside = False
-        if callable(contains):
-            try:
-                pointer_inside = bool(contains(mx, my))
-            except _MOUSE_ROUTE_ERRORS:
-                pointer_inside = False
-
-        # On some TTY/tmux streams press state is inferred from stale state.
-        # If pointer already left window and there is no raw press in this event,
-        # release capture to avoid treating whole-screen drags as text selection.
-        raw_pressed = bool((norm or {}).get("button1_pressed_raw"))
-        if not pointer_inside and not raw_pressed:
-            win._mouse_selecting = False
-            return False
-
-        drag_handler = getattr(win, "handle_mouse_drag", None)
-        if drag_handler is None:
-            return True
-        drag_result = _invoke_mouse_handler(drag_handler, mx, my, bstate)
-        app._dispatch_window_result(drag_result, win)
-        return True
-    return False
-
-
-def _pointer_capture_owner(app):
-    """Return currently captured pointer owner as `(kind, owner)` or `(None, None)`."""
-    dragging = getattr(app, "_dragging_win", None)
-    if dragging is not None:
-        return ("window_drag", dragging)
-
-    resizing = getattr(app, "_resizing_win", None)
-    if resizing is not None:
-        return ("window_resize", resizing)
-
-    drag_drop = getattr(app, "drag_drop", None)
-    if drag_drop is not None and getattr(drag_drop, "payload", None) is not None:
-        return ("file_drag", drag_drop)
-
-    icon_mgr = getattr(app, "_icon_mgr", None)
-    if icon_mgr is not None and bool(getattr(icon_mgr, "is_dragging", False)):
-        return ("icon_drag", icon_mgr)
-
-    # Selection capture applies only while primary button is physically down.
-    if not bool(getattr(app, "button1_pressed", False)):
-        return (None, None)
-    for win in reversed(getattr(app, "windows", ())):
-        if not getattr(win, "visible", False):
-            continue
-        if bool(getattr(win, "_mouse_selecting", False)):
-            return ("window_selection", win)
-
-    return (None, None)
-
-
-def _is_button1_click_event(bstate):
-    """Return True for discrete button-1 click-like events (not motion reports)."""
-    if bstate & _REPORT_MOUSE_POSITION:
-        return False
-    return bool(bstate & _BUTTON1_CLICK_MASK)
-
-
-def _is_release_like_stop_event(app, bstate, norm=None):
-    """Return True when drag/resize/file-drop should stop for current mouse event."""
-    if norm is not None:
-        if bool(norm.get("button1_released")):
-            return True
-        if not bool(norm.get("is_motion")) and bool(
-            norm.get("button1_clicked") or norm.get("button1_double")
-        ):
-            return True
-        return False
-    return bool(bstate & getattr(app, "stop_drag_flags", 0))
-
-
-def _is_desktop_double_click(app, icon_idx, bstate):
-    """Detect double-click for desktop icons with a time-based fallback."""
-    if bstate & _BUTTON1_DOUBLE_CLICKED:
-        return True
-
-    if not _is_button1_click_event(bstate):
-        return False
-
-    now = time.monotonic()
-    last_idx = app._last_icon_click_idx
-    last_ts = app._last_icon_click_ts
-    interval = getattr(app, "double_click_interval", None) or DEFAULT_DOUBLE_CLICK_INTERVAL
-    is_double = (last_idx == icon_idx) and ((now - last_ts) <= interval)
-    app._last_icon_click_idx = icon_idx
-    app._last_icon_click_ts = now
-    return is_double
+# Additional curses masks used only by routing functions.
+_BUTTON3_PRESSED = getattr(curses, 'BUTTON3_PRESSED', 0)
+_BUTTON3_CLICKED = getattr(curses, 'BUTTON3_CLICKED', 0)
+_BUTTON3_RELEASED = getattr(curses, 'BUTTON3_RELEASED', 0)
+_BUTTON4_PRESSED = getattr(curses, 'BUTTON4_PRESSED', 0)
+_BUTTON3_MASK = _BUTTON3_PRESSED | _BUTTON3_CLICKED | _BUTTON3_RELEASED
 
 
 def handle_file_drag_drop_mouse(app, mx, my, bstate, norm=None):
@@ -578,6 +331,7 @@ def handle_desktop_mouse(app, mx, my, bstate, norm=None):
         app.menu.active = False
 
     return True
+
 
 def handle_mouse_event(app, event):
     """Handle mouse events.

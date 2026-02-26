@@ -3,6 +3,10 @@
 import curses
 
 from .core.actions import AppAction
+
+# Portable curses error type — ``curses.error`` may not exist on all platforms
+# or in test environments with mocked curses modules.
+_CURSES_ERROR = getattr(curses, "error", Exception)
 # Box drawing characters (Unicode).
 BOX_TL = "\u2554"
 BOX_TR = "\u2557"

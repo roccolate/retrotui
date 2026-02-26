@@ -5,7 +5,6 @@ import curses
 import logging
 import signal
 import threading
-import time
 
 from ..constants import (
     ICONS, ICONS_ASCII,
@@ -13,6 +12,7 @@ from ..constants import (
     TERMINAL_LIVE_INPUT_TIMEOUT_MS,
     TERMINAL_BACKGROUND_INPUT_TIMEOUT_MS,
     WELCOME_WIN_WIDTH, WELCOME_WIN_HEIGHT,
+    _CURSES_ERROR,
 )
 from ..utils import check_unicode_support, init_colors
 from ..theme import get_theme
@@ -101,11 +101,15 @@ from .viewer import (
     show_url_dialog as _show_url_dialog,
     show_video_open_dialog as _show_video_open_dialog,
 )
+from .context_menu_handler import (
+    handle_right_click as _handle_right_click,
+    handle_desktop_right_click as _handle_desktop_right_click,
+    show_icon_properties as _show_icon_properties,
+)
 
 LOGGER = logging.getLogger(__name__)
 
 APP_VERSION = '0.9.2'
-_CURSES_ERROR = getattr(curses, "error", Exception)
 _CONFIG_PERSIST_ERRORS = (OSError, UnicodeError, ValueError, TypeError)
 _INPUT_ROUTE_ERRORS = (
     AttributeError,
@@ -567,109 +571,15 @@ class RetroTUI:
 
     def handle_right_click(self, mx, my, bstate):
         """Dispatch right-clicks to windows or desktop. Return True if handled."""
-        # If a context menu is already open, let it consume the click first.
-        if self.context_menu and self.context_menu.active:
-            try:
-                action = self.context_menu.handle_click(mx, my)
-            except _INPUT_ROUTE_ERRORS:
-                LOGGER.debug('context menu click handler failed', exc_info=True)
-                action = None
-            if action is not None:
-                self.execute_action(action)
-                return True
-            # If the menu remains open (e.g., separator click), consume event.
-            is_open = getattr(self.context_menu, "is_open", None)
-            if callable(is_open) and is_open():
-                return True
-
-        # Try windows first (topmost)
-        for win in reversed(self.windows):
-            if not getattr(win, 'visible', False):
-                continue
-            contains = getattr(win, 'contains', None)
-            if not callable(contains) or not contains(mx, my):
-                continue
-
-            # Route subsequent context-menu actions to the clicked window.
-            self.set_active_window(win)
-
-            handler = getattr(win, 'handle_right_click', None)
-            if callable(handler):
-                try:
-                    res = _invoke_mouse_handler(handler, mx, my, bstate)
-                except _INPUT_ROUTE_ERRORS:
-                    LOGGER.debug('window right-click handler failed', exc_info=True)
-                    res = None
-
-                # If window handled it (returned True or ActionResult), we stop.
-                if isinstance(res, list):
-                    from ..ui.context_menu import ContextMenu
-                    self.context_menu = ContextMenu(self.theme)
-                    self.context_menu.show(mx, my, res)
-                    return True
-
-                if res:
-                    self._dispatch_window_result(res, win)
-                    return True
-
-        # Desktop hook
-        try:
-            return bool(self._handle_desktop_right_click(mx, my, bstate))
-        except _INPUT_ROUTE_ERRORS:
-            LOGGER.debug('desktop right-click handler failed', exc_info=True)
-            return False
+        return _handle_right_click(self, mx, my, bstate)
 
     def _handle_desktop_right_click(self, mx, my, bstate):
         """Open a desktop context menu or icon-specific menu at (mx,my)."""
-        icon_idx = self.get_icon_at(mx, my)
-        from ..ui.context_menu import ContextMenu
-
-        if icon_idx >= 0:
-            # Icon menu
-            # Select the icon first
-            self.selected_icon = icon_idx
-            icon = self.icons[icon_idx]
-            items = [
-                {'label': 'Open', 'action': icon.get('action')},
-                {'separator': True},
-                {'label': 'Properties', 'action': lambda selected_icon=icon: self._show_icon_properties(selected_icon)},
-            ]
-        else:
-            # Desktop menu
-            items = [
-                {'label': 'New Terminal', 'action': AppAction.TERMINAL},
-                {'label': 'New Notepad', 'action': AppAction.NOTEPAD},
-                {'separator': True},
-                {'label': 'Desktop Icons', 'action': AppAction.DESKTOP_ICON_MANAGER},
-                {'label': 'Icons', 'action': AppAction.ICONS},
-                {'label': 'Menu Editor', 'action': AppAction.MENU_EDITOR},
-                {'label': 'Sort Icons (A-Z)', 'action': self.sort_desktop_icons},
-                {'separator': True},
-                {'label': 'Theme', 'action': AppAction.SETTINGS},
-                {'label': 'Settings', 'action': AppAction.SETTINGS},
-                {'separator': True},
-                {'label': 'About', 'action': AppAction.ABOUT},
-                {'label': 'Exit', 'action': AppAction.EXIT},
-            ]
-
-        self.context_menu = ContextMenu(self.theme)
-        self.context_menu.show(mx, my, items)
-        return True
+        return _handle_desktop_right_click(self, mx, my, bstate)
 
     def _show_icon_properties(self, icon):
         """Show a simple properties dialog for a desktop icon."""
-        label = str(icon.get('label', 'Unknown'))
-        category = str(icon.get('category', 'Apps'))
-        action = icon.get('action')
-        action_name = getattr(action, 'value', None) or str(action)
-        message = (
-            f'Name: {label}\n'
-            f'Category: {category}\n'
-            f'Action: {action_name}\n'
-            f'RetroTUI: {APP_VERSION}'
-        )
-        self.dialog = Dialog(f'{label} Properties', message, ['OK'], width=54)
-        return None
+        return _show_icon_properties(self, icon)
 
     def sort_desktop_icons(self):
         """Sort desktop icons alphabetically and persist the updated grid positions."""
@@ -750,26 +660,18 @@ class RetroTUI:
 
     def draw_desktop(self, frame_size=None):
         """Draw the desktop background pattern."""
-        if frame_size is None:
-            return draw_desktop(self)
         return draw_desktop(self, frame_size=frame_size)
 
     def draw_icons(self, frame_size=None):
         """Draw desktop icons (3x4 art + label)."""
-        if frame_size is None:
-            return draw_icons(self)
         return draw_icons(self, frame_size=frame_size)
 
     def draw_taskbar(self, frame_size=None):
         """Draw taskbar row with minimized window buttons."""
-        if frame_size is None:
-            return draw_taskbar(self)
         return draw_taskbar(self, frame_size=frame_size)
 
     def draw_statusbar(self, frame_size=None):
         """Draw the bottom status bar."""
-        if frame_size is None:
-            return draw_statusbar(self, APP_VERSION)
         return draw_statusbar(self, APP_VERSION, frame_size=frame_size)
 
     # ------------------------------------------------------------------

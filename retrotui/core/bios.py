@@ -4,8 +4,7 @@ import time
 import random
 
 from ..utils import safe_addstr, theme_attr
-
-_CURSES_ERROR = getattr(curses, "error", Exception)
+from ..constants import _CURSES_ERROR
 _BIOS_INPUT_ERRORS = (
     AttributeError,
     OSError,
