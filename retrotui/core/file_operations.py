@@ -236,9 +236,13 @@ class FileOperationManager:
 
         thread = threading.Thread(target=_runner, name='retrotui-file-op')
         op_state['thread'] = thread
+        op_state['dialog_title'] = title
         self._app._background_operation = op_state
         self._app.dialog = progress_dialog
         thread.start()
+        bus = getattr(self._app, '_event_bus', None)
+        if bus is not None:
+            bus.publish("file_op.started", data={"title": title})
         return None
 
     def has_background_operation(self):
@@ -267,6 +271,14 @@ class FileOperationManager:
 
         self._app._background_operation = None
         result = state.get('worker_result')
+
+        # Publish completion event on the bus (main thread, safe).
+        bus = getattr(self._app, '_event_bus', None)
+        if bus is not None:
+            is_error = result is not None and getattr(result, 'type', None) == ActionType.ERROR
+            topic = "file_op.failed" if is_error else "file_op.completed"
+            bus.publish(topic, data={"title": state.get('dialog_title', '')})
+
         if result is not None:
             self._app._dispatch_window_result(result, state.get('source_win'))
 

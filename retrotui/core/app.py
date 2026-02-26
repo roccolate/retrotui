@@ -253,6 +253,43 @@ class RetroTUI:
             self._dialog_dispatcher = DialogDispatcher(self)
         return self._dialog_dispatcher
 
+    # ------------------------------------------------------------------
+    # Event bus / IPC / Notifications (lazy-init for test compatibility)
+    # ------------------------------------------------------------------
+
+    @property
+    def event_bus(self):
+        """Return the EventBus, creating it lazily if needed."""
+        if not hasattr(self, '_event_bus'):
+            from .event_bus import EventBus
+            self._event_bus = EventBus()
+        return self._event_bus
+
+    @property
+    def ipc(self):
+        """Return the IPCRouter, creating it lazily if needed."""
+        if not hasattr(self, '_ipc'):
+            from .ipc import IPCRouter
+            self._ipc = IPCRouter(self.event_bus, lambda: self.windows)
+        return self._ipc
+
+    @property
+    def notifications(self):
+        """Return the NotificationManager, creating it lazily if needed."""
+        if not hasattr(self, '_notifications'):
+            from .notifications import NotificationManager
+            self._notifications = NotificationManager(self.event_bus)
+        return self._notifications
+
+    def publish_event(self, topic, data=None, *, source=None):
+        """Publish an event on the bus."""
+        return self.event_bus.publish(topic, data, source=source)
+
+    def notify(self, message, **kwargs):
+        """Show a toast notification."""
+        self.notifications.notify(message, **kwargs)
+        self._dirty = True
+
     @property
     def drag_payload(self):
         return self._get_drag_drop().payload
@@ -615,6 +652,10 @@ class RetroTUI:
                     )
         for win in list(self.windows):
             self._close_window_safely(win)
+        if hasattr(self, '_notifications'):
+            self._notifications.cleanup()
+        if hasattr(self, '_event_bus'):
+            self._event_bus.clear()
         disable_mouse_support()
 
     # ------------------------------------------------------------------

@@ -60,6 +60,11 @@ def draw_frame(app):
     if ctx and ctx.is_open():
         ctx.draw(app.stdscr)
 
+    # Toast notifications overlay (top-right corner).
+    _notifications = getattr(app, '_notifications', None)
+    if _notifications is not None and _notifications.has_visible:
+        _notifications.draw(app.stdscr, frame_w, frame_h)
+
     app.stdscr.noutrefresh()
     curses.doupdate()
 
@@ -299,6 +304,13 @@ def run_app_loop(app):
                 metrics["loops"] += 1
                 # Keep background progression deterministic: one poll per loop.
                 app.poll_background_operation()
+                # Expire toast notifications and force redraw while visible.
+                _notif = getattr(app, '_notifications', None)
+                if _notif is not None:
+                    if _notif.tick():
+                        app._dirty = True
+                    if _notif.has_visible:
+                        app._dirty = True
                 # Always redraw when live terminals may have pending PTY output.
                 if _has_live_terminals(app):
                     app._dirty = True

@@ -136,11 +136,13 @@ def _system_paste() -> str | None:
     return result.stdout or ""
 
 
-def copy_text(text: str, sync_system: bool = True) -> str:
+def copy_text(text: str, sync_system: bool = True, event_bus=None) -> str:
     """Store text in internal clipboard and optionally mirror to system clipboard."""
     _STATE["text"] = text or ""
     if sync_system:
         _system_copy(_STATE["text"])
+    if event_bus is not None:
+        event_bus.publish("clipboard.changed", data={"text": _STATE["text"]})
     return _STATE["text"]
 
 
