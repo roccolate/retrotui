@@ -418,7 +418,7 @@ class ActionRunnerTests(unittest.TestCase):
                 app,
                 self.actions_mod.AppAction.FILE_MANAGER,
                 logger,
-                version="0.9.2",
+                version="0.9.3",
             )
 
         spawned = app._spawn_window.call_args.args[0]
@@ -438,7 +438,7 @@ class ActionRunnerTests(unittest.TestCase):
                     app,
                     self.actions_mod.AppAction.FILE_MANAGER,
                     logger,
-                    version="0.9.2",
+                    version="0.9.3",
                 )
 
     def test_execute_notepad_spawns_window_with_offset(self):
@@ -472,7 +472,7 @@ class ActionRunnerTests(unittest.TestCase):
                 app,
                 self.actions_mod.AppAction.NOTEPAD,
                 logger,
-                version="0.9.2",
+                version="0.9.3",
             )
 
         spawned = app._spawn_window.call_args.args[0]
@@ -514,7 +514,7 @@ class ActionRunnerTests(unittest.TestCase):
                 app,
                 self.actions_mod.AppAction.IMAGE_VIEWER,
                 logger,
-                version="0.9.2",
+                version="0.9.3",
             )
 
         app._next_window_offset.assert_called_once_with(14, 3)
@@ -531,7 +531,7 @@ class ActionRunnerTests(unittest.TestCase):
                 app,
                 self.actions_mod.AppAction.TRASH_BIN,
                 logger,
-                version="0.9.2",
+                version="0.9.3",
             )
 
         app._next_window_offset.assert_called_once_with(15, 4)
@@ -570,7 +570,7 @@ class ActionRunnerTests(unittest.TestCase):
                 app,
                 self.actions_mod.AppAction.DESKTOP_ICON_MANAGER,
                 logger,
-                version="0.9.2",
+                version="0.9.3",
             )
 
         app._next_window_offset.assert_called_once_with(22, 6)
@@ -593,7 +593,7 @@ class ActionRunnerTests(unittest.TestCase):
                 app,
                 self.actions_mod.AppAction.ICONS,
                 logger,
-                version="0.9.2",
+                version="0.9.3",
             )
 
         app._next_window_offset.assert_called_once_with(22, 6)
@@ -616,7 +616,7 @@ class ActionRunnerTests(unittest.TestCase):
                 app,
                 self.actions_mod.AppAction.MENU_EDITOR,
                 logger,
-                version="0.9.2",
+                version="0.9.3",
             )
 
         app._next_window_offset.assert_called_once_with(20, 5)
@@ -651,7 +651,7 @@ class ActionRunnerTests(unittest.TestCase):
                 app,
                 self.actions_mod.AppAction.LOG_VIEWER,
                 logger,
-                version="0.9.2",
+                version="0.9.3",
             )
 
         app._next_window_offset.assert_called_once_with(16, 4)
@@ -670,7 +670,7 @@ class ActionRunnerTests(unittest.TestCase):
                 app,
                 self.actions_mod.AppAction.PROCESS_MANAGER,
                 logger,
-                version="0.9.2",
+                version="0.9.3",
             )
 
         app._next_window_offset.assert_called_once_with(14, 3)
@@ -689,7 +689,7 @@ class ActionRunnerTests(unittest.TestCase):
                 app,
                 self.actions_mod.AppAction.CLOCK_CALENDAR,
                 logger,
-                version="0.9.2",
+                version="0.9.3",
             )
 
         app._next_window_offset.assert_called_once_with(30, 6)

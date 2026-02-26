@@ -184,30 +184,34 @@ def theme_attr(role):
     _theme_attr_cache[role] = attr
     return attr
 
-def safe_addstr(win, y, x, text, attr=0):
-    """Write string safely, clipping to window bounds."""
+def safe_addstr(win, y, x, text, attr=0, *, _bounds=None):
+    """Write string safely, clipping to window bounds.
+
+    When *_bounds* is a ``(h, w)`` tuple the expensive ``getmaxyx()`` call and
+    Mock-detection logic are skipped entirely.  The rendering hot-path should
+    always supply pre-computed bounds.
+    """
     if x < 0 or y < 0:
         return
-    # Be defensive: some tests provide a Mock for `win.getmaxyx()` which may
-    # return a Mock object rather than a (h, w) tuple. Try to coerce into a
-    # tuple when possible and bail out gracefully otherwise.
-    res = win.getmaxyx()
-    if not isinstance(res, (list, tuple)):
-        try:
-            # If the returned object is itself callable (a Mock), call it.
-            if callable(res):
-                res = res()
-        except _SAFE_ADDSTR_PROBE_ERRORS:
-            res = None
+    if _bounds is not None:
+        h, w = _bounds
+    else:
+        # Slow path: probe getmaxyx with Mock-tolerance for test environments.
+        res = win.getmaxyx()
         if not isinstance(res, (list, tuple)):
-            # Try to extract common attributes as a last resort
             try:
-                h = int(getattr(res, 'h', None) or getattr(res, 'rows', None) or getattr(res, 'height', None))
-                w = int(getattr(res, 'w', None) or getattr(res, 'cols', None) or getattr(res, 'width', None))
-                res = (h, w)
+                if callable(res):
+                    res = res()
             except _SAFE_ADDSTR_PROBE_ERRORS:
-                return
-    h, w = res
+                res = None
+            if not isinstance(res, (list, tuple)):
+                try:
+                    h = int(getattr(res, 'h', None) or getattr(res, 'rows', None) or getattr(res, 'height', None))
+                    w = int(getattr(res, 'w', None) or getattr(res, 'cols', None) or getattr(res, 'width', None))
+                    res = (h, w)
+                except _SAFE_ADDSTR_PROBE_ERRORS:
+                    return
+        h, w = res
     if y >= h or x >= w:
         return
     max_len = w - x
@@ -216,8 +220,6 @@ def safe_addstr(win, y, x, text, attr=0):
     try:
         win.addnstr(y, x, text, max_len, attr)
     except curses.error:
-        # Some curses backends still reject writes that touch lower-right cell.
-        # Retry with one cell less only for this call.
         if max_len <= 1:
             return
         try:
