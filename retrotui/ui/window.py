@@ -55,6 +55,9 @@ class Window:
         self.visible = True
         self.window_menu = None  # Instance of WindowMenu if menu enabled
 
+    def on_ipc_message(self, message):
+        """Handle an IPC message from another window.  Override in subclasses."""
+
     def close_button_pos(self):
         """Return (x, y) of the close button."""
         return (self.x + self.w - self.CLOSE_BTN_OFFSET, self.y)

@@ -28,6 +28,15 @@ class WindowManager:
         self._taskbar_cache = {"key": None, "buttons": ()}
         self._window_stats_cache = {"cycle": None, "stats": None}
 
+    def _emit_event(self, topic, win):
+        """Publish a window lifecycle event on the app's bus (if available)."""
+        bus = getattr(self._app, '_event_bus', None)
+        if bus is not None:
+            bus.publish(topic, data={
+                "window_id": getattr(win, "id", None),
+                "title": getattr(win, "title", ""),
+            })
+
     # ------------------------------------------------------------------
     # Window list / activation
     # ------------------------------------------------------------------
@@ -51,6 +60,7 @@ class WindowManager:
                 insert_at = i
                 break
         self.windows.insert(insert_at, win)
+        self._emit_event("window.focused", win)
 
     def normalize_window_layers(self):
         """Keep always-on-top windows above regular windows preserving order."""
@@ -76,6 +86,7 @@ class WindowManager:
                 LOGGER.debug('Window close hook failed for %r', win, exc_info=True)
         self.windows.remove(win)
         self._layers_dirty = True
+        self._emit_event("window.closed", win)
         self._activate_last_visible_window()
 
     def _activate_last_visible_window(self):
@@ -100,6 +111,7 @@ class WindowManager:
         """Append a window and make it active."""
         self.windows.append(win)
         self._layers_dirty = True
+        self._emit_event("window.opened", win)
         self.set_active_window(win)
 
     def _next_window_offset(self, base_x, base_y, step_x=2, step_y=1):
