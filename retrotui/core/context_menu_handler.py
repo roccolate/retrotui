@@ -93,7 +93,6 @@ def handle_desktop_right_click(app, mx, my, bstate):
             {'label': 'Menu Editor', 'action': AppAction.MENU_EDITOR},
             {'label': 'Sort Icons (A-Z)', 'action': app.sort_desktop_icons},
             {'separator': True},
-            {'label': 'Theme', 'action': AppAction.SETTINGS},
             {'label': 'Settings', 'action': AppAction.SETTINGS},
             {'separator': True},
             {'label': 'About', 'action': AppAction.ABOUT},

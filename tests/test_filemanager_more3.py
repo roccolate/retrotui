@@ -50,7 +50,7 @@ class FileManagerMore3Tests(unittest.TestCase):
         self.assertIsNotNone(self.win._last_trash_move)
 
         # undo delete
-        ures = self.win.undo_last_delete()
+        ures = self.win.undo_delete()
         self.assertEqual(ures.type, ActionType.REFRESH)
         # file should be back
         self.assertTrue(any(e.name == 'b.txt' for e in self.win.entries))
