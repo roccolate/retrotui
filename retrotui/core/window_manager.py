@@ -112,6 +112,12 @@ class WindowManager:
         self.windows.append(win)
         self._layers_dirty = True
         self._emit_event("window.opened", win)
+        # Let windows subscribe to the event bus (if they opt in).
+        bus_sub = getattr(win, "subscribe_to_bus", None)
+        if callable(bus_sub):
+            bus = getattr(self._app, "_event_bus", None)
+            if bus is not None:
+                bus_sub(bus)
         self.set_active_window(win)
 
     def _next_window_offset(self, base_x, base_y, step_x=2, step_y=1):

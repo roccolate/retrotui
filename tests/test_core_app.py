@@ -170,6 +170,9 @@ class CoreAppTests(unittest.TestCase):
         app._last_icon_click_ts = 0.0
         app.double_click_interval = 0.4
         app.drag_drop = self.app_mod.DragDropManager(app)
+        # Wire event bus so tests run in the same mode as production.
+        from retrotui.core.event_bus import EventBus
+        app._event_bus = EventBus()
         return app
 
     def test_init_configures_terminal_and_creates_welcome_window(self):
@@ -1706,7 +1709,8 @@ class CoreAppTests(unittest.TestCase):
 
         app.show_kill_confirm_dialog(target, {"command": "missing pid"})
 
-        self.assertEqual(app.dialog.title, "Kill Error")
+        toasts = app.notifications.visible_toasts
+        self.assertTrue(any("No process selected" in t.message for t in toasts))
 
     def test_show_copy_move_dialogs_reject_invalid_selection(self):
         app = self._make_app()
@@ -1715,14 +1719,17 @@ class CoreAppTests(unittest.TestCase):
             _selected_entry=mock.Mock(return_value=None),
         )
         app.show_copy_dialog(invalid)
-        self.assertEqual(app.dialog.title, "Copy Error")
+        # Error now shown as toast notification instead of modal dialog.
+        toasts = app.notifications.visible_toasts
+        self.assertTrue(any("valid item to copy" in t.message for t in toasts))
 
         invalid_parent = types.SimpleNamespace(
             current_path="/tmp",
             _selected_entry=mock.Mock(return_value=types.SimpleNamespace(name="..", is_dir=True)),
         )
         app.show_move_dialog(invalid_parent)
-        self.assertEqual(app.dialog.title, "Move Error")
+        toasts = app.notifications.visible_toasts
+        self.assertTrue(any("valid item to move" in t.message for t in toasts))
 
     def test_get_active_window_and_dispatch_ignore_paths(self):
         app = self._make_app()

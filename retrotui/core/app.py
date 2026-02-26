@@ -551,6 +551,13 @@ class RetroTUI:
         if sunday_first is not None:
             self.default_sunday_first = bool(sunday_first)
 
+        if hasattr(self, '_event_bus'):
+            self._event_bus.publish("config.changed", data={
+                "show_hidden": getattr(self, "default_show_hidden", None),
+                "word_wrap_default": getattr(self, "default_word_wrap", None),
+                "sunday_first": getattr(self, "default_sunday_first", None),
+            })
+
         if not apply_to_open_windows:
             return
 

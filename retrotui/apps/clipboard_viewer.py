@@ -54,7 +54,26 @@ class ClipboardViewerWindow(Window):
         self.history_size = history_size
         self.history: List[str] = []
         self.selected_index = 0
+        self._unsub_clipboard = None
         self._refresh_from_clipboard()
+
+    def subscribe_to_bus(self, event_bus):
+        """Subscribe to clipboard changes via the event bus."""
+        self._unsub_clipboard = event_bus.subscribe(
+            "clipboard.changed",
+            self._on_clipboard_changed,
+            subscriber_id=f"clipboard_viewer_{self.id}",
+        )
+
+    def _on_clipboard_changed(self, event):
+        """React to clipboard.changed events from the bus."""
+        data = event.data
+        if not isinstance(data, dict):
+            return
+        text = data.get("text", "")
+        if text and (not self.history or self.history[0] != text):
+            self.history.insert(0, text)
+            self.history = self.history[: self.history_size]
 
     def _refresh_from_clipboard(self):
         text = paste_text(sync_system=False)
@@ -62,9 +81,17 @@ class ClipboardViewerWindow(Window):
             self.history.insert(0, text)
             self.history = self.history[: self.history_size]
 
+    def close(self):
+        """Unsubscribe from the event bus on close."""
+        if self._unsub_clipboard:
+            self._unsub_clipboard()
+            self._unsub_clipboard = None
+
     def draw(self, stdscr):
         if not self.visible:
             return
+        # Poll system clipboard as fallback — the bus only fires for internal
+        # copies; external clipboard changes (other apps) need polling.
         self._refresh_from_clipboard()
         body_attr = self.draw_frame(stdscr)
         bx, by, bw, bh = self.body_rect()

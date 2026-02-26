@@ -39,6 +39,21 @@ class FileOperationManager:
         if not hasattr(self._app, '_background_operation'):
             self._app._background_operation = None
 
+    def _notify_error(self, message):
+        """Show an error as a toast notification (or fallback to dialog).
+
+        Uses toast when the notification system is available (the common
+        runtime path).  Falls back to a modal dialog only when running
+        under minimal test scaffolding that doesn't wire up the bus.
+        """
+        bus = getattr(self._app, '_event_bus', None)
+        if bus is not None:
+            # Bus exists → notification manager is available via lazy property.
+            self._app.notifications.notify(message, title="Error", level="error")
+            self._app._dirty = True
+        else:
+            self._app.dialog = Dialog('Error', message, ['OK'], width=44)
+
     # ------------------------------------------------------------------
     # Dialog helpers
     # ------------------------------------------------------------------
@@ -61,10 +76,10 @@ class FileOperationManager:
         """Show dialog to rename selected File Manager entry."""
         entry = getattr(win, '_selected_entry', lambda: None)()
         if entry is None:
-            self._app.dialog = Dialog('Rename Error', 'No item selected.', ['OK'], width=44)
+            self._notify_error('No item selected.')
             return
         if entry.name == '..':
-            self._app.dialog = Dialog('Rename Error', 'Cannot rename parent entry.', ['OK'], width=44)
+            self._notify_error('Cannot rename parent entry.')
             return
 
         prompt = f"Rename:\n{entry.name}"
@@ -76,10 +91,10 @@ class FileOperationManager:
         """Show confirmation dialog before deleting selected File Manager entry."""
         entry = self._window_selected_entry(win)
         if entry is None:
-            self._app.dialog = Dialog('Delete Error', 'No item selected.', ['OK'], width=44)
+            self._notify_error('No item selected.')
             return
         if entry.name == '..':
-            self._app.dialog = Dialog('Delete Error', 'Cannot delete parent entry.', ['OK'], width=44)
+            self._notify_error('Cannot delete parent entry.')
             return
 
         kind = 'directory' if entry.is_dir else 'file'
@@ -99,7 +114,7 @@ class FileOperationManager:
         """Show destination input for copy operation in File Manager."""
         entry = self._window_selected_entry(win)
         if entry is None or entry.name == '..':
-            self._app.dialog = Dialog('Copy Error', 'Select a valid item to copy.', ['OK'], width=48)
+            self._notify_error('Select a valid item to copy.')
             return
 
         prompt = f"Copy:\n{entry.name}\n\nDestination path:"
@@ -115,7 +130,7 @@ class FileOperationManager:
         """Show destination input for move operation in File Manager."""
         entry = self._window_selected_entry(win)
         if entry is None or entry.name == '..':
-            self._app.dialog = Dialog('Move Error', 'Select a valid item to move.', ['OK'], width=48)
+            self._notify_error('Select a valid item to move.')
             return
 
         prompt = f"Move:\n{entry.name}\n\nDestination path:"
@@ -141,7 +156,7 @@ class FileOperationManager:
         pid = data.get('pid')
         command = data.get('command', '')
         if not pid:
-            self._app.dialog = Dialog('Kill Error', 'No process selected.', ['OK'], width=44)
+            self._notify_error('No process selected.')
             return
 
         title = 'Confirm Kill'
