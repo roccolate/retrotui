@@ -1,0 +1,9 @@
+[plugin]
+id = "charmap"
+name = "Character Map"
+version = "0.9.3"
+description = "Unicode character map browser"
+
+[plugin.window]
+default_width = 46
+default_height = 18

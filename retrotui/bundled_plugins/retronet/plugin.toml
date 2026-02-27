@@ -1,0 +1,9 @@
+[plugin]
+id = "retronet"
+name = "RetroNet Explorer"
+version = "0.9.3"
+description = "Retro-style web browser"
+
+[plugin.window]
+default_width = 70
+default_height = 24

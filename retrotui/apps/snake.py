@@ -10,7 +10,17 @@ from pathlib import Path
 
 from ..ui.window import Window
 from ..ui.menu import WindowMenu
-from ..core.actions import AppAction, ActionResult, ActionType
+from ..core.actions import ActionResult, ActionType
+
+# Local action constants (formerly in AppAction enum, now plugin-internal).
+_SNAKE_NEW = "snake_new"
+_SNAKE_PAUSE = "snake_pause"
+_SNAKE_TOGGLE_WRAP = "snake_toggle_wrap"
+_SNAKE_TOGGLE_OBSTACLES = "snake_toggle_obstacles"
+_SNAKE_DIFF_EASY = "snake_diff_easy"
+_SNAKE_DIFF_NORMAL = "snake_diff_normal"
+_SNAKE_DIFF_HARD = "snake_diff_hard"
+_SNAKE_CLOSE = "close"
 from ..constants import C_ANSI_START
 from ..utils import safe_addstr, theme_attr, normalize_key_code
 
@@ -56,19 +66,19 @@ class SnakeWindow(Window):
 
         self.window_menu = WindowMenu({
             "Game": [
-                ("New Game (R)", AppAction.SNAKE_NEW),
+                ("New Game (R)", _SNAKE_NEW),
                 ("-", None),
-                ("Pause (P)", AppAction.SNAKE_PAUSE),
-                ("Close (Q)", AppAction.CLOSE_WINDOW),
+                ("Pause (P)", _SNAKE_PAUSE),
+                ("Close (Q)", _SNAKE_CLOSE),
             ],
             "Options": [
-                ("  Wrap Around", AppAction.SNAKE_TOGGLE_WRAP),
-                ("  Obstacles", AppAction.SNAKE_TOGGLE_OBSTACLES),
+                ("  Wrap Around", _SNAKE_TOGGLE_WRAP),
+                ("  Obstacles", _SNAKE_TOGGLE_OBSTACLES),
             ],
             "Difficulty": [
-                ("  Easy", AppAction.SNAKE_DIFF_EASY),
-                ("  Normal", AppAction.SNAKE_DIFF_NORMAL),
-                ("  Hard", AppAction.SNAKE_DIFF_HARD),
+                ("  Easy", _SNAKE_DIFF_EASY),
+                ("  Normal", _SNAKE_DIFF_NORMAL),
+                ("  Hard", _SNAKE_DIFF_HARD),
             ],
         })
         
@@ -156,51 +166,51 @@ class SnakeWindow(Window):
         else:
             self.food = pos
 
-    def execute_action(self, action: str | AppAction) -> ActionResult | None:
-        if action == AppAction.SNAKE_NEW:
+    def execute_action(self, action) -> ActionResult | None:
+        if action == _SNAKE_NEW:
             self._reset_game()
             return ActionResult(ActionType.REFRESH)
-        elif action == AppAction.SNAKE_PAUSE:
+        elif action == _SNAKE_PAUSE:
             if not self.game_over:
                 self.paused = not self.paused
             return ActionResult(ActionType.REFRESH)
-        elif action == AppAction.SNAKE_TOGGLE_WRAP:
+        elif action == _SNAKE_TOGGLE_WRAP:
             self.wrap_mode = not self.wrap_mode
             self._update_menu_checks()
             return ActionResult(ActionType.REFRESH)
-        elif action == AppAction.SNAKE_TOGGLE_OBSTACLES:
+        elif action == _SNAKE_TOGGLE_OBSTACLES:
             self.obstacles_mode = not self.obstacles_mode
             self._update_menu_checks()
             # If turning on or off, a new game is best to apply/clear obstacles
             self._reset_game()
             return ActionResult(ActionType.REFRESH)
-        elif action == AppAction.SNAKE_DIFF_EASY:
+        elif action == _SNAKE_DIFF_EASY:
             self.difficulty = "Easy"
             self._update_menu_checks()
             self._reset_game()
             return ActionResult(ActionType.REFRESH)
-        elif action == AppAction.SNAKE_DIFF_NORMAL:
+        elif action == _SNAKE_DIFF_NORMAL:
             self.difficulty = "Normal"
             self._update_menu_checks()
             self._reset_game()
             return ActionResult(ActionType.REFRESH)
-        elif action == AppAction.SNAKE_DIFF_HARD:
+        elif action == _SNAKE_DIFF_HARD:
             self.difficulty = "Hard"
             self._update_menu_checks()
             self._reset_game()
             return ActionResult(ActionType.REFRESH)
-        elif action == AppAction.CLOSE_WINDOW:
+        elif action == _SNAKE_CLOSE:
             self._save_high_scores()
-            return ActionResult(ActionType.EXECUTE, AppAction.CLOSE_WINDOW)
+            return ActionResult(ActionType.EXECUTE, _SNAKE_CLOSE)
         return None
 
     def _update_menu_checks(self):
         items = self.window_menu.items.get("Options", [])
         for i, (label, action) in enumerate(items):
-            if action == AppAction.SNAKE_TOGGLE_WRAP:
+            if action == _SNAKE_TOGGLE_WRAP:
                 mark = "√" if self.wrap_mode else " "
                 items[i] = (f"{mark} Wrap Around", action)
-            elif action == AppAction.SNAKE_TOGGLE_OBSTACLES:
+            elif action == _SNAKE_TOGGLE_OBSTACLES:
                 mark = "√" if self.obstacles_mode else " "
                 items[i] = (f"{mark} Obstacles", action)
 
@@ -338,11 +348,11 @@ class SnakeWindow(Window):
         k = normalize_key_code(key)
         
         if k == ord('r') or k == ord('R'):
-            return self.execute_action(AppAction.SNAKE_NEW)
+            return self.execute_action(_SNAKE_NEW)
         if k == ord('p') or k == ord('P'):
-            return self.execute_action(AppAction.SNAKE_PAUSE)
+            return self.execute_action(_SNAKE_PAUSE)
         if k == ord('q') or k == ord('Q'):
-            return self.execute_action(AppAction.CLOSE_WINDOW)
+            return self.execute_action(_SNAKE_CLOSE)
 
         # Movement keys (Arrows or WASD)
         if (k == curses.KEY_UP or k == ord('w')) and self.direction != (1, 0):

@@ -1,0 +1,9 @@
+[plugin]
+id = "clock"
+name = "Clock / Calendar"
+version = "0.9.3"
+description = "Clock and calendar widget"
+
+[plugin.window]
+default_width = 34
+default_height = 14

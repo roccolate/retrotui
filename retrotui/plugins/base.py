@@ -24,6 +24,10 @@ class RetroApp(Window):
 
     def draw(self, stdscr):
         """Draw frame + delegate body to draw_content."""
+        if not self.visible:
+            return
         body_attr = self.draw_frame(stdscr)
         bx, by, bw, bh = self.body_rect()
         self.draw_content(stdscr, bx, by, bw, bh)
+        if self.window_menu:
+            self.window_menu.draw_dropdown(stdscr, self.x, self.y, self.w)

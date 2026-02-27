@@ -11,19 +11,10 @@ from ..apps.terminal import TerminalWindow
 from ..apps.calculator import CalculatorWindow
 from ..apps.logviewer import LogViewerWindow
 from ..apps.process_manager import ProcessManagerWindow
-from ..apps.clock import ClockCalendarWindow
-from ..apps.image_viewer import ImageViewerWindow
 from ..apps.trash import TrashWindow
-from ..apps.minesweeper import MinesweeperWindow
-from ..apps.solitaire import SolitaireWindow
-from ..apps.snake import SnakeWindow
-from ..apps.charmap import CharacterMapWindow
 from ..apps.hexviewer import HexViewerWindow
-from ..apps.wifi_manager import WifiManagerWindow
 from ..apps.sysmon import SystemMonitorWindow
 from ..apps.control_panel import ControlPanelWindow
-from ..apps.tetris import TetrisWindow
-from ..apps.retronet import RetroNetWindow
 from ..apps.clipboard_viewer import ClipboardViewerWindow
 from ..ui.dialog import Dialog
 from ..ui.window import Window
@@ -78,21 +69,14 @@ def _supports_constructor_kwarg(constructor, kwarg: str) -> bool:
 # Only "simple spawn" actions belong here — actions with special logic stay
 # as explicit handlers below.
 _APP_REGISTRY = {
-    AppAction.IMAGE_VIEWER:    ("ImageViewerWindow",    84, 26, 14, 3, {}),
     AppAction.HEX_VIEWER:      ("HexViewerWindow",      76, 22, 16, 4, {}),
     AppAction.TERMINAL:        ("TerminalWindow",        80, 24, 18, 5, {}),
     AppAction.TRASH_BIN:       ("TrashWindow",           62, 20, 15, 4, {}),
     AppAction.CALCULATOR:      ("CalculatorWindow",      44, 14, 24, 5, {}),
     AppAction.LOG_VIEWER:      ("LogViewerWindow",       74, 22, 16, 4, {}),
     AppAction.PROCESS_MANAGER: ("ProcessManagerWindow",  76, 22, 14, 3, {}),
-    AppAction.MINESWEEPER:     ("MinesweeperWindow",     54, 20, 18, 4, {}),
-    AppAction.SOLITAIRE:       ("SolitaireWindow",       46, 22, 20, 4, {}),
-    AppAction.SNAKE:           ("SnakeWindow",           48, 20, 22, 5, {}),
-    AppAction.CHARMAP:         ("CharacterMapWindow",    46, 18, 26, 6, {}),
     AppAction.CLIPBOARD:       ("ClipboardViewerWindow", 56, 18, 24, 5, {}),
-    AppAction.WIFI_MANAGER:    ("WifiManagerWindow",     60, 18, 22, 4, {}),
     AppAction.SYSTEM_MONITOR:  ("SystemMonitorWindow",   44, 20, 15, 4, {}),
-    AppAction.RETRONET:        ("RetroNetWindow",        70, 24, 15, 3, {}),
     # Actions with kwargs derived from app state
     AppAction.FILE_MANAGER:    ("FileManagerWindow",     70, 24,  8, 3,
                                 {"show_hidden_default": "default_show_hidden"}),
@@ -190,26 +174,6 @@ def execute_app_action(app, action, logger, *, version: str) -> None:
         )
         return
 
-    if action == AppAction.CLOCK_CALENDAR:
-        # Toggle existing clock instance if any.
-        existing = next((w for w in app.windows if isinstance(w, ClockCalendarWindow)), None)
-        if existing:
-            if existing.visible and existing.active:
-                app.close_window(existing)
-            else:
-                existing.visible = True
-                existing.minimized = False
-                app.set_active_window(existing)
-            return
-
-        offset_x, offset_y = app._next_window_offset(30, 6)
-        kwargs = {}
-        if _supports_constructor_kwarg(ClockCalendarWindow, 'week_starts_sunday'):
-            kwargs['week_starts_sunday'] = getattr(app, 'default_sunday_first', False)
-        win = ClockCalendarWindow(offset_x, offset_y, 34, 14, **kwargs)
-        app._spawn_window(win)
-        return
-
     if action == AppAction.NEW_WINDOW:
         offset_x, offset_y = app._next_window_offset(20, 3)
         app._spawn_window(
@@ -256,11 +220,6 @@ def execute_app_action(app, action, logger, *, version: str) -> None:
     if action == AppAction.CONTROL_PANEL:
         offset_x, offset_y = app._next_window_offset(10, 3)
         app._spawn_window(ControlPanelWindow(offset_x, offset_y, 60, 18, app))
-        return
-
-    if action == AppAction.TETRIS:
-        offset_x, offset_y = app._next_window_offset(20, 4)
-        app._spawn_window(TetrisWindow(offset_x, offset_y))
         return
 
     # --- Registry dispatch for simple window-spawn actions ---

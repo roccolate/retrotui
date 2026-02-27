@@ -1,0 +1,9 @@
+[plugin]
+id = "wifi-manager"
+name = "WiFi Manager"
+version = "0.9.3"
+description = "Network WiFi connection manager"
+
+[plugin.window]
+default_width = 60
+default_height = 18

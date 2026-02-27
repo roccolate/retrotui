@@ -77,13 +77,8 @@ class AppAction(str, Enum):
     FM_SET_BOOKMARK_3 = "fm_set_bookmark_3"
     FM_SET_BOOKMARK_4 = "fm_set_bookmark_4"
 
-    # New app actions
-    MINESWEEPER = "minesweeper"
-    SOLITAIRE = "solitaire"
-    SNAKE = "snake"
-    CHARMAP = "charmap"
+    # App actions
     CLIPBOARD = "clipboard"
-    WIFI_MANAGER = "wifi_manager"
     APP_MANAGER = "app_manager"
     DESKTOP_ICON_MANAGER = "desktop_icon_manager"
     ICONS = "icons"
@@ -91,17 +86,6 @@ class AppAction(str, Enum):
     MARKDOWN_VIEWER = "markdown_viewer"
     SYSTEM_MONITOR = "system_monitor"
     CONTROL_PANEL = "control_panel"
-    TETRIS = "tetris"
-    RETRONET = "retronet"
-
-    # Snake specific
-    SNAKE_NEW = "snake_new"
-    SNAKE_TOGGLE_WRAP = "snake_toggle_wrap"
-    SNAKE_TOGGLE_OBSTACLES = "snake_toggle_obstacles"
-    SNAKE_DIFF_EASY = "snake_diff_easy"
-    SNAKE_DIFF_NORMAL = "snake_diff_normal"
-    SNAKE_DIFF_HARD = "snake_diff_hard"
-    SNAKE_PAUSE = "snake_pause"
 
 
 @dataclass(frozen=True)

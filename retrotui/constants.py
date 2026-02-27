@@ -53,8 +53,6 @@ ICONS = [
     {"label": "Calc", "action": AppAction.CALCULATOR, "art": ["\u250c\u2500\u2500\u2510", "\u2502+-\u2502", "\u2514\u2500\u2500\u2518"], "category": "Apps"},
     {"label": "Logs", "action": AppAction.LOG_VIEWER, "art": ["\u250c\u2500\u2500\u2510", "\u2502LG\u2502", "\u2514\u2500\u2500\u2518"], "category": "Apps"},
     {"label": "Procs", "action": AppAction.PROCESS_MANAGER, "art": ["\u250c\u2500\u2500\u2510", "\u2502PS\u2502", "\u2514\u2500\u2500\u2518"], "category": "Apps"},
-    {"label": "Clock", "action": AppAction.CLOCK_CALENDAR, "art": ["\u250c\u2500\u2500\u2510", "\u2502CK\u2502", "\u2514\u2500\u2500\u2518"], "category": "Apps"},
-    {"label": "Images", "action": AppAction.IMAGE_VIEWER, "art": ["\u250c\u2500\u2500\u2510", "\u2502IM\u2502", "\u2514\u2500\u2500\u2518"], "category": "Apps"},
     {"label": "Trash", "action": AppAction.TRASH_BIN, "art": ["\u250c\u2500\u2500\u2510", "\u2502TR\u2502", "\u2514\u2500\u2500\u2518"], "category": "Apps"},
     {
         "label": "Settings",
@@ -70,13 +68,8 @@ ICONS = [
         "art": ["\u250c\u2500\u2500\u2510", "\u2502i?\u2502", "\u2514\u2500\u2500\u2518"],
         "category": "Apps",
     },
-    {"label": "Mines", "action": AppAction.MINESWEEPER, "art": ["\u250c\u2500\u2500\u2510", "\u2502MX\u2502", "\u2514\u2500\u2500\u2518"], "category": "Games"},
-    {"label": "Solitaire", "action": AppAction.SOLITAIRE, "art": ["\u250c\u2500\u2500\u2510", "\u2502SL\u2502", "\u2514\u2500\u2500\u2518"], "category": "Games"},
-    {"label": "Snake", "action": AppAction.SNAKE, "art": ["\u250c\u2500\u2500\u2510", "\u2502SN\u2502", "\u2514\u2500\u2500\u2518"], "category": "Games"},
-    {"label": "Chars", "action": AppAction.CHARMAP, "art": ["\u250c\u2500\u2500\u2510", "\u2502CH\u2502", "\u2514\u2500\u2500\u2518"], "category": "Apps"},
     {"label": "Clip", "action": AppAction.CLIPBOARD, "art": ["\u250c\u2500\u2500\u2510", "\u2502CB\u2502", "\u2514\u2500\u2500\u2518"], "category": "Apps"},
     {"label": "Hex", "action": AppAction.HEX_VIEWER, "art": ["\u250c\u2500\u2500\u2510", "\u25020x\u2502", "\u2514\u2500\u2500\u2518"], "category": "Apps"},
-    {"label": "WiFi", "action": AppAction.WIFI_MANAGER, "art": ["\u250c\u2500\u2500\u2510", "\u2502WF\u2502", "\u2514\u2500\u2500\u2518"], "category": "Apps"},
     {
         "label": "Desktop",
         "action": AppAction.DESKTOP_ICON_MANAGER,
@@ -97,8 +90,6 @@ ICONS = [
     {"label": "MdView", "action": AppAction.MARKDOWN_VIEWER, "art": ["\u250c\u2500\u2500\u2510", "\u2502MD\u2502", "\u2514\u2500\u2500\u2518"], "category": "Apps"},
     {"label": "SysMon", "action": AppAction.SYSTEM_MONITOR, "art": ["\u250c\u2500\u2500\u2510", "\u2502SM\u2502", "\u2514\u2500\u2500\u2518"], "category": "Apps"},
     {"label": "Control", "action": AppAction.CONTROL_PANEL, "art": ["\u250c\u2500\u2500\u2510", "\u2502CT\u2502", "\u2514\u2500\u2500\u2518"], "category": "Apps"},
-    {"label": "Tetris", "action": AppAction.TETRIS, "art": ["\u250c\u2500\u2500\u2510", "\u2502TT\u2502", "\u2514\u2500\u2500\u2518"], "category": "Games"},
-    {"label": "RetroNet", "action": AppAction.RETRONET, "art": ["\u250c\u2500\u2500\u2510", "\u2502RN\u2502", "\u2514\u2500\u2500\u2518"], "category": "Apps"},
 ]
 
 # Fallback ASCII icons for non-Unicode terminals.
@@ -110,18 +101,11 @@ ICONS_ASCII = [
     {"label": "Calc", "action": AppAction.CALCULATOR, "art": ["+--+", "|+-|", "+--+"], "category": "Apps"},
     {"label": "Logs", "action": AppAction.LOG_VIEWER, "art": ["+--+", "|LG|", "+--+"], "category": "Apps"},
     {"label": "Procs", "action": AppAction.PROCESS_MANAGER, "art": ["+--+", "|PS|", "+--+"], "category": "Apps"},
-    {"label": "Clock", "action": AppAction.CLOCK_CALENDAR, "art": ["+--+", "|CK|", "+--+"], "category": "Apps"},
-    {"label": "Images", "action": AppAction.IMAGE_VIEWER, "art": ["+--+", "|IM|", "+--+"], "category": "Apps"},
     {"label": "Trash", "action": AppAction.TRASH_BIN, "art": ["+--+", "|TR|", "+--+"], "category": "Apps"},
     {"label": "Settings", "action": AppAction.SETTINGS, "symbol": "[S]", "art": ["+--+", "|ST|", "+--+"], "category": "Apps"},
     {"label": "About", "action": AppAction.ABOUT, "symbol": "[?]", "art": ["+--+", "|i?|", "+--+"], "category": "Apps"},
-    {"label": "Mines", "action": AppAction.MINESWEEPER, "art": ["+--+", "|MX|", "+--+"], "category": "Games"},
-    {"label": "Solitaire", "action": AppAction.SOLITAIRE, "art": ["+--+", "|SL|", "+--+"], "category": "Games"},
-    {"label": "Snake", "action": AppAction.SNAKE, "art": ["+--+", "|SN|", "+--+"], "category": "Games"},
-    {"label": "Chars", "action": AppAction.CHARMAP, "art": ["+--+", "|CH|", "+--+"], "category": "Apps"},
     {"label": "Clip", "action": AppAction.CLIPBOARD, "art": ["+--+", "|CB|", "+--+"], "category": "Apps"},
     {"label": "Hex", "action": AppAction.HEX_VIEWER, "art": ["+--+", "|0x|", "+--+"], "category": "Apps"},
-    {"label": "WiFi", "action": AppAction.WIFI_MANAGER, "art": ["+--+", "|WF|", "+--+"], "category": "Apps"},
     {
         "label": "Desktop",
         "action": AppAction.DESKTOP_ICON_MANAGER,
@@ -142,8 +126,6 @@ ICONS_ASCII = [
     {"label": "MdView", "action": AppAction.MARKDOWN_VIEWER, "art": ["+--+", "|MD|", "+--+"], "category": "Apps"},
     {"label": "SysMon", "action": AppAction.SYSTEM_MONITOR, "art": ["+--+", "|SM|", "+--+"], "category": "Apps"},
     {"label": "Control", "action": AppAction.CONTROL_PANEL, "art": ["+--+", "|CT|", "+--+"], "category": "Apps"},
-    {"label": "Tetris", "action": AppAction.TETRIS, "art": ["+--+", "|TT|", "+--+"], "category": "Games"},
-    {"label": "RetroNet", "action": AppAction.RETRONET, "art": ["+--+", "|RN|", "+--+"], "category": "Apps"},
 ]
 VIDEO_EXTENSIONS = {
     ".mp4",

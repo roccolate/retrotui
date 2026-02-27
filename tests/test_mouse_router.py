@@ -1358,7 +1358,7 @@ class MouseRouterTests(unittest.TestCase):
 
         self.mouse_router.handle_mouse_event(app, (0, 79, 24, 0, self.curses.BUTTON1_CLICKED))
 
-        app.execute_action.assert_called_once_with(self.mouse_router.AppAction.CLOCK_CALENDAR)
+        app.execute_action.assert_called_once_with("plugin:clock")
         app._handle_window_mouse.assert_not_called()
         app._handle_desktop_mouse.assert_not_called()
 

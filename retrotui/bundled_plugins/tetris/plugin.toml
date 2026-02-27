@@ -1,0 +1,9 @@
+[plugin]
+id = "tetris"
+name = "Tetris"
+version = "0.9.3"
+description = "Classic Tetris block puzzle game"
+
+[plugin.window]
+default_width = 44
+default_height = 24

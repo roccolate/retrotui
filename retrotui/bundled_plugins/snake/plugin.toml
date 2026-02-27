@@ -1,0 +1,9 @@
+[plugin]
+id = "snake"
+name = "Snake"
+version = "0.9.3"
+description = "Classic snake arcade game"
+
+[plugin.window]
+default_width = 48
+default_height = 20
