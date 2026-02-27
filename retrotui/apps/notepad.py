@@ -409,11 +409,7 @@ class NotepadWindow(SelectableTextMixin, Window):
     def execute_action(self, action):
         """Execute a window menu action. Returns signal or None."""
         if action == AppAction.NP_TOGGLE_WRAP:
-            self.wrap_mode = not self.wrap_mode
-            self.view_left = 0
-            self._invalidate_wrap()
-            self._ensure_cursor_visible()
-            return ActionResult(ActionType.UPDATE_CONFIG, {'word_wrap_default': self.wrap_mode})
+            return self._toggle_wrap()
         elif action == AppAction.NP_OPEN:
             return ActionResult(ActionType.REQUEST_OPEN_PATH)
         elif action == AppAction.NP_SAVE:
@@ -428,221 +424,264 @@ class NotepadWindow(SelectableTextMixin, Window):
             return ActionResult(ActionType.EXECUTE, AppAction.CLOSE_WINDOW)
         return None
 
-    def handle_key(self, key):
-        """Handle keyboard input for the editor. Returns None always."""
-        key_code = normalize_key_code(key)
+    # -- Key handler methods (dispatch targets) --
 
-        # Window menu keyboard handling
-        if self.window_menu and self.window_menu.active:
-            action = self.window_menu.handle_key(key_code)
-            if action:
-                return self.execute_action(action)
-            return None
+    def _toggle_wrap(self):
+        """Toggle word wrap mode. Returns ActionResult for config update."""
+        self.wrap_mode = not self.wrap_mode
+        self.view_left = 0
+        self._invalidate_wrap()
+        self._ensure_cursor_visible()
+        return ActionResult(ActionType.UPDATE_CONFIG, {'word_wrap_default': self.wrap_mode})
 
-        # Clear selection: Esc
-        if key_code == 27:
-            self.clear_selection()
-            return None
+    def _key_escape(self):
+        self.clear_selection()
+        return None
 
-        # Select all: Ctrl+A
-        if key_code == 1:
-            if not self.buffer:
-                self.buffer = ['']
-            last_line = len(self.buffer) - 1
-            last_col = len(self.buffer[last_line])
-            self.selection_anchor = (0, 0)
-            self.selection_cursor = (last_line, last_col)
-            self.cursor_line = last_line
-            self.cursor_col = last_col
+    def _key_select_all(self):
+        if not self.buffer:
+            self.buffer = ['']
+        last_line = len(self.buffer) - 1
+        last_col = len(self.buffer[last_line])
+        self.selection_anchor = (0, 0)
+        self.selection_cursor = (last_line, last_col)
+        self.cursor_line = last_line
+        self.cursor_col = last_col
+        self._ensure_cursor_visible()
+        return None
+
+    def _key_copy(self):
+        if self.has_selection():
+            selected = self._selected_text()
+            if selected:
+                copy_text(selected)
+        else:
+            if self.buffer and self.cursor_line < len(self.buffer):
+                copy_text(self.buffer[self.cursor_line])
+        return None
+
+    def _key_cut(self):
+        if self.has_selection():
+            selected = self._selected_text()
+            if selected:
+                copy_text(selected)
+            self._delete_selection()
+        else:
+            self._cut_current_line()
+        return None
+
+    def _key_nav_up(self):
+        self.clear_selection()
+        if self.cursor_line > 0:
+            self.cursor_line -= 1
+            self._clamp_cursor()
             self._ensure_cursor_visible()
-            return None
+        return None
 
-        # Copy: Ctrl+C
-        if key_code == 3:
-            if self.has_selection():
-                selected = self._selected_text()
-                if selected:
-                    copy_text(selected)
-            else:
-                if self.buffer and self.cursor_line < len(self.buffer):
-                    copy_text(self.buffer[self.cursor_line])
-            return None
-
-        # Cut: Ctrl+X
-        if key_code == 24:
-            if self.has_selection():
-                selected = self._selected_text()
-                if selected:
-                    copy_text(selected)
-                self._delete_selection()
-            else:
-                self._cut_current_line()
-            return None
-
-        # Navigation
-        if key_code == curses.KEY_UP:
-            self.clear_selection()
-            if self.cursor_line > 0:
-                self.cursor_line -= 1
-                self._clamp_cursor()
-                self._ensure_cursor_visible()
-        elif key_code == curses.KEY_DOWN:
-            self.clear_selection()
-            if self.cursor_line < len(self.buffer) - 1:
-                self.cursor_line += 1
-                self._clamp_cursor()
-                self._ensure_cursor_visible()
-        elif key_code == curses.KEY_LEFT:
-            self.clear_selection()
-            if self.cursor_col > 0:
-                self.cursor_col -= 1
-            elif self.cursor_line > 0:
-                self.cursor_line -= 1
-                self.cursor_col = len(self.buffer[self.cursor_line])
+    def _key_nav_down(self):
+        self.clear_selection()
+        if self.cursor_line < len(self.buffer) - 1:
+            self.cursor_line += 1
+            self._clamp_cursor()
             self._ensure_cursor_visible()
-        elif key_code == curses.KEY_RIGHT:
+        return None
+
+    def _key_nav_left(self):
+        self.clear_selection()
+        if self.cursor_col > 0:
+            self.cursor_col -= 1
+        elif self.cursor_line > 0:
+            self.cursor_line -= 1
+            self.cursor_col = len(self.buffer[self.cursor_line])
+        self._ensure_cursor_visible()
+        return None
+
+    def _key_nav_right(self):
+        self.clear_selection()
+        line = self.buffer[self.cursor_line]
+        if self.cursor_col < len(line):
+            self.cursor_col += 1
+        elif self.cursor_line < len(self.buffer) - 1:
+            self.cursor_line += 1
+            self.cursor_col = 0
+        self._ensure_cursor_visible()
+        return None
+
+    def _key_nav_home(self):
+        self.clear_selection()
+        self.cursor_col = 0
+        self._ensure_cursor_visible()
+        return None
+
+    def _key_nav_end(self):
+        self.clear_selection()
+        self.cursor_col = len(self.buffer[self.cursor_line])
+        self._ensure_cursor_visible()
+        return None
+
+    def _key_nav_pgup(self):
+        self.clear_selection()
+        _, _, _, bh = self.body_rect()
+        self.cursor_line = max(0, self.cursor_line - (bh - 2))
+        self._clamp_cursor()
+        self._ensure_cursor_visible()
+        return None
+
+    def _key_nav_pgdn(self):
+        self.clear_selection()
+        _, _, _, bh = self.body_rect()
+        self.cursor_line = min(len(self.buffer) - 1, self.cursor_line + (bh - 2))
+        self._clamp_cursor()
+        self._ensure_cursor_visible()
+        return None
+
+    def _key_enter(self):
+        if self.has_selection():
+            self._delete_selection()
+        else:
+            self.clear_selection()
+        line = self.buffer[self.cursor_line]
+        before = line[:self.cursor_col]
+        after = line[self.cursor_col:]
+        self.buffer[self.cursor_line] = before
+        self.buffer.insert(self.cursor_line + 1, after)
+        self.cursor_line += 1
+        self.cursor_col = 0
+        self.modified = True
+        self._invalidate_wrap()
+        self._ensure_cursor_visible()
+        return None
+
+    def _key_backspace(self):
+        if self.has_selection():
+            self._delete_selection()
+        elif self.cursor_col > 0:
+            line = self.buffer[self.cursor_line]
+            self.buffer[self.cursor_line] = line[:self.cursor_col - 1] + line[self.cursor_col:]
+            self.cursor_col -= 1
+            self.modified = True
+            self._invalidate_wrap()
+        elif self.cursor_line > 0:
+            # Merge with previous line
+            prev_line = self.buffer[self.cursor_line - 1]
+            self.cursor_col = len(prev_line)
+            self.buffer[self.cursor_line - 1] = prev_line + self.buffer[self.cursor_line]
+            self.buffer.pop(self.cursor_line)
+            self.cursor_line -= 1
+            self.modified = True
+            self._invalidate_wrap()
+        self._ensure_cursor_visible()
+        return None
+
+    def _key_delete(self):
+        if self.has_selection():
+            self._delete_selection()
+        else:
             self.clear_selection()
             line = self.buffer[self.cursor_line]
             if self.cursor_col < len(line):
-                self.cursor_col += 1
+                self.buffer[self.cursor_line] = line[:self.cursor_col] + line[self.cursor_col + 1:]
+                self.modified = True
+                self._invalidate_wrap()
             elif self.cursor_line < len(self.buffer) - 1:
-                self.cursor_line += 1
-                self.cursor_col = 0
-            self._ensure_cursor_visible()
-        elif key_code == curses.KEY_HOME:
-            self.clear_selection()
-            self.cursor_col = 0
-            self._ensure_cursor_visible()
-        elif key_code == curses.KEY_END:
-            self.clear_selection()
-            self.cursor_col = len(self.buffer[self.cursor_line])
-            self._ensure_cursor_visible()
-        elif key_code == curses.KEY_PPAGE:
-            self.clear_selection()
-            _, _, _, bh = self.body_rect()
-            self.cursor_line = max(0, self.cursor_line - (bh - 2))
-            self._clamp_cursor()
-            self._ensure_cursor_visible()
-        elif key_code == curses.KEY_NPAGE:
-            self.clear_selection()
-            _, _, _, bh = self.body_rect()
-            self.cursor_line = min(len(self.buffer) - 1, self.cursor_line + (bh - 2))
-            self._clamp_cursor()
-            self._ensure_cursor_visible()
-
-        # Editing: Enter
-        elif key_code in (curses.KEY_ENTER, 10, 13):
-            if self.has_selection():
-                self._delete_selection()
-            else:
-                self.clear_selection()
-            line = self.buffer[self.cursor_line]
-            before = line[:self.cursor_col]
-            after = line[self.cursor_col:]
-            self.buffer[self.cursor_line] = before
-            self.buffer.insert(self.cursor_line + 1, after)
-            self.cursor_line += 1
-            self.cursor_col = 0
-            self.modified = True
-            self._invalidate_wrap()
-            self._ensure_cursor_visible()
-
-        # Editing: Backspace
-        elif key_code in (curses.KEY_BACKSPACE, 127, 8):
-            if self.has_selection():
-                self._delete_selection()
-            elif self.cursor_col > 0:
-                line = self.buffer[self.cursor_line]
-                self.buffer[self.cursor_line] = line[:self.cursor_col - 1] + line[self.cursor_col:]
-                self.cursor_col -= 1
+                # Merge with next line
+                self.buffer[self.cursor_line] = line + self.buffer[self.cursor_line + 1]
+                self.buffer.pop(self.cursor_line + 1)
                 self.modified = True
                 self._invalidate_wrap()
-            elif self.cursor_line > 0:
-                # Merge with previous line
-                prev_line = self.buffer[self.cursor_line - 1]
-                self.cursor_col = len(prev_line)
-                self.buffer[self.cursor_line - 1] = prev_line + self.buffer[self.cursor_line]
-                self.buffer.pop(self.cursor_line)
-                self.cursor_line -= 1
-                self.modified = True
-                self._invalidate_wrap()
-            self._ensure_cursor_visible()
+        return None
 
-        # Editing: Delete
-        elif key_code == curses.KEY_DC:
-            if self.has_selection():
-                self._delete_selection()
-            else:
-                self.clear_selection()
-                line = self.buffer[self.cursor_line]
-                if self.cursor_col < len(line):
-                    self.buffer[self.cursor_line] = line[:self.cursor_col] + line[self.cursor_col + 1:]
-                    self.modified = True
-                    self._invalidate_wrap()
-                elif self.cursor_line < len(self.buffer) - 1:
-                    # Merge with next line
-                    self.buffer[self.cursor_line] = line + self.buffer[self.cursor_line + 1]
-                    self.buffer.pop(self.cursor_line + 1)
-                    self.modified = True
-                    self._invalidate_wrap()
+    def _key_open(self):
+        return ActionResult(ActionType.REQUEST_OPEN_PATH)
 
-        # Open: Ctrl+O (key 15)
-        elif key_code == 15:
-            return ActionResult(ActionType.REQUEST_OPEN_PATH)
+    def _key_save(self):
+        result = self._save_file()
+        if result is not True:
+            return result
+        return None
 
-        # Save: Ctrl+S (key 19)
-        elif key_code == 19:
-            result = self._save_file()
-            if result is not True:
-                return result
+    def _key_copy_line(self):
+        text = self._selected_text()
+        if text:
+            copy_text(text)
+        elif 0 <= self.cursor_line < len(self.buffer):
+            copy_text(self.buffer[self.cursor_line])
+        return None
 
-        # Copy line: F6 / Insert (Ctrl+Ins fallback where modifiers collapse)
-        elif key_code in (self.KEY_F6, self.KEY_INSERT):
-            text = self._selected_text()
-            if text:
-                copy_text(text)
-            elif 0 <= self.cursor_line < len(self.buffer):
-                copy_text(self.buffer[self.cursor_line])
+    def _key_paste(self):
+        if self.has_selection():
+            self._delete_selection()
+        self._insert_text(paste_text())
+        return None
 
-        # Paste: Ctrl+V (key 22)
-        elif key_code == 22:
-            if self.has_selection():
-                self._delete_selection()
-            self._insert_text(paste_text())
+    def _key_toggle_wrap(self):
+        self.clear_selection()
+        self._toggle_wrap()
+        return None
 
-        # Toggle: Ctrl+W (key 23)
-        elif key_code == 23:
+    def _key_printable(self, ch):
+        if self.has_selection():
+            self._delete_selection()
+        else:
             self.clear_selection()
-            self.wrap_mode = not self.wrap_mode
-            self.view_left = 0
-            self._invalidate_wrap()
-            self._ensure_cursor_visible()
+        line = self.buffer[self.cursor_line]
+        self.buffer[self.cursor_line] = line[:self.cursor_col] + ch + line[self.cursor_col:]
+        self.cursor_col += 1
+        self.modified = True
+        self._invalidate_wrap()
+        self._ensure_cursor_visible()
+        return None
 
-        # Printable characters
-        elif isinstance(key, str) and key.isprintable() and key not in ('\n', '\r', '\t'):
-            if self.has_selection():
-                self._delete_selection()
-            else:
-                self.clear_selection()
-            ch = key
-            line = self.buffer[self.cursor_line]
-            self.buffer[self.cursor_line] = line[:self.cursor_col] + ch + line[self.cursor_col:]
-            self.cursor_col += 1
-            self.modified = True
-            self._invalidate_wrap()
-            self._ensure_cursor_visible()
-        elif isinstance(key, int) and 32 <= key <= 126:
-            if self.has_selection():
-                self._delete_selection()
-            else:
-                self.clear_selection()
-            ch = chr(key)
-            line = self.buffer[self.cursor_line]
-            self.buffer[self.cursor_line] = line[:self.cursor_col] + ch + line[self.cursor_col:]
-            self.cursor_col += 1
-            self.modified = True
-            self._invalidate_wrap()
-            self._ensure_cursor_visible()
+    # -- Dispatch table mapping key codes to handler method names --
+
+    _KEY_DISPATCH = {
+        27: '_key_escape',
+        1: '_key_select_all',
+        3: '_key_copy',
+        24: '_key_cut',
+        curses.KEY_UP: '_key_nav_up',
+        curses.KEY_DOWN: '_key_nav_down',
+        curses.KEY_LEFT: '_key_nav_left',
+        curses.KEY_RIGHT: '_key_nav_right',
+        curses.KEY_HOME: '_key_nav_home',
+        curses.KEY_END: '_key_nav_end',
+        curses.KEY_PPAGE: '_key_nav_pgup',
+        curses.KEY_NPAGE: '_key_nav_pgdn',
+        curses.KEY_ENTER: '_key_enter',
+        10: '_key_enter',
+        13: '_key_enter',
+        curses.KEY_BACKSPACE: '_key_backspace',
+        127: '_key_backspace',
+        8: '_key_backspace',
+        curses.KEY_DC: '_key_delete',
+        15: '_key_open',
+        19: '_key_save',
+        KEY_F6: '_key_copy_line',
+        KEY_INSERT: '_key_copy_line',
+        22: '_key_paste',
+        23: '_key_toggle_wrap',
+    }
+
+    def handle_key(self, key):
+        """Handle keyboard input for the editor. Returns None or ActionResult."""
+        key_code = normalize_key_code(key)
+        if key_code is None:
+            return None
+
+        # Window menu intercept
+        if self.window_menu and self.window_menu.active:
+            action = self.window_menu.handle_key(key_code)
+            return self.execute_action(action) if action else None
+
+        # Dispatch table lookup
+        handler_name = self._KEY_DISPATCH.get(key_code)
+        if handler_name:
+            return getattr(self, handler_name)()
+
+        # Printable characters (unified)
+        ch = key if isinstance(key, str) else chr(key) if isinstance(key, int) and 32 <= key <= 126 else None
+        if ch and ch.isprintable() and ch not in ('\n', '\r', '\t'):
+            return self._key_printable(ch)
 
         return None
 
@@ -721,7 +760,7 @@ class NotepadWindow(SelectableTextMixin, Window):
         # For simple notepad, let's always move cursor to click position
         self._set_cursor_from_screen(mx, my)
         self._ensure_cursor_visible()
-            
+
         # Actions for context menu
         # We use lambdas or AppActions where possible
         items = [
