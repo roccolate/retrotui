@@ -53,6 +53,9 @@ class HexViewerWindow(Window):
         self.selection_anchor = None  # row index
         self.selection_cursor = None  # row index
         self._mouse_selecting = False
+        self._cached_slice = None
+        self._cached_offset = None
+        self._cached_total = None
 
         if filepath:
             self.open_path(filepath)
@@ -90,7 +93,7 @@ class HexViewerWindow(Window):
     def _rows_visible(self):
         """Return number of hex rows visible in current body."""
         _, _, _, bh = self.body_rect()
-        return max(1, bh - 2)
+        return max(1, bh - 3)
 
     def _max_top_offset(self):
         """Return max aligned top offset for current file/viewport."""
@@ -104,20 +107,34 @@ class HexViewerWindow(Window):
         """Clamp and align view offset."""
         max_offset = self._max_top_offset()
         clamped = max(0, min(int(offset), max_offset))
-        self.top_offset = (clamped // self.BYTES_PER_ROW) * self.BYTES_PER_ROW
+        new_offset = (clamped // self.BYTES_PER_ROW) * self.BYTES_PER_ROW
+        if new_offset != self.top_offset:
+            self.top_offset = new_offset
+            self._invalidate_cache()
 
     def _scroll_rows(self, delta_rows):
         """Scroll by row count."""
         self._set_top_offset(self.top_offset + delta_rows * self.BYTES_PER_ROW)
 
+    def _invalidate_cache(self):
+        self._cached_slice = None
+        self._cached_offset = None
+        self._cached_total = None
+
     def _read_slice(self, offset, length):
         """Read one chunk from current file."""
         if not self.filepath or length <= 0:
             return b""
+        if self._cached_slice is not None and self._cached_offset == offset and self._cached_total == length:
+            return self._cached_slice
         try:
             with open(self.filepath, "rb") as stream:
                 stream.seek(max(0, int(offset)))
-                return stream.read(max(0, int(length)))
+                data = stream.read(max(0, int(length)))
+            self._cached_slice = data
+            self._cached_offset = offset
+            self._cached_total = length
+            return data
         except OSError as exc:
             self.status_message = f"Read error: {exc}"
             return b""

@@ -10,7 +10,8 @@ from pathlib import Path
 from ..ui.window import Window
 from ..ui.menu import WindowMenu
 from ..core.actions import AppAction, ActionResult, ActionType
-from ..utils import safe_addstr, theme_attr
+from ..constants import C_ANSI_START, C_ERROR
+from ..utils import normalize_key_code, safe_addstr, theme_attr
 
 _MINESWEEPER_SCORE_LOAD_ERRORS = (
     OSError,
@@ -199,12 +200,12 @@ class MinesweeperWindow(Window):
         elif self.game_over: smiley = "😵"
         
         header_y = by + 1
-        safe_addstr(stdscr, header_y, bx + 2, bombs_str, curses.color_pair(1) | curses.A_BOLD) # Red text if possible
+        safe_addstr(stdscr, header_y, bx + 2, bombs_str, curses.color_pair(C_ERROR) | curses.A_BOLD)
         
         center_x = bx + (bw // 2) - 1
         safe_addstr(stdscr, header_y, center_x, smiley, body_attr)
         
-        safe_addstr(stdscr, header_y, bx + bw - 5, timer_str, curses.color_pair(1) | curses.A_BOLD)
+        safe_addstr(stdscr, header_y, bx + bw - 5, timer_str, curses.color_pair(C_ERROR) | curses.A_BOLD)
         
         # Draw Grid horizontally centered
         grid_start_y = by + 3
@@ -212,7 +213,6 @@ class MinesweeperWindow(Window):
         # Centering logic: if window is wide enough, center it; otherwise flush left + 1
         grid_start_x = bx + max(1, (bw - grid_w) // 2)
         
-        from ..constants import C_ANSI_START
         color_map = {
             1: getattr(curses, 'COLOR_BLUE', 4),
             2: getattr(curses, 'COLOR_GREEN', 2),
@@ -281,7 +281,8 @@ class MinesweeperWindow(Window):
         col = (mx - grid_start_x) // 3
         row = my - grid_start_y
         
-        if bstate and getattr(bstate, 'right', False): # Right click
+        _B3_MASK = getattr(curses, 'BUTTON3_PRESSED', 0) | getattr(curses, 'BUTTON3_CLICKED', 0)
+        if bstate and _B3_MASK and (bstate & _B3_MASK):  # Right click
             self.toggle_flag(row, col)
             return None
 
@@ -313,9 +314,10 @@ class MinesweeperWindow(Window):
             if res: return self.execute_action(res)
             return None
 
-        if getattr(key, '__int__', None) and int(key) == ord('r'):
+        key_code = normalize_key_code(key)
+        if key_code == ord('r'):
             self._reset_game()
-        elif getattr(key, '__int__', None) and int(key) == ord('f'):
+        elif key_code == ord('f'):
             # Fallback flag key if no mouse right click
             # But we don't know the cursor pos precisely. Ignore.
             pass

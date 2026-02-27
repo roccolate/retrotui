@@ -9,7 +9,8 @@ from pathlib import Path
 from ..ui.window import Window
 from ..ui.menu import WindowMenu
 from ..core.actions import AppAction, ActionResult, ActionType
-from ..utils import safe_addstr, theme_attr
+from ..constants import C_ANSI_START
+from ..utils import normalize_key_code, safe_addstr, theme_attr
 
 _SOLITAIRE_SCORE_LOAD_ERRORS = (
     OSError,
@@ -160,7 +161,6 @@ class SolitaireWindow(Window):
                 self._save_high_scores()
 
     def _draw_card(self, stdscr, y, x, card: str|None, face_up: bool, selected: bool, body_attr: int, min_y: int = 0):
-        from ..constants import C_ANSI_START
         _, by, _, bh = self.body_rect()
         max_y = by + bh
 
@@ -388,7 +388,6 @@ class SolitaireWindow(Window):
             if res: return self.execute_action(res)
             return None
 
-        from ..core.key_router import normalize_key_code
         kc = normalize_key_code(key)
         
         if kc == curses.KEY_UP:
@@ -401,8 +400,8 @@ class SolitaireWindow(Window):
             self.scroll_y = min(getattr(self, 'max_scroll', 0), getattr(self, 'scroll_y', 0) + 5)
 
         if isinstance(key, int):
-            if key == ord('q'):
+            if key in (ord('q'), ord('Q')):
                 return self.execute_action(AppAction.CLOSE_WINDOW)
-            elif key == ord('r'):
+            elif key in (ord('r'), ord('R')):
                 return self.execute_action("solitaire_new")
         return None

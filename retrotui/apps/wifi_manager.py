@@ -4,7 +4,6 @@ from __future__ import annotations
 import curses
 import shutil
 import subprocess
-import time
 
 from ..ui.window import Window
 from ..ui.dialog import InputDialog
@@ -58,9 +57,6 @@ class WifiManagerWindow(Window):
         try:
             # Tell nmcli to rescan (returns immediately usually)
             subprocess.run([self.nmcli, "dev", "wifi", "rescan"], check=False)
-            # Sleep briefly to let it populate
-            time.sleep(1)
-            
             result = subprocess.run([self.nmcli, "-t", "-f", "SSID,SIGNAL,SECURITY,IN-USE,BSSID", "dev", "wifi"],
                                     text=True, capture_output=True, check=False)
             
@@ -117,7 +113,7 @@ class WifiManagerWindow(Window):
         for row in range(bh):
             safe_addstr(stdscr, by + row, bx, " " * bw, body_attr)
             
-        if getattr(self, '_fetch_error', False):
+        if not self.nmcli:
             safe_addstr(stdscr, by + 2, bx + 2, "Error: 'nmcli' could not be found.", theme_attr('window_body') | curses.A_BOLD)
             return
             

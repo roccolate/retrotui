@@ -1,3 +1,4 @@
+import curses
 import time
 
 from retrotui.apps.minesweeper import MinesweeperWindow
@@ -57,10 +58,12 @@ def test_toggle_flag_and_handle_click_flagging():
     mx = grid_start_x
     my = grid_start_y
 
-    class BState:
-        right = True
+    # Ensure BUTTON3 constants exist in fake curses for bitmask check
+    if not getattr(curses, 'BUTTON3_PRESSED', 0):
+        curses.BUTTON3_PRESSED = 4096
+    right_click_bstate = curses.BUTTON3_PRESSED
 
-    ms.handle_click(mx, my, bstate=BState())
+    ms.handle_click(mx, my, bstate=right_click_bstate)
     # Toggling flag sets flagged True
     col = (mx - grid_start_x) // 3
     row = my - grid_start_y

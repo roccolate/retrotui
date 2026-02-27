@@ -3,8 +3,9 @@ import curses
 import random
 import time
 
+from ..constants import C_ANSI_START
 from ..ui.window import Window
-from ..utils import safe_addstr, theme_attr
+from ..utils import normalize_key_code, safe_addstr, theme_attr
 
 class TetrisWindow(Window):
     """Retro Tetris implementation."""
@@ -22,21 +23,24 @@ class TetrisWindow(Window):
     def __init__(self, x, y):
         # 10x20 grid, each block is 2 chars wide
         super().__init__('Tetris', x, y, 44, 24, resizable=False)
+        self._reset_game()
+
+    def _reset_game(self):
         self.grid = [[0 for _ in range(10)] for _ in range(20)]
         self.score = 0
         self.lines = 0
         self.level = 1
         self.game_over = False
         self.paused = False
-        
+
         self.curr_piece = None
         self.curr_pos = [0, 0] # [x, y]
         self.curr_color = 0
         self.next_piece_type = random.choice(list(self.PIECES.keys()))
-        
+
         self.last_drop_time = time.time()
         self.drop_interval = 0.8
-        
+
         self._spawn_piece()
 
     def _spawn_piece(self):
@@ -146,12 +150,12 @@ class TetrisWindow(Window):
                 if cell != 0:
                     # Use ANSI pairs 50+cell (e.g. 51=Red, 52=Green...)
                     # We use [] for blocks
-                    attr = curses.color_pair(50 + cell)
+                    attr = curses.color_pair(C_ANSI_START + cell)
                     safe_addstr(stdscr, board_y + y, board_x + x*2, "[]", attr)
         
         # Draw current piece
         if self.curr_piece and not self.game_over:
-            attr = curses.color_pair(50 + self.curr_color)
+            attr = curses.color_pair(C_ANSI_START + self.curr_color)
             for px, py in self.curr_piece:
                 gx, gy = self.curr_pos[0] + px, self.curr_pos[1] + py
                 if 0 <= gy < 20:
@@ -165,7 +169,7 @@ class TetrisWindow(Window):
         
         safe_addstr(stdscr, board_y + 4, hud_x, "NEXT:", body_attr)
         next_coords, next_color = self.PIECES[self.next_piece_type]
-        attr = curses.color_pair(50 + next_color)
+        attr = curses.color_pair(C_ANSI_START + next_color)
         for px, py in next_coords:
             safe_addstr(stdscr, board_y + 5 + py, hud_x + px*2, "[]", attr)
 
@@ -176,13 +180,15 @@ class TetrisWindow(Window):
             safe_addstr(stdscr, board_y + 10, board_x + 5, " PAUSED ", theme_attr('window_title') | curses.A_BOLD)
 
     def handle_key(self, key):
+        key = normalize_key_code(key)
+
         if self.game_over:
-            if key in (ord('r'), ord('R')):
-                self.__init__(self.x, self.y)
+            if key in ('r', 'R'):
+                self._reset_game()
                 return None
             return super().handle_key(key)
 
-        if key == ord('p') or key == ord('P'):
+        if key in ('p', 'P'):
             self.paused = not self.paused
             return None
 
@@ -202,11 +208,11 @@ class TetrisWindow(Window):
                 self.curr_pos = test_pos
         elif key == curses.KEY_UP:
             self._rotate_piece()
-        elif key == ord(' '):
+        elif key == ' ':
             # Hard drop
             while not self._check_collision(self.curr_piece, [self.curr_pos[0], self.curr_pos[1] + 1]):
                 self.curr_pos[1] += 1
             self._lock_piece()
             self.last_drop_time = time.time()
-        
+
         return super().handle_key(key)

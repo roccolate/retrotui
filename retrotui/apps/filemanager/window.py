@@ -788,7 +788,7 @@ class FileManagerWindow(Window):
             return theme_attr('window_body')
         if entry_obj.is_dir:
             return theme_attr('file_directory')
-        if getattr(entry_obj, 'size', 0) > 0 and (entry_obj.size & 0o111):
+        if not entry_obj.is_dir:
             try:
                 if os.access(entry_obj.full_path, os.X_OK):
                     return theme_attr('window_body') | curses.A_BOLD
