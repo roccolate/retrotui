@@ -11,6 +11,7 @@ import struct
 
 _BACKENDS_UNSET = object()
 _BACKENDS_CACHE = {"value": _BACKENDS_UNSET}
+_WIN_BACKEND_CACHE = {"value": _BACKENDS_UNSET}
 
 
 def _resolve_posix_backends():
@@ -31,9 +32,30 @@ def _resolve_posix_backends():
     return _BACKENDS_CACHE["value"]
 
 
+def _resolve_windows_backend():
+    """Resolve and cache the pywinpty module for Windows PTY sessions."""
+    cached = _WIN_BACKEND_CACHE["value"]
+    if cached is not _BACKENDS_UNSET:
+        return cached
+
+    try:
+        winpty_mod = importlib.import_module("winpty")
+    except ImportError:
+        _WIN_BACKEND_CACHE["value"] = None
+        return None
+
+    _WIN_BACKEND_CACHE["value"] = winpty_mod
+    return winpty_mod
+
+
 def _reset_backend_cache():
     """Reset cache for tests."""
     _BACKENDS_CACHE["value"] = _BACKENDS_UNSET
+
+
+def _reset_win_backend_cache():
+    """Reset Windows backend cache for tests."""
+    _WIN_BACKEND_CACHE["value"] = _BACKENDS_UNSET
 
 
 class TerminalSession:
@@ -48,12 +70,13 @@ class TerminalSession:
         self.master_fd = None
         self.child_pid = None
         self.running = False
+        self._win_pty = None
         self._decoder = codecs.getincrementaldecoder("utf-8")("replace")
 
     @staticmethod
     def is_supported():
         """Return True when PTY backends are available."""
-        return _resolve_posix_backends() is not None
+        return _resolve_posix_backends() is not None or _resolve_windows_backend() is not None
 
     def _require_backends(self):
         backends = _resolve_posix_backends()
@@ -66,12 +89,9 @@ class TerminalSession:
         nonblock_flag = getattr(os, "O_NONBLOCK", 0)
         fcntl_mod.fcntl(master_fd, fcntl_mod.F_SETFL, flags | nonblock_flag)
 
-    def start(self):
-        """Spawn shell process inside a PTY."""
-        if self.running:
-            return
-
-        fcntl_mod, pty_mod, _termios_mod = self._require_backends()
+    def _start_posix(self, backends):
+        """Spawn shell process inside a POSIX PTY."""
+        fcntl_mod, pty_mod, _termios_mod = backends
         shell = self.shell or os.environ.get("SHELL") or "/bin/sh"
         child_pid, master_fd = pty_mod.fork()
 
@@ -88,8 +108,36 @@ class TerminalSession:
         self._set_nonblocking(fcntl_mod, master_fd)
         self.resize(self.cols, self.rows)
 
+    def _start_windows(self, winpty_mod):
+        """Spawn shell process inside a Windows ConPTY."""
+        shell = self.shell or os.environ.get("COMSPEC") or "cmd.exe"
+        pty = winpty_mod.PTY(self.cols, self.rows)
+        pty.spawn(shell.encode() if isinstance(shell, str) else shell)
+        self._win_pty = pty
+        self.running = True
+
+    def start(self):
+        """Spawn shell process inside a PTY."""
+        if self.running:
+            return
+
+        backends = _resolve_posix_backends()
+        if backends is not None:
+            self._start_posix(backends)
+            return
+
+        winpty = _resolve_windows_backend()
+        if winpty is not None:
+            self._start_windows(winpty)
+            return
+
+        raise RuntimeError("No PTY backend available (need POSIX pty or pywinpty).")
+
     def read(self, max_bytes=4096):
         """Read available PTY output (non-blocking)."""
+        if self._win_pty is not None:
+            return self._read_windows(max_bytes)
+
         if self.master_fd is None:
             return ""
 
@@ -119,8 +167,23 @@ class TerminalSession:
             return ""
         return self._decoder.decode(b"".join(chunks))
 
+    def _read_windows(self, max_bytes=4096):
+        """Read available output from Windows ConPTY."""
+        try:
+            data = self._win_pty.read(max_bytes, blocking=False)
+        except Exception:
+            data = None
+        if not data:
+            return ""
+        if isinstance(data, bytes):
+            return self._decoder.decode(data)
+        return data
+
     def write(self, data):
         """Write data to PTY input."""
+        if self._win_pty is not None:
+            return self._write_windows(data)
+
         if self.master_fd is None:
             return 0
         if isinstance(data, str):
@@ -129,10 +192,26 @@ class TerminalSession:
             payload = bytes(data)
         return os.write(self.master_fd, payload)
 
+    def _write_windows(self, data):
+        """Write data to Windows ConPTY input."""
+        if isinstance(data, str):
+            payload = data.encode("utf-8", errors="replace")
+        else:
+            payload = bytes(data)
+        try:
+            self._win_pty.write(payload)
+        except OSError:
+            self.running = False
+            return 0
+        return len(payload)
+
     def send_signal(self, sig):
         """Send signal to foreground process group (or child pid fallback)."""
         if not self.running:
             return False
+
+        if self._win_pty is not None:
+            return self._send_signal_windows(sig)
 
         if self.master_fd is not None and hasattr(os, "tcgetpgrp") and hasattr(os, "killpg"):
             try:
@@ -155,6 +234,24 @@ class TerminalSession:
             return False
         return True
 
+    def _send_signal_windows(self, sig):
+        """Send signal via Windows ConPTY (write Ctrl+C byte as fallback)."""
+        if sig == signal.SIGINT:
+            try:
+                self._win_pty.write(b'\x03')
+                return True
+            except OSError:
+                return False
+        # For other signals, try os.kill if we can find the pid
+        pid = getattr(self._win_pty, 'pid', None)
+        if pid is not None:
+            try:
+                os.kill(pid, sig)
+                return True
+            except OSError:
+                return False
+        return False
+
     def interrupt(self):
         """Send SIGINT to foreground process."""
         return self.send_signal(signal.SIGINT)
@@ -167,6 +264,13 @@ class TerminalSession:
         """Update terminal window size and notify child PTY."""
         self.cols = max(1, int(cols))
         self.rows = max(1, int(rows))
+
+        if self._win_pty is not None:
+            try:
+                self._win_pty.set_size(self.cols, self.rows)
+            except OSError:
+                pass
+            return
 
         if self.master_fd is None:
             return
@@ -184,7 +288,16 @@ class TerminalSession:
 
     def poll_exit(self):
         """Check whether child process has exited."""
-        if not self.running or self.child_pid is None:
+        if not self.running:
+            return False
+
+        if self._win_pty is not None:
+            if not self._win_pty.isalive():
+                self.running = False
+                return True
+            return False
+
+        if self.child_pid is None:
             return False
 
         try:
@@ -202,6 +315,15 @@ class TerminalSession:
 
     def close(self):
         """Close PTY fd and mark session stopped."""
+        if self._win_pty is not None:
+            try:
+                del self._win_pty
+            except Exception:
+                pass
+            self._win_pty = None
+            self.running = False
+            return
+
         if self.master_fd is not None:
             try:
                 os.close(self.master_fd)

@@ -40,6 +40,7 @@ class TerminalSessionTests(unittest.TestCase):
 
     def setUp(self):
         self.mod._reset_backend_cache()
+        self.mod._reset_win_backend_cache()
 
     def test_resolve_posix_backends_success_and_cache(self):
         fake_fcntl = object()
@@ -69,7 +70,10 @@ class TerminalSessionTests(unittest.TestCase):
         self.assertIsNone(backends)
 
     def test_is_supported_reflects_backend_availability(self):
-        with mock.patch.object(self.mod, "_resolve_posix_backends", return_value=None):
+        with (
+            mock.patch.object(self.mod, "_resolve_posix_backends", return_value=None),
+            mock.patch.object(self.mod, "_resolve_windows_backend", return_value=None),
+        ):
             self.assertFalse(self.mod.TerminalSession.is_supported())
         with mock.patch.object(
             self.mod,
@@ -78,10 +82,20 @@ class TerminalSessionTests(unittest.TestCase):
         ):
             self.assertTrue(self.mod.TerminalSession.is_supported())
 
+    def test_is_supported_true_when_only_windows_backend(self):
+        with (
+            mock.patch.object(self.mod, "_resolve_posix_backends", return_value=None),
+            mock.patch.object(self.mod, "_resolve_windows_backend", return_value=object()),
+        ):
+            self.assertTrue(self.mod.TerminalSession.is_supported())
+
     def test_start_raises_when_backends_missing(self):
         session = self.mod.TerminalSession()
 
-        with mock.patch.object(self.mod, "_resolve_posix_backends", return_value=None):
+        with (
+            mock.patch.object(self.mod, "_resolve_posix_backends", return_value=None),
+            mock.patch.object(self.mod, "_resolve_windows_backend", return_value=None),
+        ):
             with self.assertRaises(RuntimeError):
                 session.start()
 
@@ -346,6 +360,182 @@ class TerminalSessionTests(unittest.TestCase):
         poll_exit.assert_called_once_with()
         self.assertIsNone(session.master_fd)
         self.assertFalse(session.running)
+
+
+    # -- Windows backend tests --------------------------------------------------
+
+    def test_resolve_windows_backend_success_and_cache(self):
+        self.mod._reset_win_backend_cache()
+        fake_winpty = object()
+        with mock.patch.object(
+            self.mod.importlib, "import_module", return_value=fake_winpty,
+        ) as import_mod:
+            first = self.mod._resolve_windows_backend()
+            second = self.mod._resolve_windows_backend()
+        self.assertIs(first, fake_winpty)
+        self.assertIs(second, first)
+        import_mod.assert_called_once_with("winpty")
+
+    def test_resolve_windows_backend_import_error_returns_none(self):
+        self.mod._reset_win_backend_cache()
+        with mock.patch.object(
+            self.mod.importlib, "import_module", side_effect=ImportError("no winpty"),
+        ):
+            self.assertIsNone(self.mod._resolve_windows_backend())
+
+    def test_start_windows_spawns_pty(self):
+        fake_pty = mock.MagicMock()
+        fake_winpty = mock.MagicMock()
+        fake_winpty.PTY.return_value = fake_pty
+
+        session = self.mod.TerminalSession(cols=100, rows=30)
+        with (
+            mock.patch.object(self.mod, "_resolve_posix_backends", return_value=None),
+            mock.patch.object(self.mod, "_resolve_windows_backend", return_value=fake_winpty),
+        ):
+            session.start()
+
+        self.assertTrue(session.running)
+        self.assertIs(session._win_pty, fake_pty)
+        fake_winpty.PTY.assert_called_once_with(100, 30)
+        fake_pty.spawn.assert_called_once()
+
+    def test_start_prefers_posix_over_windows(self):
+        fake_fcntl = _FakeFcntl()
+        fake_pty = _FakePty(999, 50)
+        fake_termios = types.SimpleNamespace(TIOCSWINSZ=555)
+        fake_winpty = mock.MagicMock()
+
+        session = self.mod.TerminalSession()
+        with (
+            mock.patch.object(
+                self.mod, "_resolve_posix_backends",
+                return_value=(fake_fcntl, fake_pty, fake_termios),
+            ),
+            mock.patch.object(self.mod, "_resolve_windows_backend", return_value=fake_winpty),
+        ):
+            session.start()
+
+        # Should use POSIX, not Windows
+        self.assertEqual(session.master_fd, 50)
+        self.assertIsNone(session._win_pty)
+
+    def test_read_windows(self):
+        session = self.mod.TerminalSession()
+        session._win_pty = mock.MagicMock()
+        session._win_pty.read.return_value = b"hello"
+        session.running = True
+
+        result = session.read()
+        self.assertEqual(result, "hello")
+
+    def test_read_windows_empty(self):
+        session = self.mod.TerminalSession()
+        session._win_pty = mock.MagicMock()
+        session._win_pty.read.return_value = b""
+        session.running = True
+
+        self.assertEqual(session.read(), "")
+
+    def test_read_windows_exception(self):
+        session = self.mod.TerminalSession()
+        session._win_pty = mock.MagicMock()
+        session._win_pty.read.side_effect = Exception("timeout")
+        session.running = True
+
+        self.assertEqual(session.read(), "")
+
+    def test_write_windows(self):
+        session = self.mod.TerminalSession()
+        session._win_pty = mock.MagicMock()
+        session.running = True
+
+        count = session.write("hello")
+        self.assertEqual(count, 5)
+        session._win_pty.write.assert_called_once_with(b"hello")
+
+    def test_write_windows_oserror_marks_not_running(self):
+        session = self.mod.TerminalSession()
+        session._win_pty = mock.MagicMock()
+        session._win_pty.write.side_effect = OSError("broken")
+        session.running = True
+
+        count = session.write("test")
+        self.assertEqual(count, 0)
+        self.assertFalse(session.running)
+
+    def test_resize_windows(self):
+        session = self.mod.TerminalSession()
+        session._win_pty = mock.MagicMock()
+        session.running = True
+
+        session.resize(120, 40)
+        session._win_pty.set_size.assert_called_once_with(120, 40)
+        self.assertEqual(session.cols, 120)
+        self.assertEqual(session.rows, 40)
+
+    def test_resize_windows_oserror_swallowed(self):
+        session = self.mod.TerminalSession()
+        session._win_pty = mock.MagicMock()
+        session._win_pty.set_size.side_effect = OSError("bad")
+        session.running = True
+
+        session.resize(80, 24)  # Should not raise
+
+    def test_poll_exit_windows(self):
+        session = self.mod.TerminalSession()
+        session._win_pty = mock.MagicMock()
+        session.running = True
+
+        session._win_pty.isalive.return_value = True
+        self.assertFalse(session.poll_exit())
+        self.assertTrue(session.running)
+
+        session._win_pty.isalive.return_value = False
+        self.assertTrue(session.poll_exit())
+        self.assertFalse(session.running)
+
+    def test_close_windows(self):
+        session = self.mod.TerminalSession()
+        session._win_pty = mock.MagicMock()
+        session.running = True
+
+        session.close()
+        self.assertIsNone(session._win_pty)
+        self.assertFalse(session.running)
+
+    def test_send_signal_windows_interrupt(self):
+        session = self.mod.TerminalSession()
+        session._win_pty = mock.MagicMock()
+        session.running = True
+
+        self.assertTrue(session.interrupt())
+        session._win_pty.write.assert_called_once_with(b'\x03')
+
+    def test_send_signal_windows_interrupt_oserror(self):
+        session = self.mod.TerminalSession()
+        session._win_pty = mock.MagicMock()
+        session._win_pty.write.side_effect = OSError("broken")
+        session.running = True
+
+        self.assertFalse(session.interrupt())
+
+    def test_send_signal_windows_terminate_with_pid(self):
+        session = self.mod.TerminalSession()
+        session._win_pty = mock.MagicMock()
+        session._win_pty.pid = 12345
+        session.running = True
+
+        with mock.patch.object(self.mod.os, "kill") as kill:
+            self.assertTrue(session.terminate())
+        kill.assert_called_once_with(12345, signal.SIGTERM)
+
+    def test_send_signal_windows_no_pid(self):
+        session = self.mod.TerminalSession()
+        session._win_pty = mock.MagicMock(spec=[])  # no pid attr
+        session.running = True
+
+        self.assertFalse(session.terminate())
 
 
 if __name__ == "__main__":
