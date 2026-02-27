@@ -39,6 +39,11 @@ _DEFAULT_PLUGIN_DIR = os.path.join(os.path.expanduser("~"), ".config", "retrotui
 PLUGIN_DIR = _DEFAULT_PLUGIN_DIR
 
 
+def _bundled_plugin_dir():
+    """Return the package-internal bundled plugins directory."""
+    return str(Path(__file__).resolve().parent.parent / "bundled_plugins")
+
+
 def _repo_examples_plugin_dir():
     """Return repo-local bundled examples/plugins path when available."""
     return str(Path(__file__).resolve().parents[2] / "examples" / "plugins")
@@ -73,6 +78,14 @@ def _iter_plugin_dirs():
                 continue
             seen.add(norm)
             yield candidate
+
+    # Bundled plugins shipped with the package (always included).
+    bundled = _bundled_plugin_dir()
+    if bundled:
+        norm = os.path.normcase(os.path.normpath(bundled))
+        if norm not in seen:
+            seen.add(norm)
+            yield bundled
 
     # Primary user plugin directory.
     primary = str(PLUGIN_DIR or "").strip()

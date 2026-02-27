@@ -505,23 +505,6 @@ class ActionRunnerTests(unittest.TestCase):
         self.assertEqual(spawned.kind, "term")
         self.assertEqual((spawned.x, spawned.y, spawned.w, spawned.h), (12, 7, 80, 24))
 
-    def test_execute_image_viewer_spawns_image_window(self):
-        app = self._make_app()
-        logger = mock.Mock()
-
-        with mock.patch.object(self.action_runner, "ImageViewerWindow", _DummyImageViewerWindow):
-            self.action_runner.execute_app_action(
-                app,
-                self.actions_mod.AppAction.IMAGE_VIEWER,
-                logger,
-                version="0.9.3",
-            )
-
-        app._next_window_offset.assert_called_once_with(14, 3)
-        spawned = app._spawn_window.call_args.args[0]
-        self.assertEqual(spawned.kind, "image")
-        self.assertEqual((spawned.x, spawned.y, spawned.w, spawned.h), (12, 7, 84, 26))
-
     def test_execute_trash_spawns_trash_window(self):
         app = self._make_app()
         logger = mock.Mock()
@@ -677,25 +660,6 @@ class ActionRunnerTests(unittest.TestCase):
         spawned = app._spawn_window.call_args.args[0]
         self.assertEqual(spawned.kind, "proc")
         self.assertEqual((spawned.x, spawned.y, spawned.w, spawned.h), (12, 7, 76, 22))
-
-    def test_execute_clock_calendar_spawns_clock_window(self):
-        app = self._make_app()
-        logger = mock.Mock()
-
-        with mock.patch.object(
-            self.action_runner, "ClockCalendarWindow", _DummyClockCalendarWindow
-        ):
-            self.action_runner.execute_app_action(
-                app,
-                self.actions_mod.AppAction.CLOCK_CALENDAR,
-                logger,
-                version="0.9.3",
-            )
-
-        app._next_window_offset.assert_called_once_with(30, 6)
-        spawned = app._spawn_window.call_args.args[0]
-        self.assertEqual(spawned.kind, "clock")
-        self.assertEqual((spawned.x, spawned.y, spawned.w, spawned.h), (12, 7, 34, 14))
 
     def test_execute_new_window_uses_incremental_title(self):
         app = self._make_app()

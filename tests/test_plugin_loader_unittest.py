@@ -38,7 +38,9 @@ class PluginLoaderUnitTests(unittest.TestCase):
         root = Path(tmpdir.name)
         self._create_plugin(root, "demo")
         self.loader.PLUGIN_DIR = str(root)
-        manifests = self.loader.discover_plugins()
+        # Suppress bundled plugins so the count is predictable
+        with mock.patch.object(self.loader, "_bundled_plugin_dir", return_value=str(root / "_nonexistent_bundled")):
+            manifests = self.loader.discover_plugins()
         self.assertEqual(len(manifests), 1)
 
         with mock.patch.object(self.loader.importlib.util, "spec_from_file_location", return_value=None):
@@ -76,6 +78,7 @@ class PluginLoaderUnitTests(unittest.TestCase):
         with (
             mock.patch.object(self.loader, "_repo_examples_plugin_dir", return_value=str(examples)),
             mock.patch.object(self.loader, "_cwd_examples_plugin_dir", return_value=str(root / "nope")),
+            mock.patch.object(self.loader, "_bundled_plugin_dir", return_value=str(root / "_nonexistent_bundled")),
         ):
             manifests = self.loader.discover_plugins()
 
@@ -98,6 +101,7 @@ class PluginLoaderUnitTests(unittest.TestCase):
         with (
             mock.patch.object(self.loader, "_repo_examples_plugin_dir", return_value=str(examples)),
             mock.patch.object(self.loader, "_cwd_examples_plugin_dir", return_value=str(root / "nope")),
+            mock.patch.object(self.loader, "_bundled_plugin_dir", return_value=str(root / "_nonexistent_bundled")),
         ):
             manifests = self.loader.discover_plugins()
 
@@ -119,6 +123,7 @@ class PluginLoaderUnitTests(unittest.TestCase):
         with (
             mock.patch.object(self.loader, "_repo_examples_plugin_dir", return_value=str(root / "nope")),
             mock.patch.object(self.loader, "_cwd_examples_plugin_dir", return_value=str(examples)),
+            mock.patch.object(self.loader, "_bundled_plugin_dir", return_value=str(root / "_nonexistent_bundled")),
         ):
             manifests = self.loader.discover_plugins()
 

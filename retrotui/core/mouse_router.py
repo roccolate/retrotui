@@ -420,7 +420,7 @@ def handle_mouse_event(app, event):
     h, w = app.stdscr.getmaxyx()
     if my == h - 1 and mx >= w - CLOCK_CLICK_REGION_WIDTH:
         if norm.get("button1_clicked") or norm.get("button1_double"):
-            app.execute_action(AppAction.CLOCK_CALENDAR)
+            app.execute_action("plugin:clock")
             return True
 
     if app._handle_window_mouse(mx, my, bstate):

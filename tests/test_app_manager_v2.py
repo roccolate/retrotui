@@ -70,14 +70,14 @@ class AppManagerV2Tests(unittest.TestCase):
         self.app._build_desktop_icon_catalog = mock.Mock(
             return_value=[
                 {"label": "App1", "category": "Apps", "action": AppAction.ABOUT},
-                {"label": "Game1", "category": "Games", "action": AppAction.SNAKE},
+                {"label": "Game1", "category": "Games", "action": "plugin:snake"},
                 {"label": "Weather", "category": "Plugins", "action": "plugin:weather", "hide_key": "plugin:weather"},
             ]
         )
         self.app._build_menu_editor_catalog = mock.Mock(
             return_value=[
                 {"category": "Apps", "label": "Calculator", "action": AppAction.CALCULATOR, "key": "calculator"},
-                {"category": "Games", "label": "Snake", "action": AppAction.SNAKE, "key": "snake"},
+                {"category": "Games", "label": "Snake", "action": "plugin:snake", "key": "snake"},
                 {"category": "Plugins", "label": "Weather", "action": "plugin:weather", "key": "plugin:weather"},
             ]
         )

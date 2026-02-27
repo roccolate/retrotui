@@ -1,0 +1,9 @@
+[plugin]
+id = "solitaire"
+name = "Solitaire"
+version = "0.9.3"
+description = "Classic Klondike solitaire card game"
+
+[plugin.window]
+default_width = 46
+default_height = 22

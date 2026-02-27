@@ -1,0 +1,9 @@
+[plugin]
+id = "image-viewer"
+name = "Image Viewer"
+version = "0.9.3"
+description = "Terminal image viewer with external tool support"
+
+[plugin.window]
+default_width = 84
+default_height = 26

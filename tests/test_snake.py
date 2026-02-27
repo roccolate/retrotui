@@ -52,29 +52,6 @@ class SnakeTests(unittest.TestCase):
         win.step()
         self.assertNotEqual(win.snake[0], old_head)
 
-    def test_execute_actions(self):
-        win = self.mod.SnakeWindow(0, 0, 60, 20)
-        # Mock body_rect to set rows/cols
-        win.body_rect = mock.Mock(return_value=(0, 0, 10, 10))
-        win._reset_game()
-        
-        # Test Pause
-        self.assertFalse(win.paused)
-        win.execute_action(self.mod.AppAction.SNAKE_PAUSE)
-        self.assertTrue(win.paused)
-        win.execute_action(self.mod.AppAction.SNAKE_PAUSE)
-        self.assertFalse(win.paused)
-        
-        # Test Wrap Toggle
-        self.assertFalse(win.wrap_mode)
-        win.execute_action(self.mod.AppAction.SNAKE_TOGGLE_WRAP)
-        self.assertTrue(win.wrap_mode)
-        
-        # Test Restart
-        win.score = 10
-        win.execute_action(self.mod.AppAction.SNAKE_NEW)
-        self.assertEqual(win.score, 0)
-        
     def test_wrap_movement(self):
         win = self.mod.SnakeWindow(0, 0, 60, 20)
         win.rows = 10
