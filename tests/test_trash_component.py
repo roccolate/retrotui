@@ -201,8 +201,8 @@ class TrashComponentTests(unittest.TestCase):
         try:
             win = self._make_window(root)
 
-            with mock.patch.object(win, "empty_trash", return_value="emptied"):
-                self.assertEqual(win.execute_action("trash_empty"), "emptied")
+            result = win.execute_action("trash_empty")
+            self.assertEqual(result.type, self.actions_mod.ActionType.REQUEST_DELETE_CONFIRM)
 
             close = win.execute_action("trash_close")
             self.assertEqual(close.type, self.actions_mod.ActionType.EXECUTE)
@@ -213,8 +213,8 @@ class TrashComponentTests(unittest.TestCase):
             ):
                 self.assertEqual(win.execute_action("unknown"), "super-result")
 
-            with mock.patch.object(win, "empty_trash", return_value="from-key"):
-                self.assertEqual(win.handle_key(ord("E")), "from-key")
+            key_result = win.handle_key(ord("E"))
+            self.assertEqual(key_result.type, self.actions_mod.ActionType.REQUEST_DELETE_CONFIRM)
 
             with mock.patch.object(win, "_rebuild_content") as rebuild:
                 self.assertIsNone(win.handle_key(ord("R")))

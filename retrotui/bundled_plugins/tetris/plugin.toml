@@ -3,6 +3,7 @@ id = "tetris"
 name = "Tetris"
 version = "0.9.3"
 description = "Classic Tetris block puzzle game"
+category = "game"
 
 [plugin.window]
 default_width = 44

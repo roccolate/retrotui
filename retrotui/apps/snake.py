@@ -124,6 +124,7 @@ class SnakeWindow(Window):
         self._last_special_spawn = time.time()
         self.score = 0
         self.game_over = False
+        self._scores_saved = False
         self.paused = False
         
         # Initial speed based on difficulty
@@ -217,8 +218,9 @@ class SnakeWindow(Window):
         # Update difficulty marks
         diff_items = self.window_menu.items.get("Difficulty", [])
         for i, (label, action) in enumerate(diff_items):
-            mark = "√" if label.strip() == self.difficulty else " "
-            diff_items[i] = (f"{mark} {label.strip()}", action)
+            base_label = label[2:]  # strip mark + space prefix
+            mark = "√" if base_label == self.difficulty else " "
+            diff_items[i] = (f"{mark} {base_label}", action)
 
     def step(self, now: float | None = None, force: bool = False):
         if self.game_over or self.paused:
@@ -279,7 +281,7 @@ class SnakeWindow(Window):
         if not self.visible:
             return
             
-        self.step()  # Update game state
+        self.step(time.time())  # Update game state
         
         bx, by, bw, bh = self.body_rect()
         # Update grid dimensions if window was resized
@@ -296,7 +298,9 @@ class SnakeWindow(Window):
         state = ""
         if self.game_over:
             state = "[GAME OVER] "
-            self._save_high_scores()
+            if not self._scores_saved:
+                self._save_high_scores()
+                self._scores_saved = True
         elif self.paused:
             state = "[PAUSED] "
             
@@ -310,7 +314,7 @@ class SnakeWindow(Window):
             safe_addstr(stdscr, by + r, bx, " " * bw, body_attr)
             
         # Draw obstacles
-        obs_attr = body_attr | theme_attr("window_inactive")
+        obs_attr = theme_attr("window_inactive")
         for r, c in self.obstacles:
             safe_addstr(stdscr, by + r, bx + c, "▒", obs_attr)
 

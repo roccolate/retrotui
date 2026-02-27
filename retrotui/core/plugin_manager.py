@@ -66,6 +66,12 @@ def register_plugin_manifest(app, manifest, load_plugin):
     }
 
 
+def _get_plugin_category(info):
+    """Return the category string for a plugin ('game' or 'plugin')."""
+    plugin_info = (info.get("manifest", {}) or {}).get("plugin", {}) or {}
+    return str(plugin_info.get("category") or "plugin").lower()
+
+
 def build_plugin_menu_items(app):
     """Build dynamic plugin entries as menu tuples ``(label, action)``."""
     from .menu_builder import menu_item_visibility_key, get_hidden_menu_keys
@@ -82,6 +88,34 @@ def build_plugin_menu_items(app):
         entries.append((name, action))
     entries.sort(key=lambda item: (item[0].lower(), item[1]))
     return entries
+
+
+def build_categorized_plugin_menu_items(app):
+    """Build plugin menu items split by category.
+
+    Returns ``(games, plugins)`` where each is a list of
+    ``(label, action)`` tuples.
+    """
+    from .menu_builder import menu_item_visibility_key, get_hidden_menu_keys
+
+    hidden_menu_items = get_hidden_menu_keys(app.config)
+    games = []
+    plugins = []
+    for plugin_id, info in (getattr(app, "_plugins", None) or {}).items():
+        plugin_info = (info.get("manifest", {}) or {}).get("plugin", {}) or {}
+        name = str(plugin_info.get("name") or plugin_id)
+        action = f"plugin:{plugin_id}"
+        item_key = menu_item_visibility_key(name, action)
+        if item_key in hidden_menu_items:
+            continue
+        category = _get_plugin_category(info)
+        if category == "game":
+            games.append((name, action))
+        else:
+            plugins.append((name, action))
+    games.sort(key=lambda item: (item[0].lower(), item[1]))
+    plugins.sort(key=lambda item: (item[0].lower(), item[1]))
+    return games, plugins
 
 
 def build_plugin_window(app, info, plugin_id):

@@ -10,6 +10,8 @@ from .core import FileEntry
 
 def _trash_base_dir():
     """Return platform-local trash directory used for undoable delete."""
+    if os.name == 'nt':
+        return os.path.join(os.environ.get('TEMP', os.path.expanduser('~')), 'RetroTUI_Trash')
     return os.path.join(os.path.expanduser('~'), '.local', 'share', 'Trash', 'files')
 
 def _is_long_file_operation(entry, threshold_bytes):
@@ -119,7 +121,8 @@ def create_file(base_path, name):
     if os.path.exists(path):
         return ActionResult(ActionType.ERROR, 'A file or folder with that name already exists.')
     try:
-        open(path, 'a').close()
+        with open(path, 'a'):
+            pass
         return ActionResult(ActionType.REFRESH)
     except OSError as exc:
         return ActionResult(ActionType.ERROR, str(exc))

@@ -115,21 +115,31 @@ class TrashWindow(FileManagerWindow):
         except OSError as exc:
             return ActionResult(ActionType.ERROR, str(exc))
 
+        if not names:
+            return ActionResult(ActionType.ERROR, "Trash is already empty.")
+
+        errors = []
         for name in names:
             path = os.path.join(root, name)
             try:
                 self._delete_path(path)
             except OSError as exc:
-                return ActionResult(ActionType.ERROR, str(exc))
+                errors.append(f"{name}: {exc}")
 
         self.current_path = root
         self._rebuild_content()
+        if errors:
+            return ActionResult(ActionType.ERROR, "Failed to delete: " + "; ".join(errors))
         return None
+
+    def _confirm_empty_trash(self):
+        """Request confirmation before emptying trash."""
+        return ActionResult(ActionType.REQUEST_DELETE_CONFIRM)
 
     def execute_action(self, action):
         """Execute trash-specific menu actions."""
         if action == "trash_empty":
-            return self.empty_trash()
+            return self._confirm_empty_trash()
         if action == "trash_close":
             return ActionResult(ActionType.EXECUTE, AppAction.CLOSE_WINDOW)
         return super().execute_action(action)
@@ -138,7 +148,7 @@ class TrashWindow(FileManagerWindow):
         """Handle trash app shortcuts."""
         key_code = normalize_key_code(key)
         if key_code in (ord("e"), ord("E")):
-            return self.empty_trash()
+            return self._confirm_empty_trash()
         if key_code in (ord("r"), ord("R"), self.KEY_F5):
             self._rebuild_content()
             return None

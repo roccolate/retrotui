@@ -24,7 +24,7 @@ def get_hidden_menu_keys(config):
 
 def build_global_menu_items(app):
     """Return global menu items with hidden-label filtering and plugin section."""
-    from .plugin_manager import build_plugin_menu_items
+    from .plugin_manager import build_categorized_plugin_menu_items
 
     hidden_menu_items = get_hidden_menu_keys(app.config)
     from ..ui.menu import DEFAULT_GLOBAL_ITEMS
@@ -39,10 +39,13 @@ def build_global_menu_items(app):
         if filtered_items:
             filtered_menu_items[category] = filtered_items
 
-    plugin_items = build_plugin_menu_items(app)
-    if not plugin_items:
-        plugin_items = [("(No plugins installed)", None)]
-    filtered_menu_items["Plugins"] = plugin_items
+    games, plugins = build_categorized_plugin_menu_items(app)
+    if games:
+        filtered_menu_items["Games"] = games
+    if plugins:
+        filtered_menu_items["Plugins"] = plugins
+    if not games and not plugins:
+        filtered_menu_items["Plugins"] = [("(No plugins installed)", None)]
 
     return filtered_menu_items
 
@@ -91,13 +94,17 @@ def build_menu_editor_catalog(app):
                 }
             )
 
+    from .plugin_manager import _get_plugin_category
+
     for plugin_id, info in (getattr(app, "_plugins", None) or {}).items():
         plugin_info = (info.get("manifest", {}) or {}).get("plugin", {}) or {}
         name = str(plugin_info.get("name") or plugin_id)
         action = f"plugin:{plugin_id}"
+        cat = _get_plugin_category(info)
+        cat_label = "Games" if cat == "game" else "Plugins"
         entries.append(
             {
-                "category": "Plugins",
+                "category": cat_label,
                 "label": name,
                 "action": action,
                 "key": menu_item_visibility_key(name, action),

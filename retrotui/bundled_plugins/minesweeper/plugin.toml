@@ -3,6 +3,7 @@ id = "minesweeper"
 name = "Minesweeper"
 version = "0.9.3"
 description = "Classic minesweeper game"
+category = "game"
 
 [plugin.window]
 default_width = 54

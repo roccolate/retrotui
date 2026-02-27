@@ -33,10 +33,11 @@ RetroTUI es un entorno de escritorio estilo Windows 3.1 que corre completamente 
 *   **Gestor de Ventanas**: Mover, redimensionar, maximizar, minimizar, arrastrar y soltar.
 *   **Soporte de Mouse**: Funciona en consola TTY (via `gpm`) y emuladores de terminal (protocolo xterm).
 *   **Terminal Embebida**: Shell PTY completo dentro de una ventana (POSIX y Windows via `pywinpty`).
-*   **Apps principales**: Explorador de Archivos (doble panel), Bloc de Notas, Terminal, Calculadora, Visor Hex, Monitor de Procesos, Monitor de Sistema, Visor de Logs, Papelera.
-*   **Plugins**: Buscaminas, Solitario, Snake, Tetris, Mapa de Caracteres, Reloj, RetroNet, Visor de Imagenes, WiFi Manager.
+*   **Apps principales**: Explorador de Archivos (doble panel), Bloc de Notas, Terminal, Calculadora, Visor Hex, Visor Markdown, Monitor de Procesos, Monitor de Sistema, Visor de Logs, Clipboard Viewer, Panel de Control, Papelera.
+*   **Juegos**: Buscaminas, Solitario, Snake, Tetris.
+*   **Plugins**: RetroNet Explorer (navegador web de texto), Mapa de Caracteres, Reloj/Calendario, Visor de Imagenes, WiFi Manager.
 *   **Temas**: Windows 3.1, DOS, Windows 95, Hacker, Amiga.
-*   **Sistema de Plugins**: Carga automatica de plugins propios desde directorio configurable.
+*   **Sistema de Plugins**: Carga automatica de plugins propios desde directorio configurable. Campo `category` en `plugin.toml` para separar juegos de herramientas.
 *   **Sin dependencias en Linux**: Solo Python 3.10+ estandar. En Windows requiere `pywinpty` y `windows-curses`.
 
 ## Instalacion
@@ -91,10 +92,11 @@ RetroTUI is a Windows 3.1-style desktop environment that runs entirely in the te
 *   **Window Manager**: Move, resize, maximize, minimize, drag and drop.
 *   **Mouse Support**: Works in TTY consoles (via `gpm`) and terminal emulators (xterm protocol).
 *   **Embedded Terminal**: Full PTY shell inside a window (POSIX and Windows via `pywinpty`).
-*   **Core Apps**: File Manager (dual-pane), Notepad, Terminal, Calculator, Hex Viewer, Process Manager, System Monitor, Log Viewer, Trash.
-*   **Plugins**: Minesweeper, Solitaire, Snake, Tetris, Character Map, Clock, RetroNet, Image Viewer, WiFi Manager.
+*   **Core Apps**: File Manager (dual-pane), Notepad, Terminal, Calculator, Hex Viewer, Markdown Viewer, Process Manager, System Monitor, Log Viewer, Clipboard Viewer, Control Panel, Trash.
+*   **Games**: Minesweeper, Solitaire, Snake, Tetris.
+*   **Plugins**: RetroNet Explorer (text web browser), Character Map, Clock/Calendar, Image Viewer, WiFi Manager.
 *   **Themes**: Windows 3.1, DOS, Windows 95, Hacker, Amiga.
-*   **Plugin System**: Auto-loads custom plugins from a configurable directory.
+*   **Plugin System**: Auto-loads custom plugins from a configurable directory. Use `category` field in `plugin.toml` to separate games from tools.
 *   **No dependencies on Linux**: Just standard Python 3.10+. Windows requires `pywinpty` and `windows-curses`.
 
 ## Installation
