@@ -45,7 +45,6 @@ class TerminalWindow(SelectableTextMixin, Window):
         self._cursor_col = 0
         self.scrollback_offset = 0
         
-        self._dirty_lines = set()
         self._init_selection()
 
         self.window_menu = WindowMenu({
@@ -154,7 +153,6 @@ class TerminalWindow(SelectableTextMixin, Window):
                 self._line_cells.append((' ', 0))
             self._line_cells.append((ch, attr))
         self._cursor_col += 1
-        self._dirty_lines.add(len(self._scroll_lines))
 
     def _append_newline(self):
         """Commit current line to scrollback."""
@@ -162,7 +160,6 @@ class TerminalWindow(SelectableTextMixin, Window):
         self._scroll_lines.append(list(self._line_cells))
         self._line_cells = []
         self._cursor_col = 0
-        self._dirty_lines.add(len(self._scroll_lines))  # new current line
         overflow = len(self._scroll_lines) - self.max_scrollback
         if overflow > 0:
             del self._scroll_lines[:overflow]
@@ -170,7 +167,6 @@ class TerminalWindow(SelectableTextMixin, Window):
     def _erase_line(self, mode):
         """Apply CSI K (erase in line) mode."""
         fill_attr = self.ansi.attr
-        self._dirty_lines.add(len(self._scroll_lines))  # current line changed
 
         if mode == 2:  # Clear entire line
             self._line_cells = []
@@ -223,7 +219,6 @@ class TerminalWindow(SelectableTextMixin, Window):
             count = max(1, _num(0, 1))
             if self._cursor_col < len(self._line_cells):
                 del self._line_cells[self._cursor_col:self._cursor_col + count]
-            self._dirty_lines.add(len(self._scroll_lines))
             return
         if final == 'J':  # Erase in display
             mode = _num(0, 0)
@@ -232,7 +227,6 @@ class TerminalWindow(SelectableTextMixin, Window):
                 self._line_cells = []
                 self._cursor_col = 0
                 self.scrollback_offset = 0
-                self._dirty_lines.clear()  # everything gone, full redraw next
 
     def _consume_output(self, text):
         """Feed text to ANSI state machine and update buffer."""
@@ -241,9 +235,7 @@ class TerminalWindow(SelectableTextMixin, Window):
         
         prev_total = len(self._all_lines())
         prev_offset = self.scrollback_offset
-        # if text: self.clear_selection() # Optional: clear selection on output? 
-        # Standard terminals usually don't clear selection on output, only on input.
-        
+
         for kind, data, attr in self.ansi.parse_chunk(text):
             if kind == 'TEXT':
                 self._write_char(data, attr)
@@ -410,9 +402,9 @@ class TerminalWindow(SelectableTextMixin, Window):
             if chunk:
                 self._pending_output += chunk
             self._session.poll_exit()
-        elif self._session_error and not self._scroll_lines and not self._line_cells:
+        if self._session_error:
             self._pending_output += self._session_error + '\n'
-            self._session_error = None  # avoid re-appending
+            self._session_error = None
 
         # Throttle: process at most MAX_OUTPUT_PER_FRAME per render tick.
         if self._pending_output:
@@ -458,8 +450,6 @@ class TerminalWindow(SelectableTextMixin, Window):
         live_state = 'LIVE' if self.scrollback_offset == 0 else f'BACK {self.scrollback_offset}'
         status = f' {state}  {live_state} '
         safe_addstr(stdscr, by + bh - 1, bx, status.ljust(bw)[:bw], theme_attr('status'))
-
-        self._dirty_lines.clear()
 
         if self.window_menu:
             self.window_menu.draw_dropdown(stdscr, self.x, self.y, self.w)

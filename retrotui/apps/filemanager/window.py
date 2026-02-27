@@ -47,36 +47,37 @@ class FileManagerWindow(Window):
 
     _MENU_ACTION_MAP = {
         AppAction.FM_OPEN: 'activate_selected',
-        AppAction.FM_COPY: lambda self: ActionResult(ActionType.REQUEST_COPY_ENTRY),
-        AppAction.FM_MOVE: lambda self: ActionResult(ActionType.REQUEST_MOVE_ENTRY),
-        AppAction.FM_RENAME: lambda self: ActionResult(ActionType.REQUEST_RENAME_ENTRY),
-        AppAction.FM_DELETE: lambda self: ActionResult(ActionType.REQUEST_DELETE_CONFIRM),
-        AppAction.FM_NEW_DIR: lambda self: ActionResult(ActionType.REQUEST_NEW_DIR),
-        AppAction.FM_NEW_FILE: lambda self: ActionResult(ActionType.REQUEST_NEW_FILE),
+        AppAction.FM_COPY: '_action_copy',
+        AppAction.FM_MOVE: '_action_move',
+        AppAction.FM_RENAME: '_action_rename',
+        AppAction.FM_DELETE: '_action_delete',
+        AppAction.FM_NEW_DIR: '_action_new_dir',
+        AppAction.FM_NEW_FILE: '_action_new_file',
         AppAction.FM_UNDO_DELETE: 'undo_delete',
         AppAction.FM_REFRESH: '_action_refresh',
         AppAction.FM_TOGGLE_HIDDEN: 'toggle_hidden',
         AppAction.FM_PARENT: '_action_parent',
-        AppAction.FM_CLOSE: lambda self: ActionResult(ActionType.EXECUTE, AppAction.CLOSE_WINDOW),
+        AppAction.FM_CLOSE: '_action_close',
         'fm_toggle_dual': 'toggle_dual_pane',
-        AppAction.FM_BOOKMARK_1: lambda self: self.navigate_bookmark(1),
-        AppAction.FM_BOOKMARK_2: lambda self: self.navigate_bookmark(2),
-        AppAction.FM_BOOKMARK_3: lambda self: self.navigate_bookmark(3),
-        AppAction.FM_BOOKMARK_4: lambda self: self.navigate_bookmark(4),
-        AppAction.FM_SET_BOOKMARK_1: lambda self: self.set_bookmark(1),
-        AppAction.FM_SET_BOOKMARK_2: lambda self: self.set_bookmark(2),
-        AppAction.FM_SET_BOOKMARK_3: lambda self: self.set_bookmark(3),
-        AppAction.FM_SET_BOOKMARK_4: lambda self: self.set_bookmark(4),
+        AppAction.FM_BOOKMARK_1: '_action_bookmark_1',
+        AppAction.FM_BOOKMARK_2: '_action_bookmark_2',
+        AppAction.FM_BOOKMARK_3: '_action_bookmark_3',
+        AppAction.FM_BOOKMARK_4: '_action_bookmark_4',
+        AppAction.FM_SET_BOOKMARK_1: '_action_set_bookmark_1',
+        AppAction.FM_SET_BOOKMARK_2: '_action_set_bookmark_2',
+        AppAction.FM_SET_BOOKMARK_3: '_action_set_bookmark_3',
+        AppAction.FM_SET_BOOKMARK_4: '_action_set_bookmark_4',
     }
 
     def __init__(self, x, y, w, h, start_path=None, show_hidden_default=False):
+        # _primary must exist before super().__init__ because it sets
+        # self.content and self.scroll_offset which now go through properties.
+        self._primary = PaneState(
+            os.path.realpath(start_path or os.path.expanduser('~'))
+        )
         super().__init__('File Manager', x, y, w, h, content=[])
-        self.current_path = os.path.realpath(start_path or os.path.expanduser('~'))
         self.use_unicode = check_unicode_support()
-        self.entries = []           # List[FileEntry]
-        self.selected_index = 0
         self.show_hidden = bool(show_hidden_default)
-        self.error_message = None
         self.window_menu = WindowMenu({
             'File': [
                 ('Open       Enter', AppAction.FM_OPEN),
@@ -173,7 +174,59 @@ class FileManagerWindow(Window):
     def secondary_error_message(self, value):
         self._secondary.error_message = value
 
-    # -- End backward-compatible accessors ----------------------------------
+    # -- End backward-compatible accessors for secondary pane ----------------
+
+    # -- Backward-compatible accessors for primary pane state ----------------
+
+    @property
+    def current_path(self):
+        return self._primary.path
+
+    @current_path.setter
+    def current_path(self, value):
+        self._primary.path = value
+
+    @property
+    def entries(self):
+        return self._primary.entries
+
+    @entries.setter
+    def entries(self, value):
+        self._primary.entries = value
+
+    @property
+    def content(self):
+        return self._primary.content
+
+    @content.setter
+    def content(self, value):
+        self._primary.content = value
+
+    @property
+    def selected_index(self):
+        return self._primary.selected_index
+
+    @selected_index.setter
+    def selected_index(self, value):
+        self._primary.selected_index = value
+
+    @property
+    def scroll_offset(self):
+        return self._primary.scroll_offset
+
+    @scroll_offset.setter
+    def scroll_offset(self, value):
+        self._primary.scroll_offset = value
+
+    @property
+    def error_message(self):
+        return self._primary.error_message
+
+    @error_message.setter
+    def error_message(self, value):
+        self._primary.error_message = value
+
+    # -- End backward-compatible accessors for primary pane ------------------
 
     @staticmethod
     def _dual_pane_min_width():
@@ -332,20 +385,21 @@ class FileManagerWindow(Window):
     def _rebuild_content(self):
         old_selection = self._selected_entry()
         old_name = old_selection.name if old_selection else None
-        
+
         self._invalidate_preview_cache()
-        self.entries, self.content, self.error_message = self._build_listing(self.current_path)
+        self._rebuild_pane(self._primary)
+
         basename = os.path.basename(self.current_path) or '/'
         count = len([e for e in self.entries if e.name != '..'])
         self.title = f'File Manager - {basename} ({count} items)'
-        
+
         self.selected_index = 0
         if old_name:
             for i, e in enumerate(self.entries):
                 if e.name == old_name:
                     self.selected_index = i
                     break
-                    
+
         self.scroll_offset = 0
         if self.selected_index >= (self.h - self._header_lines()):
              self.scroll_offset = max(0, self.selected_index - (self.h - self._header_lines()) + 1)
@@ -397,8 +451,8 @@ class FileManagerWindow(Window):
                  break
 
     def _active_pane_state(self):
-        """Return the PaneState-like object for the active pane."""
-        return self._secondary if self.active_pane == 1 else self
+        """Return the PaneState for the active pane."""
+        return self._secondary if self.active_pane == 1 else self._primary
 
     def _selected_entry(self):
         pane = self._active_pane_state()
@@ -469,7 +523,7 @@ class FileManagerWindow(Window):
 
     def _active_base_path(self):
         """Return the directory path of the currently active pane."""
-        return self._active_pane_state().path if self.active_pane == 1 else self.current_path
+        return self._active_pane_state().path
 
     def create_directory(self, name):
         res = create_directory(self._active_base_path(), name)
@@ -771,7 +825,7 @@ class FileManagerWindow(Window):
              
              is_sel = (idx == selected)
 
-             pane = self if pane_id == 0 else self._secondary
+             pane = self._primary if pane_id == 0 else self._secondary
              entry_obj = pane.entries[idx] if 0 <= idx < len(pane.entries) else None
 
              attr = self._entry_display_attr(entry_obj, is_sel, is_active)
@@ -1031,14 +1085,57 @@ class FileManagerWindow(Window):
         self.navigate_parent()
         return ActionResult(ActionType.REFRESH)
 
+    def _action_copy(self):
+        return ActionResult(ActionType.REQUEST_COPY_ENTRY)
+
+    def _action_move(self):
+        return ActionResult(ActionType.REQUEST_MOVE_ENTRY)
+
+    def _action_rename(self):
+        return ActionResult(ActionType.REQUEST_RENAME_ENTRY)
+
+    def _action_delete(self):
+        return ActionResult(ActionType.REQUEST_DELETE_CONFIRM)
+
+    def _action_new_dir(self):
+        return ActionResult(ActionType.REQUEST_NEW_DIR)
+
+    def _action_new_file(self):
+        return ActionResult(ActionType.REQUEST_NEW_FILE)
+
+    def _action_close(self):
+        return ActionResult(ActionType.EXECUTE, AppAction.CLOSE_WINDOW)
+
+    def _action_bookmark_1(self):
+        return self.navigate_bookmark(1)
+
+    def _action_bookmark_2(self):
+        return self.navigate_bookmark(2)
+
+    def _action_bookmark_3(self):
+        return self.navigate_bookmark(3)
+
+    def _action_bookmark_4(self):
+        return self.navigate_bookmark(4)
+
+    def _action_set_bookmark_1(self):
+        return self.set_bookmark(1)
+
+    def _action_set_bookmark_2(self):
+        return self.set_bookmark(2)
+
+    def _action_set_bookmark_3(self):
+        return self.set_bookmark(3)
+
+    def _action_set_bookmark_4(self):
+        return self.set_bookmark(4)
+
     def execute_action(self, action):
         """Execute a window menu action via dispatch table."""
         handler = self._MENU_ACTION_MAP.get(action)
         if handler is None:
             return None
-        if isinstance(handler, str):
-            return getattr(self, handler)()
-        return handler(self)
+        return getattr(self, handler)()
 
     def handle_tab_key(self):
         """Handle Tab key for pane switching (active window hook)."""
