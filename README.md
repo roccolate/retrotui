@@ -47,10 +47,11 @@ python3 -m retrotui
 ```
 
 ### Requisitos
-*   **Linux/WSL** (Windows nativo no soportado por falta de `curses` completo).
+*   **Linux/WSL/Windows**.
 *   **Python 3.10+**.
 *   **Tamaño de terminal**: Al menos 80x24.
 *   **Locale UTF-8** (Recomendado).
+*   **Windows**: `pip install pywinpty windows-curses` (para Python 3.14+: [windows-curses fork](https://github.com/roccolate/windows-curses)).
 
 ## Controles Principales
 
@@ -112,10 +113,11 @@ python3 -m retrotui
 ```
 
 ### Requirements
-*   **Linux/WSL** (Windows native not supported due to missing `curses`).
+*   **Linux/WSL/Windows**.
 *   **Python 3.10+**.
 *   **Terminal size**: At least 80x24.
 *   **UTF-8 Locale** (Recommended).
+*   **Windows**: `pip install pywinpty windows-curses` (for Python 3.14+: [windows-curses fork](https://github.com/roccolate/windows-curses)).
 
 ## Controls
 
