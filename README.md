@@ -1,138 +1,133 @@
-# RetroTUI 🖥️
+# RetroTUI
 
 [![CI](https://github.com/roccolate/RetroTUI/actions/workflows/ci.yml/badge.svg)](https://github.com/roccolate/RetroTUI/actions/workflows/ci.yml)
 [![Release](https://github.com/roccolate/RetroTUI/actions/workflows/release.yml/badge.svg)](https://github.com/roccolate/RetroTUI/actions/workflows/release.yml)
 [![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/I2I1WKMLQ)
 
-**Un entorno de escritorio estilo Windows 3.1 para tu terminal.**
-
-*(English below)*
-
-## Descripción General
-
-RetroTUI trae la nostalgia de los escritorios clásicos a tu terminal Linux. Funciona sin interfaz gráfica (X11/Wayland), usando solo texto y `curses`.
+**Un entorno de escritorio retro para tu terminal.** *(English below)*
 
 ```text
 ╔══════════════════════════════════════════════════════════════╗
-║ ≡ File   Edit   Help                            12:30:45   ║
+║ ≡ File   Edit   Help                            12:30:45     ║
 ╠══════════════════════════════════════════════════════════════╣
-║░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░║
-║░░ 📁 ░░░░╔═══ File Manager ═══════════[─][□][×]╗░░░░░░░░░░║
-║░ Files ░░║ 📂 /home/user                       ║░░░░░░░░░░║
-║░░░░░░░░░░║ ──────────────────────────           ║░░░░░░░░░░║
-║░░ 📝 ░░░░║  📁 Documents/                      ║░░░░░░░░░░║
-║░Notepad░░║  📁 Downloads/                      ║░░░░░░░░░░║
-║░░░░░░░░░░║  📄 readme.txt            2.4K      ║░░░░░░░░░░║
-║░░ 💻 ░░░░║  📄 config.json           512B      ║░░░░░░░░░░║
-║░Terminal░╚══════════════════════════════════════╝░░░░░░░░░░║
-║░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░║
-║ RetroTUI v0.9.2 │ Windows: 1/1 │ Mouse: Enabled │ Ctrl+Q: Exit║
+║░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░║
+║░░ 📁 ░░░░╔═══ File Manager ═══════════[─][□][×]╗░░░░░░░░░░░░░║
+║░ Files ░░║ 📂 /home/user                       ║░░░░░░░░░░░░░║
+║░░░░░░░░░░║ ──────────────────────────           ║░░░░░░░░░░░░░║
+║░░ 📝 ░░░░║  📁 Documents/                      ║░░░░░░░░░░░░░║
+║░Notepad░░║  📁 Downloads/                      ║░░░░░░░░░░░░░║
+║░░░░░░░░░░║  📄 readme.txt            2.4K      ║░░░░░░░░░░░░░║
+║░░ 💻 ░░░░║  📄 config.json           512B      ║░░░░░░░░░░░░░║
+║░Terminal░╚══════════════════════════════════════╝░░░░░░░░░░░░░║
+║░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░║
+║ RetroTUI v0.9.3 │ Windows: 1/1 │ Mouse: Enabled │ Ctrl+Q: Exit║
 ╚══════════════════════════════════════════════════════════════╝
 ```
 
-### Características
-*   **Gestor de Ventanas**: Mover, redimensionar, maximizar, minimizar.
-*   **Soporte de Mouse**: Funciona en consola TTY (vía `gpm`) y emuladores (protocolo xterm).
-*   **Terminal Embebida**: Ejecuta tu shell dentro de una ventana.
-*   **Apps Incluidas**: Explorador de Archivos, Bloc de Notas, Calculadora, Monitor de Procesos, Visor de Logs.
-*   **Temas**: Windows 3.1, DOS, Windows 95, Hacker, Amiga.
-*   **Sin Dependencias**: Solo requiere Python 3.10 estándar.
+## Descripcion
 
-## Instalación
+RetroTUI es un entorno de escritorio estilo Windows 3.1 que corre completamente en la terminal. Sin X11, sin Wayland, solo Python y `curses`. Funciona en Linux, WSL y Windows nativo.
+
+### Caracteristicas
+
+*   **Gestor de Ventanas**: Mover, redimensionar, maximizar, minimizar, arrastrar y soltar.
+*   **Soporte de Mouse**: Funciona en consola TTY (via `gpm`) y emuladores de terminal (protocolo xterm).
+*   **Terminal Embebida**: Shell PTY completo dentro de una ventana (POSIX y Windows via `pywinpty`).
+*   **Apps principales**: Explorador de Archivos (doble panel), Bloc de Notas, Terminal, Calculadora, Visor Hex, Monitor de Procesos, Monitor de Sistema, Visor de Logs, Papelera.
+*   **Plugins**: Buscaminas, Solitario, Snake, Tetris, Mapa de Caracteres, Reloj, RetroNet, Visor de Imagenes, WiFi Manager.
+*   **Temas**: Windows 3.1, DOS, Windows 95, Hacker, Amiga.
+*   **Sistema de Plugins**: Carga automatica de plugins propios desde directorio configurable.
+*   **Sin dependencias en Linux**: Solo Python 3.10+ estandar. En Windows requiere `pywinpty` y `windows-curses`.
+
+## Instalacion
 
 ```bash
 git clone https://github.com/roccolate/RetroTUI.git
 cd RetroTUI
-python3 -m retrotui
+python -m retrotui
 ```
 
 ### Requisitos
-*   **Linux/WSL/Windows**.
-*   **Python 3.10+**.
-*   **Tamaño de terminal**: Al menos 80x24.
-*   **Locale UTF-8** (Recomendado).
-*   **Windows**: `pip install pywinpty windows-curses` (para Python 3.14+: [windows-curses fork](https://github.com/roccolate/windows-curses)).
 
-## Controles Principales
+| Plataforma | Requisitos |
+| :--- | :--- |
+| **Linux/WSL** | Python 3.10+, terminal 80x24 minimo, UTF-8 recomendado |
+| **Windows** | Python 3.10+, `pip install pywinpty windows-curses` |
 
-### Globales
-| Tecla | Acción |
+Para Python 3.14+ en Windows: [windows-curses fork](https://github.com/roccolate/windows-curses).
+
+## Controles
+
+| Tecla | Accion |
 | :--- | :--- |
 | `Tab` | Cambiar ventana activa |
-| `F10` | Abrir menú |
+| `F10` | Abrir menu |
 | `Ctrl+Q` | Salir |
 | `Alt+Tab` | Ciclar ventanas |
+| Click derecho | Menu contextual |
 
 ### Apps
-*   **File Manager**: `Enter` abrir, `F5` Copiar, `F6` Mover, `F8` Borrar.
-*   **Notepad**: `Ctrl+S` Guardar, `Ctrl+W` Ajuste de línea.
-*   **Terminal**: `Ctrl+Shift+C` Copiar, `Ctrl+Shift+V` Pegar.
+*   **File Manager**: `Enter` abrir, `F5` Copiar, `F4` Mover, `F2` Renombrar, `Del` Borrar, `D` doble panel.
+*   **Notepad**: `Ctrl+S` Guardar, `Ctrl+O` Abrir, `Ctrl+W` Ajuste de linea.
+*   **Terminal**: `Ctrl+C` Copiar/Interrumpir, `Ctrl+V` Pegar, `F6` Interrumpir, `F7` Terminar.
 
-## Documentación
+## Documentacion
 *   [ARCHITECTURE.md](ARCHITECTURE.md) - Arquitectura del sistema.
-*   [CONTRIBUTING.md](CONTRIBUTING.md) - Guía de contribución.
+*   [CONTRIBUTING.md](CONTRIBUTING.md) - Guia de contribucion.
 *   [CHANGELOG.md](CHANGELOG.md) - Historial de cambios.
 
 ---
 
 # RetroTUI (English)
 
-## New apps and icons
-
-This release adds several small, self-contained applications (desktop icons and menu entries) useful for demos and utility workflows:
-
-- `Minesweeper` — classic minesweeper game with safe-first-click placement and headless-friendly UI for tests.
-- `Solitaire` — Klondike-like solitaire with auto-move/drain heuristics and optional auto-complete trigger.
-- `Snake` — simple time-driven snake game with pause/resume support and legacy-compatible step behavior.
-- `Charmap` — character map utility for browsing and inserting Unicode glyphs.
-- `Clipboard Viewer` — read-only viewer for the system clipboard (supports common backends, falls back gracefully).
-- `WiFi Manager` — lightweight scanner UI that uses `nmcli` when available and degrades safely when not present.
-
-The icons for these apps are registered with the desktop layer and available in the main application menu.
-
-**A Windows 3.1-style desktop environment for your terminal.**
+**A retro desktop environment for your terminal.**
 
 ## Overview
 
-RetroTUI brings the nostalgic experience of a classic desktop to your Linux/WSL terminal. No X11, no Wayland, just pure Python and `curses`.
+RetroTUI is a Windows 3.1-style desktop environment that runs entirely in the terminal. No X11, no Wayland, just Python and `curses`. Works on Linux, WSL, and native Windows.
 
-### Key Features
-*   **Window Management**: Move, resize, maximize, minimize.
-*   **Mouse Support**: Works in TTY (via `gpm`) and terminal emulators (xterm protocol).
-*   **Embedded Terminal**: Run your shell inside a window.
-*   **Apps**: File Manager, Notepad, Calculator, Process Manager, Log Viewer, Hex Editor.
-*   **Themes**: Switch between Win 3.1, DOS, Win 95, Hacker, and Amiga styles.
-*   **No Dependencies**: Runs on standard Python 3.10+ library.
+### Features
+
+*   **Window Manager**: Move, resize, maximize, minimize, drag and drop.
+*   **Mouse Support**: Works in TTY consoles (via `gpm`) and terminal emulators (xterm protocol).
+*   **Embedded Terminal**: Full PTY shell inside a window (POSIX and Windows via `pywinpty`).
+*   **Core Apps**: File Manager (dual-pane), Notepad, Terminal, Calculator, Hex Viewer, Process Manager, System Monitor, Log Viewer, Trash.
+*   **Plugins**: Minesweeper, Solitaire, Snake, Tetris, Character Map, Clock, RetroNet, Image Viewer, WiFi Manager.
+*   **Themes**: Windows 3.1, DOS, Windows 95, Hacker, Amiga.
+*   **Plugin System**: Auto-loads custom plugins from a configurable directory.
+*   **No dependencies on Linux**: Just standard Python 3.10+. Windows requires `pywinpty` and `windows-curses`.
 
 ## Installation
 
 ```bash
 git clone https://github.com/roccolate/RetroTUI.git
 cd RetroTUI
-python3 -m retrotui
+python -m retrotui
 ```
 
 ### Requirements
-*   **Linux/WSL/Windows**.
-*   **Python 3.10+**.
-*   **Terminal size**: At least 80x24.
-*   **UTF-8 Locale** (Recommended).
-*   **Windows**: `pip install pywinpty windows-curses` (for Python 3.14+: [windows-curses fork](https://github.com/roccolate/windows-curses)).
+
+| Platform | Requirements |
+| :--- | :--- |
+| **Linux/WSL** | Python 3.10+, terminal 80x24 minimum, UTF-8 recommended |
+| **Windows** | Python 3.10+, `pip install pywinpty windows-curses` |
+
+For Python 3.14+ on Windows: [windows-curses fork](https://github.com/roccolate/windows-curses).
 
 ## Controls
 
-### Global
 | Key | Action |
 | :--- | :--- |
-| `Tab` | Switch Window Focus |
-| `F10` | Toggle Menu Bar |
-| `Ctrl+Q` | Exit RetroTUI |
-| `Alt+Tab` | Cycle Windows |
+| `Tab` | Switch window focus |
+| `F10` | Toggle menu bar |
+| `Ctrl+Q` | Exit |
+| `Alt+Tab` | Cycle windows |
+| Right click | Context menu |
 
 ### Apps
-*   **File Manager**: `Enter` to open, `F5` Copy, `F6` Move, `F8` Delete.
-*   **Notepad**: `Ctrl+S` Save, `Ctrl+W` Toggle Word Wrap.
-*   **Terminal**: `Ctrl+Shift+C` Copy, `Ctrl+Shift+V` Paste.
+*   **File Manager**: `Enter` to open, `F5` Copy, `F4` Move, `F2` Rename, `Del` Delete, `D` dual-pane.
+*   **Notepad**: `Ctrl+S` Save, `Ctrl+O` Open, `Ctrl+W` Toggle word wrap.
+*   **Terminal**: `Ctrl+C` Copy/Interrupt, `Ctrl+V` Paste, `F6` Interrupt, `F7` Terminate.
 
 ## Documentation
 *   [ARCHITECTURE.md](ARCHITECTURE.md) - System design and internals.
@@ -141,5 +136,5 @@ python3 -m retrotui
 
 ---
 
-## Licencia / License
+## License
 MIT
