@@ -5,6 +5,10 @@ version = "0.1.0"
 description = "Simple weather fetch via wttr.in (example)."
 menu_category = "Entertainment"
 
+[plugin.icon]
+emoji = "🌤️"
+token = "WX"
+
 [plugin.window]
 default_width = 60
 default_height = 8

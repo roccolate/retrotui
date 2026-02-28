@@ -5,6 +5,10 @@ version = "0.1.0"
 description = "Network interfaces counters and simple rates (example)"
 menu_category = "System"
 
+[plugin.icon]
+emoji = "🌐"
+token = "NM"
+
 [plugin.window]
 default_width = 60
 default_height = 14

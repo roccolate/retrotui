@@ -317,7 +317,6 @@ class IconsWindow(DesktopIconManagerWindow):
         ("default", "Classic"),
         ("mini", "Mini"),
         ("braille", "Braille"),
-        ("codex", "Codex"),
     )
 
     def __init__(self, x, y, w, h, app):
@@ -362,7 +361,6 @@ class IconsWindow(DesktopIconManagerWindow):
             "default": "📁",
             "mini": ":D",
             "braille": "⠋⠊",
-            "codex": "⟠F",
         }
         return fallback.get(style_key, "[]")
 

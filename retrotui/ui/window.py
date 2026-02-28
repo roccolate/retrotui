@@ -20,6 +20,8 @@ from .menu import WindowMenu
 class Window:
     """A draggable window with title bar and content area."""
 
+    needs_redraw = False
+
     _next_id = 0
     TITLE_CONTROLS = '[─][□][×]'
     MIN_BTN_OFFSET = 10

@@ -32,6 +32,10 @@ _LOG_COLOR_APPLY_ERRORS = (
 class LogViewerWindow(SelectableTextMixin, Window):
     """Read-only log viewer with follow mode and vim-like search."""
 
+    @property
+    def needs_redraw(self):
+        return getattr(self, "follow_mode", False) and getattr(self, "filepath", None) is not None
+
     MAX_LINES = 5000
     READ_TAIL_BYTES = 512 * 1024
     POLL_INTERVAL_SECONDS = 0.4

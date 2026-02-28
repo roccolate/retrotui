@@ -9,6 +9,8 @@ from retrotui.utils import safe_addstr, theme_attr
 
 
 class Plugin(RetroApp):
+    needs_redraw = True
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.cols = []

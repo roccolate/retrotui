@@ -9,6 +9,7 @@ from ..constants import (
     TERMINAL_INPUT_TIMEOUT_MS,
     TERMINAL_LIVE_INPUT_TIMEOUT_MS,
     TERMINAL_BACKGROUND_INPUT_TIMEOUT_MS,
+    TERMINAL_ANIMATED_INPUT_TIMEOUT_MS,
     _CURSES_ERROR,
 )
 
@@ -137,6 +138,16 @@ def _has_live_terminals(app):
     return False
 
 
+def _has_animated_windows(app):
+    """Return True if any visible window requests periodic redraws."""
+    for w in app.windows:
+        if not getattr(w, "visible", True):
+            continue
+        if getattr(w, "needs_redraw", False):
+            return True
+    return False
+
+
 def _select_input_timeout_ms(app):
     """Return the target input timeout for the current runtime state."""
     idle = int(getattr(app, "input_timeout_idle_ms", TERMINAL_INPUT_TIMEOUT_MS))
@@ -151,6 +162,16 @@ def _select_input_timeout_ms(app):
             )
         )
         return max(1, live)
+
+    if _has_animated_windows(app):
+        anim = int(
+            getattr(
+                app,
+                "input_timeout_animated_ms",
+                TERMINAL_ANIMATED_INPUT_TIMEOUT_MS,
+            )
+        )
+        return max(1, min(timeout_ms, anim))
 
     has_background_operation = getattr(app, "has_background_operation", None)
     if callable(has_background_operation) and bool(has_background_operation()):
@@ -311,8 +332,8 @@ def run_app_loop(app):
                         app._dirty = True
                     if _notif.has_visible:
                         app._dirty = True
-                # Always redraw when live terminals may have pending PTY output.
-                if _has_live_terminals(app):
+                # Always redraw when live terminals or animated windows are active.
+                if _has_live_terminals(app) or _has_animated_windows(app):
                     app._dirty = True
                 if getattr(app, '_dirty', True):
                     draw_start = time.perf_counter()

@@ -5,6 +5,10 @@ version = "0.1.0"
 description = "Animated ASCII aquarium (simple demo)."
 menu_category = "Entertainment"
 
+[plugin.icon]
+emoji = "🐠"
+token = "AQ"
+
 [plugin.window]
 default_width = 60
 default_height = 16

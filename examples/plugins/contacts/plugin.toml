@@ -4,8 +4,11 @@ id = "contacts"
 version = "0.1.0"
 description = "Simple contacts/cardfile plugin"
 author = "RetroTUI"
-icon = "📇"
 menu_category = "Apps"
+
+[plugin.icon]
+emoji = "📇"
+token = "CT"
 
 [plugin.window]
 default_width = 50

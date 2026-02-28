@@ -4,8 +4,11 @@ id = "qa-runner"
 version = "0.1.0"
 description = "Run RetroTUI QA checks and unit tests from a plugin window"
 author = "RetroTUI"
-icon = "[T]"
 menu_category = "Apps"
+
+[plugin.icon]
+emoji = "🧪"
+token = "QA"
 
 [plugin.window]
 default_width = 88

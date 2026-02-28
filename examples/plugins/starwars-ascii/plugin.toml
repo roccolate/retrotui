@@ -5,6 +5,10 @@ version = "0.1.0"
 description = "Stream the full Star Wars ASCII movie over telnet."
 menu_category = "Entertainment"
 
+[plugin.icon]
+emoji = "⭐"
+token = "SW"
+
 [plugin.window]
 default_width = 96
 default_height = 28

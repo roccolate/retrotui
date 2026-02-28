@@ -120,7 +120,7 @@ def _normalize_config(raw: dict) -> AppConfig:
     icon_style = str(ui.get("icon_style", "default")).strip().lower() or "default"
     if icon_style == "retro_01":
         icon_style = "mini"
-    if icon_style not in ("default", "mini", "braille", "codex"):
+    if icon_style not in ("default", "mini", "braille"):
         icon_style = "default"
     hidden_icons = str(ui.get("hidden_icons", "")).strip()
     hidden_menu_items = str(ui.get("hidden_menu_items", "")).strip()
