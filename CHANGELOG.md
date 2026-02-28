@@ -4,6 +4,26 @@ Todas las versiones notables de RetroTUI están documentadas aquí.
 
 ---
 
+## [v0.9.3] - 2026-02-27
+
+### Added
+- **Animated plugin auto-refresh**: `needs_redraw` mechanism in `Window` base class. Animated plugins (aquarium, matrix, starwars, game-of-life, pomodoro, system-monitor, network-monitor) and LogViewer now refresh automatically without user interaction.
+- **Adaptive input timeout**: 100ms timeout for animated windows, cascading back to 500ms idle when no animations are active.
+- **Per-plugin icons**: `[plugin.icon]` section in `plugin.toml` with `emoji` and `token` fields. All 21 example plugins have custom icons.
+- **Braille pixel art icons**: 8x12 pixel grids rendered as 4x3 Unicode braille characters for all 39 icons (18 built-in + 21 plugins).
+
+### Changed
+- **Core modularization**: `core/app.py` decomposed into 5 modules (window_manager, action_runner, dialog_dispatch, drag_drop, file_operations).
+- **Bundled plugins**: 9 apps migrated from `apps/` to `bundled_plugins/` (charmap, clock, image-viewer, minesweeper, retronet, snake, solitaire, tetris, wifi-manager).
+- **Notepad**: dispatch table (`_KEY_DISPATCH`) replaces 217-line if/elif chain.
+- **File Manager**: pane state unified with `PaneState` + compatibility properties.
+- **Terminal**: dead code cleanup (`_dirty_lines`), session error visibility fix.
+- **Windows support**: dual PTY backend (POSIX `pty.fork()` + Windows `pywinpty` ConPTY), conditional deps, cross-platform flow control shim.
+- Icon style system reduced to 3 styles: default, mini, braille (removed codex).
+- Test suite expanded to 970 tests.
+
+---
+
 ## [v0.9.2] - 2026-02-24
 
 ### Added

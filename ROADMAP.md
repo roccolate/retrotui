@@ -2,7 +2,7 @@
 
 **Objetivo:** Un entorno de escritorio estilo Windows 3.1 completamente funcional para la terminal. Sin X11. Sin Wayland. Solo curses, una TTY y vibes.
 
-**Estado actual:** v0.9.3-dev en `main` — pendiente de tag/release formal.
+**Estado actual:** v0.9.3 released.
 
 ---
 
@@ -52,9 +52,7 @@ Character Map, Markdown Viewer, System Monitor, Control Panel, Tetris, RetroNet 
 
 Plugin loader con `plugin.toml`, clase base `RetroApp`, auto-discovery, registro dinamico en desktop/menu. Plugin de ejemplo (`todo-list`). Guia de desarrollo (`docs/plugin-guide.md`). Hardening de TTY: captura de puntero, drag-drop normalizado, menu Plugins dinamico.
 
-### v0.9.3 — Refactor, Plugins Bundled y Windows (dev, sin tag)
-
-Lo que hay en `main` desde v0.9.2:
+### v0.9.3 — Refactor, Plugins Bundled y Windows
 
 **Modularizacion del core**
 - [x] Descomposicion de `core/app.py` en 5 modulos (window_manager, action_runner, dialog_dispatch, drag_drop, file_operations)
@@ -76,11 +74,18 @@ Lo que hay en `main` desde v0.9.2:
 - [x] Shim `win_termios.py` para flow control cross-platform
 
 **Estilos de iconos**
-- [x] 4 estilos de iconos de escritorio: default, mini, braille, codex
+- [x] 3 estilos de iconos de escritorio: default, mini, braille
+- [x] Braille pixel art: iconos 8x12 renderizados como caracteres braille Unicode (4x3)
+- [x] Iconos per-plugin via `[plugin.icon]` en `plugin.toml` (emoji + token)
 - [x] Seleccion desde Settings con gallery preview
 
+**Auto-refresh de plugins animados**
+- [x] Mecanismo `needs_redraw` en `Window` para plugins con animacion
+- [x] Timeout adaptativo (100ms) para ventanas animadas sin afectar idle (500ms)
+- [x] Plugins animados se refrescan solos: aquarium, matrix, starwars, game-of-life, pomodoro, system-monitor, network-monitor
+
 **Calidad**
-- [x] ~950 tests, 100% cobertura por modulo
+- [x] 970 tests, 100% cobertura por modulo
 - [x] Optimizaciones de rendering (cache de taskbar, window stats)
 
 ---
@@ -177,4 +182,4 @@ Ideas sin version asignada, se consideraran segun prioridad.
 
 ---
 
-*Ultima actualizacion: 26 de febrero de 2026*
+*Ultima actualizacion: 27 de febrero de 2026*
