@@ -6,6 +6,10 @@ from retrotui.utils import safe_addstr, theme_attr
 
 
 class Plugin(RetroApp):
+    @property
+    def needs_redraw(self):
+        return getattr(self, "state", "idle") == "running"
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.state = 'idle'  # idle, running, break

@@ -4,8 +4,11 @@ id = "sticky-notes"
 version = "0.1.0"
 description = "Persistent sticky notes on the desktop"
 author = "RetroTUI"
-icon = "📌"
 menu_category = "Apps"
+
+[plugin.icon]
+emoji = "📌"
+token = "SN"
 
 [plugin.window]
 default_width = 30

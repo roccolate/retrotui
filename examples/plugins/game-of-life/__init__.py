@@ -12,6 +12,10 @@ from retrotui.utils import safe_addstr, theme_attr
 
 
 class Plugin(RetroApp):
+    @property
+    def needs_redraw(self):
+        return getattr(self, "running", False)
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.running = False

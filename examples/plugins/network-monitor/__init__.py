@@ -24,6 +24,8 @@ def _parse_proc_net_dev():
 
 
 class Plugin(RetroApp):
+    needs_redraw = True
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.last = _parse_proc_net_dev()

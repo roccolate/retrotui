@@ -4,8 +4,11 @@ id = "rss-reader"
 version = "0.1.0"
 description = "Simple RSS/Atom feed reader (network optional)"
 author = "RetroTUI"
-icon = "📰"
 menu_category = "Apps"
+
+[plugin.icon]
+emoji = "📰"
+token = "RS"
 
 [plugin.window]
 default_width = 60

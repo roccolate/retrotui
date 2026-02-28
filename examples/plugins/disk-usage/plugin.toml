@@ -5,6 +5,10 @@ version = "0.1.0"
 description = "ncdu-style disk usage viewer (example plugin)"
 menu_category = "System"
 
+[plugin.icon]
+emoji = "💾"
+token = "DU"
+
 [plugin.window]
 default_width = 60
 default_height = 20

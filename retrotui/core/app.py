@@ -61,7 +61,6 @@ from .icon_styles import (
     ICON_STYLE_DEFAULT,
     ICON_STYLE_MINI,
     ICON_STYLE_BRAILLE,
-    ICON_STYLE_CODEX,
     ICON_STYLE_RETRO_01,
     normalize_icon_style,
     icon_style_variants as _icon_style_variants,

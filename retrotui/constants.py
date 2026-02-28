@@ -188,6 +188,8 @@ TERMINAL_INPUT_TIMEOUT_MS = 500  # Curses input timeout in milliseconds
 TERMINAL_LIVE_INPUT_TIMEOUT_MS = 33  # ~30 FPS polling cadence
 # Background workers (progress dialogs) benefit from faster updates than idle mode.
 TERMINAL_BACKGROUND_INPUT_TIMEOUT_MS = 120
+# Animated plugin windows (aquarium, matrix, etc.) need periodic redraws (~10 FPS).
+TERMINAL_ANIMATED_INPUT_TIMEOUT_MS = 100
 MOUSE_SCROLL_DOWN_FALLBACK = 0x200000  # Fallback mask for BUTTON5_PRESSED (scroll down)
 
 # Welcome window dimensions

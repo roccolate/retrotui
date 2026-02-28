@@ -8,9 +8,569 @@ from .actions import AppAction
 ICON_STYLE_DEFAULT = "default"
 ICON_STYLE_MINI = "mini"
 ICON_STYLE_BRAILLE = "braille"
-ICON_STYLE_CODEX = "codex"
 ICON_STYLE_RETRO_01 = "retro_01"  # Legacy alias kept for backwards compatibility.
 
+
+# ---------------------------------------------------------------------------
+# Braille pixel art helpers
+# ---------------------------------------------------------------------------
+
+def _grid_to_braille(text):
+    """Convert an 8-wide x 12-tall pixel grid to 4x3 braille characters.
+
+    ``#`` = filled dot, any other character = empty.  The grid is supplied as
+    a multi-line string (12 lines of up to 8 characters each).
+    """
+    lines = text.strip().splitlines()
+    while len(lines) < 12:
+        lines.append("")
+    pixels = []
+    for line in lines[:12]:
+        pixels.append([(1 if i < len(line) and line[i] == "#" else 0) for i in range(8)])
+    result = []
+    for br in range(3):
+        row = ""
+        for bc in range(4):
+            val = 0
+            r, c = br * 4, bc * 2
+            if pixels[r][c]:       val |= 0x01
+            if pixels[r + 1][c]:   val |= 0x02
+            if pixels[r + 2][c]:   val |= 0x04
+            if pixels[r][c + 1]:   val |= 0x08
+            if pixels[r + 1][c + 1]: val |= 0x10
+            if pixels[r + 2][c + 1]: val |= 0x20
+            if pixels[r + 3][c]:   val |= 0x40
+            if pixels[r + 3][c + 1]: val |= 0x80
+            row += chr(0x2800 + val)
+        result.append(row)
+    return result
+
+
+# 8x12 pixel grids for braille icon art.  Each grid is keyed by either an
+# AppAction value (built-in apps) or "plugin:<id>" (example plugins).
+_BRAILLE_GRIDS = {
+    # -- Built-in apps --------------------------------------------------
+    "filemanager": """\
+.####...
+########
+########
+########
+########
+########
+########
+########
+########
+.######.
+........
+........""",
+    "notepad": """\
+.######.
+.######.
+.#..#.#.
+.######.
+.#..#.#.
+.######.
+.#..#.#.
+.######.
+.######.
+........
+........
+........""",
+    "asciivideo": """\
+..#.....
+.##.....
+####..##
+#####.##
+####..##
+.##.....
+..#.....
+........
+........
+........
+........
+........""",
+    "terminal": """\
+########
+#......#
+#.#....#
+#..#...#
+#.#.##.#
+#......#
+#......#
+#......#
+########
+........
+........
+........""",
+    "calculator": """\
+########
+#.####.#
+#.####.#
+#......#
+#.#..#.#
+#.#..#.#
+#......#
+#.#..#.#
+########
+........
+........
+........""",
+    "log_viewer": """\
+.######.
+.######.
+.##..##.
+.######.
+.##..##.
+.######.
+.##..##.
+.######.
+.######.
+...##...
+...##...
+........""",
+    "process_manager": """\
+########
+#......#
+#.#.##.#
+#.#.##.#
+#.####.#
+#.####.#
+#.####.#
+#......#
+########
+........
+........
+........""",
+    "trash_bin": """\
+.######.
+########
+.######.
+.######.
+.#.##.#.
+.#.##.#.
+.#.##.#.
+.######.
+..####..
+........
+........
+........""",
+    "settings": """\
+..#..#..
+.######.
+########
+###..###
+###..###
+########
+.######.
+..#..#..
+........
+........
+........
+........""",
+    "about": """\
+..####..
+.######.
+.##..##.
+..####..
+...##...
+...##...
+...##...
+..####..
+........
+........
+........
+........""",
+    "clipboard": """\
+..####..
+########
+##....##
+##.##.##
+##....##
+##.##.##
+##....##
+########
+........
+........
+........
+........""",
+    "hex_viewer": """\
+.##..##.
+#..#.#.#
+#..#..#.
+#..#.#..
+#..#.#.#
+.##..##.
+........
+........
+........
+........
+........
+........""",
+    "desktop_icon_manager": """\
+##..##..
+##..##..
+........
+##..##..
+##..##..
+........
+##..##..
+##..##..
+........
+........
+........
+........""",
+    "icons": """\
+...##...
+..####..
+.######.
+########
+.######.
+..####..
+...##...
+........
+........
+........
+........
+........""",
+    "menu_editor": """\
+########
+........
+.######.
+........
+.####...
+........
+.######.
+........
+########
+........
+........
+........""",
+    "markdown_viewer": """\
+.######.
+.##..##.
+.#.##.#.
+.#....#.
+.######.
+.#..#.#.
+.######.
+.######.
+.######.
+........
+........
+........""",
+    "system_monitor": """\
+......#.
+......##
+....#.##
+....####
+..#.####
+..######
+########
+########
+........
+........
+........
+........""",
+    "control_panel": """\
+########
+#......#
+#.####.#
+#......#
+#..###.#
+#......#
+#.####.#
+#......#
+########
+........
+........
+........""",
+    # -- Example plugins ------------------------------------------------
+    "plugin:ascii-aquarium": """\
+........
+..#.....
+.###.##.
+########
+.###.##.
+..#.....
+........
+........
+........
+........
+........
+........""",
+    "plugin:contacts": """\
+...##...
+..####..
+...##...
+..####..
+.######.
+########
+.######.
+..####..
+........
+........
+........
+........""",
+    "plugin:cron-editor": """\
+.######.
+##....##
+#.#...##
+#..#..##
+#..##.##
+#.....##
+##....##
+.######.
+........
+........
+........
+........""",
+    "plugin:db-browser": """\
+.######.
+########
+.######.
+.######.
+########
+.######.
+.######.
+########
+.######.
+........
+........
+........""",
+    "plugin:disk-usage": """\
+..####..
+.######.
+####..##
+####..##
+######.#
+.######.
+..####..
+........
+........
+........
+........
+........""",
+    "plugin:docker-manager": """\
+#.#.#.#.
+########
+########
+########
+########
+########
+.######.
+........
+........
+........
+........
+........""",
+    "plugin:fortune-cookie": """\
+..####..
+.######.
+.#####..
+..###...
+..##.#..
+.##..##.
+........
+........
+........
+........
+........
+........""",
+    "plugin:game-of-life": """\
+........
+.##.....
+.##.##..
+....##..
+.....##.
+##...##.
+##......
+........
+........
+........
+........
+........""",
+    "plugin:git-status": """\
+....##..
+....##..
+.#..##..
+.##.##..
+..####..
+...##...
+...##...
+...##...
+........
+........
+........
+........""",
+    "plugin:json-viewer": """\
+..##....
+.##.....
+.##.....
+##......
+.##.....
+.##.....
+..##....
+........
+........
+........
+........
+........""",
+    "plugin:matrix-rain": """\
+.#..#..#
+.#.##..#
+.#.##.##
+##.##.##
+##.##.##
+##..#.##
+##..#.#.
+.#..#.#.
+........
+........
+........
+........""",
+    "plugin:network-monitor": """\
+.##..##.
+.##..##.
+..####..
+...##...
+..####..
+.##..##.
+.##..##.
+........
+........
+........
+........
+........""",
+    "plugin:pomodoro": """\
+..####..
+.######.
+##.##.##
+##.##.##
+##..#.##
+##....##
+.######.
+..####..
+........
+........
+........
+........""",
+    "plugin:qa-runner": """\
+........
+......#.
+.....##.
+....##..
+#..##...
+.####...
+..##....
+........
+........
+........
+........
+........""",
+    "plugin:rss-reader": """\
+........
+...####.
+.#.##...
+.###....
+.##.....
+.##.....
+........
+........
+........
+........
+........
+........""",
+    "plugin:service-manager": """\
+##...##.
+.##.##..
+..###...
+...##...
+..###...
+.##.##..
+##...##.
+........
+........
+........
+........
+........""",
+    "plugin:starwars-ascii": """\
+...##...
+...##...
+########
+.######.
+..####..
+.##..##.
+##....##
+........
+........
+........
+........
+........""",
+    "plugin:sticky-notes": """\
+########
+########
+##....##
+##....##
+##....##
+########
+########
+........
+........
+........
+........
+........""",
+    "plugin:system-monitor": """\
+......#.
+......##
+....#.##
+....####
+..#.####
+..######
+########
+########
+........
+........
+........
+........""",
+    "plugin:todo-list": """\
+.#.#####
+##.#####
+.#......
+.#.#####
+##.#####
+.#......
+.#.#####
+##.#####
+........
+........
+........
+........""",
+    "plugin:weather-widget": """\
+......##
+..###.##
+.######.
+########
+########
+.######.
+........
+........
+........
+........
+........
+........""",
+}
+
+_BRAILLE_ART = {k: _grid_to_braille(v) for k, v in _BRAILLE_GRIDS.items()}
+
+
+def braille_art_for_action(action_key):
+    """Return 3-line braille pixel art for *action_key*, or None."""
+    return _BRAILLE_ART.get(str(action_key or "").lower())
+
+
+# ---------------------------------------------------------------------------
+# Public helpers
+# ---------------------------------------------------------------------------
 
 def split_config_csv(raw):
     """Return lowercased non-empty comma-separated tokens from *raw* string."""
@@ -24,7 +584,7 @@ def normalize_icon_style(style):
     normalized = str(style or ICON_STYLE_DEFAULT).strip().lower()
     if normalized == ICON_STYLE_RETRO_01:
         return ICON_STYLE_MINI
-    if normalized in (ICON_STYLE_DEFAULT, ICON_STYLE_MINI, ICON_STYLE_BRAILLE, ICON_STYLE_CODEX):
+    if normalized in (ICON_STYLE_DEFAULT, ICON_STYLE_MINI, ICON_STYLE_BRAILLE):
         return normalized
     return ICON_STYLE_DEFAULT
 
@@ -32,41 +592,40 @@ def normalize_icon_style(style):
 def icon_style_variants():
     """Return per-icon style variants keyed by action/value key."""
     return {
-        AppAction.FILE_MANAGER.value: {"mini": ":D", "braille": "⠋⠊", "codex": "⟠F"},
-        AppAction.NOTEPAD.value: {"mini": ":|", "braille": "⠝⠏", "codex": "⟠N"},
-        AppAction.ASCII_VIDEO.value: {"mini": "AV", "braille": "⠁⠧", "codex": "⟠V"},
-        AppAction.TERMINAL.value: {"mini": ">:", "braille": "⠞⠍", "codex": "⟠T"},
-        AppAction.CALCULATOR.value: {"mini": "+)", "braille": "⠉⠁", "codex": "⟠C"},
-        AppAction.LOG_VIEWER.value: {"mini": "LG", "braille": "⠇⠛", "codex": "⟠L"},
-        AppAction.PROCESS_MANAGER.value: {"mini": "PS", "braille": "⠏⠎", "codex": "⟠P"},
-        AppAction.TRASH_BIN.value: {"mini": "TR", "braille": "⠞⠗", "codex": "⟠R"},
-        AppAction.SETTINGS.value: {"mini": "8)", "braille": "⠎⠞", "codex": "⟠S"},
-        AppAction.ABOUT.value: {"mini": "i)", "braille": "⠁⠃", "codex": "⟠A"},
-        AppAction.CLIPBOARD.value: {"mini": "CB", "braille": "⠉⠃", "codex": "⟠B"},
-        AppAction.HEX_VIEWER.value: {"mini": "0x", "braille": "⠓⠭", "codex": "⟠X"},
-        AppAction.DESKTOP_ICON_MANAGER.value: {"mini": "DT", "braille": "⠙⠞", "codex": "⟠D"},
-        AppAction.ICONS.value: {"mini": ":)", "braille": "⠊⠉", "codex": "⟠O"},
-        AppAction.MENU_EDITOR.value: {"mini": "MN", "braille": "⠍⠝", "codex": "⟠E"},
-        AppAction.MARKDOWN_VIEWER.value: {"mini": "MD", "braille": "⠍⠙", "codex": "⟠Y"},
-        AppAction.SYSTEM_MONITOR.value: {"mini": "SM", "braille": "⠎⠍", "codex": "⟠U"},
-        AppAction.CONTROL_PANEL.value: {"mini": "CT", "braille": "⠉⠞", "codex": "⟠Q"},
+        AppAction.FILE_MANAGER.value: {"mini": ":D"},
+        AppAction.NOTEPAD.value: {"mini": ":|"},
+        AppAction.ASCII_VIDEO.value: {"mini": "AV"},
+        AppAction.TERMINAL.value: {"mini": ">:"},
+        AppAction.CALCULATOR.value: {"mini": "+)"},
+        AppAction.LOG_VIEWER.value: {"mini": "LG"},
+        AppAction.PROCESS_MANAGER.value: {"mini": "PS"},
+        AppAction.TRASH_BIN.value: {"mini": "TR"},
+        AppAction.SETTINGS.value: {"mini": "8)"},
+        AppAction.ABOUT.value: {"mini": "i)"},
+        AppAction.CLIPBOARD.value: {"mini": "CB"},
+        AppAction.HEX_VIEWER.value: {"mini": "0x"},
+        AppAction.DESKTOP_ICON_MANAGER.value: {"mini": "DT"},
+        AppAction.ICONS.value: {"mini": ":)"},
+        AppAction.MENU_EDITOR.value: {"mini": "MN"},
+        AppAction.MARKDOWN_VIEWER.value: {"mini": "MD"},
+        AppAction.SYSTEM_MONITOR.value: {"mini": "SM"},
+        AppAction.CONTROL_PANEL.value: {"mini": "CT"},
     }
 
 
 def style_symbol_for_icon(icon, style):
     """Return style-specific symbol token for one icon."""
+    if style == ICON_STYLE_BRAILLE:
+        return None  # Braille uses pixel art, not symbols.
     action = icon.get("action")
     key = getattr(action, "value", action)
     key = str(key or "").lower()
     by_icon = icon_style_variants().get(key, {})
 
     if key.startswith("plugin:"):
+        token = icon.get("_token", "")
         if style == ICON_STYLE_MINI:
-            return ":)"
-        if style == ICON_STYLE_BRAILLE:
-            return "⠏⠇"
-        if style == ICON_STYLE_CODEX:
-            return "⟠PL"
+            return token if token else ":)"
         return None
 
     return by_icon.get(style)
@@ -76,20 +635,30 @@ def styled_icon_entry(icon, style, use_unicode):
     """Return style-adjusted icon entry for current desktop icon style."""
     style = normalize_icon_style(style)
     if style == ICON_STYLE_DEFAULT:
-        # Default style is the classic 3-line grid icon set.
         styled = dict(icon)
         styled.pop("symbol", None)
         return styled
 
+    # Braille pixel art — use pre-computed 3-line art directly.
+    if style == ICON_STYLE_BRAILLE:
+        styled = dict(icon)
+        action = icon.get("action")
+        key = getattr(action, "value", action)
+        key = str(key or "").lower()
+        art = braille_art_for_action(key)
+        if art:
+            styled["art"] = list(art)
+            styled.pop("symbol", None)
+        return styled
+
+    # Mini style — symbol inside a box.
     styled = dict(icon)
     symbol = style_symbol_for_icon(styled, style)
     if symbol:
         styled["symbol"] = symbol
         token = symbol[:2].ljust(2)
-        if use_unicode and style in (ICON_STYLE_MINI, ICON_STYLE_CODEX):
+        if use_unicode:
             styled["art"] = ["╭──╮", f"│{token}│", "╰──╯"]
-        elif use_unicode and style == ICON_STYLE_BRAILLE:
-            styled["art"] = ["┌──┐", f"│{token}│", "└──┘"]
         else:
             styled["art"] = ["+--+", f"|{token}|", "+--+"]
     return styled
@@ -115,6 +684,11 @@ def icon_style_preview_symbol(style, icon_key, use_unicode):
             if isinstance(symbol, str) and symbol:
                 return symbol
         return "[]"
+    if normalized == ICON_STYLE_BRAILLE:
+        art = braille_art_for_action(icon_key)
+        if art and len(art) >= 2:
+            return art[1]
+        return "⣿⣿"
     probe_icon = {"action": icon_key}
     return style_symbol_for_icon(probe_icon, normalized) or "[]"
 
@@ -133,13 +707,15 @@ def get_hidden_icon_labels(config):
     return split_config_csv(raw)
 
 
-def plugin_icon_art(name, use_unicode):
+def plugin_icon_art(name, use_unicode, token=None):
     """Build compact 3x4 icon art for plugin desktop entries."""
-    token = ''.join(ch for ch in str(name) if ch.isalnum())[:2].upper()
+    if not token:
+        token = ''.join(ch for ch in str(name) if ch.isalnum())[:2].upper()
     if not token:
         token = "PL"
     if len(token) == 1:
         token += " "
+    token = token[:2]
     if use_unicode:
         return ["┌──┐", f"│{token}│", "└──┘"]
     return ["+--+", f"|{token}|", "+--+"]
@@ -151,15 +727,26 @@ def build_plugin_icons(plugins, use_unicode):
     for plugin_id, info in (plugins or {}).items():
         plugin_info = (info.get("manifest", {}) or {}).get("plugin", {}) or {}
         name = str(plugin_info.get("name") or plugin_id)
-        icons.append(
-            {
-                "label": name,
-                "action": f"plugin:{plugin_id}",
-                "art": plugin_icon_art(name, use_unicode),
-                "category": "Plugins",
-                "hide_key": f"plugin:{plugin_id}",
-            }
-        )
+        icon_section = plugin_info.get("icon") or {}
+        # Support both [plugin.icon] table and legacy flat icon = "emoji" string.
+        if isinstance(icon_section, str):
+            emoji = icon_section
+            token = None
+        else:
+            emoji = icon_section.get("emoji") or plugin_info.get("icon_legacy")
+            token = icon_section.get("token")
+        entry = {
+            "label": name,
+            "action": f"plugin:{plugin_id}",
+            "art": plugin_icon_art(name, use_unicode, token=token),
+            "category": "Plugins",
+            "hide_key": f"plugin:{plugin_id}",
+        }
+        if isinstance(emoji, str) and emoji.strip():
+            entry["symbol"] = emoji.strip()
+        if isinstance(token, str) and token.strip():
+            entry["_token"] = token.strip()[:2].upper()
+        icons.append(entry)
     icons.sort(key=lambda item: (item.get("label", "").lower(), item.get("action", "")))
     return icons
 

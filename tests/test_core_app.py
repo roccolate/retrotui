@@ -1055,7 +1055,7 @@ class CoreAppTests(unittest.TestCase):
     def test_normalize_icon_style_maps_legacy_and_invalid_values(self):
         self.assertEqual(self.app_mod.RetroTUI._normalize_icon_style("retro_01"), "mini")
         self.assertEqual(self.app_mod.RetroTUI._normalize_icon_style("MINI"), "mini")
-        self.assertEqual(self.app_mod.RetroTUI._normalize_icon_style("codex"), "codex")
+        self.assertEqual(self.app_mod.RetroTUI._normalize_icon_style("codex"), "default")
         self.assertEqual(self.app_mod.RetroTUI._normalize_icon_style("weird"), "default")
 
     def test_default_icon_style_uses_classic_grid_without_symbol(self):

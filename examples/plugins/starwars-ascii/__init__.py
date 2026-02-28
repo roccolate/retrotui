@@ -17,6 +17,11 @@ from retrotui.utils import safe_addstr, theme_attr
 class Plugin(RetroApp):
     """Render the classic ASCII movie stream inside RetroTUI."""
 
+    @property
+    def needs_redraw(self):
+        thread = getattr(self, "_worker_thread", None)
+        return thread is not None and thread.is_alive()
+
     HOSTS = (
         ("starwarstel.net", 23),
         ("towel.blinkenlights.nl", 23),

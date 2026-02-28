@@ -5,6 +5,10 @@ version = "0.1.0"
 description = "Simple system dashboard: load, memory, disk (example plugin)"
 menu_category = "System"
 
+[plugin.icon]
+emoji = "📊"
+token = "SM"
+
 [plugin.window]
 default_width = 50
 default_height = 12

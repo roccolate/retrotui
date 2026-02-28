@@ -4,8 +4,11 @@ id = "pomodoro"
 version = "0.1.0"
 description = "Pomodoro 25/5 timer with bell and history"
 author = "RetroTUI"
-icon = "⏲️"
 menu_category = "Apps"
+
+[plugin.icon]
+emoji = "⏲️"
+token = "PM"
 
 [plugin.window]
 default_width = 36

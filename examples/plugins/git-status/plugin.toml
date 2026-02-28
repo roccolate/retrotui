@@ -5,6 +5,10 @@ version = "0.1.0"
 description = "Show branch and recent commits for a repo (example)."
 menu_category = "Development"
 
+[plugin.icon]
+emoji = "🔀"
+token = "GI"
+
 [plugin.window]
 default_width = 70
 default_height = 16

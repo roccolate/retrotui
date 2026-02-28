@@ -5,6 +5,10 @@ version = "0.1.0"
 description = "Explore SQLite files: list tables and show first rows (example)."
 menu_category = "Development"
 
+[plugin.icon]
+emoji = "🗄️"
+token = "DB"
+
 [plugin.window]
 default_width = 80
 default_height = 20
