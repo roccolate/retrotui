@@ -6,11 +6,10 @@ import os
 
 from ..constants import MOUSE_SCROLL_DOWN_FALLBACK, _CURSES_ERROR
 
-# Platform-aware termios import
-if os.name == 'nt':
-    from . import win_termios as termios
-else:
+try:
     import termios
+except ImportError:
+    termios = None
 _TERMINAL_SETUP_ERRORS = (
     AttributeError,
     OSError,
