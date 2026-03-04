@@ -9,9 +9,14 @@ local terminal flags to Windows console modes (via Win32 API).
 Limitations: not a full POSIX implementation. Suitable for apps
 that only need to switch console to raw/no-echo modes.
 """
-from ctypes import windll, byref, c_uint
+import sys
 
-kernel32 = windll.kernel32
+if sys.platform == "win32":
+    from ctypes import windll, byref, c_uint
+    kernel32 = windll.kernel32
+else:
+    from ctypes import byref, c_uint
+    kernel32 = None
 STD_INPUT_HANDLE = -10
 
 # Console mode flags
