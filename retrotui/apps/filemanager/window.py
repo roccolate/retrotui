@@ -287,6 +287,47 @@ class FileManagerWindow(Window):
         self.clear_pending_drag()
         return payload
 
+    def handle_mouse_drag(self, mx, my, bstate, norm=None):
+        if getattr(self, '_drag_mode', 0) == 0:
+            if not (bstate & curses.BUTTON1_PRESSED):
+                self.clear_pending_drag()
+            elif self._pending_drag_payload is None:
+                entry = self._selected_entry()
+                if entry and entry.name != '..':
+                    payload = self._drag_payload_for_entry(entry)
+                    if payload:
+                        self._set_pending_drag(payload, mx, my)
+        return super().handle_mouse_drag(mx, my, bstate, norm=norm)
+
+    def accept_dropped_path(self, path):
+        if not path or not isinstance(path, str):
+            return None
+        
+        dest_dir = self._active_base_path()
+        basename = os.path.basename(path)
+        dest_path = os.path.join(dest_dir, basename)
+        
+        p1 = os.path.normcase(os.path.realpath(path))
+        p2 = os.path.normcase(os.path.realpath(dest_path))
+        if p1 == p2:
+            return ActionResult(ActionType.ERROR, 'Source and destination are the same.')
+        if os.path.exists(dest_path):
+            return ActionResult(ActionType.ERROR, f'Destination already exists: {basename}')
+        
+        entry_is_dir = os.path.isdir(path)
+        size = 0 if entry_is_dir else (os.path.getsize(path) if os.path.exists(path) else 0)
+        entry_stub = FileEntry(basename, entry_is_dir, path, size)
+
+        if _is_long_file_operation(entry_stub, 10 * 1024 * 1024):
+            return ActionResult(ActionType.REQUEST_COPY_BETWEEN_PANES, {'source': path, 'dest': dest_dir})
+            
+        res = perform_copy(path, dest_path)
+        if res.type == ActionType.ERROR:
+            return res
+            
+        self._rebuild_content()
+        return ActionResult(ActionType.REFRESH, f'Copied {basename}')
+
     def _preview_stat_key(self, path):
         try:
             st = os.stat(path)
@@ -671,7 +712,9 @@ class FileManagerWindow(Window):
             dest_path = os.path.join(dest_dir, source.name)
             if os.path.exists(dest_path):
                 return ActionResult(ActionType.ERROR, f'Destination exists: {source.name}')
-            perform_move(source.full_path, dest_path)
+            res = perform_move(source.full_path, dest_path)
+            if res.type == ActionType.ERROR:
+                return res
             self._rebuild_content()
             return ActionResult(ActionType.REFRESH, f'Moved {source.name}')
         else:
@@ -681,7 +724,9 @@ class FileManagerWindow(Window):
             dest_path = os.path.join(dest_dir, source.name)
             if os.path.exists(dest_path):
                  return ActionResult(ActionType.ERROR, f'Destination exists: {source.name}')
-            perform_copy(source.full_path, dest_path)
+            res = perform_copy(source.full_path, dest_path)
+            if res.type == ActionType.ERROR:
+                return res
             self._rebuild_content()
             return ActionResult(ActionType.REFRESH, f'Copied {source.name}')
 
