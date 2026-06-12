@@ -260,6 +260,11 @@ class TerminalSession:
         """Send SIGTERM to foreground process."""
         return self.send_signal(signal.SIGTERM)
 
+    def kill(self):
+        """Send SIGKILL to foreground process."""
+        sig = getattr(signal, "SIGKILL", signal.SIGTERM)
+        return self.send_signal(sig)
+
     def resize(self, cols, rows):
         """Update terminal window size and notify child PTY."""
         self.cols = max(1, int(cols))
@@ -325,6 +330,18 @@ class TerminalSession:
             return
 
         if self.master_fd is not None:
+            if self.running:
+                self.terminate()
+                import time
+                for _ in range(5):
+                    if self.poll_exit():
+                        break
+                    time.sleep(0.02)
+                if self.running:
+                    self.kill()
+                    time.sleep(0.02)
+                    self.poll_exit()
+
             try:
                 os.close(self.master_fd)
             except OSError:

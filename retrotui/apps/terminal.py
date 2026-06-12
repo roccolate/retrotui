@@ -47,6 +47,11 @@ class TerminalWindow(SelectableTextMixin, Window):
         
         self._init_selection()
 
+        self._alt_screen = False
+        self._alt_lines = []
+        self._alt_cursor_col = 0
+        self._alt_cursor_row = 0
+
         self.window_menu = WindowMenu({
             'Terminal': [
                 ('Clear Scrollback', self.MENU_CLEAR),
@@ -145,6 +150,19 @@ class TerminalWindow(SelectableTextMixin, Window):
 
     def _write_char(self, ch, attr):
         """Write one character with attribute at current cursor."""
+        if getattr(self, '_alt_screen', False):
+            cols, rows = self._text_area_size()
+            row = self._alt_cursor_row
+            col = self._alt_cursor_col
+            if row < len(self._alt_lines):
+                line = self._alt_lines[row]
+                if col < cols:
+                    while len(line) <= col:
+                        line.append((' ', 0))
+                    line[col] = (ch, attr)
+            self._alt_cursor_col += 1
+            return
+
         if self._cursor_col < len(self._line_cells):
             self._line_cells[self._cursor_col] = (ch, attr)
         else:
@@ -156,6 +174,16 @@ class TerminalWindow(SelectableTextMixin, Window):
 
     def _append_newline(self):
         """Commit current line to scrollback."""
+        if getattr(self, '_alt_screen', False):
+            cols, rows = self._text_area_size()
+            self._alt_cursor_row += 1
+            self._alt_cursor_col = 0
+            if self._alt_cursor_row >= rows:
+                self._alt_cursor_row = rows - 1
+                self._alt_lines.pop(0)
+                self._alt_lines.append([(' ', 0) for _ in range(cols)])
+            return
+
         # We store the list of cells directly
         self._scroll_lines.append(list(self._line_cells))
         self._line_cells = []
@@ -167,6 +195,26 @@ class TerminalWindow(SelectableTextMixin, Window):
     def _erase_line(self, mode):
         """Apply CSI K (erase in line) mode."""
         fill_attr = self.ansi.attr
+        if getattr(self, '_alt_screen', False):
+            cols, rows = self._text_area_size()
+            row = self._alt_cursor_row
+            if row < len(self._alt_lines):
+                line = self._alt_lines[row]
+                if mode == 2:
+                    for i in range(cols):
+                        if i < len(line): line[i] = (' ', fill_attr)
+                        else: line.append((' ', fill_attr))
+                elif mode == 1:
+                    end = min(cols, self._alt_cursor_col + 1)
+                    for i in range(end):
+                        if i < len(line): line[i] = (' ', fill_attr)
+                        else: line.append((' ', fill_attr))
+                else:
+                    col = self._alt_cursor_col
+                    if col < len(line):
+                        for i in range(col, len(line)):
+                            line[i] = (' ', fill_attr)
+            return
 
         if mode == 2:  # Clear entire line
             self._line_cells = []
@@ -185,48 +233,82 @@ class TerminalWindow(SelectableTextMixin, Window):
 
     def _apply_csi(self, params, final):
         """Handle CSI controls for layout (attributes handled by AnsiStateMachine)."""
-        # params is a list of ints
-        
         def _num(index, default):
             if index >= len(params):
                 return default
             return params[index]
 
-        if final == 'D':  # Cursor left
-            self._cursor_col = max(0, self._cursor_col - max(1, _num(0, 1)))
+        if final == 'h':
+            if _num(0, 0) in (1049, 1047, 47):
+                self._alt_screen = True
+                cols, rows = self._text_area_size()
+                self._alt_lines = [[(' ', 0) for _ in range(cols)] for _ in range(rows)]
+                self._alt_cursor_col = 0
+                self._alt_cursor_row = 0
             return
-        if final == 'C':  # Cursor right
-            self._cursor_col = max(0, self._cursor_col + max(1, _num(0, 1)))
+        if final == 'l':
+            if _num(0, 0) in (1049, 1047, 47):
+                self._alt_screen = False
+                self._alt_lines = []
             return
-        if final == 'G':  # Cursor horizontal absolute (1-based)
-            self._cursor_col = max(0, _num(0, 1) - 1)
+
+        if final == 'A':
+            if getattr(self, '_alt_screen', False): self._alt_cursor_row = max(0, self._alt_cursor_row - max(1, _num(0, 1)))
             return
-        if final in ('H', 'f'):  # Cursor position (row;col) - we only support column
-            # We are single-line editable, row moves usually ignored or just clear?
-            # Implies we handle full screen addressable terminal?
-            # Our simple terminal is a rolling logger + single line edit mostly.
-            # But "real" programs use H to move around.
-            # Since we only render `_scroll_lines` (history) + `_line_cells` (current),
-            # we can't easily support moving UP into history to edit it.
-            # We treat H as setting column only for the current line.
+        if final == 'B':
+            if getattr(self, '_alt_screen', False): self._alt_cursor_row = max(0, self._alt_cursor_row + max(1, _num(0, 1)))
+            return
+        if final == 'D':
+            if getattr(self, '_alt_screen', False): self._alt_cursor_col = max(0, self._alt_cursor_col - max(1, _num(0, 1)))
+            else: self._cursor_col = max(0, self._cursor_col - max(1, _num(0, 1)))
+            return
+        if final == 'C':
+            if getattr(self, '_alt_screen', False): self._alt_cursor_col = max(0, self._alt_cursor_col + max(1, _num(0, 1)))
+            else: self._cursor_col = max(0, self._cursor_col + max(1, _num(0, 1)))
+            return
+        if final == 'G':
+            if getattr(self, '_alt_screen', False): self._alt_cursor_col = max(0, _num(0, 1) - 1)
+            else: self._cursor_col = max(0, _num(0, 1) - 1)
+            return
+        if final in ('H', 'f'):
+            row = _num(0, 1)
             col = _num(1, 1)
-            self._cursor_col = max(0, col - 1)
+            if getattr(self, '_alt_screen', False):
+                self._alt_cursor_row = max(0, row - 1)
+                self._alt_cursor_col = max(0, col - 1)
+            else:
+                self._cursor_col = max(0, col - 1)
             return
-        if final == 'K':  # Erase in line
+        if final == 'K':
             self._erase_line(_num(0, 0))
             return
-        if final == 'P':  # Delete character(s) at cursor
+        if final == 'P':
             count = max(1, _num(0, 1))
-            if self._cursor_col < len(self._line_cells):
-                del self._line_cells[self._cursor_col:self._cursor_col + count]
+            if getattr(self, '_alt_screen', False):
+                row = self._alt_cursor_row
+                col = self._alt_cursor_col
+                if row < len(self._alt_lines):
+                    line = self._alt_lines[row]
+                    if col < len(line):
+                        del line[col:col + count]
+                        line.extend([(' ', self.ansi.attr)] * count)
+            else:
+                if self._cursor_col < len(self._line_cells):
+                    del self._line_cells[self._cursor_col:self._cursor_col + count]
             return
-        if final == 'J':  # Erase in display
+        if final == 'J':
             mode = _num(0, 0)
             if mode == 2:
-                self._scroll_lines = []
-                self._line_cells = []
-                self._cursor_col = 0
-                self.scrollback_offset = 0
+                if getattr(self, '_alt_screen', False):
+                    cols, rows = self._text_area_size()
+                    self._alt_lines = [[(' ', self.ansi.attr) for _ in range(cols)] for _ in range(rows)]
+                    self._alt_cursor_col = 0
+                    self._alt_cursor_row = 0
+                else:
+                    self._scroll_lines = []
+                    self._line_cells = []
+                    self._cursor_col = 0
+                    self.scrollback_offset = 0
 
     def _consume_output(self, text):
         """Feed text to ANSI state machine and update buffer."""
@@ -243,14 +325,18 @@ class TerminalWindow(SelectableTextMixin, Window):
                 if data == '\n':
                     self._append_newline()
                 elif data == '\r':
-                    self._cursor_col = 0
+                    if getattr(self, '_alt_screen', False): self._alt_cursor_col = 0
+                    else: self._cursor_col = 0
                 elif data == '\b':
-                    self._cursor_col = max(0, self._cursor_col - 1)
+                    if getattr(self, '_alt_screen', False): self._alt_cursor_col = max(0, self._alt_cursor_col - 1)
+                    else: self._cursor_col = max(0, self._cursor_col - 1)
                 elif data == '\t':
-                    spaces = 4 - (self._cursor_col % 4)
-                    current_attr = self.ansi.attr
-                    for _ in range(spaces):
-                        self._write_char(' ', current_attr)
+                    if getattr(self, '_alt_screen', False):
+                        spaces = 4 - (self._alt_cursor_col % 4)
+                        for _ in range(spaces): self._write_char(' ', self.ansi.attr)
+                    else:
+                        spaces = 4 - (self._cursor_col % 4)
+                        for _ in range(spaces): self._write_char(' ', self.ansi.attr)
             elif kind == 'CSI':
                 # data is final char, attr is params list
                 self._apply_csi(attr, data)
@@ -275,8 +361,8 @@ class TerminalWindow(SelectableTextMixin, Window):
 
     def _all_lines(self):
         """Return all lines including current editable line (as lists of cells)."""
-        # _scroll_lines is list of lists
-        # _line_cells is list
+        if getattr(self, '_alt_screen', False):
+            return self._alt_lines
         return self._scroll_lines + [list(self._line_cells)]
 
     def _max_scrollback_offset(self, text_rows):
@@ -318,25 +404,31 @@ class TerminalWindow(SelectableTextMixin, Window):
         if total_lines <= 0:
             return
 
-        cursor_line_idx = total_lines - 1
-        if not (start_idx <= cursor_line_idx < start_idx + text_rows):
-            return
+        if getattr(self, '_alt_screen', False):
+            cursor_line_idx = self._alt_cursor_row
+            col = self._alt_cursor_col
+            row = y + cursor_line_idx
+            if row >= y + text_rows:
+                return
+            if cursor_line_idx < len(self._alt_lines):
+                line = self._alt_lines[cursor_line_idx]
+                if col < len(line): ch, attr = line[col]
+                else: ch, attr = ' ', 0
+            else:
+                ch, attr = ' ', 0
+        else:
+            cursor_line_idx = total_lines - 1
+            if not (start_idx <= cursor_line_idx < start_idx + text_rows):
+                return
+            row = y + (cursor_line_idx - start_idx)
+            col = max(0, self._cursor_col)
+            current_cells = self._line_cells
+            if col < len(current_cells): ch, attr = current_cells[col]
+            else: ch, attr = ' ', 0
 
-        row = y + (cursor_line_idx - start_idx)
-        col = max(0, self._cursor_col)
         if col >= text_cols:
             col = text_cols - 1
 
-        # Retrieve char at cursor
-        current_cells = self._line_cells
-        if col < len(current_cells):
-            ch, attr = current_cells[col]
-        else:
-            ch, attr = ' ', 0
-
-        # Combine attributes: cell attr | window body attr | reverse for cursor
-        # Note: if cell has its own attr (color), use it. 
-        # If cell attr is 0, use body_attr.
         effective_attr = attr if attr else body_attr
         
         if ch == ' ':
@@ -405,6 +497,12 @@ class TerminalWindow(SelectableTextMixin, Window):
         if self._session_error:
             self._pending_output += self._session_error + '\n'
             self._session_error = None
+
+        if getattr(self, '_alt_screen', False):
+            while len(self._alt_lines) < text_rows:
+                self._alt_lines.append([(' ', 0) for _ in range(text_cols)])
+            if len(self._alt_lines) > text_rows:
+                self._alt_lines = self._alt_lines[:text_rows]
 
         # Throttle: process at most MAX_OUTPUT_PER_FRAME per render tick.
         if self._pending_output:
