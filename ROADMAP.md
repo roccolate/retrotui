@@ -138,7 +138,7 @@ Antes de agregar grandes features, cerrar los problemas de robustez detectados e
 
 Convertir la Terminal embebida en una base fiable para apps TUI comunes sin salir de curses/GPM.
 
-- [ ] Introducir `TerminalScreenBuffer` normal-screen `rows x cols`
+- [x] Introducir `TerminalScreenBuffer` normal-screen `rows x cols` (clase base con pruebas unitarias; integración con `TerminalWindow` pendiente en la próxima iteración)
 - [ ] Mantener alt-screen separado de normal-screen y scrollback
 - [ ] Cursor real por fila/columna en normal-screen
 - [ ] Wrap, scroll, clear, insert/delete char/line y resize con pruebas unitarias
