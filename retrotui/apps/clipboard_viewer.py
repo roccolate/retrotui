@@ -144,9 +144,14 @@ class ClipboardViewerWindow(Window):
         kc = normalize_key_code(key)
         if kc is None:
             return None
-        # 'c' clears clipboard
+        # 'c' clears clipboard (both internal and system clipboard)
         if kc == ord('c'):
             clear_clipboard()
+            if pyperclip:
+                try:
+                    pyperclip.copy("")
+                except _CLIPBOARD_SYNC_ERRORS:
+                    pass
             self.history = []
             self.selected_index = 0
         # 'y' yank top history to system clipboard if available

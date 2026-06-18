@@ -83,29 +83,34 @@ class ProcessManagerWindow(Window):
             return stream.readline().strip()
 
     @staticmethod
-    def _read_mem_total_kb():
+    def _read_meminfo():
+        """Read MemTotal and MemAvailable in a single pass over /proc/meminfo."""
+        total_kb = 0
+        available_kb = 0
         try:
             with open("/proc/meminfo", "r", encoding="utf-8", errors="replace") as stream:
                 for line in stream:
                     if line.startswith("MemTotal:"):
-                        return int(line.split()[1])
-        except (OSError, ValueError, IndexError):
-            return 1
-        return 1
+                        try:
+                            total_kb = int(line.split()[1])
+                        except (ValueError, IndexError):
+                            pass
+                    elif line.startswith("MemAvailable:"):
+                        try:
+                            available_kb = int(line.split()[1])
+                        except (ValueError, IndexError):
+                            pass
+        except OSError:
+            pass
+        return total_kb, available_kb
+
+    @staticmethod
+    def _read_mem_total_kb():
+        return ProcessManagerWindow._read_meminfo()[0] or 1
 
     @staticmethod
     def _read_mem_available_kb():
-        mem_free = 0
-        try:
-            with open("/proc/meminfo", "r", encoding="utf-8", errors="replace") as stream:
-                for line in stream:
-                    if line.startswith("MemAvailable:"):
-                        return int(line.split()[1])
-                    if line.startswith("MemFree:"):
-                        mem_free = int(line.split()[1])
-        except (OSError, ValueError, IndexError):
-            return 0
-        return mem_free
+        return ProcessManagerWindow._read_meminfo()[1]
 
     @staticmethod
     def _read_total_jiffies():

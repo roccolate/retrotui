@@ -38,7 +38,6 @@ class ControlPanelWindow(Window):
         
         # For Theme selection
         self._themes = list_themes()
-        self._theme_scroll = 0
 
     def draw(self, stdscr):
         if not self.visible:
@@ -100,8 +99,25 @@ class ControlPanelWindow(Window):
         safe_addstr(stdscr, btn_y, bx + bw - 18, " [ Apply ] ", theme_attr('button'))
         safe_addstr(stdscr, btn_y, bx + bw - 8, " [ OK ] ", theme_attr('button_selected'))
 
+    def _cycle_theme(self, delta):
+        """Move to the previous/next theme and apply it."""
+        if not self._themes:
+            return
+        idx = next(
+            (i for i, t in enumerate(self._themes) if t.key == self.theme_name),
+            0,
+        )
+        self.theme_name = self._themes[(idx + delta) % len(self._themes)].key
+        self.app.apply_theme(self.theme_name)
+        self.app.persist_config()
+
     def handle_key(self, key):
         code = normalize_key_code(key)
+        if self.selected_cat == 0 and code in (curses.KEY_LEFT, curses.KEY_RIGHT):
+            # On Appearance, Left/Right selects a specific theme so the
+            # user no longer has to cycle with Space.
+            self._cycle_theme(-1 if code == curses.KEY_LEFT else 1)
+            return None
         if code == curses.KEY_UP:
             self.selected_cat = (self.selected_cat - 1) % len(self.CATEGORIES)
         elif code == curses.KEY_DOWN:
@@ -109,10 +125,7 @@ class ControlPanelWindow(Window):
         elif code in (ord(' '), 10, 13):
             # Toggle logic or save logic based on selection
             if self.selected_cat == 0:
-                # Cycle themes for now as a simple way
-                idx = next((i for i, t in enumerate(self._themes) if t.key == self.theme_name), 0)
-                self.theme_name = self._themes[(idx + 1) % len(self._themes)].key
-                self.app.apply_theme(self.theme_name)
+                self._cycle_theme(1)
             elif self.selected_cat == 1:
                 # Cycle hidden / word-wrap defaults so both are reachable.
                 idx = next(
@@ -138,13 +151,25 @@ class ControlPanelWindow(Window):
 
     def handle_click(self, mx, my):
         bx, by, bw, bh = self.body_rect()
-        if bx <= mx < bx + 18:
-            # Click on category
+        pane_divider_x = bx + 18
+
+        # Click on category
+        if bx <= mx < pane_divider_x:
             for i in range(len(self.CATEGORIES)):
                 y = by + 1 + i * 3
                 if y <= my < y + 3:
                     self.selected_cat = i
                     return None
+
+        # Click on a theme row in the Appearance pane
+        if self.selected_cat == 0 and pane_divider_x <= mx:
+            rx = pane_divider_x + 2
+            row = (my - by - 3)  # themes start at by + 2 (+1 for the header)
+            if 0 <= row < len(self._themes) and my >= by + 2:
+                self.theme_name = self._themes[row].key
+                self.app.apply_theme(self.theme_name)
+                self.app.persist_config()
+                return None
 
         # Check buttons
         btn_y = by + bh - 2

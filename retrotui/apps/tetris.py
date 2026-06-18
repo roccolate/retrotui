@@ -74,17 +74,26 @@ class TetrisWindow(Window):
 
     def _rotate_piece(self):
         if self.curr_type == 'O': return
-        
-        cx, cy = 1, 1
-        if self.curr_type == 'I': 
-            cx, cy = 1.5, 1.5
-            
+
+        # Compute the rotation center dynamically from the actual piece
+        # cells. Hard-coding (1.5, 1.5) only works for the initial
+        # horizontal orientation; once the piece is vertical the center
+        # shifts and the I-piece lands off by one cell.
+        if not self.curr_piece:
+            return
+        rows = [p[0] for p in self.curr_piece]
+        cols = [p[1] for p in self.curr_piece]
+        cx = (min(rows) + max(rows)) / 2.0
+        cy = (min(cols) + max(cols)) / 2.0
+
+        # Use round() (not int()) to avoid the I-piece landing at
+        # (n-1)/n cells off after two rotations.
         new_piece = []
         for px, py in self.curr_piece:
             rx, ry = px - cx, py - cy
             nx, ny = -ry, rx
-            new_piece.append((int(nx + cx), int(ny + cy)))
-            
+            new_piece.append((round(nx + cx), round(ny + cy)))
+
         # Try rotation with wall kicks (simplistic)
         for offset in [0, 1, -1, 2, -2]:
             test_pos = [self.curr_pos[0] + offset, self.curr_pos[1]]

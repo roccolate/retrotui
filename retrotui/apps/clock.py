@@ -59,10 +59,13 @@ class ClockCalendarWindow(Window):
             except _CLOCK_CHIME_ERRORS:
                 pass
 
+    def _toggle_always_on_top(self):
+        self.always_on_top = not self.always_on_top
+        return None
+
     def execute_action(self, action):
         if action == "clk_top":
-            self.always_on_top = not self.always_on_top
-            return None
+            return self._toggle_always_on_top()
         if action == "clk_chime":
             self.chime_enabled = not self.chime_enabled
             return None
@@ -146,7 +149,7 @@ class ClockCalendarWindow(Window):
             return None
 
         if key_code in (ord("t"), ord("T")):
-            self.always_on_top = not self.always_on_top
+            self._toggle_always_on_top()
         elif key_code in (ord("b"), ord("B")):
             self.chime_enabled = not self.chime_enabled
         elif key_code in (ord("s"), ord("S")):

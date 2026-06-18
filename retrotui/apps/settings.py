@@ -37,8 +37,19 @@ class SettingsWindow(Window):
     def _theme_count(self):
         return len(self._themes)
 
+    # Number of toggle controls between the theme list and the action buttons.
+    _TOGGLE_COUNT = 4
+
+    def _toggle_indices(self):
+        """Return the contiguous range of toggle indices after the themes."""
+        return range(self._theme_count(), self._theme_count() + self._TOGGLE_COUNT)
+
+    def _button_start(self):
+        return self._theme_count() + self._TOGGLE_COUNT
+
     def _controls_count(self):
-        return self._theme_count() + 6  # theme rows + 4 toggles + save + cancel
+        # Themes + toggles + Save + Cancel.
+        return self._button_start() + 2
 
     def _toggle_show_hidden_index(self):
         return self._theme_count()
@@ -48,15 +59,15 @@ class SettingsWindow(Window):
 
     def _toggle_sunday_first_index(self):
         return self._theme_count() + 2
-        
+
     def _toggle_show_welcome_index(self):
         return self._theme_count() + 3
 
     def _save_index(self):
-        return self._theme_count() + 4
+        return self._button_start()
 
     def _cancel_index(self):
-        return self._theme_count() + 5
+        return self._button_start() + 1
 
     def _apply_runtime(self):
         self.app.apply_theme(self.theme_name)
