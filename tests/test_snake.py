@@ -80,8 +80,27 @@ class SnakeTests(unittest.TestCase):
         win.snake = self.mod.deque([(0, 0)])
         win.food = (0, 1)
         win.direction = (0, 1)
-        
+
         win.step()
         self.assertEqual(win.score, 1)
         self.assertEqual(len(win.snake), 2)
         self.assertNotEqual(win.food, (0, 1))
+
+    def test_difficulty_back_to_back_keeps_menu_consistent(self):
+        """Switching difficulty twice in a row keeps the checkmark in sync."""
+        win = self.mod.SnakeWindow(0, 0, 60, 20)
+        # Cycle through every difficulty and ensure the menu check still
+        # reports the new value after repeated updates.
+        for new_diff in ("Easy", "Normal", "Hard", "Normal", "Easy"):
+            win.execute_action(
+                "snake_diff_" + new_diff.lower(),
+            )
+            diff_items = win.window_menu.items.get("Difficulty", [])
+            marks = [label.split(" ", 1)[0] for label, _ in diff_items]
+            checked = [name for mark, name in zip(marks, ("Easy", "Normal", "Hard")) if mark == "√"]
+            self.assertEqual(checked, [new_diff])
+            # The label for every difficulty row must still parse back
+            # to the underlying name (the 2-char prefix invariant).
+            for label, _ in diff_items:
+                base = label[2:] if len(label) > 2 else label
+                self.assertIn(base, ("Easy", "Normal", "Hard"))
