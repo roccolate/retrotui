@@ -2,6 +2,24 @@
 
 Analysis of every app and bundled plugin. Issues are categorized by severity and grouped by cross-cutting pattern when applicable.
 
+**Status:** v0.9.4 hardening in progress over v0.9.3. The retroaudit backlog tracked here is now feeding directly into the v0.9.4 milestone in `ROADMAP.md`.
+
+**Last reviewed:** 2026-06-18.
+
+## Resolved in current hardening pass
+
+- Terminal: PTY start/read/resize moved out of `draw()` into `tick()`, resize is cached by terminal body size, session errors remain visible without duplicate spam, tabs now use 8-column stops, CSI `H`/`f` clamps row/column in alternate screen mode, CSI `J` handles partial erase modes, alternate-screen text wraps at the right edge, PageUp/PageDown forward to full-screen programs, F1-F12 input sequences are mapped when available, and interrupt fallback writes `Ctrl+C` through one explicit path.
+- File Manager: file creation now uses `Path.touch()`, directory copy targets are no longer duplicated, dual-pane copy/move preserves operation errors, keyboard routing uses normalized key codes for navigation/F-keys, preview cache keys use file/directory stat data, image preview backend detection is cached, image preview rendering runs outside the render path, pane scroll clamping uses entry bounds, undoable delete respects the window trash-dir override, undo now returns `ActionResult`, bookmarks persist across sessions, directory drag reports unsupported instead of failing silently, parent (`..`) entries are blocked from destructive operations, rename validates path separators/collisions, `use_unicode` controls entry icons, redundant border assignment was removed, and file sizes format through GB/TB.
+- Notepad: wrapped rows now use terminal cell width for CJK/wide characters, wrap viewport state is based on wrapped rows, visible wrap chunks reuse the wrap cache, undo history has a character budget for large files, wrap cache is invalidated on load/undo/redo, window title updates are cached by filepath/modified state, Ctrl+W returns the config update action, and `get_context_menu_items()` now returns the actual context menu instead of a dead stub.
+- Base profile: default config now exposes only File Manager/Explorer, Terminal, and Notepad in desktop icons, global menus, plugin menus, and the desktop context menu; secondary apps and plugins remain installed but disabled by default.
+- Game logic and platform polling moved out of `draw()`: Snake, Tetris, Process Manager, System Monitor, Hex Viewer, Clipboard Viewer, Image Viewer and WiFi Manager all run their update/poll steps from a new `tick()` hook wired by the event loop. `step()` is preserved for tests but no longer invoked from the renderer.
+- Blocking I/O moved to background threads: WiFi Manager scans and connects in worker threads with a `_status_msg` indicator, Image Viewer renders `chafa`/`timg`/`catimg` off the main thread with a `[rendering...]` placeholder, and Hex Viewer warms the file slice cache from `tick()`.
+- Thread safety: RetroNet now takes `_lock` for every mutation of `url`, `_back_stack`, `_forward_stack`, `title`, `_search_*` and `content`/`is_loading`; all read paths in `draw` and `handle_click` use the same lock. WiFi Manager and Image Viewer use dedicated locks for their worker state. The previous `_create_unverified_context()` SSL bypass is gone; an opt-in `check_hostname=False` fallback is only used after a `ssl.SSLError`.
+- Trash: a new `REQUEST_EMPTY_TRASH_CONFIRM` action type now routes to a dedicated dialog that lists the items being purged. `perform_delete` writes a `.trashinfo` sidecar with the original path and `perform_restore` consumes it to put items back; the trash window exposes the operation through a "Restore" menu entry and the `R` shortcut.
+- Bundled plugins (9): the wrapper classes now apply the manifest `title` to the window instead of silently discarding it.
+- Input handling: `normalize_key_code` is now used by Minesweeper, Tetris, Solitaire, WiFi Manager and Clipboard Viewer, and the previous `getattr(key, '__int__', None)` duck-type check in Clipboard Viewer was replaced with `isinstance(key, int)` plus `normalize_key_code`.
+- Other: Markdown viewer adds `*italic*` and `` `inline code` ``, preserves `in_code_block` across scroll and supports the mouse wheel; Control Panel exposes `word_wrap_default` via a 4-state cycle; Settings applies preferences consistently for all toggles; App Manager `IconsWindow` reuses the base class via `super()` and caches the icon catalog; Process Manager implements `cmd` sort, initializes `scroll_offset`, and no longer kills on double-click; Solitaire blocks foundation-to-column moves and uses a 500 ms double-click window; Tetris restarts through a new `reset_game()` helper; Clock caches `TextCalendar` per `(year, month, first-weekday)`; System Monitor adds a platform guard and rescales the CPU history when the window is resized.
+
 ---
 
 ## Cross-Cutting Issues
@@ -84,43 +102,19 @@ All 9 bundled plugin `__init__.py` files silently discard the `title` parameter 
 
 | Sev | File | Issue |
 |---|---|---|
-| HIGH | `window.py:791-796` | `entry.size & 0o111` tests executable bit on **file size** instead of **file mode** — wrong attribute |
-| HIGH | `operations.py:122` | `open(path, 'a').close()` — unclosed file handle, use `pathlib.Path.touch()` |
-| MED | `window.py:1053-1056` | `handle_key` passes raw `key` to `_handle_pane_navigation` instead of normalized `norm_key` |
-| MED | `window.py:563` | Directory preview cache key uses constant `0` for size — stale previews after directory changes |
-| MED | `window.py:674-686` | `_dual_copy_move_between_panes` drops the error `ActionResult` from `perform_copy`/`perform_move` |
-| MED | `core.py:103-104` | `clamp()` uses `len(self.content) - 1` — off-by-one scroll bound |
-| MED | `operations.py:13` | `_trash_base_dir` creates `.local/share/Trash/files` on Windows — nonsense path |
-| MED | `operations.py:97` | `perform_undo` returns `None` instead of `ActionResult` — inconsistent API |
-| MED | `bookmarks.py` | Bookmarks are not persisted across sessions |
-| MED | `preview.py:75-81` | `_detect_image_preview_backend` calls `shutil.which()` on every preview render — never cached |
-| LOW | `window.py:724-726` | Dead code: `border_attr` assigned then overwritten with identical value in `if self.active` |
-| LOW | `window.py:611` | Directory drag silently ignored — no user feedback |
-| LOW | `core.py:46-53` | `FileEntry.use_unicode` stored but never consulted — dead slot |
-| LOW | `core.py:56-61` | `_format_size` doesn't handle GB-scale files |
-| LOW | `bookmarks.py:12-13` | Default bookmarks `/var/log`, `/etc` don't exist on Windows |
+| INFO | - | No remaining File Manager items tracked from the current audit pass. |
 
 ### Notepad (`apps/notepad.py`)
 
 | Sev | Issue |
 |---|---|
-| MED | `_compute_wrap` (184-188): slices by character count, not terminal cell width — CJK characters overflow columns |
-| MED | `_cursor_to_wrap_row` (195-203): fallback returns `0` on cache miss — jumps cursor to top of file |
-| MED | `_key_toggle_wrap` (617-620): discards `ActionResult` from `_toggle_wrap()` — Ctrl+W never persists the config change |
-| LOW | `draw` (303-310): rebuilds title string with `os.path.basename` on every frame |
-| LOW | `handle_right_click` (766-781): builds then discards "Cut Line"/"Copy Line" items when selection exists |
-| LOW | `get_context_menu_items` (785-787): deprecated stub, always returns `[]` |
+| INFO | - | No remaining Notepad items tracked from the current audit pass. |
 
 ### Terminal (`apps/terminal.py`)
 
 | Sev | Issue |
 |---|---|
-| HIGH | `_apply_csi` (204-213): `H`/`f` CSI ignores row component — full-screen apps (vim, htop, nano) display garbage |
-| MED | `_ensure_session` (398): called from `draw()` — session startup blocks render loop |
-| MED | `_session.resize` (400): called unconditionally every frame — unnecessary SIGWINCH ioctl ~30x/sec |
-| LOW | `_session_error` (405-407 vs 442): error cleared before status bar reads it — status never shows `ERR` |
-| LOW | Tab handling (249-253): uses 4-space stops instead of standard 8-column stops |
-| LOW | `_send_interrupt` (526-533): fallback `write('\x03')` after callable sender is unreachable |
+| INFO | - | No remaining Terminal items tracked from the current audit pass. |
 
 ### Calculator (`apps/calculator.py`)
 
@@ -323,19 +317,15 @@ All 9 bundled plugin `__init__.py` files silently discard the `title` parameter 
 
 ## Priority Summary
 
-**CRITICAL (1):** RetroNet SSL bypass
+**CRITICAL (0):** RetroNet SSL bypass closed (uses `create_default_context` with an explicit opt-in fallback).
 
-**HIGH (30):**
-- Game logic in draw: snake (2), tetris (2)
-- Blocking I/O: wifi (2), image_viewer (1), hexviewer (1), process_manager (1), terminal (1)
-- Thread safety: retronet (2)
-- Broken input: minesweeper (2), tetris (1)
-- Wrong attribute: filemanager executable bit check
-- Unclosed file: filemanager operations
-- No confirmation: trash empty
-- Code duplication: app_manager (3)
-- Other: sysmon platform, logviewer race, control_panel unreachable toggle, retronet scroll, markdown color pair, solitaire case sensitivity, tetris __init__ restart
+**HIGH remaining (1):** WiFi Manager still falls back to passing the password as a CLI argument on older `nmcli` releases that lack `--ask`. The first attempt always uses `--ask`; only the fallback path leaks the secret. Documented in code.
 
-**MEDIUM (48):** Scattered across all files — scroll bounds, cache misses, API inconsistencies, missing features.
+**MEDIUM remaining:**
+- RetroNet HTML regex parser does not handle nested or malformed tags (returns best-effort text).
+- App Manager `_iter_catalog_entries` rebuilds the dict when invalidated, but the catalog key for label→entry lookup is recomputed on first call after invalidation only.
+- Markdown viewer still only supports `**bold**`, `*italic*` and `` `inline code` ``; links, headings rendered as plain text.
+- CharMap grid width magic constant `22` does not match the detail pane drawn at `bw - 20`.
+- Snake difficulty label prefix logic still relies on the 2-character width invariant; the test does not exercise back-to-back difficulty changes.
 
-**LOW (28):** Dead code, naming issues, minor UX gaps.
+**LOW remaining:** Cosmetic polish (Charmap "About Map" menu, Snake obs_attr theme_attr alignment, Clock separator string, charmap grid width, retronet history linear scan O(n) within `_MAX_HISTORY` cap).

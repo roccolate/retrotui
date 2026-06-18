@@ -6,7 +6,7 @@ This document describes the internals of RetroTUI for anyone who wants to contri
 
 - **Windows 3.1 Experience**: A faithful TUI recreation of the classic desktop environment — no X11, no Wayland, just Python and `curses`.
 - **Zero Dependencies on Linux**: Only the Python 3.10+ standard library. Windows requires `pywinpty` and `windows-curses`.
-- **Single-Threaded**: Everything runs on one thread in a synchronous event loop. The only exception is background file operations (copy/move of large files), which run in a separate thread and are polled from the main loop.
+- **Main-Thread UI**: Rendering and input dispatch happen on one curses thread. Long-running work must run through explicit background workers and communicate back through polled state, locks, events, or `ActionResult`.
 - **Testability**: Core logic is decoupled from curses via a fake curses module injected in tests. No real terminal needed to run the test suite.
 
 ## Directory Structure
@@ -77,9 +77,10 @@ retrotui/
 │   ├── clipboard_viewer.py # Clipboard viewer
 │   ├── control_panel.py    # Control Panel / Settings
 │   ├── settings.py         # Settings window
-│   ├── image_viewer.py     # Image viewer (braille rendering)
+│   ├── image_viewer.py     # Image viewer implementation (also exposed by bundled plugin)
 │   ├── markdown_viewer.py  # Markdown viewer
-│   └── retronet.py         # RetroNet (HTTP browser)
+│   ├── retronet.py         # RetroNet implementation (also exposed by bundled plugin)
+│   └── wifi_manager.py     # WiFi manager implementation (also exposed by bundled plugin)
 │
 ├── plugins/                # Plugin infrastructure
 │   ├── base.py             # RetroApp — ergonomic base class for plugins
@@ -302,10 +303,16 @@ my-plugin/
 [plugin]
 id = "my-plugin"
 name = "My Plugin"
+version = "1.0.0"
+category = "plugin"
 
 [plugin.window]
 default_width = 40
 default_height = 20
+
+[plugin.icon]
+emoji = "🔧"
+token = "MP"
 ```
 
 `__init__.py` example:
@@ -326,23 +333,25 @@ class Plugin(RetroApp):
 
 `plugins/loader.py` searches these locations (in order):
 
-1. `RETROTUI_PLUGIN_DIR` env var
-2. `RETROTUI_PLUGIN_PATH` env var (colon/semicolon-separated)
-3. `~/.config/retrotui/plugins/`
-4. `retrotui/bundled_plugins/` (shipped with the package)
-5. `examples/plugins/` (for development)
+1. `RETROTUI_PLUGIN_DIR` env var (single forced directory)
+2. `RETROTUI_PLUGIN_PATH` env var (colon/semicolon-separated on POSIX, semicolon-separated on Windows)
+3. `retrotui/bundled_plugins/` (shipped with the package)
+4. `~/.config/retrotui/plugins/`
+5. `examples/plugins/` (only when the default user plugin directory is active, for development)
 
-All errors during plugin loading are isolated — a broken plugin never crashes startup.
+All errors during plugin loading are isolated — a broken plugin never crashes startup. The stable base profile keeps plugins disabled by default with `plugin:*` in `hidden_icons` and `hidden_menu_items`; when both wildcards are present, runtime plugin discovery is skipped.
 
 ### Bundled Plugins
 
-Games and utilities that ship with RetroTUI but load through the plugin system: Character Map, Clock, Image Viewer, Minesweeper, RetroNet, Snake, Solitaire, Tetris, WiFi Manager.
+Games and utilities that ship with RetroTUI and can load through the plugin system when enabled: Character Map, Clock, Image Viewer, Minesweeper, RetroNet, Snake, Solitaire, Tetris, WiFi Manager.
+
+The repository also includes 21 example plugins under `examples/plugins/`. These are visible in a checkout/development run when the default plugin directory is used.
 
 ## Configuration
 
 `core/config.py → AppConfig` is a frozen dataclass persisted to `~/.config/retrotui/config.toml`.
 
-Fields: `theme`, `show_hidden`, `word_wrap_default`, `sunday_first`, `show_welcome`, `icon_style`, `hidden_icons`, `hidden_menu_items`.
+Fields include `theme`, `show_hidden`, `word_wrap_default`, `sunday_first`, `show_welcome`, `icon_style`, `hidden_icons`, `hidden_menu_items`, and persisted desktop/menu customization state.
 
 Uses `tomllib` on Python 3.11+, falls back to a hand-rolled minimal TOML parser for older versions.
 
@@ -384,7 +393,7 @@ Falls back to internal-only if no system tool is found. Backend detection is cac
 
 ## Testing
 
-~950 tests, all using `unittest.TestCase` + `unittest.mock`. No pytest dependencies.
+The repo currently has 97 `tests/test_*.py` files. The v0.9.3 release notes recorded 970 collected tests. Most tests use `unittest.TestCase` + `unittest.mock`, and can run without a real terminal.
 
 ### Fake Curses
 
@@ -407,9 +416,10 @@ The shared implementation is in `tests/_support.py`. Some test files define thei
 ### Running Tests
 
 ```bash
-python -m pytest tests/ -x        # Stop on first failure
-python -m pytest tests/ -q        # Quiet output
-python -m unittest discover tests  # Also works, no pytest needed
+python -m unittest discover tests      # Standard-library runner
+python tools/qa.py                     # Project QA helper
+python tools/qa.py --module-coverage   # Optional module coverage gate
+python -m pytest tests/ -q             # Optional if pytest is installed
 ```
 
 ## Common Patterns
