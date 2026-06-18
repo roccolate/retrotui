@@ -63,10 +63,13 @@ def evaluate_expression(expression):
     parsed = ast.parse(expr, mode="eval")
     value = _eval_ast_node(parsed.body)
     if isinstance(value, float):
-        # Compact float formatting and normalize negative zero.
+        # Compact float formatting and normalize negative zero so the
+        # display never shows "-0".
         if value == 0.0:
             value = 0.0
         text = f"{value:.12g}"
+        if text == "-0":
+            text = "0"
         return text
     return str(value)
 
@@ -332,8 +335,6 @@ class CalculatorWindow(Window):
         elif key_code == 17:  # Ctrl+Q closes calculator window
             return ActionResult(ActionType.EXECUTE, AppAction.CLOSE_WINDOW)
 
-        bx, by, bw, _ = self.body_rect()
-        _ = by
-        input_w = max(1, bw - len("Expr> "))
-        self._ensure_cursor_visible(input_w)
+        # body_rect() is queried lazily from draw(); no further work to do
+        # here. ``_ensure_cursor_visible`` runs on the next draw call.
         return None

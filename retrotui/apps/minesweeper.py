@@ -200,12 +200,15 @@ class MinesweeperWindow(Window):
         elif self.game_over: smiley = "😵"
         
         header_y = by + 1
-        safe_addstr(stdscr, header_y, bx + 2, bombs_str, curses.color_pair(C_ERROR) | curses.A_BOLD)
-        
+        # Use the menubar/status color for the bomb counter and timer so
+        # the chrome reads as informational rather than error-tone.
+        header_attr = theme_attr("menubar") | curses.A_BOLD
+        safe_addstr(stdscr, header_y, bx + 2, bombs_str, header_attr)
+
         center_x = bx + (bw // 2) - 1
         safe_addstr(stdscr, header_y, center_x, smiley, body_attr)
-        
-        safe_addstr(stdscr, header_y, bx + bw - 5, timer_str, curses.color_pair(C_ERROR) | curses.A_BOLD)
+
+        safe_addstr(stdscr, header_y, bx + bw - 5, timer_str, header_attr)
         
         # Draw Grid horizontally centered
         grid_start_y = by + 3

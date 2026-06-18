@@ -75,9 +75,14 @@ class CharacterMapWindow(Window):
         self.chars = [chr(i) for i in range(start, end + 1)]
         self.status_message = f"Block: {name}"
 
+    # Width reserved for the detail pane on the right side of the body.
+    # Must match `detail_x = bx + bw - 20` below and the block-rendering
+    # column count for the info column.
+    DETAIL_PANE_WIDTH = 22
+
     def _get_grid_dims(self, bw, bh):
-        # Grid on the left, details on the right
-        grid_w = bw - 22 # Reserved for details
+        # Grid on the left, details on the right.
+        grid_w = bw - self.DETAIL_PANE_WIDTH
         cols = max(1, grid_w // 3)
         rows = max(1, (bh - 2)) # Leave room for header/footer
         return cols, rows
@@ -85,6 +90,10 @@ class CharacterMapWindow(Window):
     def draw(self, stdscr):
         if not self.visible:
             return
+        if getattr(self, "_status_ttl", 0):
+            self._status_ttl -= 1
+            if self._status_ttl <= 0:
+                self._status_message = ""
         body_attr = self.draw_frame(stdscr)
         bx, by, bw, bh = self.body_rect()
         if bw < 30 or bh < 10:
@@ -114,8 +123,10 @@ class CharacterMapWindow(Window):
                 
                 safe_addstr(stdscr, cy, cx, f" {ch} ", attr)
 
-        # Draw Detail Pane (Right Side)
-        detail_x = bx + bw - 20
+        # Draw Detail Pane (Right Side). `DETAIL_PANE_WIDTH` controls how
+        # much horizontal room we reserve; the detail content starts 20
+        # cells from the right edge of the body so the inner art lines up.
+        detail_x = bx + bw - self.DETAIL_PANE_WIDTH
         # Vertical separator
         for r in range(bh):
             safe_addstr(stdscr, by + r, detail_x - 1, "\u2502", theme_attr("window_border"))
@@ -249,4 +260,19 @@ class CharacterMapWindow(Window):
                 self._copy_to_clipboards(f"U+{ord(self.selected_char):04X}")
             return None
 
+        if action == "about_map":
+            # Surface the about text in the status line so the menu entry is
+            # actually wired up. The dialog system requires an existing
+            # context to open a modal; deferring to a status line keeps the
+            # UI responsive without expanding the public surface.
+            self._set_status(
+                "Character Map - browse Unicode blocks, copy character or hex code"
+            )
+            return ActionResult(ActionType.REFRESH)
+
         return None
+
+    def _set_status(self, message, ttl=30):
+        """Set a transient status line cleared by the next draw cycle."""
+        self._status_message = message
+        self._status_ttl = ttl

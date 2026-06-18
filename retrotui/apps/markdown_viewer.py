@@ -153,11 +153,13 @@ class MarkdownViewerWindow(Window):
             self.window_menu.draw_dropdown(stdscr, self.x, self.y, self.w)
 
     def _render_line(self, stdscr, y, x, line, bw, base_attr):
-        """Render a single line with inline formatting (bold, italic, code)."""
+        """Render a single line with inline formatting (bold, italic, code, links)."""
         current_x = x
         # Split on common inline markdown tokens. Order matters: code spans
-        # first to keep inner asterisks from being mis-interpreted.
-        pattern = r"(`[^`]+`)|(\*\*[^*]+\*\*)|(\*[^*]+\*)"
+        # first to keep inner asterisks from being mis-interpreted, then
+        # bold, italic, and finally links (which can contain text with
+        # formatting inside).
+        pattern = r"(`[^`]+`)|(\*\*[^*]+\*\*)|(\*[^*]+\*)|(\[[^\]]+\]\([^)]+\))"
         parts = re.split(pattern, line)
 
         for part in parts:
@@ -180,6 +182,14 @@ class MarkdownViewerWindow(Window):
                 # a real italic attribute.
                 attr |= curses.A_DIM
                 text = part[1:-1]
+            elif part.startswith("[") and "](" in part and part.endswith(")"):
+                # [label](url) - render only the label, with underline to
+                # signal the link visually. The URL itself is dropped to
+                # avoid cluttering the terminal output.
+                label_match = re.match(r"\[([^\]]+)\]\(([^)]+)\)", part)
+                if label_match:
+                    text = label_match.group(1)
+                    attr |= curses.A_UNDERLINE
 
             remaining_w = bw - (current_x - x)
             chunk = text[:remaining_w]
