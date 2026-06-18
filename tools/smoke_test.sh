@@ -92,7 +92,7 @@ if [ -n "$PYTHON_CMD" ]; then
     if $PYTHON_CMD -c "import curses; print('OK')" 2>/dev/null | grep -q "OK"; then
         ok "available"
     else
-        fail "not available (install windows-curses with: pip install windows-curses)"
+        fail "not available (on Python 3.13- install windows-curses: pip install windows-curses; on 3.14+ curses is native)"
     fi
 else
     fail "skipped"

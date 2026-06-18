@@ -70,8 +70,8 @@ Plugin loader con `plugin.toml`, clase base `RetroApp`, auto-discovery, registro
 
 **Soporte Windows nativo**
 - [x] Backend PTY dual: POSIX (`pty.fork()`) + Windows (`pywinpty` ConPTY)
-- [x] Dependencias condicionales en `pyproject.toml` (`windows-curses`, `pywinpty`)
-- [x] Shim `win_termios.py` para flow control cross-platform
+- [x] Dependencias condicionales en `pyproject.toml` (`pywinpty`; `windows-curses` ya no es necesario en Python 3.14+)
+- [x] `windows-curses` provee el modo raw en Windows (no hace falta shim termios; en Python 3.14+ curses es nativo)
 
 **Estilos de iconos**
 - [x] 3 estilos de iconos de escritorio: default, mini, braille
@@ -155,7 +155,7 @@ Cerrar matriz de compatibilidad real.
 - [ ] Capturar baselines en `docs/baseline/` para rendimiento y estabilidad
 - [ ] Cerrar gaps GPM vs SGR en edge-cases de seleccion/drag/right-click
 - [ ] Documentar desvios por terminal y mitigaciones
-- [ ] Verificar soporte Windows nativo end-to-end (pywinpty + windows-curses)
+- [ ] Verificar soporte Windows nativo end-to-end (pywinpty; curses nativo en 3.14+)
 
 ### v0.9.7 — Session Restore
 

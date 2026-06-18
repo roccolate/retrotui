@@ -89,5 +89,31 @@ class TestMarkdownViewer(unittest.TestCase):
         self.assertIsNotNone(bold_call)
         self.assertTrue(bold_call[4] & 1) # A_BOLD
 
+    def test_max_scroll_uses_raw_content_length(self):
+        """Each raw line maps to one visible row, so raw count is correct."""
+        win = self.MarkdownViewerWindow(0, 0, 80, 24)
+        # Two text lines, two headers, two list items, two code lines, and
+        # two fenced-block delimiters. Each becomes exactly one visible row.
+        win.raw_content = [
+            "# Title",
+            "**bold**",
+            "- item 1",
+            "- item 2",
+            "```",
+            "code line 1",
+            "code line 2",
+            "```",
+            "tail",
+        ]
+        with mock.patch.object(win, "_rows_visible", return_value=3):
+            self.assertEqual(win._max_scroll(), len(win.raw_content) - 3)
+
+    def test_max_scroll_clamps_to_zero_for_small_files(self):
+        """A file shorter than the viewport must clamp _max_scroll to 0."""
+        win = self.MarkdownViewerWindow(0, 0, 80, 24)
+        win.raw_content = ["# one", "two"]
+        with mock.patch.object(win, "_rows_visible", return_value=20):
+            self.assertEqual(win._max_scroll(), 0)
+
 if __name__ == "__main__":
     unittest.main()

@@ -38,7 +38,7 @@ RetroTUI es un entorno de escritorio estilo Windows 3.1 que corre completamente 
 *   **Juegos y plugins opcionales**: Buscaminas, Solitario, Snake, Tetris, RetroNet Explorer, Mapa de Caracteres, Reloj/Calendario, Visor de Imagenes y WiFi Manager quedan fuera del perfil base.
 *   **Temas**: Windows 3.1, DOS, Windows 95, Hacker, Amiga.
 *   **Sistema de Plugins**: Plugins bundled, de ejemplo/desarrollo y propios desde directorios configurables; se mantienen deshabilitados en el perfil base hasta que la configuracion los habilite.
-*   **Sin dependencias en Linux**: Solo Python 3.10+ estandar. En Windows requiere `pywinpty` y `windows-curses`.
+*   **Sin dependencias en Linux**: Solo Python 3.10+ estandar. En Windows requiere `pywinpty` (Python 3.13 o anterior; en 3.14+ curses ya viene nativo).
 
 ## Instalacion
 
@@ -53,9 +53,7 @@ python -m retrotui
 | Plataforma | Requisitos |
 | :--- | :--- |
 | **Linux/WSL** | Python 3.10+, terminal 80x24 minimo, UTF-8 recomendado |
-| **Windows** | Python 3.10+, `pip install pywinpty windows-curses` |
-
-Para Python 3.14+ en Windows: [windows-curses fork](https://github.com/roccolate/windows-curses).
+| **Windows** | Python 3.10+. En 3.13 o anterior: `pip install pywinpty`. En 3.14+ no se requieren dependencias extra (curses ya viene nativo y la PTY usa ConPTY). |
 
 ## Controles
 
@@ -101,7 +99,7 @@ RetroTUI is a Windows 3.1-style desktop environment that runs entirely in the te
 *   **Optional games and plugins**: Minesweeper, Solitaire, Snake, Tetris, RetroNet Explorer, Character Map, Clock/Calendar, Image Viewer, and WiFi Manager stay outside the base profile.
 *   **Themes**: Windows 3.1, DOS, Windows 95, Hacker, Amiga.
 *   **Plugin System**: Bundled, development/example, and custom plugins from configurable directories; they stay disabled in the base profile until enabled by config.
-*   **No dependencies on Linux**: Just standard Python 3.10+. Windows requires `pywinpty` and `windows-curses`.
+*   **No dependencies on Linux**: Just standard Python 3.10+. Windows requires `pywinpty` (Python 3.13 or earlier; on 3.14+ curses is native).
 
 ## Installation
 
@@ -116,9 +114,7 @@ python -m retrotui
 | Platform | Requirements |
 | :--- | :--- |
 | **Linux/WSL** | Python 3.10+, terminal 80x24 minimum, UTF-8 recommended |
-| **Windows** | Python 3.10+, `pip install pywinpty windows-curses` |
-
-For Python 3.14+ on Windows: [windows-curses fork](https://github.com/roccolate/windows-curses).
+| **Windows** | Python 3.10+. On 3.13 or earlier: `pip install pywinpty`. On 3.14+ no extra dependencies required (curses is native and the PTY uses ConPTY). |
 
 ## Controls
 

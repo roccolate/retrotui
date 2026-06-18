@@ -5,7 +5,7 @@ This document describes the internals of RetroTUI for anyone who wants to contri
 ## Design Principles
 
 - **Windows 3.1 Experience**: A faithful TUI recreation of the classic desktop environment — no X11, no Wayland, just Python and `curses`.
-- **Zero Dependencies on Linux**: Only the Python 3.10+ standard library. Windows requires `pywinpty` and `windows-curses`.
+- **Zero Dependencies on Linux**: Only the Python 3.10+ standard library. Windows requires `pywinpty` (ConPTY backend for the embedded terminal). On Python 3.14+ `curses` is part of the standard library on Windows, so no extra curses package is needed.
 - **Main-Thread UI**: Rendering and input dispatch happen on one curses thread. Long-running work must run through explicit background workers and communicate back through polled state, locks, events, or `ActionResult`.
 - **Testability**: Core logic is decoupled from curses via a fake curses module injected in tests. No real terminal needed to run the test suite.
 
@@ -47,7 +47,6 @@ retrotui/
 │   ├── ansi.py             # ANSI escape code state machine for terminal emulation
 │   ├── viewer.py           # File type detection → viewer window dispatch
 │   ├── content.py          # Static text (welcome, about, help)
-│   ├── win_termios.py      # Windows termios shim (ctypes → kernel32)
 │   └── platform/
 │       └── mouse_backend.py  # Mouse event normalization (GPM, SGR, fallback)
 │
@@ -384,12 +383,11 @@ Falls back to internal-only if no system tool is found. Backend detection is cac
 | Platform | curses | PTY | Mouse |
 |---|---|---|---|
 | **Linux/WSL** | stdlib `curses` | `pty.fork()` | GPM (TTY) or xterm protocol |
-| **Windows** | `windows-curses` | `pywinpty` (ConPTY) | xterm protocol |
+| **Windows** | stdlib `curses` (3.14+; `windows-curses` on 3.13-) | `pywinpty` (ConPTY) | xterm protocol |
 
 ### Windows-Specific
 
-- **`core/win_termios.py`**: Minimal `termios` shim using `ctypes.windll.kernel32` (`GetConsoleMode`/`SetConsoleMode`), so `bootstrap.disable_flow_control()` works cross-platform.
-- **`core/terminal_session.py`**: Dual backend — tries POSIX first, falls back to `pywinpty`. All methods (`read`, `write`, `resize`, `close`, `send_signal`, `poll_exit`) branch on `self._win_pty is not None`.
+- **`core/terminal_session.py`**: Dual backend — tries POSIX first, falls back to `pywinpty`. All methods (`read`, `write`, `resize`, `close`, `send_signal`, `poll_exit`) branch on `self._win_pty is not None`. Flow control on Windows is handled by the stdlib curses module (or the legacy `windows-curses` package on Python ≤ 3.13), so no shim is needed.
 
 ## Testing
 

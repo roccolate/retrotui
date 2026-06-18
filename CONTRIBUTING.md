@@ -12,7 +12,7 @@ Thank you for your interest in contributing! RetroTUI is a community-driven proj
     ```
 3.  **Install dependencies** (none required for Linux/WSL runtime!):
     - For development/testing, use Python 3.10+.
-    - On Windows, install the conditional runtime packages: `pip install windows-curses pywinpty`.
+    - On Windows, install the conditional runtime package for the embedded terminal: `pip install pywinpty`. On Python 3.14+ the stdlib `curses` module is native on Windows, so no extra curses package is required.
     - (Optional) Install `gpm` if you are on Linux TTY and want mouse support.
 
 ## Development Workflow
