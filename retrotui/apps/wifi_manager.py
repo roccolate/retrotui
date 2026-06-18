@@ -75,6 +75,35 @@ class WifiManagerWindow(Window):
         self._scan_thread = thread
         thread.start()
 
+    @staticmethod
+    def _split_nmcli_fields(line, expected=5):
+        """Split an `nmcli -t` line on unescaped ``:`` separators.
+
+        ``nmcli`` escapes literal colons inside a field as ``\\:``. The
+        default ``str.split(":")`` does not honour this and corrupts
+        SSIDs that contain colons. We split on unescaped colons here so
+        the field boundaries line up with the requested column order.
+        """
+        fields = []
+        current = []
+        i = 0
+        while i < len(line):
+            ch = line[i]
+            if ch == "\\" and i + 1 < len(line) and line[i + 1] == ":":
+                # Escaped colon belongs to the current field.
+                current.append(":")
+                i += 2
+                continue
+            if ch == ":" and len(fields) < expected - 1:
+                fields.append("".join(current))
+                current = []
+                i += 1
+                continue
+            current.append(ch)
+            i += 1
+        fields.append("".join(current))
+        return fields
+
     def _scan_worker(self):
         new_networks = []
         error_message = None
@@ -88,7 +117,7 @@ class WifiManagerWindow(Window):
             )
             seen_ssids = set()
             for line in result.stdout.splitlines():
-                parts = line.split(":", 4)
+                parts = self._split_nmcli_fields(line, expected=5)
                 if len(parts) < 4:
                     continue
                 ssid = parts[0].strip()

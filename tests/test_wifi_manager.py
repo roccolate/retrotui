@@ -43,3 +43,24 @@ class WifiManagerTests(unittest.TestCase):
             self.mod, "safe_addstr"
         ) as safe_addstr, mock.patch.object(self.mod, "theme_attr", return_value=0):
             win.draw(None)
+
+    def test_split_nmcli_fields_unescaped(self):
+        splitter = self.mod.WifiManagerWindow._split_nmcli_fields
+        # No escapes, default 5 columns.
+        self.assertEqual(
+            splitter("MyNet:80:WPA2:*:AA:BB:CC:DD:EE:FF", expected=5),
+            ["MyNet", "80", "WPA2", "*", "AA:BB:CC:DD:EE:FF"],
+        )
+
+    def test_split_nmcli_fields_preserves_escaped_colon(self):
+        splitter = self.mod.WifiManagerWindow._split_nmcli_fields
+        # SSID contains a literal colon; nmcli encodes it as `\:`
+        # and the BSSID is the last field, so it stays intact.
+        result = splitter(r"My\:Network:42:WPA1::00\:11\:22\:33\:44\:55:66", expected=5)
+        self.assertEqual(result[0], "My:Network")
+        self.assertEqual(result[1], "42")
+        self.assertEqual(result[2], "WPA1")
+        # Empty IN-USE field after a trailing colon stays empty.
+        self.assertEqual(result[3], "")
+        # BSSID keeps its colons.
+        self.assertEqual(result[4], "00:11:22:33:44:55:66")
