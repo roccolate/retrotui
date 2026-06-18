@@ -2,7 +2,7 @@
 
 **Objetivo:** Un entorno de escritorio estilo Windows 3.1 completamente funcional para la terminal. Sin X11. Sin Wayland. Solo curses, una TTY y vibes.
 
-**Estado actual:** v0.9.4 hardening en progreso sobre v0.9.3. Este roadmap prioriza estabilidad antes de nuevas features; la auditoria tecnica viva esta en [IMPROVEMENTS.md](IMPROVEMENTS.md).
+**Estado actual:** v0.9.4 hardening cerrado. v0.9.5 (Terminal 2D buffer) en progreso: `TerminalScreenBuffer` y `TerminalScreen` ya viven en `core/terminal_session.py` con 22 pruebas unitarias; la integración con `TerminalWindow` es el siguiente paso. La auditoria tecnica viva esta en [IMPROVEMENTS.md](IMPROVEMENTS.md).
 
 ---
 
@@ -138,13 +138,14 @@ Antes de agregar grandes features, cerrar los problemas de robustez detectados e
 
 Convertir la Terminal embebida en una base fiable para apps TUI comunes sin salir de curses/GPM.
 
-- [x] Introducir `TerminalScreenBuffer` normal-screen `rows x cols` (clase base con pruebas unitarias; integración con `TerminalWindow` pendiente en la próxima iteración)
-- [ ] Mantener alt-screen separado de normal-screen y scrollback
-- [ ] Cursor real por fila/columna en normal-screen
-- [ ] Wrap, scroll, clear, insert/delete char/line y resize con pruebas unitarias
-- [ ] Atributos por celda compatibles con seleccion/copy
+- [x] Introducir `TerminalScreenBuffer` normal-screen `rows x cols` (clase base con 18 pruebas unitarias en `tests/test_terminal_screen_buffer.py`)
+- [x] Mantener alt-screen separado de normal-screen y scrollback (`TerminalScreen` mantiene dos `TerminalScreenBuffer` y cambia el activo via `set_alt_screen`; el buffer inactivo se preserva al alternar)
+- [x] Wrap, scroll, clear, insert/delete char/line y resize con pruebas unitarias (18 tests del buffer + 4 del `TerminalScreen`)
+- [ ] Cursor real por fila/columna en normal-screen (la API ya existe en el buffer; falta cablearla al `TerminalWindow`)
+- [ ] Atributos por celda compatibles con seleccion/copy (cada celda ya guarda `(char, attr)`; falta exponerlos al sistema de seleccion)
 - [ ] Mouse pass-through opcional solo cuando el programa hijo active mouse reporting
 - [ ] Mantener compatibilidad GPM: RetroTUI conserva menus/seleccion cuando el hijo no pide mouse
+- [ ] Cablear el `TerminalScreenBuffer` dentro de `TerminalWindow` (el state machine ANSI debe escribir via `put_char` en lugar de mantener su propio grid)
 
 ### v0.9.6 — Certificacion Cross-Terminal
 
