@@ -18,6 +18,9 @@ class SystemMonitorWindow(Window):
         self.cpu_history = deque([0] * 30, maxlen=30)
         self.last_cpu_times = self._get_cpu_times()
         self.mem_info = {'total': 0, 'available': 0}
+        # Cached uptime string refreshed by `_update_stats` so the render
+        # path does not reopen `/proc/uptime` on every frame.
+        self.uptime_str = "-"
         self.platform_supported = _PROC_AVAILABLE
         if self.platform_supported:
             self._update_stats()
@@ -56,6 +59,23 @@ class SystemMonitorWindow(Window):
             pass
         return mem
 
+    def _read_uptime(self):
+        """Return uptime in seconds from /proc/uptime, or None if unavailable."""
+        if not _PROC_AVAILABLE:
+            return None
+        try:
+            with open('/proc/uptime', 'r') as f:
+                return float(f.readline().split()[0])
+        except (OSError, ValueError, IndexError):
+            return None
+
+    def _format_uptime(self, seconds):
+        """Format a duration in seconds as ``Xh YYm`` (days if >= 24h)."""
+        total = max(0, int(seconds))
+        hours, rem = divmod(total, 3600)
+        minutes = rem // 60
+        return f"{hours}h {minutes:02d}m"
+
     def _update_stats(self):
         """Calculate current CPU usage since last call and update RAM."""
         new_idle, new_total = self._get_cpu_times()
@@ -70,6 +90,8 @@ class SystemMonitorWindow(Window):
 
         self.last_cpu_times = (new_idle, new_total)
         self.mem_info = self._get_mem_info()
+        uptime_sec = self._read_uptime()
+        self.uptime_str = self._format_uptime(uptime_sec) if uptime_sec is not None else "-"
         self._resize_history_to_viewport()
 
     def _resize_history_to_viewport(self):
@@ -156,14 +178,9 @@ class SystemMonitorWindow(Window):
                 pass
             y += 1
 
-            try:
-                with open('/proc/uptime', 'r') as f:
-                    uptime_sec = float(f.readline().split()[0])
-                    hours = int(uptime_sec // 3600)
-                    minutes = int((uptime_sec % 3600) // 60)
-                    safe_addstr(stdscr, y, bx + 1, f"Uptime: {hours}h {minutes}m", body_attr)
-            except (OSError, ValueError, IndexError):
-                pass
+            # Uptime is cached by `_update_stats` and refreshed on the same
+            # 1-second cadence as CPU/RAM, so the draw path is read-free.
+            safe_addstr(stdscr, y, bx + 1, f"Uptime: {self.uptime_str}", body_attr)
         else:
             safe_addstr(
                 stdscr,

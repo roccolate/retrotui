@@ -399,17 +399,33 @@ class NotepadComponentTests(unittest.TestCase):
         win.modified = False
         win.draw_frame = mock.Mock(return_value=0)
 
-        with (
-            mock.patch.object(self.notepad_mod, "safe_addstr"),
-            mock.patch.object(self.notepad_mod.os.path, "basename", wraps=self.notepad_mod.os.path.basename) as basename,
-        ):
-            win.draw(None)
-            win.draw(None)
-            self.assertEqual(basename.call_count, 1)
+        # Spy on `_update_title` to count cache hits vs misses. The previous
+        # version mocked the global `os.path.basename`, which made the test
+        # fail when Python's line tracer called basename from unrelated paths
+        # during coverage runs (the test was reported as flaky on CI).
+        cache_misses = {"count": 0}
+        real_update = win._update_title
 
+        def spy_update_title():
+            before_key = win._title_cache_key
+            real_update()
+            if win._title_cache_key != before_key:
+                cache_misses["count"] += 1
+
+        win._update_title = spy_update_title
+
+        with mock.patch.object(self.notepad_mod, "safe_addstr"):
+            win.draw(None)
+            self.assertEqual(cache_misses["count"], 1)
+
+            # Unchanged state: cache hit, basename must not run.
+            win.draw(None)
+            self.assertEqual(cache_misses["count"], 1)
+
+            # Modified flag changes: cache miss again.
             win.modified = True
             win.draw(None)
-            self.assertEqual(basename.call_count, 2)
+            self.assertEqual(cache_misses["count"], 2)
 
         self.assertEqual(win.title, "Notepad - * demo.txt")
 
