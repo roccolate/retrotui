@@ -27,15 +27,14 @@ class ControlPanelWindow(Window):
         super().__init__('Control Panel', x, y, 60, 18, resizable=False)
         self.app = app
         self.selected_cat = 0
-        self._committed = False
-        
+
         # We reuse some state from SettingsWindow eventually, but start fresh for UI logic
         self.theme_name = app.theme_name
         self.show_hidden = bool(app.default_show_hidden)
         self.word_wrap_default = bool(app.default_word_wrap)
         self.sunday_first = bool(app.config.sunday_first)
         self.show_welcome = bool(app.config.show_welcome)
-        
+
         # For Theme selection
         self._themes = list_themes()
 

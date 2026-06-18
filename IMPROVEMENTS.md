@@ -325,9 +325,11 @@ All 9 bundled plugin `__init__.py` files silently discard the `title` parameter 
 - RetroNet HTML regex parser does not handle nested or malformed tags (returns best-effort text).
 - Clock `always_on_top` toggle keybinding (`kc == 1`) collides with Ctrl+A — kept for legacy reasons; documented in code.
 
-**LOW remaining:** Cosmetic polish (Clock separator string, Snake obs_attr theme_attr alignment, retronet history linear scan O(n) within `_MAX_HISTORY` cap).
+**LOW remaining:** Cosmetic polish (Clock separator string, Snake obs_attr theme_attr alignment, Hex Viewer reimplements `SelectableTextMixin` instead of mixing it in).
 
 **Closed in this iteration:**
-- WiFi Manager: `nmcli -t` output is now split on unescaped colons so SSIDs containing `:` are preserved.
+- WiFi Manager: `nmcli -t` output is now split on unescaped colons so SSIDs containing `:` (encoded as `\: ` by `nmcli -t`) are preserved.
 - WiFi Manager: password is always sent via stdin (nmcli `--ask`) on the first attempt; the CLI-arg fallback only runs on releases that lack `--ask`.
 - Snake: back-to-back difficulty changes keep the menu checkmark in sync (new unit test covers the sequence).
+- Settings: renamed `_committed` to `_finalized` so the flag is no longer misleading when the user chooses Cancel.
+- Control Panel: removed the unused `_committed` attribute.

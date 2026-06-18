@@ -149,7 +149,7 @@ class SettingsComponentTests(unittest.TestCase):
         result = win._activate_selection()
         self.assertEqual(result.type, self.actions_mod.ActionType.SAVE_ERROR)
         self.assertIn("disk full", result.payload)
-        self.assertFalse(win._committed)
+        self.assertFalse(win._finalized)
 
         win._selection = 999
         self.assertIsNone(win._activate_selection())
@@ -261,10 +261,10 @@ class SettingsComponentTests(unittest.TestCase):
         with mock.patch.object(win2, "_revert_runtime") as revert:
             win2.close()
         revert.assert_called_once_with()
-        self.assertTrue(win2._committed)
+        self.assertTrue(win2._finalized)
 
         win3 = self._make_window()
-        win3._committed = True
+        win3._finalized = True
         with mock.patch.object(win3, "_revert_runtime") as revert:
             win3.close()
         revert.assert_not_called()

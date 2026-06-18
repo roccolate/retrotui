@@ -28,7 +28,10 @@ class SettingsWindow(Window):
             app.config.show_welcome,
         )
         self._selection = 0
-        self._committed = False
+        # True after the user has explicitly chosen Save or Cancel, or
+        # after the close() hook has run. Used to skip the implicit
+        # revert in close() when the user already made a decision.
+        self._finalized = False
         self._control_rows = {}
         self._button_bounds = {}
         self.h = max(self.h, 17)
@@ -110,16 +113,19 @@ class SettingsWindow(Window):
             self.show_welcome = not self.show_welcome
             return None
         if idx == self._save_index():
-            self._committed = True
+            self._finalized = True
             self._apply_runtime()
             try:
                 self.app.persist_config()
             except OSError as exc:
-                self._committed = False
+                self._finalized = False
                 return ActionResult(ActionType.SAVE_ERROR, str(exc))
             return ActionResult(ActionType.EXECUTE, AppAction.CLOSE_WINDOW)
         if idx == self._cancel_index():
-            self._committed = True
+            # Cancel is also a "final" outcome from the runtime state
+            # perspective: nothing should be reverted on close. We mark
+            # the window finalized to skip the implicit revert in close().
+            self._finalized = True
             self._revert_runtime()
             return ActionResult(ActionType.EXECUTE, AppAction.CLOSE_WINDOW)
         return None
@@ -257,6 +263,6 @@ class SettingsWindow(Window):
 
     def close(self):
         """Revert preview state when window closes without save/cancel."""
-        if not self._committed:
+        if not self._finalized:
             self._revert_runtime()
-        self._committed = True
+        self._finalized = True
