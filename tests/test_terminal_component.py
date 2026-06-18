@@ -7,9 +7,11 @@ from unittest import mock
 
 def _install_fake_curses():
     fake = types.ModuleType("curses")
+    fake.KEY_F1 = 265
     fake.KEY_F6 = 270
     fake.KEY_F7 = 271
     fake.KEY_F8 = 272
+    fake.KEY_F12 = 276
     fake.KEY_LEFT = 260
     fake.KEY_RIGHT = 261
     fake.KEY_UP = 259
@@ -332,6 +334,7 @@ class TerminalComponentTests(unittest.TestCase):
         fake_session.read_chunks = ["one\ntwo\nthree\nfour\n"]
         win._session = fake_session
         win.scrollback_offset = 1
+        win.tick()
 
         with mock.patch.object(self.terminal_mod, "safe_addstr") as safe_addstr:
             win.draw(types.SimpleNamespace())
@@ -363,6 +366,7 @@ class TerminalComponentTests(unittest.TestCase):
         win.draw_frame = mock.Mock(return_value=0)
         win._session_error = "session failed"
         win.window_menu = None
+        win.tick()
 
         with mock.patch.object(self.terminal_mod, "safe_addstr"):
             win.draw(types.SimpleNamespace())
@@ -370,6 +374,18 @@ class TerminalComponentTests(unittest.TestCase):
 
         scroll_text = self._get_scroll_text(win)
         self.assertTrue(any("session failed" in line for line in scroll_text))
+
+    def test_tick_reports_session_read_error_once(self):
+        win = self._make_window()
+        fake_session = _FakeSession()
+        fake_session.read = mock.Mock(side_effect=OSError("pty read failed"))
+        win._session = fake_session
+
+        self.assertTrue(win.tick())
+        self.assertEqual(win._pending_output, "pty read failed\n")
+
+        self.assertFalse(win.tick())
+        self.assertEqual(win._pending_output, "pty read failed\n")
 
     def test_draw_states_init_and_exit_and_hidden_short_circuit(self):
         win = self._make_window()
@@ -500,6 +516,8 @@ class TerminalComponentTests(unittest.TestCase):
 
         self.assertEqual(win._key_to_input(self.curses.KEY_UP, self.curses.KEY_UP), "\x1b[A")
         self.assertEqual(win._key_to_input(self.curses.KEY_DC, self.curses.KEY_DC), "\x1b[3~")
+        self.assertEqual(win._key_to_input(self.curses.KEY_F1, self.curses.KEY_F1), "\x1bOP")
+        self.assertEqual(win._key_to_input(self.curses.KEY_F12, self.curses.KEY_F12), "\x1b[24~")
         self.assertEqual(win._key_to_input(10, 10), "\r")
         self.assertEqual(win._key_to_input(127, 127), "\x7f")
         self.assertEqual(win._key_to_input(9, 9), "\t")
@@ -685,6 +703,17 @@ class TerminalComponentTests(unittest.TestCase):
         win._send_terminate()
         self.assertEqual(fallback.write.call_count, 2)
 
+        # If a dedicated interrupt sender exists but declines, fall back once.
+        fallback_interrupt = types.SimpleNamespace(
+            running=True,
+            interrupt=mock.Mock(return_value=False),
+            write=mock.Mock(),
+        )
+        win._session = fallback_interrupt
+        win._send_interrupt()
+        fallback_interrupt.interrupt.assert_called_once_with()
+        fallback_interrupt.write.assert_called_once_with('\x03')
+
     def test_handle_key_ctrl_v_pastes_clipboard_into_session(self):
         win = self._make_window()
         win.window_menu = types.SimpleNamespace(active=False)
@@ -788,6 +817,49 @@ class TerminalComponentTests(unittest.TestCase):
         self.assertIsNone(win.handle_key(self.curses.KEY_NPAGE))
         self.assertLessEqual(win.scrollback_offset, up_offset)
         self.assertEqual(fake_session.writes, [])
+
+    def test_handle_key_pgup_pgdn_forward_in_alt_screen(self):
+        win = self._make_window()
+        win.window_menu = types.SimpleNamespace(active=False)
+        fake_session = _FakeSession()
+        win._session = fake_session
+        win._alt_screen = True
+
+        self.assertIsNone(win.handle_key(self.curses.KEY_PPAGE))
+        self.assertIsNone(win.handle_key(self.curses.KEY_NPAGE))
+
+        self.assertEqual(fake_session.writes, ['\x1b[5~', '\x1b[6~'])
+
+    def test_alt_screen_writes_wrap_at_right_edge(self):
+        win = self._make_window()
+        win.body_rect = mock.Mock(return_value=(4, 5, 5, 4))
+        win._alt_screen = True
+        win._alt_lines = [[(' ', 0) for _ in range(4)] for _ in range(3)]
+        win._alt_cursor_row = 0
+        win._alt_cursor_col = 3
+
+        win._write_char('A', 0)
+        win._write_char('B', 0)
+
+        self.assertEqual(win._alt_cursor_row, 1)
+        self.assertEqual(win._alt_cursor_col, 1)
+        self.assertEqual(win._alt_lines[0][3], ('A', 0))
+        self.assertEqual(win._alt_lines[1][0], ('B', 0))
+
+    def test_alt_screen_erase_display_partial_modes(self):
+        win = self._make_window()
+        win.body_rect = mock.Mock(return_value=(4, 5, 5, 4))
+        win._alt_screen = True
+        win._alt_lines = [[(ch, 0) for ch in row] for row in ["abcd", "efgh", "ijkl"]]
+        win._alt_cursor_row = 1
+        win._alt_cursor_col = 2
+
+        win._apply_csi([0], "J")
+        self.assertEqual(["".join(ch for ch, _ in row) for row in win._alt_lines], ["abcd", "ef  ", "    "])
+
+        win._alt_lines = [[(ch, 0) for ch in row] for row in ["abcd", "efgh", "ijkl"]]
+        win._apply_csi([1], "J")
+        self.assertEqual(["".join(ch for ch, _ in row) for row in win._alt_lines], ["    ", "   h", "ijkl"])
 
     def test_line_selection_span_and_selected_text_edge_cases(self):
         win = self._make_window()

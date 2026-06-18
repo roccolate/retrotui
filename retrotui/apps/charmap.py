@@ -58,12 +58,12 @@ class CharacterMapWindow(Window):
         range_items = []
         for i, (name, _, _) in enumerate(UNICODE_BLOCKS):
             range_items.append((name, f"block_{i}"))
-            
+
         self.window_menu = WindowMenu({
             "Range": range_items,
             "Edit": [
-                ("Copy Char    C", "copy_hex"),
-                ("Copy Hex     H", "copy_hex_val"),
+                ("Copy Char    C", "copy_char"),
+                ("Copy Hex     H", "copy_hex"),
             ],
             "Help": [
                 ("About Map", "about_map"),
@@ -155,9 +155,17 @@ class CharacterMapWindow(Window):
         if self.window_menu:
             self.window_menu.draw_dropdown(stdscr, self.x, self.y, self.w)
 
+    def _copy_to_clipboards(self, value):
+        copy_text(value)
+        if pyperclip:
+            try:
+                pyperclip.copy(value)
+            except _SYSTEM_CLIPBOARD_SYNC_ERRORS:
+                pass
+
     def handle_key(self, key):
         key_code = normalize_key_code(key)
-        
+
         if self.window_menu and self.window_menu.active:
             action = self.window_menu.handle_key(key_code)
             if action:
@@ -185,21 +193,10 @@ class CharacterMapWindow(Window):
             self.sel_idx = max(0, self.sel_idx - cols * rows)
         elif key_code in (ord('c'), ord('C')):
             if self.selected_char:
-                copy_text(self.selected_char)
-                if pyperclip:
-                    try:
-                        pyperclip.copy(self.selected_char)
-                    except _SYSTEM_CLIPBOARD_SYNC_ERRORS:
-                        pass
+                self._copy_to_clipboards(self.selected_char)
         elif key_code in (ord('h'), ord('H')):
             if self.selected_char:
-                hex_val = f"U+{ord(self.selected_char):04X}"
-                copy_text(hex_val)
-                if pyperclip:
-                    try:
-                        pyperclip.copy(hex_val)
-                    except _SYSTEM_CLIPBOARD_SYNC_ERRORS:
-                        pass
+                self._copy_to_clipboards(f"U+{ord(self.selected_char):04X}")
 
         self.selected_char = self.chars[self.sel_idx]
         return None
@@ -241,26 +238,15 @@ class CharacterMapWindow(Window):
             self.sel_idx = 0
             self.selected_char = self.chars[0]
             return ActionResult(ActionType.REFRESH)
-        
+
+        if action == "copy_char":
+            if self.selected_char:
+                self._copy_to_clipboards(self.selected_char)
+            return None
+
         if action == "copy_hex":
             if self.selected_char:
-                copy_text(self.selected_char)
-                if pyperclip:
-                    try:
-                        pyperclip.copy(self.selected_char)
-                    except _SYSTEM_CLIPBOARD_SYNC_ERRORS:
-                        pass
+                self._copy_to_clipboards(f"U+{ord(self.selected_char):04X}")
             return None
-        
-        if action == "copy_hex_val":
-            if self.selected_char:
-                val = f"U+{ord(self.selected_char):04X}"
-                copy_text(val)
-                if pyperclip:
-                    try:
-                        pyperclip.copy(val)
-                    except _SYSTEM_CLIPBOARD_SYNC_ERRORS:
-                        pass
-            return None
-            
+
         return None

@@ -28,12 +28,23 @@ class ProcessManagerWindow(Window):
 
     REFRESH_INTERVAL_SECONDS = 1.0
     KEY_F5 = getattr(curses, "KEY_F5", -1)
+    # Column header width: the rendered header pads to 6 chars per numeric
+    # column. These widths must match the format strings below.
+    PID_COL_WIDTH = 6
+    CPU_COL_WIDTH = 6
+    MEM_COL_WIDTH = 6
+    # Pre-computed column boundaries (start column) used by header click
+    # routing in ``handle_click``.
+    COL_PID_END = 7
+    COL_CPU_END = 14
+    COL_MEM_END = 21
 
     def __init__(self, x, y, w, h):
         super().__init__("Process Manager", x, y, max(58, w), max(14, h), content=[])
         self.rows = []
         self.selected_index = 0
-        self.sort_key = "cpu"  # cpu | mem | pid
+        self.scroll_offset = 0
+        self.sort_key = "cpu"  # cpu | mem | pid | cmd
         self.sort_reverse = True
         self._last_refresh = 0.0
         self._error_message = None
@@ -208,6 +219,9 @@ class ProcessManagerWindow(Window):
         if self.sort_key == "mem":
             self.rows.sort(key=lambda row: row.mem_percent, reverse=self.sort_reverse)
             return
+        if self.sort_key == "cmd":
+            self.rows.sort(key=lambda row: row.command.lower(), reverse=self.sort_reverse)
+            return
         self.rows.sort(key=lambda row: row.cpu_percent, reverse=self.sort_reverse)
 
     def _visible_rows(self):
@@ -313,7 +327,7 @@ class ProcessManagerWindow(Window):
             self.sort_reverse = not self.sort_reverse
         else:
             self.sort_key = key
-            self.sort_reverse = key != "pid"
+            self.sort_reverse = key not in ("pid", "cmd")
         self.refresh_processes(force=True)
 
     def execute_action(self, action):
@@ -335,12 +349,17 @@ class ProcessManagerWindow(Window):
             return ActionResult(ActionType.EXECUTE, AppAction.CLOSE_WINDOW)
         return None
 
+    def tick(self):
+        """Refresh process table outside the render path."""
+        before = len(self.rows)
+        self.refresh_processes(force=False)
+        return len(self.rows) != before
+
     def draw(self, stdscr):
         """Draw process table and summary bar."""
         if not self.visible:
             return
 
-        self.refresh_processes(force=False)
         body_attr = self.draw_frame(stdscr)
         bx, by, bw, bh = self.body_rect()
         if bh <= 0 or bw <= 0:
@@ -350,16 +369,16 @@ class ProcessManagerWindow(Window):
             safe_addstr(stdscr, by + row, bx, " " * bw, body_attr)
 
         arrow = '▼' if self.sort_reverse else '▲'
-        pid_h = f"{'PID':>6}"
-        cpu_h = f"{'CPU%':>6}"
-        mem_h = f"{'MEM%':>6}"
+        pid_h = f"{'PID':>{self.PID_COL_WIDTH}}"
+        cpu_h = f"{'CPU%':>{self.CPU_COL_WIDTH}}"
+        mem_h = f"{'MEM%':>{self.MEM_COL_WIDTH}}"
         cmd_h = 'COMMAND'
         if self.sort_key == 'pid':
-            pid_h = f"{'PID':>5}{arrow}"
+            pid_h = f"{'PID':>{self.PID_COL_WIDTH - 1}}{arrow}"
         elif self.sort_key == 'cpu':
-            cpu_h = f"{'CPU%':>5}{arrow}"
+            cpu_h = f"{'CPU%':>{self.CPU_COL_WIDTH - 1}}{arrow}"
         elif self.sort_key == 'mem':
-            mem_h = f"{'MEM%':>5}{arrow}"
+            mem_h = f"{'MEM%':>{self.MEM_COL_WIDTH - 1}}{arrow}"
         elif self.sort_key == 'cmd':
             cmd_h = f'COMMAND{arrow}'
         header = f"{pid_h} {cpu_h} {mem_h} {cmd_h}"
@@ -406,14 +425,15 @@ class ProcessManagerWindow(Window):
 
         bx, by, bw, bh = self.body_rect()
 
-        # Header row click — sort by column
+        # Header row click — sort by column. Column boundaries mirror the
+        # rendered header in `draw()`.
         if my == by and bx <= mx < bx + bw:
             col = mx - bx
-            if col < 7:
+            if col < self.COL_PID_END:
                 self._set_sort('pid')
-            elif col < 14:
+            elif col < self.COL_CPU_END:
                 self._set_sort('cpu')
-            elif col < 21:
+            elif col < self.COL_MEM_END:
                 self._set_sort('mem')
             else:
                 self._set_sort('cmd')
@@ -426,8 +446,6 @@ class ProcessManagerWindow(Window):
         if 0 <= row_index < len(self.rows):
             self.selected_index = row_index
             self._ensure_selection_visible()
-            if bstate and (bstate & getattr(curses, "BUTTON1_DOUBLE_CLICKED", 0)):
-                return self.request_kill_selected()
         return None
 
     def handle_key(self, key):

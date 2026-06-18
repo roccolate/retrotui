@@ -1,8 +1,25 @@
 """
 Bookmark management for File Manager.
 """
+import json
 import os
+from pathlib import Path
+
 from ...core.actions import ActionResult, ActionType
+
+BOOKMARK_SLOTS = (1, 2, 3, 4)
+_BOOKMARK_LOAD_ERRORS = (OSError, TypeError, ValueError)
+
+
+def default_bookmarks_path():
+    """Return the persistent bookmark store path."""
+    config_home = os.environ.get('XDG_CONFIG_HOME')
+    if config_home:
+        base = Path(config_home)
+    else:
+        base = Path.home() / '.config'
+    return base / 'retrotui' / 'filemanager_bookmarks.json'
+
 
 def get_default_bookmarks():
     """Build default bookmark slots 1..4."""
@@ -22,9 +39,53 @@ def get_default_bookmarks():
         bookmarks[1] = home if os.path.isdir(home) else os.path.sep
     return bookmarks
 
+
+def load_bookmarks(path=None):
+    """Load persisted bookmarks, falling back to platform-safe defaults."""
+    bookmarks = get_default_bookmarks()
+    store_path = Path(path) if path is not None else default_bookmarks_path()
+    try:
+        raw = json.loads(store_path.read_text(encoding='utf-8'))
+    except _BOOKMARK_LOAD_ERRORS:
+        return bookmarks
+
+    raw_bookmarks = raw.get('bookmarks', raw) if isinstance(raw, dict) else {}
+    if not isinstance(raw_bookmarks, dict):
+        return bookmarks
+
+    for raw_slot, raw_path in raw_bookmarks.items():
+        try:
+            slot = int(raw_slot)
+        except (TypeError, ValueError):
+            continue
+        if slot not in BOOKMARK_SLOTS or not isinstance(raw_path, str):
+            continue
+        target = os.path.realpath(os.path.expanduser(raw_path))
+        if os.path.isdir(target):
+            bookmarks[slot] = target
+    return bookmarks
+
+
+def save_bookmarks(bookmarks, path=None):
+    """Persist bookmark slots and return the written path."""
+    store_path = Path(path) if path is not None else default_bookmarks_path()
+    payload = {
+        str(slot): os.path.realpath(os.path.expanduser(bookmarks[slot]))
+        for slot in BOOKMARK_SLOTS
+        if slot in bookmarks and isinstance(bookmarks[slot], str)
+    }
+    store_path.parent.mkdir(parents=True, exist_ok=True)
+    store_path.write_text(
+        json.dumps({'bookmarks': payload}, indent=2, sort_keys=True) + '\n',
+        encoding='utf-8',
+        newline='\n',
+    )
+    return store_path
+
+
 def set_bookmark(bookmarks, slot, path):
     """Assign bookmark slot to provided path."""
-    if slot not in (1, 2, 3, 4):
+    if slot not in BOOKMARK_SLOTS:
         return ActionResult(ActionType.ERROR, 'Invalid bookmark slot.')
     target = os.path.realpath(path)
     if not os.path.isdir(target):

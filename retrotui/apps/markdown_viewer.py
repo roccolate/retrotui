@@ -4,10 +4,13 @@ import curses
 import os
 import re
 
+from ..constants import C_ANSI_START
 from ..core.actions import ActionResult, ActionType, AppAction
 from ..ui.menu import WindowMenu
 from ..ui.window import Window
 from ..utils import normalize_key_code, safe_addstr, theme_attr
+
+_CODE_PAIR = C_ANSI_START + 4 if C_ANSI_START + 4 <= 255 else 0
 
 
 class MarkdownViewerWindow(Window):
@@ -83,15 +86,22 @@ class MarkdownViewerWindow(Window):
         visible_rows = self._rows_visible()
         self.scroll_offset = max(0, min(self.scroll_offset, self._max_scroll()))
 
+        # Determine whether we start inside an open code block based on the
+        # content above the viewport. This keeps formatting consistent when
+        # the user scrolls into the middle of a fenced code block.
         in_code_block = False
+        for prev_idx in range(min(self.scroll_offset, len(self.raw_content))):
+            prev_line = self.raw_content[prev_idx].rstrip("\r\n").strip()
+            if prev_line.startswith("```"):
+                in_code_block = not in_code_block
 
         for row in range(visible_rows):
             idx = self.scroll_offset + row
             if idx >= len(self.raw_content):
                 break
-            
+
             line = self.raw_content[idx].rstrip("\r\n")
-            
+
             # 1. Code block detection
             if line.strip().startswith("```"):
                 in_code_block = not in_code_block
@@ -99,8 +109,12 @@ class MarkdownViewerWindow(Window):
                 continue
 
             if in_code_block:
-                # Use a specific color for code
-                code_attr = curses.color_pair(4) if curses.can_change_color() else body_attr
+                # Use a specific color for code. Only apply color pair when the
+                # terminal allows it; otherwise fall back to body attribute.
+                if curses.can_change_color() and _CODE_PAIR:
+                    code_attr = curses.color_pair(_CODE_PAIR)
+                else:
+                    code_attr = body_attr
                 safe_addstr(stdscr, by + row, bx, line[:bw].ljust(bw), code_attr | curses.A_BOLD)
                 continue
 
@@ -139,25 +153,37 @@ class MarkdownViewerWindow(Window):
             self.window_menu.draw_dropdown(stdscr, self.x, self.y, self.w)
 
     def _render_line(self, stdscr, y, x, line, bw, base_attr):
-        """Render a single line with inline formatting (bold)."""
+        """Render a single line with inline formatting (bold, italic, code)."""
         current_x = x
-        parts = re.split(r"(\*\*.*?\*\*)", line)
-        
+        # Split on common inline markdown tokens. Order matters: code spans
+        # first to keep inner asterisks from being mis-interpreted.
+        pattern = r"(`[^`]+`)|(\*\*[^*]+\*\*)|(\*[^*]+\*)"
+        parts = re.split(pattern, line)
+
         for part in parts:
-            if current_x - x >= bw:
-                break
-                
+            if not part or current_x - x >= bw:
+                continue
+
             attr = base_attr
             text = part
-            
-            if part.startswith("**") and part.endswith("**") and len(part) > 3:
+
+            if part.startswith("`") and part.endswith("`") and len(part) > 1:
+                text = part[1:-1]
+                if curses.can_change_color() and _CODE_PAIR:
+                    attr = curses.color_pair(_CODE_PAIR)
+                attr |= curses.A_BOLD
+            elif part.startswith("**") and part.endswith("**") and len(part) > 3:
                 attr |= curses.A_BOLD
                 text = part[2:-2]
-            
-            # Truncate if needed
+            elif part.startswith("*") and part.endswith("*") and len(part) > 1:
+                # Italic approximated as dim/underline because curses lacks
+                # a real italic attribute.
+                attr |= curses.A_DIM
+                text = part[1:-1]
+
             remaining_w = bw - (current_x - x)
             chunk = text[:remaining_w]
-            
+
             safe_addstr(stdscr, y, current_x, chunk, attr)
             current_x += len(chunk)
 
@@ -200,6 +226,14 @@ class MarkdownViewerWindow(Window):
             if action:
                 return self.execute_action(action)
         return None
+
+    def handle_scroll(self, direction, steps=1):
+        count = max(1, int(steps))
+        if direction == 'up':
+            self.scroll_offset = max(0, self.scroll_offset - count)
+        elif direction == 'down':
+            self.scroll_offset = min(self._max_scroll(), self.scroll_offset + count)
+        return True
 
     def handle_hover(self, mx, my):
         if self.window_menu:

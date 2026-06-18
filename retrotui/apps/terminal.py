@@ -35,6 +35,8 @@ class TerminalWindow(SelectableTextMixin, Window):
 
         self._session = None
         self._session_error = None
+        self._reported_session_error = False
+        self._last_pty_size = None
         self._pending_output = ''
 
         self.ansi = AnsiStateMachine()
@@ -141,10 +143,39 @@ class TerminalWindow(SelectableTextMixin, Window):
         try:
             session.start()
         except (RuntimeError, OSError) as exc:
-            self._session_error = str(exc)
+            self._set_session_error(exc)
             return
 
         self._session = session
+
+    def _set_session_error(self, exc):
+        """Record a PTY/session error for one visible status line."""
+        message = str(exc) or exc.__class__.__name__
+        if message != self._session_error:
+            self._session_error = message
+            self._reported_session_error = False
+
+    def tick(self):
+        """Poll PTY state outside the render path."""
+        before = len(self._pending_output)
+        self._ensure_session()
+        text_cols, text_rows = self._text_area_size()
+        if self._session is not None:
+            try:
+                size = (text_cols, text_rows)
+                if size != self._last_pty_size:
+                    self._session.resize(text_cols, text_rows)
+                    self._last_pty_size = size
+                chunk = self._session.read()
+                if chunk:
+                    self._pending_output += chunk
+                self._session.poll_exit()
+            except (OSError, RuntimeError) as exc:
+                self._set_session_error(exc)
+        if self._session_error and not self._reported_session_error:
+            self._pending_output += self._session_error + '\n'
+            self._reported_session_error = True
+        return len(self._pending_output) != before
 
     # OLD _strip_ansi removed, replaced by self.ansi usage
 
@@ -160,7 +191,7 @@ class TerminalWindow(SelectableTextMixin, Window):
                     while len(line) <= col:
                         line.append((' ', 0))
                     line[col] = (ch, attr)
-            self._alt_cursor_col += 1
+            self._advance_alt_cursor(cols, rows)
             return
 
         if self._cursor_col < len(self._line_cells):
@@ -171,6 +202,19 @@ class TerminalWindow(SelectableTextMixin, Window):
                 self._line_cells.append((' ', 0))
             self._line_cells.append((ch, attr))
         self._cursor_col += 1
+
+    def _advance_alt_cursor(self, cols, rows):
+        """Advance alt-screen cursor with terminal-style right-edge wrapping."""
+        self._alt_cursor_col += 1
+        if self._alt_cursor_col < cols:
+            return
+        self._alt_cursor_col = 0
+        self._alt_cursor_row += 1
+        if self._alt_cursor_row < rows:
+            return
+        self._alt_cursor_row = rows - 1
+        self._alt_lines.pop(0)
+        self._alt_lines.append([(' ', 0) for _ in range(cols)])
 
     def _append_newline(self):
         """Commit current line to scrollback."""
@@ -231,6 +275,46 @@ class TerminalWindow(SelectableTextMixin, Window):
         if self._cursor_col < len(self._line_cells):
             del self._line_cells[self._cursor_col:]
 
+    def _erase_display(self, mode):
+        """Apply CSI J (erase in display) for supported screen buffers."""
+        fill_attr = self.ansi.attr
+        if getattr(self, '_alt_screen', False):
+            cols, rows = self._text_area_size()
+            while len(self._alt_lines) < rows:
+                self._alt_lines.append([(' ', fill_attr) for _ in range(cols)])
+            for idx, line in enumerate(self._alt_lines[:rows]):
+                if len(line) < cols:
+                    line.extend([(' ', fill_attr)] * (cols - len(line)))
+                self._alt_lines[idx] = line[:cols]
+
+            row = max(0, min(rows - 1, self._alt_cursor_row))
+            col = max(0, min(cols - 1, self._alt_cursor_col))
+            if mode == 2:
+                self._alt_lines = [[(' ', fill_attr) for _ in range(cols)] for _ in range(rows)]
+                self._alt_cursor_col = 0
+                self._alt_cursor_row = 0
+            elif mode == 1:
+                for y in range(0, row):
+                    self._alt_lines[y] = [(' ', fill_attr) for _ in range(cols)]
+                for x in range(0, col + 1):
+                    self._alt_lines[row][x] = (' ', fill_attr)
+            else:
+                for x in range(col, cols):
+                    self._alt_lines[row][x] = (' ', fill_attr)
+                for y in range(row + 1, rows):
+                    self._alt_lines[y] = [(' ', fill_attr) for _ in range(cols)]
+            return
+
+        if mode == 2:
+            self._scroll_lines = []
+            self._line_cells = []
+            self._cursor_col = 0
+            self.scrollback_offset = 0
+        elif mode == 1:
+            self._erase_line(1)
+        else:
+            self._erase_line(0)
+
     def _apply_csi(self, params, final):
         """Handle CSI controls for layout (attributes handled by AnsiStateMachine)."""
         def _num(index, default):
@@ -256,27 +340,34 @@ class TerminalWindow(SelectableTextMixin, Window):
             if getattr(self, '_alt_screen', False): self._alt_cursor_row = max(0, self._alt_cursor_row - max(1, _num(0, 1)))
             return
         if final == 'B':
-            if getattr(self, '_alt_screen', False): self._alt_cursor_row = max(0, self._alt_cursor_row + max(1, _num(0, 1)))
+            if getattr(self, '_alt_screen', False):
+                _, rows = self._text_area_size()
+                self._alt_cursor_row = min(rows - 1, max(0, self._alt_cursor_row + max(1, _num(0, 1))))
             return
         if final == 'D':
             if getattr(self, '_alt_screen', False): self._alt_cursor_col = max(0, self._alt_cursor_col - max(1, _num(0, 1)))
             else: self._cursor_col = max(0, self._cursor_col - max(1, _num(0, 1)))
             return
         if final == 'C':
-            if getattr(self, '_alt_screen', False): self._alt_cursor_col = max(0, self._alt_cursor_col + max(1, _num(0, 1)))
+            cols, _ = self._text_area_size()
+            if getattr(self, '_alt_screen', False): self._alt_cursor_col = min(cols - 1, max(0, self._alt_cursor_col + max(1, _num(0, 1))))
             else: self._cursor_col = max(0, self._cursor_col + max(1, _num(0, 1)))
             return
         if final == 'G':
-            if getattr(self, '_alt_screen', False): self._alt_cursor_col = max(0, _num(0, 1) - 1)
+            cols, _ = self._text_area_size()
+            if getattr(self, '_alt_screen', False): self._alt_cursor_col = min(cols - 1, max(0, _num(0, 1) - 1))
             else: self._cursor_col = max(0, _num(0, 1) - 1)
             return
         if final in ('H', 'f'):
             row = _num(0, 1)
             col = _num(1, 1)
             if getattr(self, '_alt_screen', False):
-                self._alt_cursor_row = max(0, row - 1)
-                self._alt_cursor_col = max(0, col - 1)
+                cols, rows = self._text_area_size()
+                self._alt_cursor_row = min(rows - 1, max(0, row - 1))
+                self._alt_cursor_col = min(cols - 1, max(0, col - 1))
             else:
+                while len(self._scroll_lines) < max(0, row - 1):
+                    self._scroll_lines.append([])
                 self._cursor_col = max(0, col - 1)
             return
         if final == 'K':
@@ -297,18 +388,8 @@ class TerminalWindow(SelectableTextMixin, Window):
                     del self._line_cells[self._cursor_col:self._cursor_col + count]
             return
         if final == 'J':
-            mode = _num(0, 0)
-            if mode == 2:
-                if getattr(self, '_alt_screen', False):
-                    cols, rows = self._text_area_size()
-                    self._alt_lines = [[(' ', self.ansi.attr) for _ in range(cols)] for _ in range(rows)]
-                    self._alt_cursor_col = 0
-                    self._alt_cursor_row = 0
-                else:
-                    self._scroll_lines = []
-                    self._line_cells = []
-                    self._cursor_col = 0
-                    self.scrollback_offset = 0
+            self._erase_display(_num(0, 0))
+            return
 
     def _consume_output(self, text):
         """Feed text to ANSI state machine and update buffer."""
@@ -332,10 +413,10 @@ class TerminalWindow(SelectableTextMixin, Window):
                     else: self._cursor_col = max(0, self._cursor_col - 1)
                 elif data == '\t':
                     if getattr(self, '_alt_screen', False):
-                        spaces = 4 - (self._alt_cursor_col % 4)
+                        spaces = 8 - (self._alt_cursor_col % 8)
                         for _ in range(spaces): self._write_char(' ', self.ansi.attr)
                     else:
-                        spaces = 4 - (self._cursor_col % 4)
+                        spaces = 8 - (self._cursor_col % 8)
                         for _ in range(spaces): self._write_char(' ', self.ansi.attr)
             elif kind == 'CSI':
                 # data is final char, attr is params list
@@ -487,17 +568,6 @@ class TerminalWindow(SelectableTextMixin, Window):
         for row in range(bh):
             safe_addstr(stdscr, by + row, bx, blank, body_attr)
 
-        self._ensure_session()
-        if self._session is not None:
-            self._session.resize(text_cols, text_rows)
-            chunk = self._session.read()
-            if chunk:
-                self._pending_output += chunk
-            self._session.poll_exit()
-        if self._session_error:
-            self._pending_output += self._session_error + '\n'
-            self._session_error = None
-
         if getattr(self, '_alt_screen', False):
             while len(self._alt_lines) < text_rows:
                 self._alt_lines.append([(' ', 0) for _ in range(text_cols)])
@@ -566,6 +636,24 @@ class TerminalWindow(SelectableTextMixin, Window):
             getattr(curses, 'KEY_IC', None): '\x1b[2~',
             getattr(curses, 'KEY_DC', None): '\x1b[3~',
         }
+        function_keys = {
+            1: '\x1bOP',
+            2: '\x1bOQ',
+            3: '\x1bOR',
+            4: '\x1bOS',
+            5: '\x1b[15~',
+            6: '\x1b[17~',
+            7: '\x1b[18~',
+            8: '\x1b[19~',
+            9: '\x1b[20~',
+            10: '\x1b[21~',
+            11: '\x1b[23~',
+            12: '\x1b[24~',
+        }
+        for number, sequence in function_keys.items():
+            curses_key = getattr(curses, f'KEY_F{number}', None)
+            if curses_key is not None:
+                special[curses_key] = sequence
         if key_code in special and special[key_code] is not None:
             return special[key_code]
         if key_code in (getattr(curses, 'KEY_ENTER', -1), 10, 13):
@@ -624,12 +712,10 @@ class TerminalWindow(SelectableTextMixin, Window):
             if callable(sender):
                 if sender():
                     return
-            else:
-                self._session.write('\x03')
-                return
             self._session.write('\x03')
         except OSError as exc:
             self._session_error = str(exc)
+            self._reported_session_error = False
 
     def _send_terminate(self):
         """Terminate foreground process group (fallback: interrupt)."""
@@ -645,6 +731,7 @@ class TerminalWindow(SelectableTextMixin, Window):
             self._session.write('\x03')
         except OSError as exc:
             self._session_error = str(exc)
+            self._reported_session_error = False
 
     def _forward_payload(self, payload):
         """Write one payload chunk into the PTY session when available."""
@@ -658,6 +745,7 @@ class TerminalWindow(SelectableTextMixin, Window):
             self._session.write(payload)
         except OSError as exc:
             self._session_error = str(exc)
+            self._reported_session_error = False
 
     def accept_dropped_path(self, path):
         """Accept file drop payload by inserting a shell-safe path token."""
@@ -698,10 +786,16 @@ class TerminalWindow(SelectableTextMixin, Window):
             return None
 
         if key_code == getattr(curses, 'KEY_PPAGE', -1):
+            if getattr(self, '_alt_screen', False):
+                self._forward_payload(self._key_to_input(key, key_code))
+                return None
             _, text_rows = self._text_area_size()
             self.handle_scroll('up', max(1, text_rows - 1))
             return None
         if key_code == getattr(curses, 'KEY_NPAGE', -1):
+            if getattr(self, '_alt_screen', False):
+                self._forward_payload(self._key_to_input(key, key_code))
+                return None
             _, text_rows = self._text_area_size()
             self.handle_scroll('down', max(1, text_rows - 1))
             return None
@@ -805,6 +899,8 @@ class TerminalWindow(SelectableTextMixin, Window):
         """Reset scrollback state and start a fresh shell session lazily."""
         self.close()
         self._session_error = None
+        self._reported_session_error = False
+        self._last_pty_size = None
         self._pending_output = ''
         self.ansi = AnsiStateMachine()
         self._scroll_lines = []
@@ -815,6 +911,7 @@ class TerminalWindow(SelectableTextMixin, Window):
     def close(self):
         """Release PTY resources when terminal window is closed."""
         self._pending_output = ''
+        self._last_pty_size = None
         if self._session is not None:
             self._session.close()
             self._session = None

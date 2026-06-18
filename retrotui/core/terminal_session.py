@@ -332,20 +332,13 @@ class TerminalSession:
         if self.master_fd is not None:
             if self.running:
                 self.terminate()
-                import time
-                for _ in range(5):
-                    if self.poll_exit():
-                        break
-                    time.sleep(0.02)
+                self.poll_exit()
                 if self.running:
                     self.kill()
-                    time.sleep(0.02)
-                    self.poll_exit()
 
             try:
                 os.close(self.master_fd)
             except OSError:
                 pass
             self.master_fd = None
-        self.poll_exit()
         self.running = False

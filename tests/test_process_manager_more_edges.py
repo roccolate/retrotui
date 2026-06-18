@@ -37,15 +37,14 @@ class ProcessManagerMoreEdgesTests(unittest.TestCase):
         win.draw(std)
         self.assertTrue(len(std.calls) > 0)
 
-    def test_handle_click_double_returns_kill_request(self):
+    def test_handle_click_double_does_not_trigger_kill(self):
         win = ProcessManagerWindow(0, 0, 80, 12)
         win.rows = [ProcessRow(pid=42, cpu_percent=0, mem_percent=0, command='x', total_ticks=0)]
         win.selected_index = 0
         bx, by, bw, bh = win.body_rect()
-        # click on first data row (by+1)
+        # double-click is no longer a destructive shortcut; only the K key/menu triggers kill
         res = win.handle_click(bx, by + 1, bstate=sys.modules['curses'].BUTTON1_DOUBLE_CLICKED)
-        self.assertIsNotNone(res)
-        self.assertEqual(res.type, ActionType.REQUEST_KILL_CONFIRM)
+        self.assertIsNone(res)
 
     def test_handle_key_sorts_and_close(self):
         win = ProcessManagerWindow(0, 0, 80, 12)

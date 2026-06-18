@@ -4,6 +4,7 @@ from __future__ import annotations
 import curses
 import json
 import random
+import time
 from pathlib import Path
 
 from ..ui.window import Window
@@ -90,6 +91,7 @@ class SolitaireWindow(Window):
         self.scroll_y = 0
         self.victory = False
         self._last_click = None
+        self._last_click_time = 0.0
 
     def execute_action(self, action: str | AppAction) -> ActionResult | None:
         if action == "solitaire_new":
@@ -295,8 +297,13 @@ class SolitaireWindow(Window):
             if cx <= mx < cx + cw and cy <= my < cy + ch:
                 clicked = key
                 break
-        
-        if self._last_click == (mx, my) and clicked and clicked == self.selected:
+
+        now = time.monotonic()
+        is_double_click = (
+            self._last_click == (mx, my)
+            and (now - self._last_click_time) <= 0.5
+        )
+        if is_double_click and clicked and clicked == self.selected:
             area, col_idx, card_idx = clicked
             if area in ("waste", "col"):
                 if self._auto_move_to_foundation():
@@ -304,9 +311,11 @@ class SolitaireWindow(Window):
                     self.selected = None
                     self._check_victory()
             self._last_click = (mx, my)
+            self._last_click_time = now
             return None
 
         self._last_click = (mx, my)
+        self._last_click_time = now
 
         if not clicked:
             self.selected = None
@@ -339,34 +348,38 @@ class SolitaireWindow(Window):
                  self.selected = clicked
         else:
             sel_area, sel_col, sel_idx = self.selected
-            
+
             if area == "col":
                 moving = []
                 if sel_area == "waste": moving = [(self.waste[-1], True)]
-                elif sel_area == "found": moving = [(self.foundations[sel_col][-1], True)]
                 elif sel_area == "col": moving = self.columns[sel_col][sel_idx:]
-                
+
+                if not moving:
+                    # Foundation cards cannot be returned to columns under
+                    # standard Klondike rules.
+                    self.selected = None
+                    return None
+
                 target_col = self.columns[col_idx]
                 target_top = target_col[-1][0] if target_col else None
                 seq_first = moving[0][0]
-                
+
                 if self._can_place_sequence_on(target_top, seq_first):
                     self.columns[col_idx].extend(moving)
                     if sel_area == "waste": self.waste.pop()
-                    elif sel_area == "found": self.foundations[sel_col].pop()
                     elif sel_area == "col":
                         del self.columns[sel_col][sel_idx:]
                         if self.columns[sel_col] and not self.columns[sel_col][-1][1]:
                             c, _ = self.columns[sel_col][-1]
                             self.columns[sel_col][-1] = (c, True)
                     self.moves += 1
-                    
+
             elif area == "found":
                 moving_card = None
                 if sel_area == "waste": moving_card = self.waste[-1]
                 elif sel_area == "col" and sel_idx == len(self.columns[sel_col]) - 1:
                     moving_card = self.columns[sel_col][-1][0]
-                
+
                 if moving_card and self._can_move_to_foundation(moving_card, self.foundations[col_idx]):
                     self.foundations[col_idx].append(moving_card)
                     if sel_area == "waste": self.waste.pop()
@@ -376,10 +389,10 @@ class SolitaireWindow(Window):
                             c, _ = self.columns[sel_col][-1]
                             self.columns[sel_col][-1] = (c, True)
                     self.moves += 1
-                    
+
             self.selected = None
             self._check_victory()
-        
+
         return None
 
     def handle_key(self, key):
@@ -389,7 +402,7 @@ class SolitaireWindow(Window):
             return None
 
         kc = normalize_key_code(key)
-        
+
         if kc == curses.KEY_UP:
             self.scroll_y = max(0, getattr(self, 'scroll_y', 0) - 1)
         elif kc == curses.KEY_DOWN:
@@ -398,10 +411,8 @@ class SolitaireWindow(Window):
             self.scroll_y = max(0, getattr(self, 'scroll_y', 0) - 5)
         elif kc == curses.KEY_NPAGE:
             self.scroll_y = min(getattr(self, 'max_scroll', 0), getattr(self, 'scroll_y', 0) + 5)
-
-        if isinstance(key, int):
-            if key in (ord('q'), ord('Q')):
-                return self.execute_action(AppAction.CLOSE_WINDOW)
-            elif key in (ord('r'), ord('R')):
-                return self.execute_action("solitaire_new")
+        elif kc in (ord('q'), ord('Q')):
+            return self.execute_action(AppAction.CLOSE_WINDOW)
+        elif kc in (ord('r'), ord('R')):
+            return self.execute_action("solitaire_new")
         return None

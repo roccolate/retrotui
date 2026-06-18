@@ -451,6 +451,20 @@ class CoreAppTests(unittest.TestCase):
             )
         )
 
+    def test_load_plugins_runtime_skips_discovery_when_plugins_hidden_by_default(self):
+        app = self._make_app()
+        app.config = self.app_mod.AppConfig()
+        app.refresh_icons = mock.Mock()
+        app._rebuild_global_menu = mock.Mock()
+
+        with mock.patch("retrotui.plugins.loader.discover_plugins") as discover_plugins:
+            self.plugin_mod.load_plugins_runtime(app)
+
+        discover_plugins.assert_not_called()
+        self.assertEqual(app._plugins, {})
+        app.refresh_icons.assert_called_once_with()
+        app._rebuild_global_menu.assert_called_once_with()
+
     def test_build_global_menu_items_adds_sorted_plugins_section(self):
         app = self._make_app()
         app.config = types.SimpleNamespace(hidden_icons="", hidden_menu_items="")
@@ -491,6 +505,28 @@ class CoreAppTests(unittest.TestCase):
         self.assertNotIn("Calculator", apps_labels)
         self.assertEqual(menu_items["Plugins"], [("Beta Tool", "plugin:beta")])
 
+    def test_build_global_menu_items_defaults_to_core_apps_only(self):
+        app = self._make_app()
+        app.config = self.app_mod.AppConfig()
+        app._plugins = {
+            "alpha": {"manifest": {"plugin": {"id": "alpha", "name": "Alpha Tool"}}},
+            "game": {"manifest": {"plugin": {"id": "game", "name": "Game Tool", "category": "game"}}},
+        }
+
+        menu_items = app._build_global_menu_items()
+
+        self.assertEqual(set(menu_items), {"File"})
+        file_actions = [action for _, action in menu_items["File"] if action is not None]
+        self.assertEqual(
+            file_actions,
+            [
+                self.actions_mod.AppAction.NOTEPAD,
+                self.actions_mod.AppAction.FILE_MANAGER,
+                self.actions_mod.AppAction.TERMINAL,
+                self.actions_mod.AppAction.EXIT,
+            ],
+        )
+
     def test_refresh_icons_includes_plugins_and_honors_hidden_keys(self):
         app = self._make_app()
         app.use_unicode = True
@@ -508,6 +544,26 @@ class CoreAppTests(unittest.TestCase):
         self.assertNotIn("Alpha Tool", labels)
         self.assertIn("Beta Tool", labels)
         self.assertIn("plugin:beta", actions)
+
+    def test_refresh_icons_defaults_to_core_apps_only(self):
+        app = self._make_app()
+        app.use_unicode = True
+        app.config = self.app_mod.AppConfig()
+        app._plugins = {
+            "alpha": {"manifest": {"plugin": {"id": "alpha", "name": "Alpha Tool"}}},
+        }
+
+        app.refresh_icons()
+        actions = [icon.get("action") for icon in app.icons]
+
+        self.assertEqual(
+            actions,
+            [
+                self.actions_mod.AppAction.FILE_MANAGER,
+                self.actions_mod.AppAction.NOTEPAD,
+                self.actions_mod.AppAction.TERMINAL,
+            ],
+        )
 
     def test_dispatch_open_file_calls_file_viewer(self):
         app = self._make_app()
@@ -1927,6 +1983,28 @@ class CoreAppTests(unittest.TestCase):
             self.actions_mod.AppAction.MENU_EDITOR,
         )
         self.assertTrue(callable(label_to_action.get("Sort Icons (A-Z)")))
+
+    def test_desktop_context_menu_defaults_to_core_apps_only(self):
+        app = self._make_app()
+        app.config = self.app_mod.AppConfig()
+        app.theme = object()
+        app.context_menu = None
+        app.get_icon_at = mock.Mock(return_value=-1)
+
+        with mock.patch("retrotui.ui.context_menu.ContextMenu") as context_menu_cls:
+            context_menu = context_menu_cls.return_value
+            handled = app._handle_desktop_right_click(12, 8, 0)
+            shown_items = context_menu.show.call_args.args[2]
+
+        self.assertTrue(handled)
+        labels = [
+            item["label"]
+            for item in shown_items
+            if isinstance(item, dict) and "label" in item
+        ]
+        self.assertEqual(labels, ["File Manager", "New Terminal", "New Notepad", "Exit"])
+        self.assertNotIn("Desktop Icons", labels)
+        self.assertNotIn("Settings", labels)
 
     def test_sort_desktop_icons_delegates_to_icon_manager(self):
         app = self._make_app()

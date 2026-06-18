@@ -115,6 +115,21 @@ class FileManagerComponentTests(unittest.TestCase):
         self.assertEqual(result.type, self.actions_mod.ActionType.REFRESH)
         self.assertEqual(win._last_trash_move, {'source': '/tmp/a.txt', 'trash': '/trash/a.txt'})
 
+    def test_parent_entry_is_not_operable(self):
+        win = self._make_window()
+        parent = self.fm_mod.FileEntry("..", True, "/tmp")
+        win.entries = [parent]
+        win.selected_index = 0
+
+        for action in (
+            lambda: win.delete_selected(),
+            lambda: win.rename_selected("parent"),
+            lambda: win.copy_selected("/dest"),
+            lambda: win.move_selected("/dest"),
+        ):
+            result = action()
+            self.assertEqual(result.type, self.actions_mod.ActionType.ERROR)
+
     def test_delete_selected_can_be_undone(self):
         win = self._make_window()
         win._last_trash_move = {'source': '/tmp/a.txt', 'trash': '/trash/a.txt'}
@@ -236,6 +251,19 @@ class FileManagerComponentTests(unittest.TestCase):
             win.set_bookmark(1, "/new")
             
         mock_set.assert_called_with(win.bookmarks, 1, "/new")
+
+    def test_set_bookmark_persists_on_success(self):
+        win = self._make_window()
+        win.bookmarks = {1: "/tmp"}
+
+        with (
+            mock.patch("retrotui.apps.filemanager.window.set_bookmark", return_value=None),
+            mock.patch("retrotui.apps.filemanager.window.save_bookmarks") as mock_save,
+        ):
+            result = win.set_bookmark(1, "/tmp")
+
+        self.assertEqual(result.type, self.actions_mod.ActionType.REFRESH)
+        mock_save.assert_called_once_with(win.bookmarks)
 
 if __name__ == "__main__":
     unittest.main()

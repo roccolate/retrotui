@@ -4,6 +4,7 @@ File Manager Window UI.
 import os
 import curses
 import shutil
+import threading
 import time
 from ...ui.window import Window
 from ...ui.menu import WindowMenu
@@ -15,8 +16,15 @@ from .operations import (
     _trash_base_dir, perform_copy, perform_move, perform_delete, perform_undo,
     create_directory, create_file, _is_long_file_operation, next_trash_path
 )
-from .preview import get_preview_lines, get_entry_info_lines, IMAGE_EXTENSIONS, _read_text_preview, _read_image_preview
-from .bookmarks import get_default_bookmarks, set_bookmark, navigate_bookmark
+from .preview import (
+    get_preview_lines,
+    get_entry_info_lines,
+    IMAGE_EXTENSIONS,
+    _detect_image_preview_backend,
+    _read_text_preview,
+    _read_image_preview,
+)
+from .bookmarks import load_bookmarks, save_bookmarks, set_bookmark, navigate_bookmark
 
 _ENTRY_ATTR_PATH_ERRORS = (
     AttributeError,
@@ -112,9 +120,12 @@ class FileManagerWindow(Window):
         self.h = max(self.h, WIN_MIN_HEIGHT)
         self._pending_drag_payload = None
         self._pending_drag_origin = None
-        self.bookmarks = get_default_bookmarks()
+        self._drag_rejected_entry = None
+        self.bookmarks = load_bookmarks()
         self._last_trash_move = None
         self._preview_cache = {'key': None, 'lines': []}
+        self._preview_lock = threading.Lock()
+        self._preview_pending = set()
         self.dual_pane_enabled = self.w >= self.DUAL_PANE_MIN_WIDTH
         self.active_pane = 0
         self._secondary = PaneState(self.current_path)
@@ -291,13 +302,17 @@ class FileManagerWindow(Window):
         if getattr(self, '_drag_mode', 0) == 0:
             if not (bstate & curses.BUTTON1_PRESSED):
                 self.clear_pending_drag()
+                self._drag_rejected_entry = None
             elif self._pending_drag_payload is None:
                 entry = self._selected_entry()
                 if entry and entry.name != '..':
                     payload = self._drag_payload_for_entry(entry)
                     if payload:
                         self._set_pending_drag(payload, mx, my)
-        return super().handle_mouse_drag(mx, my, bstate, norm=norm)
+                    elif entry.is_dir and getattr(self, '_drag_rejected_entry', None) != entry.full_path:
+                        self._drag_rejected_entry = entry.full_path
+                        return ActionResult(ActionType.ERROR, 'Directory drag is not supported.')
+        return None
 
     def accept_dropped_path(self, path):
         if not path or not isinstance(path, str):
@@ -538,10 +553,16 @@ class FileManagerWindow(Window):
         entry = self._selected_entry()
         if not entry:
             return ActionResult(ActionType.ERROR, 'No item selected.')
+        if entry.name == '..':
+            return ActionResult(ActionType.ERROR, 'Parent directory cannot be deleted.')
         return self.perform_delete_entry(entry.full_path)
 
     def perform_delete_entry(self, path):
-        result_path = perform_delete(path)
+        trash_dir = self._trash_base_dir()
+        if trash_dir == _trash_base_dir():
+            result_path = perform_delete(path)
+        else:
+            result_path = perform_delete(path, trash_dir=trash_dir)
         if result_path:
             self._last_trash_move = {'source': path, 'trash': result_path}
             self._rebuild_content()
@@ -551,9 +572,11 @@ class FileManagerWindow(Window):
     def perform_undo_delete(self):
         if not self._last_trash_move:
              return ActionResult(ActionType.ERROR, 'Nothing to undo.')
-        error = perform_undo(self._last_trash_move)
-        if error:
-            return error
+        result = perform_undo(self._last_trash_move)
+        if isinstance(result, ActionResult) and result.type != ActionType.REFRESH:
+            return result
+        if result is not None and not isinstance(result, ActionResult):
+            return result
         restored = self._last_trash_move['source']
         self._last_trash_move = None
         self._rebuild_content()
@@ -581,11 +604,14 @@ class FileManagerWindow(Window):
         clean = name.strip()
         if not clean:
              return None, ActionResult(ActionType.ERROR, 'Name cannot be empty.')
+        if clean in ('.', '..') or os.sep in clean or (os.altsep and os.altsep in clean):
+             return None, ActionResult(ActionType.ERROR, 'Name cannot contain path separators.')
         return clean, None
 
     def _trash_base_dir(self):
         """Proxy for trash base directory, allows monkeypatching in tests."""
-        return _trash_base_dir()
+        from . import operations
+        return operations._trash_base_dir()
 
     def _next_trash_path(self, path):
         """Satisfy tests for trash path generation."""
@@ -601,13 +627,56 @@ class FileManagerWindow(Window):
 
     def _entry_preview_lines(self, entry, max_lines, max_cols=20):
         """Wrap preview helper for tests with caching."""
-        cache_key = (entry.full_path, entry.size if not entry.is_dir else 0, max_lines, max_cols)
-        if self._preview_cache.get('key') == cache_key:
-            return self._preview_cache['lines']
+        if entry is None:
+            cache_key = (None, max_lines, max_cols)
+        else:
+            cache_key = (*self._preview_stat_key(entry.full_path), max_lines, max_cols)
+        with self._preview_lock:
+            if self._preview_cache.get('key') == cache_key:
+                return self._preview_cache['lines']
+
+        if self._should_preview_image_async(entry, max_lines, max_cols):
+            return self._start_image_preview(cache_key, entry, max_lines, max_cols)
         
         lines = get_preview_lines(entry, max_lines, max_cols)
-        self._preview_cache = {'key': cache_key, 'lines': lines}
+        with self._preview_lock:
+            self._preview_cache = {'key': cache_key, 'lines': lines}
         return lines
+
+    def _should_preview_image_async(self, entry, max_lines, max_cols):
+        """Return True when preview generation may spawn an external renderer."""
+        if entry is None or entry.is_dir or max_lines <= 0 or max_cols <= 0:
+            return False
+        ext = os.path.splitext(entry.name)[1].lower()
+        if ext not in self.IMAGE_EXTENSIONS:
+            return False
+        return bool(_detect_image_preview_backend())
+
+    def _start_image_preview(self, cache_key, entry, max_lines, max_cols):
+        """Start expensive image preview generation outside the render path."""
+        loading = ['[image preview loading]']
+        with self._preview_lock:
+            if self._preview_cache.get('key') == cache_key:
+                return self._preview_cache['lines']
+            self._preview_cache = {'key': cache_key, 'lines': loading}
+            if cache_key in self._preview_pending:
+                return loading
+            self._preview_pending.add(cache_key)
+
+        def _worker():
+            try:
+                lines = get_preview_lines(entry, max_lines, max_cols)
+            except Exception:  # pragma: no cover - defensive worker isolation
+                lines = ['[preview failed]']
+            with self._preview_lock:
+                self._preview_pending.discard(cache_key)
+                if self._preview_cache.get('key') == cache_key:
+                    self._preview_cache = {'key': cache_key, 'lines': lines}
+                    self.needs_redraw = True
+
+        thread = threading.Thread(target=_worker, name='retrotui-preview', daemon=True)
+        thread.start()
+        return loading
 
     def _entry_info_lines(self, entry):
         """Proxy for metadata info lines."""
@@ -615,12 +684,15 @@ class FileManagerWindow(Window):
 
     def _invalidate_preview_cache(self):
         """Clear the preview cache."""
-        self._preview_cache = {'key': None, 'lines': []}
+        with self._preview_lock:
+            self._preview_cache = {'key': None, 'lines': []}
 
     def _resolve_destination_path(self, entry, dest_path):
         """Check if destination is valid and return full target path."""
         if not entry:
             return None, ActionResult(ActionType.ERROR, 'No entry selected.')
+        if entry.name == '..':
+            return None, ActionResult(ActionType.ERROR, 'Parent directory cannot be copied or moved.')
         
         if not dest_path:
             return None, ActionResult(ActionType.ERROR, 'Destination path cannot be empty.')
@@ -657,18 +729,26 @@ class FileManagerWindow(Window):
         """Record start of a potential drag operation."""
         self._pending_drag_payload = payload
         self._pending_drag_origin = (x, y)
+        self._drag_rejected_entry = None
 
 
     def rename_selected(self, new_name):
         entry = self._selected_entry()
         if not entry:
             return ActionResult(ActionType.ERROR, 'No item selected.')
+        if entry.name == '..':
+            return ActionResult(ActionType.ERROR, 'Parent directory cannot be renamed.')
+        clean, error = self._normalize_new_name(new_name)
+        if error:
+            return error
         base = os.path.dirname(entry.full_path)
-        dest = os.path.join(base, new_name)
+        dest = os.path.join(base, clean)
+        if os.path.exists(dest):
+            return ActionResult(ActionType.ERROR, 'Destination already exists.')
         res = perform_move(entry.full_path, dest)
         self._rebuild_content()
         if res.type == ActionType.REFRESH:
-             self._select_entry_by_name(new_name)
+             self._select_entry_by_name(clean)
         return res
 
     def copy_selected(self, dest_path):
@@ -758,7 +838,13 @@ class FileManagerWindow(Window):
         if path is None:
             path = self._active_base_path()
         res = set_bookmark(self.bookmarks, slot, path)
-        return ActionResult(ActionType.REFRESH) if res is None else res
+        if res is not None:
+            return res
+        try:
+            save_bookmarks(self.bookmarks)
+        except OSError as exc:
+            self._active_pane_state().error_message = f'Bookmark saved for this session only: {exc}'
+        return ActionResult(ActionType.REFRESH)
 
     def draw(self, stdscr):
         min_w = self._dual_pane_min_width()
@@ -766,11 +852,8 @@ class FileManagerWindow(Window):
              self.dual_pane_enabled = False
              self.active_pane = 0
 
-        border_attr = theme_attr('window_border')
-        if self.active:
-            border_attr = theme_attr('window_border')
-
         self.draw_frame(stdscr)
+        border_attr = theme_attr('window_border')
 
         if self.dual_pane_enabled:
             self._draw_dual_pane(stdscr, border_attr)
@@ -1096,17 +1179,17 @@ class FileManagerWindow(Window):
             return None
 
         # Navigation keys (unified for both panes)
-        nav_result = self._handle_pane_navigation(key)
+        nav_result = self._handle_pane_navigation(norm_key)
         if nav_result is not None:
             return nav_result
 
         # Shared keys and actions
-        if key == 10: # Enter
+        if norm_key == 10: # Enter
             return self.activate_selected()
-        elif key == 9: # Tab
+        elif norm_key == 9: # Tab
             return self.handle_tab_key()
 
-        fkey_result = self._handle_fkey(key)
+        fkey_result = self._handle_fkey(norm_key)
         if fkey_result is not None:
             return fkey_result
 

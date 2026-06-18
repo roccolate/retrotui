@@ -202,7 +202,7 @@ class TrashComponentTests(unittest.TestCase):
             win = self._make_window(root)
 
             result = win.execute_action("trash_empty")
-            self.assertEqual(result.type, self.actions_mod.ActionType.REQUEST_DELETE_CONFIRM)
+            self.assertEqual(result.type, self.actions_mod.ActionType.REQUEST_EMPTY_TRASH_CONFIRM)
 
             close = win.execute_action("trash_close")
             self.assertEqual(close.type, self.actions_mod.ActionType.EXECUTE)
@@ -214,12 +214,16 @@ class TrashComponentTests(unittest.TestCase):
                 self.assertEqual(win.execute_action("unknown"), "super-result")
 
             key_result = win.handle_key(ord("E"))
-            self.assertEqual(key_result.type, self.actions_mod.ActionType.REQUEST_DELETE_CONFIRM)
+            self.assertEqual(key_result.type, self.actions_mod.ActionType.REQUEST_EMPTY_TRASH_CONFIRM)
+
+            # 'R' restores the selected item; with an empty trash there is
+            # nothing to restore, so the call surfaces an error.
+            key_result = win.handle_key(ord("R"))
+            self.assertEqual(key_result.type, self.actions_mod.ActionType.ERROR)
 
             with mock.patch.object(win, "_rebuild_content") as rebuild:
-                self.assertIsNone(win.handle_key(ord("R")))
                 self.assertIsNone(win.handle_key(self.curses.KEY_F5))
-            self.assertEqual(rebuild.call_count, 2)
+            self.assertEqual(rebuild.call_count, 1)
 
             with mock.patch.object(
                 self.fm_mod.FileManagerWindow, "handle_key", return_value="fallback"
@@ -234,6 +238,45 @@ class TrashComponentTests(unittest.TestCase):
         try:
             win = self._make_window(root)
             result = win.undo_delete()
+            self.assertEqual(result.type, self.actions_mod.ActionType.ERROR)
+        finally:
+            shutil.rmtree(root, ignore_errors=True)
+
+    def test_restore_selected_round_trip(self):
+        original_root = _make_tmp_dir("restore_src")
+        trash_root = _make_tmp_dir("restore_trash")
+        try:
+            # Stage a file as if it had been moved to trash.
+            target = original_root / "hello.txt"
+            target.write_text("hi", encoding="utf-8")
+            trashed = trash_root / "hello.txt"
+            shutil.move(str(target), str(trashed))
+            self.trash_mod.perform_restore  # ensure module reference
+            from retrotui.apps.filemanager import operations as fm_ops
+            fm_ops.write_trash_metadata(str(trashed), str(target))
+
+            win = self._make_window(trash_root)
+            for idx, entry in enumerate(win.entries):
+                if entry.name == "hello.txt":
+                    win.selected_index = idx
+                    break
+            else:
+                self.fail("hello.txt missing from trash listing")
+
+            result = win.restore_selected()
+            self.assertEqual(result.type, self.actions_mod.ActionType.REFRESH)
+            self.assertTrue(target.exists())
+            self.assertFalse(trashed.exists())
+            self.assertFalse((trash_root / "hello.txt.trashinfo").exists())
+        finally:
+            shutil.rmtree(original_root, ignore_errors=True)
+            shutil.rmtree(trash_root, ignore_errors=True)
+
+    def test_restore_selected_handles_missing_item(self):
+        root = _make_tmp_dir("restore_missing")
+        try:
+            win = self._make_window(root)
+            result = win.restore_selected()
             self.assertEqual(result.type, self.actions_mod.ActionType.ERROR)
         finally:
             shutil.rmtree(root, ignore_errors=True)

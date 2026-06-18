@@ -27,6 +27,7 @@ _ALLOWED_UNARY_OPS = {
 
 _CALCULATOR_EVAL_ERRORS = (
     ArithmeticError,
+    RecursionError,
     SyntaxError,
     TypeError,
     ValueError,

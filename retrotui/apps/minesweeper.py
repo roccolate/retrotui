@@ -315,10 +315,6 @@ class MinesweeperWindow(Window):
             return None
 
         key_code = normalize_key_code(key)
-        if key_code == ord('r'):
+        if key_code == ord('r') or key_code == ord('R'):
             self._reset_game()
-        elif key_code == ord('f'):
-            # Fallback flag key if no mouse right click
-            # But we don't know the cursor pos precisely. Ignore.
-            pass
         return None

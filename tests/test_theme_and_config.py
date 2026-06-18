@@ -132,6 +132,25 @@ class ThemeAndConfigTests(unittest.TestCase):
         self.assertFalse(loaded.word_wrap_default)
         self.assertEqual(loaded.icon_style, "mini")
 
+    def test_default_config_hides_non_core_apps_and_plugins(self):
+        config = self.config.AppConfig()
+        hidden_menu = set(config.hidden_menu_items.split(","))
+        hidden_icons = set(config.hidden_icons.split(","))
+
+        self.assertIn("calculator", hidden_menu)
+        self.assertIn("settings", hidden_menu)
+        self.assertIn("plugin:*", hidden_menu)
+        self.assertNotIn("filemanager", hidden_menu)
+        self.assertNotIn("notepad", hidden_menu)
+        self.assertNotIn("terminal", hidden_menu)
+
+        self.assertIn("calc", hidden_icons)
+        self.assertIn("settings", hidden_icons)
+        self.assertIn("plugin:*", hidden_icons)
+        self.assertNotIn("files", hidden_icons)
+        self.assertNotIn("notepad", hidden_icons)
+        self.assertNotIn("terminal", hidden_icons)
+
     def test_serialize_and_save_config(self):
         config = self.config.AppConfig(theme="amiga", show_hidden=True, word_wrap_default=False)
         text = self.config.serialize_config(config)

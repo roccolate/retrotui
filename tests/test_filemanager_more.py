@@ -91,10 +91,16 @@ class FileManagerMoreTests(unittest.TestCase):
         self.assertIsNone(self.win._drag_payload_for_entry(dir_entry))
         self.assertIsNone(self.win._drag_payload_for_entry(parent_entry))
 
+        self.win.entries = [dir_entry]
+        self.win.selected_index = 0
+        bstate = self.curses.BUTTON1_PRESSED | self.curses.REPORT_MOUSE_POSITION
+        result = self.win.handle_mouse_drag(2, 2, bstate=bstate)
+        self.assertEqual(result.type, self.ActionType.ERROR)
+        self.assertIn("Directory drag", result.payload)
+
         payload = {"type": "file_path", "path": fpath, "name": "a.txt"}
         self.win._set_pending_drag(payload, 1, 1)
 
-        bstate = self.curses.BUTTON1_PRESSED | self.curses.REPORT_MOUSE_POSITION
         out = self.win.consume_pending_drag(2, 2, bstate=bstate)
         self.assertEqual(out, payload)
 
@@ -162,6 +168,23 @@ class FileManagerMoreTests(unittest.TestCase):
         self.assertEqual(res.type, self.ActionType.REFRESH)
         self.assertTrue(os.path.exists(os.path.join(destdir, fname)))
 
+        srcdir = os.path.join(self.tmpdir.name, "folder")
+        os.mkdir(srcdir)
+        with open(os.path.join(srcdir, "nested.txt"), "w", encoding="utf-8") as f:
+            f.write("nested")
+        self.win._rebuild_content()
+        dir_idx = next((i for i, entry in enumerate(self.win.entries) if entry.name == "folder"), None)
+        self.assertIsNotNone(dir_idx)
+        self.win.selected_index = dir_idx
+        dir_dest = os.path.join(self.tmpdir.name, "dir_dest")
+        os.mkdir(dir_dest)
+
+        res_dir = self.win.copy_selected(dir_dest)
+
+        self.assertEqual(res_dir.type, self.ActionType.REFRESH)
+        self.assertTrue(os.path.exists(os.path.join(dir_dest, "folder", "nested.txt")))
+        self.assertFalse(os.path.exists(os.path.join(dir_dest, "folder", "folder")))
+
         dest2 = os.path.join(self.tmpdir.name, "dest2")
         os.mkdir(dest2)
         self.win._rebuild_content()
@@ -176,4 +199,3 @@ class FileManagerMoreTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

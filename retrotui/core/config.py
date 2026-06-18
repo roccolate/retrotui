@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from ..theme import DEFAULT_THEME, THEMES
+from .actions import AppAction
 
 try:  # Python 3.11+
     import tomllib  # type: ignore[attr-defined]
@@ -22,6 +23,54 @@ else:
     _TOML_PARSE_ERRORS = (TypeError, ValueError)
 
 
+PLUGIN_VISIBILITY_WILDCARD = "plugin:*"
+DEFAULT_HIDDEN_MENU_ITEMS = ",".join(
+    sorted(
+        {
+            AppAction.NEW_WINDOW.value,
+            AppAction.ASCII_VIDEO.value,
+            AppAction.CALCULATOR.value,
+            AppAction.CLIPBOARD.value,
+            AppAction.PROCESS_MANAGER.value,
+            AppAction.LOG_VIEWER.value,
+            AppAction.MARKDOWN_VIEWER.value,
+            AppAction.SYSTEM_MONITOR.value,
+            AppAction.TRASH_BIN.value,
+            AppAction.CONTROL_PANEL.value,
+            AppAction.SETTINGS.value,
+            AppAction.DESKTOP_ICON_MANAGER.value,
+            AppAction.ICONS.value,
+            AppAction.MENU_EDITOR.value,
+            AppAction.ABOUT.value,
+            AppAction.HELP.value,
+            PLUGIN_VISIBILITY_WILDCARD,
+        }
+    )
+)
+DEFAULT_HIDDEN_ICONS = ",".join(
+    sorted(
+        {
+            "ascii vid",
+            "calc",
+            "logs",
+            "procs",
+            "trash",
+            "settings",
+            "about",
+            "clip",
+            "hex",
+            "desktop",
+            "icons_app",
+            "menus",
+            "mdview",
+            "sysmon",
+            "control",
+            PLUGIN_VISIBILITY_WILDCARD,
+        }
+    )
+)
+
+
 @dataclass(frozen=True)
 class AppConfig:
     """Persistent user-facing configuration."""
@@ -32,8 +81,8 @@ class AppConfig:
     sunday_first: bool = False
     show_welcome: bool = True
     icon_style: str = "default"
-    hidden_icons: str = ""
-    hidden_menu_items: str = ""
+    hidden_icons: str = DEFAULT_HIDDEN_ICONS
+    hidden_menu_items: str = DEFAULT_HIDDEN_MENU_ITEMS
 
 
 def default_config_path() -> Path:
@@ -122,8 +171,8 @@ def _normalize_config(raw: dict) -> AppConfig:
         icon_style = "mini"
     if icon_style not in ("default", "mini", "braille"):
         icon_style = "default"
-    hidden_icons = str(ui.get("hidden_icons", "")).strip()
-    hidden_menu_items = str(ui.get("hidden_menu_items", "")).strip()
+    hidden_icons = str(ui.get("hidden_icons", DEFAULT_HIDDEN_ICONS)).strip()
+    hidden_menu_items = str(ui.get("hidden_menu_items", DEFAULT_HIDDEN_MENU_ITEMS)).strip()
     return AppConfig(
         theme=theme,
         show_hidden=show_hidden,

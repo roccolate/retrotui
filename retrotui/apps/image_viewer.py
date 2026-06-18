@@ -5,6 +5,7 @@ import os
 import re
 import shutil
 import subprocess
+import threading
 
 from ..core.actions import ActionResult, ActionType, AppAction
 from ..ui.menu import WindowMenu
@@ -26,6 +27,14 @@ class ImageViewerWindow(Window):
 
     IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp", ".tiff", ".tif"}
     ZOOM_LEVELS = (50, 75, 100, 125, 150, 200)
+    DEFAULT_ZOOM_PERCENT = 100
+    RENDER_TIMEOUT = 3.0
+
+    def _initial_zoom_index(self):
+        try:
+            return self.ZOOM_LEVELS.index(self.DEFAULT_ZOOM_PERCENT)
+        except ValueError:
+            return 2
 
     def __init__(self, x, y, w, h, filepath=None):
         super().__init__("Media Viewer", x, y, max(56, w), max(14, h), content=[])
@@ -50,9 +59,19 @@ class ImageViewerWindow(Window):
         self.filepath = None
         self.is_video = False
         self.backend = None
-        self.zoom_index = 2  # 100%
+        self.zoom_index = self._initial_zoom_index()
         self.status_message = ""
         self._render_cache = {"key": None, "lines": []}
+
+        # Background render state.
+        self._render_lock = threading.Lock()
+        self._render_thread = None
+        self._render_request = None  # (cols, rows, cache_key)
+        self._render_pending = False
+
+        # Transient status message countdown so the bar updates without
+        # clearing inside `draw()`.
+        self._status_ttl = 0
 
         if filepath:
             self.open_path(filepath)
@@ -67,6 +86,13 @@ class ImageViewerWindow(Window):
 
     def _invalidate_cache(self):
         self._render_cache = {"key": None, "lines": []}
+        with self._render_lock:
+            self._render_request = None
+            self._render_pending = False
+
+    def _set_status(self, message, ttl=20):
+        self.status_message = message
+        self._status_ttl = ttl
 
     def _detect_backend(self):
         """Detect preferred backend command."""
@@ -87,7 +113,7 @@ class ImageViewerWindow(Window):
         path = os.path.realpath(os.path.expanduser(str(filepath)))
         if not os.path.isfile(path):
             return ActionResult(ActionType.ERROR, f"Not a file: {path}")
-        
+
         ext = os.path.splitext(path)[1].lower()
         if ext in self.IMAGE_EXTENSIONS:
             self.is_video = False
@@ -95,11 +121,11 @@ class ImageViewerWindow(Window):
             self.is_video = True
         else:
             return ActionResult(ActionType.ERROR, f"Not a supported media file: {path}")
-            
+
         self.filepath = path
         self._update_title()
         self._invalidate_cache()
-        self.status_message = f"Opened {path}"
+        self._set_status(f"Opened {path}")
         return None
 
     def _render_image(self, cols, rows):
@@ -144,7 +170,7 @@ class ImageViewerWindow(Window):
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
-                timeout=3.0,
+                timeout=self.RENDER_TIMEOUT,
                 check=False,
             )
         except (OSError, subprocess.SubprocessError):
@@ -181,9 +207,54 @@ class ImageViewerWindow(Window):
         if self._render_cache["key"] == cache_key:
             return list(self._render_cache["lines"])
 
-        lines = self._render_image(cols, rows)
+        # Schedule a background render for this key; until it finishes we
+        # show a placeholder so the UI does not block on the subprocess.
+        with self._render_lock:
+            already_pending = self._render_pending and self._render_request == cache_key
+            if not already_pending:
+                self._render_request = cache_key
+                self._render_pending = True
+                thread = threading.Thread(
+                    target=self._render_worker,
+                    args=(cols, rows, cache_key),
+                    daemon=True,
+                )
+                self._render_thread = thread
+                thread.start()
+        if self.is_video:
+            return self._render_image(cols, rows)
+        return ["[rendering...]"]
+
+    def _render_worker(self, cols, rows, cache_key):
+        try:
+            lines = self._render_image(cols, rows)
+        finally:
+            with self._render_lock:
+                if self._render_request == cache_key:
+                    self._render_pending = False
+        # Only store the result if it is still the current request.
+        with self._render_lock:
+            if self._render_request != cache_key:
+                return
         self._render_cache = {"key": cache_key, "lines": list(lines)}
-        return lines
+
+    def tick(self):
+        """Mark dirty when a background render completes or status expires."""
+        dirty = False
+        with self._render_lock:
+            pending = self._render_pending
+            request = self._render_request
+        if not pending and request is not None:
+            with self._render_lock:
+                current = self._render_cache.get("key")
+            if current == request:
+                dirty = True
+        if self._status_ttl > 0:
+            self._status_ttl -= 1
+            if self._status_ttl == 0:
+                self.status_message = ""
+                dirty = True
+        return dirty
 
     def _set_zoom(self, delta):
         """Adjust zoom index in range."""
@@ -192,16 +263,16 @@ class ImageViewerWindow(Window):
         self.zoom_index = max(0, min(len(self.ZOOM_LEVELS) - 1, self.zoom_index + delta))
         if self.zoom_index != old:
             self._invalidate_cache()
-    
+
     def _play_video(self):
         if not self.is_video or not self.filepath:
              return
         # stdscr=None is safe — the event loop redraws next frame
         success, err = play_ascii_video(None, self.filepath)
         if not success:
-             self.status_message = f"Error: {err}"
+             self._set_status(f"Error: {err}")
         else:
-             self.status_message = "Playback finished."
+             self._set_status("Playback finished.")
 
     def execute_action(self, action):
         if action == "iv_open":
@@ -209,9 +280,9 @@ class ImageViewerWindow(Window):
         if action == "iv_reload":
             self._invalidate_cache()
             if self.filepath:
-                self.status_message = "Reloaded."
+                self._set_status("Reloaded.")
             else:
-                self.status_message = "No media opened."
+                self._set_status("No media opened.")
             return None
         if action == "iv_zoom_in":
             self._set_zoom(1)
@@ -220,7 +291,7 @@ class ImageViewerWindow(Window):
             self._set_zoom(-1)
             return None
         if action == "iv_zoom_reset":
-            self.zoom_index = 2
+            self.zoom_index = self._initial_zoom_index()
             self._invalidate_cache()
             return None
         if action == "iv_play":
@@ -257,12 +328,12 @@ class ImageViewerWindow(Window):
              zoom = self.ZOOM_LEVELS[self.zoom_index]
              tech_info = f"zoom:{zoom}% backend:{backend}"
 
+        # Keep status_message sticky so the user can read it on the next frame.
         if self.status_message:
             status = self.status_message
-            self.status_message = ""
         else:
             status = f"{status_keys} | {tech_info}"
-        
+
         safe_addstr(stdscr, by + bh - 1, bx, status[:bw].ljust(bw), theme_attr("status"))
 
         if self.window_menu:
@@ -301,17 +372,11 @@ class ImageViewerWindow(Window):
             self._set_zoom(-1)
             return None
         if key_code == ord("0"):
-            self.zoom_index = 2
+            self.zoom_index = self._initial_zoom_index()
             self._invalidate_cache()
-            return None
-        if key_code == getattr(curses, "KEY_PPAGE", -1):
-            self._set_zoom(1)
-            return None
-        if key_code == getattr(curses, "KEY_NPAGE", -1):
-            self._set_zoom(-1)
             return None
         if self.is_video and key_code in (ord("p"), ord("P"), 10, 13): # P or Enter
              self._play_video()
              return None
-             
+
         return None

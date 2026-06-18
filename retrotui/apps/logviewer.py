@@ -11,15 +11,7 @@ from ..ui.selectable_text import SelectableTextMixin
 from ..ui.window import Window
 from ..utils import normalize_key_code, safe_addstr, theme_attr
 from ..constants import _CURSES_ERROR
-_LOG_COLOR_INIT_ERRORS = (
-    AttributeError,
-    OSError,
-    RuntimeError,
-    TypeError,
-    ValueError,
-    _CURSES_ERROR,
-)
-_LOG_COLOR_APPLY_ERRORS = (
+_LOG_COLOR_ERRORS = (
     AttributeError,
     OSError,
     RuntimeError,
@@ -146,7 +138,7 @@ class LogViewerWindow(SelectableTextMixin, Window):
             init_pair(cls.COLOR_ERROR_PAIR, getattr(curses, "COLOR_RED", 1), -1)
             init_pair(cls.COLOR_WARN_PAIR, getattr(curses, "COLOR_YELLOW", 3), -1)
             init_pair(cls.COLOR_INFO_PAIR, getattr(curses, "COLOR_GREEN", 2), -1)
-        except _LOG_COLOR_INIT_ERRORS:
+        except _LOG_COLOR_ERRORS:
             pass
         cls._log_colors_ready = True
 
@@ -173,8 +165,9 @@ class LogViewerWindow(SelectableTextMixin, Window):
         if callable(color_pair):
             try:
                 return color_pair(pair_id) | curses.A_BOLD
-            except _LOG_COLOR_APPLY_ERRORS:
-                return base_attr | curses.A_BOLD
+            except _LOG_COLOR_ERRORS:
+                pass
+        return base_attr | curses.A_BOLD
         return base_attr | curses.A_BOLD
 
     def _visible_line_rows(self):
@@ -206,10 +199,11 @@ class LogViewerWindow(SelectableTextMixin, Window):
     def _append_lines(self, new_lines):
         if not new_lines:
             return
+        start_index = len(self.lines)
         self.lines.extend(new_lines)
         self._trim_lines_if_needed()
         if self.search_query:
-            self._rebuild_search_matches()
+            self._extend_search_matches(start_index)
         if self.follow_mode and not self.freeze_scroll:
             self._scroll_to_bottom()
         else:
@@ -227,6 +221,10 @@ class LogViewerWindow(SelectableTextMixin, Window):
                 start = max(0, size - self.READ_TAIL_BYTES)
                 stream.seek(start, os.SEEK_SET)
                 raw = stream.read()
+                # Capture the file position from the same open handle to
+                # avoid the TOCTOU race that occurs when the file is
+                # rotated or truncated between reads.
+                self.file_position = stream.tell()
             if start > 0:
                 split_at = raw.find(b"\n")
                 if split_at >= 0:
@@ -244,7 +242,6 @@ class LogViewerWindow(SelectableTextMixin, Window):
         if rows and rows[-1] == "":
             rows = rows[:-1]
         self.lines = rows[-self.MAX_LINES :]
-        self.file_position = os.path.getsize(self.filepath)
         self._tail_remainder = ""
         self._error_message = None
         self._rebuild_search_matches()
@@ -305,6 +302,23 @@ class LogViewerWindow(SelectableTextMixin, Window):
             self.search_index = 0
         else:
             self.search_index = max(0, min(self.search_index, len(self.search_matches) - 1))
+
+    def _extend_search_matches(self, start_index):
+        """Append matches for lines added since ``start_index`` (incremental)."""
+        query = self.search_query.strip().lower()
+        if not query:
+            return
+        for idx in range(start_index, len(self.lines)):
+            if query in self.lines[idx].lower():
+                self.search_matches.append(idx)
+
+    def _is_current_search_match(self, line_index):
+        """Return True when ``line_index`` is the currently focused match."""
+        if self.search_index < 0 or not self.search_matches:
+            return False
+        if self.search_index >= len(self.search_matches):
+            return False
+        return self.search_matches[self.search_index] == line_index
 
     def _jump_search_match(self, direction):
         if not self.search_matches:
@@ -397,11 +411,17 @@ class LogViewerWindow(SelectableTextMixin, Window):
         for row, line_index in enumerate(range(start, end), start=1):
             line = self.lines[line_index]
             line_attr = self._severity_attr(line, body_attr)
-            if query_lc and query_lc in line.lower():
-                line_attr |= curses.A_REVERSE
+            line_is_match = bool(query_lc and query_lc in line.lower())
+            # Severity color pairs and A_REVERSE interact poorly on some
+            # terminals. Use A_BOLD for the line-level search match and
+            # reserve A_REVERSE for the current match (highest priority).
+            if line_is_match and not self._is_current_search_match(line_index):
+                line_attr |= curses.A_BOLD
             rendered = line[:bw].ljust(bw)
             span = self._line_selection_span(line_index, len(line))
             if not span:
+                if line_is_match and self._is_current_search_match(line_index):
+                    line_attr |= curses.A_REVERSE
                 safe_addstr(stdscr, by + row, bx, rendered, line_attr)
                 continue
 

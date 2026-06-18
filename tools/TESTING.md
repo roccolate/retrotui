@@ -77,10 +77,12 @@ Testear en cada terminal. Marcar ✓/✗:
 - [ ] Preview panel muestra contenido del archivo seleccionado
 - [ ] Info panel muestra tamaño, fecha, permisos
 - [ ] F5 copiar archivo — dialog aparece, operación funciona
-- [ ] F6 mover archivo — operación funciona
+- [ ] F4 mover archivo — operación funciona
+- [ ] F6 mover archivo — alias de mover funciona
 - [ ] F7 crear directorio
-- [ ] F8 eliminar → va a trash
-- [ ] Ctrl+Z undo delete — restaura archivo
+- [ ] F8 crear archivo
+- [ ] Delete desde menú/contexto → va a trash
+- [ ] U undo delete — restaura archivo
 - [ ] Renombrar archivo (F2 o menú)
 - [ ] Dual pane (toggle) — si ventana es suficientemente ancha
 - [ ] Bookmarks — set y navegar

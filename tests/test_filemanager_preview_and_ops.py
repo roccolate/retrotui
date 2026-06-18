@@ -11,6 +11,7 @@ sys.modules['curses'] = make_fake_curses()
 import curses
 
 from retrotui.apps.filemanager import FileManagerWindow, FileEntry
+from retrotui.apps.filemanager import bookmarks, operations
 from retrotui.core.actions import ActionResult, ActionType
 
 
@@ -122,6 +123,28 @@ class FileManagerPreviewOpsTests(unittest.TestCase):
             self.assertTrue(nxt.endswith('text.txt.2'))
         finally:
             os.path.exists = orig
+
+    def test_perform_undo_returns_refresh_action(self):
+        src = os.path.join(self.base, 'restore.txt')
+        trash = os.path.join(self.base, 'trash', 'restore.txt')
+        os.makedirs(os.path.dirname(trash), exist_ok=True)
+        with open(trash, 'w', encoding='utf-8') as f:
+            f.write('restore me')
+
+        result = operations.perform_undo({'source': src, 'trash': trash})
+
+        self.assertEqual(result.type, ActionType.REFRESH)
+        self.assertTrue(os.path.exists(src))
+        self.assertFalse(os.path.exists(trash))
+
+    def test_bookmark_persistence_round_trip(self):
+        mark = os.path.join(self.base, 'emptydir')
+        store = os.path.join(self.base, 'bookmarks.json')
+
+        written = bookmarks.save_bookmarks({1: mark}, path=store)
+        loaded = bookmarks.load_bookmarks(path=written)
+
+        self.assertEqual(loaded[1], os.path.realpath(mark))
 
     def test_pending_drag_flow(self):
         # pick a regular file

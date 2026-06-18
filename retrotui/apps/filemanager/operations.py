@@ -1,12 +1,68 @@
 """
 File system operations for File Manager.
 """
+import json
 import os
 import shutil
 import time
 import threading
+from pathlib import Path
 from ...core.actions import ActionResult, ActionType
 from .core import FileEntry
+
+_TRASH_METADATA_ERRORS = (
+    AttributeError,
+    OSError,
+    TypeError,
+    ValueError,
+)
+
+
+def _trash_metadata_path(trash_path):
+    """Return sidecar path that records the original location of a trash item."""
+    return f"{trash_path}.trashinfo"
+
+
+def write_trash_metadata(trash_path, original_path):
+    """Persist ``original_path`` next to ``trash_path`` so we can restore later."""
+    try:
+        with open(_trash_metadata_path(trash_path), "w", encoding="utf-8") as stream:
+            json.dump({"original_path": str(original_path)}, stream)
+    except _TRASH_METADATA_ERRORS:
+        # Metadata is best-effort; restore will fall back to the trash root
+        # when sidecars are missing.
+        try:
+            path = Path(_trash_metadata_path(trash_path))
+            if path.exists():
+                path.unlink()
+        except _TRASH_METADATA_ERRORS:
+            pass
+
+
+def read_trash_metadata(trash_path):
+    """Return the original path stored alongside ``trash_path`` or None."""
+    sidecar = _trash_metadata_path(trash_path)
+    if not os.path.exists(sidecar):
+        return None
+    try:
+        with open(sidecar, "r", encoding="utf-8") as stream:
+            data = json.load(stream)
+    except _TRASH_METADATA_ERRORS:
+        return None
+    if not isinstance(data, dict):
+        return None
+    original = data.get("original_path")
+    if not isinstance(original, str) or not original:
+        return None
+    return original
+
+
+def clear_trash_metadata(trash_path):
+    """Remove a trash sidecar (best-effort)."""
+    try:
+        os.unlink(_trash_metadata_path(trash_path))
+    except OSError:
+        pass
 
 def _trash_base_dir():
     """Return platform-local trash directory used for undoable delete."""
@@ -53,7 +109,7 @@ def perform_copy(source_path, dest_path):
     """Copy file or directory."""
     try:
         if os.path.isdir(source_path):
-            shutil.copytree(source_path, os.path.join(dest_path, os.path.basename(source_path)))
+            shutil.copytree(source_path, dest_path)
         else:
             shutil.copy2(source_path, dest_path)
         return ActionResult(ActionType.REFRESH)
@@ -67,15 +123,16 @@ def perform_move(source_path, dest_path):
         return ActionResult(ActionType.REFRESH)
     except (OSError, shutil.Error) as exc:
         return ActionResult(ActionType.ERROR, str(exc))
-
-def perform_delete(source_path):
+def perform_delete(source_path, trash_dir=None):
     """Move file or directory to trash."""
     try:
-        trash_path = next_trash_path(source_path)
+        trash_path = next_trash_path(source_path, trash_dir=trash_dir)
         shutil.move(source_path, trash_path)
+        write_trash_metadata(trash_path, source_path)
         return trash_path
     except (OSError, shutil.Error):
         return None
+
 
 def perform_undo(last_trash_move):
     """Restore last trashed path back to its original location."""
@@ -83,7 +140,7 @@ def perform_undo(last_trash_move):
         return ActionResult(ActionType.ERROR, 'Nothing to undo.')
     source = last_trash_move.get('source')
     trash_path = last_trash_move.get('trash')
-    
+
     if not source or not trash_path or not os.path.exists(trash_path):
         return ActionResult(ActionType.ERROR, 'Undo state is no longer available.')
     if os.path.exists(source):
@@ -91,12 +148,40 @@ def perform_undo(last_trash_move):
     parent = os.path.dirname(source) or os.path.sep
     if not os.path.isdir(parent):
         return ActionResult(ActionType.ERROR, 'Cannot undo: parent directory does not exist.')
-    
+
     try:
         shutil.move(trash_path, source)
     except OSError as exc:
         return ActionResult(ActionType.ERROR, str(exc))
-    return None
+    clear_trash_metadata(trash_path)
+    return ActionResult(ActionType.REFRESH)
+
+
+def perform_restore(trash_path, fallback_dir=None):
+    """Restore a single item currently in the trash back to its origin.
+
+    Returns a tuple ``(result, restored_path)`` so the caller can update any
+    local undo state. ``restored_path`` is ``None`` when the move failed.
+    """
+    if not trash_path or not os.path.exists(trash_path):
+        return ActionResult(ActionType.ERROR, 'Item is no longer in the trash.'), None
+    original = read_trash_metadata(trash_path)
+    target = original
+    if not target:
+        if not fallback_dir:
+            return ActionResult(ActionType.ERROR, 'Original location is unknown.'), None
+        target = os.path.join(fallback_dir, os.path.basename(trash_path))
+    if os.path.exists(target):
+        return ActionResult(ActionType.ERROR, f'Cannot restore: {target} already exists.'), None
+    parent = os.path.dirname(target) or os.path.sep
+    if not os.path.isdir(parent):
+        return ActionResult(ActionType.ERROR, f'Cannot restore: parent {parent} no longer exists.'), None
+    try:
+        shutil.move(trash_path, target)
+    except (OSError, shutil.Error) as exc:
+        return ActionResult(ActionType.ERROR, str(exc)), None
+    clear_trash_metadata(trash_path)
+    return ActionResult(ActionType.REFRESH), target
 
 def create_directory(base_path, name):
     """Create a new directory."""
@@ -121,8 +206,7 @@ def create_file(base_path, name):
     if os.path.exists(path):
         return ActionResult(ActionType.ERROR, 'A file or folder with that name already exists.')
     try:
-        with open(path, 'a'):
-            pass
+        Path(path).touch(exist_ok=False)
         return ActionResult(ActionType.REFRESH)
     except OSError as exc:
         return ActionResult(ActionType.ERROR, str(exc))

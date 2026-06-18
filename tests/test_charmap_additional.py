@@ -73,9 +73,14 @@ class CharMapAdditionalTests(unittest.TestCase):
         self.assertIsNotNone(win.selected_char)
 
         # exercise copy value action which should set internal clipboard
-        win.execute_action('copy_hex_val')
+        win.execute_action('copy_hex')
         text = paste_text(sync_system=False)
         self.assertTrue(text.startswith('U+'))
+
+        # and the character action should copy the literal character
+        win.execute_action('copy_char')
+        char_text = paste_text(sync_system=False)
+        self.assertEqual(char_text, win.selected_char)
 
 
 if __name__ == '__main__':

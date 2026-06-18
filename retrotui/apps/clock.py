@@ -27,6 +27,10 @@ class ClockCalendarWindow(Window):
         self.chime_enabled = False
         self.week_starts_sunday = False
         self._last_chime_hour = None
+        # Cache the month grid: it only changes when (year, month, first-weekday)
+        # changes, so we can avoid rebuilding a `TextCalendar` on every draw.
+        self._cached_month = None
+        self._cached_month_lines = []
         self.window_menu = WindowMenu(
             {
                 "Options": [
@@ -64,16 +68,27 @@ class ClockCalendarWindow(Window):
             return None
         if action == "clk_week":
             self.week_starts_sunday = not self.week_starts_sunday
+            self._cached_month = None  # Force re-render with new first weekday.
             return None
         if action == "clk_close":
             return ActionResult(ActionType.EXECUTE, AppAction.CLOSE_WINDOW)
         return None
 
     def _month_lines(self, now):
-        """Return ASCII calendar lines honoring first weekday preference."""
+        """Return ASCII calendar lines honoring first weekday preference.
+
+        Results are cached per (year, month, first-weekday) so we do not
+        rebuild the ``TextCalendar`` on every draw frame.
+        """
         first_weekday = calendar.SUNDAY if self.week_starts_sunday else calendar.MONDAY
+        cache_key = (now.year, now.month, first_weekday)
+        if self._cached_month == cache_key:
+            return self._cached_month_lines
         text_calendar = calendar.TextCalendar(firstweekday=first_weekday)
-        return text_calendar.formatmonth(now.year, now.month).splitlines()
+        lines = text_calendar.formatmonth(now.year, now.month).splitlines()
+        self._cached_month = cache_key
+        self._cached_month_lines = lines
+        return lines
 
     def draw(self, stdscr):
         """Draw digital clock and month calendar."""
