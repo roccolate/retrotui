@@ -2,9 +2,9 @@
 
 Analysis of every app and bundled plugin. Issues are categorized by severity and grouped by cross-cutting pattern when applicable.
 
-**Status:** v0.9.4 hardening in progress over v0.9.3. The retroaudit backlog tracked here is now feeding directly into the v0.9.4 milestone in `ROADMAP.md`.
+**Status:** v0.9.4 hardening closed. v0.9.5 (Terminal 2D buffer) in progress: `TerminalScreenBuffer` and `TerminalScreen` classes landed in `core/terminal_session.py` with 22 unit tests; the buffer has not yet been wired into `TerminalWindow`. See `ROADMAP.md` for the next milestones (v0.9.6 cross-terminal certification, v0.9.7 session restore).
 
-**Last reviewed:** 2026-06-18.
+**Last reviewed:** 2026-06-19.
 
 ## Resolved in current hardening pass
 
@@ -18,7 +18,15 @@ Analysis of every app and bundled plugin. Issues are categorized by severity and
 - Trash: a new `REQUEST_EMPTY_TRASH_CONFIRM` action type now routes to a dedicated dialog that lists the items being purged. `perform_delete` writes a `.trashinfo` sidecar with the original path and `perform_restore` consumes it to put items back; the trash window exposes the operation through a "Restore" menu entry and the `R` shortcut.
 - Bundled plugins (9): the wrapper classes now apply the manifest `title` to the window instead of silently discarding it.
 - Input handling: `normalize_key_code` is now used by Minesweeper, Tetris, Solitaire, WiFi Manager and Clipboard Viewer, and the previous `getattr(key, '__int__', None)` duck-type check in Clipboard Viewer was replaced with `isinstance(key, int)` plus `normalize_key_code`.
-- Other: Markdown viewer adds `*italic*`, `` `inline code` ``, `[label](url)` link rendering, preserves `in_code_block` across scroll and supports the mouse wheel; Control Panel exposes `word_wrap_default` via a 4-state cycle and lets the user pick a specific theme with Left/Right or by clicking the theme row; Settings applies preferences consistently for all toggles; App Manager `IconsWindow` reuses the base class via `super()` and caches the icon catalog; Process Manager implements `cmd` sort, initializes `scroll_offset`, reads `/proc/meminfo` in a single pass, and no longer kills on double-click; Solitaire blocks foundation-to-column moves and uses a 500 ms double-click window; Tetris restarts through a new `reset_game()` helper and now computes the I-piece rotation center dynamically; Clock caches `TextCalendar` per `(year, month, first-weekday)` and dedupes the `always_on_top` toggle path; System Monitor adds a platform guard and rescales the CPU history when the window is resized; CharMap fixes the `22` / `20` detail-pane width mismatch, wires up the `about_map` action and dedupes the copy helpers; Calculator normalizes `-0` to `0` and trims dead `body_rect` locals; Minesweeper uses a non-error color for the bomb/timer chrome; Settings derives `_controls_count` from a `_TOGGLE_COUNT` constant; Clipboard Viewer `c` key now also clears the system clipboard.
+- Other: Markdown viewer adds `*italic*`, `` `inline code` ``, `[label](url)` link rendering, preserves `in_code_block` across scroll and supports the mouse wheel; Control Panel exposes `word_wrap_default` via a 4-state cycle and lets the user pick a specific theme with Left/Right or by clicking the theme row; Settings applies preferences consistently for all toggles; App Manager `IconsWindow` reuses the base class via `super()` and caches the icon catalog; Process Manager implements `cmd` sort, initializes `scroll_offset`, reads `/proc/meminfo` in a single pass, and no longer kills on double-click; Solitaire blocks foundation-to-column moves and uses a 500 ms double-click window; Tetris restarts through a new `reset_game()` helper and now computes the I-piece rotation center dynamically; Clock caches `TextCalendar` per `(year, month, first-weekday)` and dedupes the `always_on_top` toggle path; System Monitor adds a platform guard and rescales the CPU history when the window is resized; CharMap fixes the `22` / `20` detail-pane width mismatch, wires up the `about_map` action and dedupes the copy helpers; Calculator normalizes `-0` to `0` and trims dead `body_rect` locals; Minesweeper uses a non-error color for the bomb/timer chrome; Settings derives `_controls_count` from a `_TOGGLE_COUNT` constant; Clipboard Viewer `c` key now also clears the system clipboard; Hex Viewer now mixes in `SelectableTextMixin` and stores row spans as `(row, 0)` tuples; Snake `_update_menu_checks` looks up the difficulty name from the action via a class-level `_DIFFICULTY_NAMES` mapping instead of parsing the previous label.
+
+## Resolved in v0.9.5 — Terminal 2D buffer
+
+- `retrotui/core/terminal_session.py` ships two new framework-free primitives:
+  - `TerminalScreenBuffer` is a `rows x cols` grid of `(char, attr)` cells with a cursor, `put_char`, `carriage_return`, `line_feed`, `backspace`, `scroll_up`/`scroll_down`, `clear_line`, `clear_screen` (ED modes `all` / `below` / `above`), `insert_line` / `delete_line`, and `resize`. The class is intentionally not wired into the curses/PTY stack so it can be unit-tested in isolation.
+  - `TerminalScreen` owns a normal-screen and an alt-screen `TerminalScreenBuffer`, swaps the active one via `set_alt_screen`, and resizes both in lockstep so dimensions stay aligned regardless of which mode is active. This unblocks the v0.9.5 item "Mantener alt-screen separado de normal-screen y scrollback".
+- 22 new unit tests in `tests/test_terminal_screen_buffer.py` cover all of the above operations, including the ED-mode semantics (columns before the cursor are preserved on `below`, columns after the cursor are preserved on `above`) and the row-preservation guarantees of `resize`.
+- The remaining v0.9.5 work is to route the ANSI state machine writes in `TerminalWindow` through `TerminalScreen.put_char` so the buffer is the single source of truth for normal-screen cells and selection.
 
 ---
 
@@ -323,15 +331,7 @@ All 9 bundled plugin `__init__.py` files silently discard the `title` parameter 
 
 **MEDIUM remaining:**
 - RetroNet HTML regex parser does not handle nested or malformed tags (returns best-effort text).
+- v0.9.5 (Terminal 2D buffer) is partially complete: `TerminalScreenBuffer` and `TerminalScreen` exist in `core/terminal_session.py` with 22 unit tests, but the classes are not yet wired into `TerminalWindow` so the ANSI state machine still owns the normal-screen grid. The remaining items ("Cursor real por fila/columna en normal-screen", "Atributos por celda compatibles con seleccion/copy", and the alt-screen routing) are blocked on that wiring.
 
 **LOW remaining:** Cosmetic polish (Clock separator string, Snake obs_attr theme_attr alignment).
-
-**Closed in this iteration:**
-- WiFi Manager: `nmcli -t` output is now split on unescaped colons so SSIDs containing `:` (encoded as `\: ` by `nmcli -t`) are preserved.
-- WiFi Manager: password is always sent via stdin (nmcli `--ask`) on the first attempt; the CLI-arg fallback only runs on releases that lack `--ask`.
-- Snake: back-to-back difficulty changes keep the menu checkmark in sync (new unit test covers the sequence); `_update_menu_checks` now looks up the difficulty name via the action instead of parsing the previous label.
-- Settings: renamed `_committed` to `_finalized` so the flag is no longer misleading when the user chooses Cancel.
-- Control Panel: removed the unused `_committed` attribute.
-- Hex Viewer: now mixes in `SelectableTextMixin` for `clear_selection`/`has_selection` and stores row spans as `(row, 0)` tuples so the mixin's bounds/span helpers apply.
-- Terminal: introduced a `TerminalScreenBuffer` 2D rows x cols class (22 unit tests) and a `TerminalScreen` wrapper that holds the normal and alt screens separately. Both landed in `core/terminal_session.py`.
 - Hex Viewer: now mixes in `SelectableTextMixin` for `clear_selection`/`has_selection` and stores row spans as `(row, 0)` tuples so the mixin's bounds/span helpers apply.
