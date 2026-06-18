@@ -325,7 +325,7 @@ All 9 bundled plugin `__init__.py` files silently discard the `title` parameter 
 - RetroNet HTML regex parser does not handle nested or malformed tags (returns best-effort text).
 - Clock `always_on_top` toggle keybinding (`kc == 1`) collides with Ctrl+A — kept for legacy reasons; documented in code.
 
-**LOW remaining:** Cosmetic polish (Clock separator string, Snake obs_attr theme_attr alignment, Hex Viewer reimplements `SelectableTextMixin` instead of mixing it in).
+**LOW remaining:** Cosmetic polish (Clock separator string, Snake obs_attr theme_attr alignment).
 
 **Closed in this iteration:**
 - WiFi Manager: `nmcli -t` output is now split on unescaped colons so SSIDs containing `:` (encoded as `\: ` by `nmcli -t`) are preserved.
@@ -333,3 +333,4 @@ All 9 bundled plugin `__init__.py` files silently discard the `title` parameter 
 - Snake: back-to-back difficulty changes keep the menu checkmark in sync (new unit test covers the sequence).
 - Settings: renamed `_committed` to `_finalized` so the flag is no longer misleading when the user chooses Cancel.
 - Control Panel: removed the unused `_committed` attribute.
+- Hex Viewer: now mixes in `SelectableTextMixin` for `clear_selection`/`has_selection` and stores row spans as `(row, 0)` tuples so the mixin's bounds/span helpers apply.

@@ -191,16 +191,16 @@ class HexViewerComponentTests(unittest.TestCase):
     def test_row_mapping_and_selected_text_edge_cases(self):
         win = self._make_window()
         win.filepath = None
-        win.selection_anchor = 10
-        win.selection_cursor = 12
+        win.selection_anchor = (10, 0)
+        win.selection_cursor = (12, 0)
         self.assertEqual(win._selected_text(), "")
 
         with mock.patch.object(win, "_selected_row_bounds", return_value=(1, 1)):
             win.filepath = "x"
             self.assertEqual(win._selected_text(), "")
 
-        win.selection_anchor = 5
-        win.selection_cursor = 1
+        win.selection_anchor = (5, 0)
+        win.selection_cursor = (1, 0)
         self.assertEqual(win._selected_row_bounds(), (1, 5))
 
         win.body_rect = mock.Mock(return_value=(0, 0, 0, 1))
@@ -220,8 +220,8 @@ class HexViewerComponentTests(unittest.TestCase):
         path = self._temp_bin(b"0123456789")
         self.addCleanup(lambda: os.path.exists(path) and os.unlink(path))
         win = self._make_window(path)
-        win.selection_anchor = 0
-        win.selection_cursor = 3
+        win.selection_anchor = (0, 0)
+        win.selection_cursor = (3, 0)
         text = win._selected_text()
         self.assertIn("00000000", text)
         self.assertNotIn("00000010", text)
@@ -515,7 +515,7 @@ class HexViewerComponentTests(unittest.TestCase):
         win.clear_selection()
         with mock.patch.object(win, "_row_from_screen", return_value=1):
             self.assertIsNone(win.handle_mouse_drag(2, 3, self.curses.BUTTON1_PRESSED))
-        self.assertEqual(win.selection_anchor, 1)
+        self.assertEqual(win.selection_anchor, (1, 0))
 
 
 if __name__ == "__main__":

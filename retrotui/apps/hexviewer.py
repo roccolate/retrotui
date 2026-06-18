@@ -7,6 +7,7 @@ import string
 from ..core.actions import ActionResult, ActionType, AppAction
 from ..core.clipboard import copy_text
 from ..ui.menu import WindowMenu
+from ..ui.selectable_text import SelectableTextMixin
 from ..ui.window import Window
 from ..utils import normalize_key_code, safe_addstr, theme_attr
 
@@ -19,7 +20,7 @@ def _ascii_column(data):
     return "".join(chr(value) if 32 <= value <= 126 else "." for value in data)
 
 
-class HexViewerWindow(Window):
+class HexViewerWindow(SelectableTextMixin, Window):
     """Read-only hex viewer with offset/hex/ascii columns."""
 
     BYTES_PER_ROW = 16
@@ -50,9 +51,9 @@ class HexViewerWindow(Window):
         self.prompt_mode = None
         self.prompt_value = ""
         self.last_query_bytes = None
-        self.selection_anchor = None  # row index
-        self.selection_cursor = None  # row index
-        self._mouse_selecting = False
+        # Row-oriented selection: anchor and cursor are (row, 0) tuples
+        # so the mixin's bounds/span helpers work without rewriting them.
+        self._init_selection()
         self._cached_slice = None
         self._cached_offset = None
         self._cached_total = None
@@ -282,25 +283,21 @@ class HexViewerWindow(Window):
             self.status_message = f"Found at 0x{found:X}"
 
     def clear_selection(self):
-        """Clear row selection state."""
-        self.selection_anchor = None
-        self.selection_cursor = None
-        self._mouse_selecting = False
+        """Clear row selection state.
 
-    def has_selection(self):
-        """Return True when at least one row span is selected."""
-        return (
-            self.selection_anchor is not None
-            and self.selection_cursor is not None
-            and self.selection_anchor != self.selection_cursor
-        )
+        Provided for backward compatibility; the SelectableTextMixin also
+        supplies a default implementation, so this method is a thin
+        alias and is kept only for tests/extensions that expect it.
+        """
+        SelectableTextMixin.clear_selection(self)
 
     def _selected_row_bounds(self):
         """Return (start_row, end_row_exclusive) or None."""
         if not self.has_selection():
             return None
-        a = int(self.selection_anchor)
-        b = int(self.selection_cursor)
+        # anchor and cursor are stored as (row, 0) tuples.
+        a = self.selection_anchor[0]
+        b = self.selection_cursor[0]
         if a <= b:
             return (a, b)
         return (b, a)
@@ -481,8 +478,8 @@ class HexViewerWindow(Window):
             )
         )
         if has_button1:
-            self.selection_anchor = row_idx
-            self.selection_cursor = row_idx + 1
+            self.selection_anchor = (row_idx, 0)
+            self.selection_cursor = (row_idx + 1, 0)
             self._mouse_selecting = bool(bstate & getattr(curses, "BUTTON1_PRESSED", 0))
             self._goto_offset(row_idx * self.BYTES_PER_ROW)
         return None
@@ -496,8 +493,8 @@ class HexViewerWindow(Window):
         if row_idx is None:
             return None
         if self.selection_anchor is None:
-            self.selection_anchor = row_idx
-        self.selection_cursor = row_idx + 1
+            self.selection_anchor = (row_idx, 0)
+        self.selection_cursor = (row_idx + 1, 0)
         self._mouse_selecting = True
         return None
 
