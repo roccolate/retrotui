@@ -10,8 +10,9 @@ Thank you for your interest in contributing! RetroTUI is a community-driven proj
     git clone https://github.com/YOUR_USERNAME/RetroTUI.git
     cd RetroTUI
     ```
-3.  **Install dependencies** (none required for runtime!):
-    - For development/testing, you just need Python 3.9+.
+3.  **Install dependencies** (none required for Linux/WSL runtime!):
+    - For development/testing, use Python 3.10+.
+    - On Windows, install the conditional runtime packages: `pip install windows-curses pywinpty`.
     - (Optional) Install `gpm` if you are on Linux TTY and want mouse support.
 
 ## Development Workflow
@@ -23,10 +24,10 @@ git checkout -b feature/my-cool-feature
 ```
 
 ### 2. Coding Standards
--   **Python**: We target Python 3.9+. Use type hints where possible.
+-   **Python**: We target Python 3.10+. Use type hints where possible.
 -   **Text Files**: Ensure all files are `UTF-8` with `LF` line endings.
     - We provide `.editorconfig` to help with this.
--   **No External Deps**: Do not add `pip` dependencies. RetroTUI must run with standard library only.
+-   **No Linux Runtime Deps**: Do not add mandatory third-party dependencies for Linux/WSL runtime. Windows-only compatibility packages are declared conditionally in `pyproject.toml`.
 
 ### 3. Quality Assurance (QA)
 Before submitting a PR, run the local QA tool. It checks encoding, syntax, and runs tests.

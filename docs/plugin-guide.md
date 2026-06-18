@@ -16,18 +16,21 @@ Manifest example
 
 ```toml
 [plugin]
-name = "Todo List"
 id = "todo-list"
+name = "Todo List"
 version = "1.0.0"
 description = "Simple task manager"
 author = "Community"
-icon = "📝"
-menu_category = "Apps"
+category = "plugin"  # use "game" to place it in the Games menu
 
 [plugin.window]
 default_width = 40
 default_height = 15
 resizable = true
+
+[plugin.icon]
+emoji = "📝"
+token = "TD"
 ```
 
 API available to plugins
@@ -41,7 +44,17 @@ API available to plugins
 Installing plugins
 ------------------
 
-Copy the plugin directory into `~/.config/retrotui/plugins/` and restart RetroTUI. The loader will discover and load the plugin manifest and module.
+Copy the plugin directory into `~/.config/retrotui/plugins/` and restart RetroTUI. In the stable base profile, plugins are disabled by default; remove `plugin:*` from `ui.hidden_icons` and `ui.hidden_menu_items` in `~/.config/retrotui/config.toml` to enable plugin discovery in the desktop/menu UI.
+
+For development, RetroTUI also discovers plugins from:
+
+1. `RETROTUI_PLUGIN_DIR` — one forced plugin directory.
+2. `RETROTUI_PLUGIN_PATH` — multiple directories separated by the OS path separator.
+3. `retrotui/bundled_plugins/` — package bundled plugins.
+4. `~/.config/retrotui/plugins/` — user plugins.
+5. `examples/plugins/` — repo examples when using the default user plugin directory.
+
+Plugin ids are de-duplicated by discovery order; the first matching id wins.
 
 Testing plugins
 ---------------

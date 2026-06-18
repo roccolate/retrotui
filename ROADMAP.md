@@ -2,7 +2,7 @@
 
 **Objetivo:** Un entorno de escritorio estilo Windows 3.1 completamente funcional para la terminal. Sin X11. Sin Wayland. Solo curses, una TTY y vibes.
 
-**Estado actual:** v0.9.3 released.
+**Estado actual:** v0.9.4 hardening en progreso sobre v0.9.3. Este roadmap prioriza estabilidad antes de nuevas features; la auditoria tecnica viva esta en [IMPROVEMENTS.md](IMPROVEMENTS.md).
 
 ---
 
@@ -85,24 +85,68 @@ Plugin loader con `plugin.toml`, clase base `RetroApp`, auto-discovery, registro
 - [x] Plugins animados se refrescan solos: aquarium, matrix, starwars, game-of-life, pomodoro, system-monitor, network-monitor
 
 **Calidad**
-- [x] 970 tests, 100% cobertura por modulo
+- [x] 970 tests reportados para el release v0.9.3
+- [x] 97 archivos de test en el arbol actual
 - [x] Optimizaciones de rendering (cache de taskbar, window stats)
 
 ---
 
 ## Versiones Planificadas
 
-### v0.9.4 — Session Restore y Pulido
+### Criterio de realineacion
 
-Comportamiento de "sistema" mas robusto.
+El proyecto queda realineado hacia una base estable antes de ampliar la superficie:
 
-- [ ] Restauracion de sesion: recordar ventanas abiertas, posiciones, archivos abiertos
-- [ ] Soft restart interno sin romper sesion host
-- [ ] Deteccion de primera ejecucion con wizard de bienvenida
-- [ ] Metadata de plugins visible en UI (version, capabilities)
-- [ ] Pulir flujo boot/init/run/shutdown con comportamiento determinista
+- Primero cerrar bloqueos, I/O en render, seguridad y consistencia de input.
+- Despues fortalecer Terminal como ventana PTY confiable para apps TUI comunes.
+- Luego certificar GPM/SGR/SSH/tmux/Windows con baselines reproducibles.
+- Solo despues volver a features visibles como Session Restore, Start Menu, widgets y apps creativas.
 
-### v0.9.5 — Certificacion Cross-Terminal
+### v0.9.4 — Hardening y Pulido
+
+Antes de agregar grandes features, cerrar los problemas de robustez detectados en la auditoria.
+
+- [x] Event loop con `tick()` por ventana fuera de `draw()`
+- [x] Terminal: PTY start/read/resize fuera de render, resize cacheado, errores visibles sin spam, tabs de 8 columnas, CSI `H`/`f`/`J`, wrap en alt-screen, PageUp/PageDown para apps full-screen, F1-F12 basico, fallback de interrupcion simplificado
+- [x] File Manager: `Path.touch()`, copia de directorios a destino exacto, bloqueo de operaciones sobre `..`, preview de imagen async, cache por stat, teclas normalizadas, tamaños GB/TB
+- [x] Notepad: wrap por ancho de celda, cache de wrap visible, titulo cacheado, presupuesto de undo para archivos grandes, Ctrl+W persistente, context menu real
+- [x] Perfil base minimo por defecto: solo File Manager/Explorer, Terminal y Notepad visibles; apps secundarias y plugins quedan deshabilitados por configuracion
+- [x] Documentacion de auditoria actualizada con remediaciones cerradas
+- [x] Suite actual verde: 946 tests + `tools/qa.py --skip-tests`
+- [x] Corregir seguridad/thread-safety de RetroNet (state lock en url, history, content, title, search; dedup de history; SSL con fallback explícito)
+- [x] Separar tick/update de `draw()` en Snake, Tetris, Process Manager, Hex Viewer, System Monitor, Clipboard Viewer, Image Viewer y WiFi Manager
+- [x] Eliminar I/O bloqueante restante: WiFi Manager (hilos scan/connect), Image Viewer (hilo de render con cache), Hex Viewer (cache en tick), System Monitor (platform guard)
+- [x] Normalizar manejo de teclas en Minesweeper, Tetris, Solitaire, Clipboard Viewer y WiFi Manager
+- [x] Reducir imports repetidos en rutas calientes de render/input (charmap, control_panel, clipboard_viewer, wifi_manager)
+- [x] Bundled plugins (9) propagan `title` del manifest a la ventana
+- [x] Trash: nuevo dialogo dedicado para "Empty Trash" (`REQUEST_EMPTY_TRASH_CONFIRM`); restore con sidecar `.trashinfo`
+- [x] Control Panel: toggle de `word_wrap_default` alcanzable; Settings usa `apply_preferences` consistente en Left/Right
+- [x] App Manager `IconsWindow` delega a `super()` y cachea el catalogo
+- [x] System Monitor: CPU history se reescala al redimensionar; plataforma no-Linux con mensaje claro
+- [x] Hex Viewer: `_rows_visible` y `draw` consistentes; `_parse_search_query` captura `ValueError`
+- [x] Log Viewer: matches incrementales al appendear; resaltado usa `A_BOLD` para no chocar con severity color
+- [x] Process Manager: cmd sort, scroll_offset init, magic numbers extraidos a constantes, sin doble-click destructivo
+- [x] Solitaire: foundation→column bloqueado (Klondike), double-click con ventana de 500ms
+- [x] Tetris: restart usa `reset_game()` en vez de re-llamar `__init__`
+- [x] Clock: `TextCalendar` cacheado por (year, month, first-weekday)
+- [x] Markdown: italic, inline code, scroll wheel, estado `in_code_block` preservado al scrollear
+- [x] Charmap: action `copy_hex` renombrada a `copy_char`/`copy_hex` con semantica correcta
+- [x] Calculator: `RecursionError` capturado en eval
+- [x] Cerrar polish restante en File Manager: `perform_undo` API, bookmarks persistentes, feedback para drag de directorios
+
+### v0.9.5 — Terminal PTY y Buffer 2D
+
+Convertir la Terminal embebida en una base fiable para apps TUI comunes sin salir de curses/GPM.
+
+- [ ] Introducir `TerminalScreenBuffer` normal-screen `rows x cols`
+- [ ] Mantener alt-screen separado de normal-screen y scrollback
+- [ ] Cursor real por fila/columna en normal-screen
+- [ ] Wrap, scroll, clear, insert/delete char/line y resize con pruebas unitarias
+- [ ] Atributos por celda compatibles con seleccion/copy
+- [ ] Mouse pass-through opcional solo cuando el programa hijo active mouse reporting
+- [ ] Mantener compatibilidad GPM: RetroTUI conserva menus/seleccion cuando el hijo no pide mouse
+
+### v0.9.6 — Certificacion Cross-Terminal
 
 Cerrar matriz de compatibilidad real.
 
@@ -112,14 +156,23 @@ Cerrar matriz de compatibilidad real.
 - [ ] Documentar desvios por terminal y mitigaciones
 - [ ] Verificar soporte Windows nativo end-to-end (pywinpty + windows-curses)
 
-### v0.9.6 — Apps Creativas
+### v0.9.7 — Session Restore
 
-- [ ] Paintbrush — editor de ASCII art (brush, line, rect, fill, text)
-- [ ] RetroCalc — visor/editor de CSV/TSV estilo VisiCalc
-- [ ] Wallpaper — ASCII art o imagen como fondo de escritorio
-- [ ] Sonido — terminal bell para feedback UI + efectos via `aplay`/`paplay`
+Comportamiento de "sistema" mas robusto.
 
-### v0.9.7 — Menu Inicio y Temas Avanzados
+- [ ] Restauracion de sesion: recordar ventanas abiertas, posiciones, archivos abiertos
+- [ ] Soft restart interno sin romper sesion host
+- [ ] Deteccion de primera ejecucion con wizard de bienvenida
+- [ ] Metadata de plugins visible en UI (version, capabilities)
+- [ ] Pulir flujo boot/init/run/shutdown con comportamiento determinista
+
+### v0.9.8 — Widgets Reutilizables
+
+- [ ] Extraer widgets reutilizables a `widgets/` (checkbox, radio, text input, list, scrollbar)
+- [ ] Simplificar apps existentes usando los widgets compartidos
+- [ ] Documentar API de widgets para plugin developers
+
+### v0.9.9 — Menu Inicio y Temas Avanzados
 
 La experiencia de escritorio completa.
 
@@ -128,15 +181,16 @@ La experiencia de escritorio completa.
 - [ ] Tema Luna (Windows XP) — colores azul/verde/plateado, bordes redondeados
 - [ ] Tema personalizable — editor de temas en vivo desde Settings
 
-### v0.9.8 — Widgets Reutilizables
+### v0.10.0 — Apps Creativas
 
-- [ ] Extraer widgets reutilizables a `widgets/` (checkbox, radio, text input, list, scrollbar)
-- [ ] Simplificar apps existentes usando los widgets compartidos
-- [ ] Documentar API de widgets para plugin developers
+- [ ] Paintbrush — editor de ASCII art (brush, line, rect, fill, text)
+- [ ] RetroCalc — visor/editor de CSV/TSV estilo VisiCalc
+- [ ] Wallpaper — ASCII art o imagen como fondo de escritorio
+- [ ] Sonido — terminal bell para feedback UI + efectos via `aplay`/`paplay`
 
-### v0.9.9 — Reservada
+### v0.x — Reservada
 
-Reservada para absorber ideas nuevas despues de validar v0.9.4-v0.9.8.
+Reservada para absorber ideas nuevas despues de validar v0.9.4-v0.10.0.
 
 ---
 
@@ -182,4 +236,4 @@ Ideas sin version asignada, se consideraran segun prioridad.
 
 ---
 
-*Ultima actualizacion: 27 de febrero de 2026*
+*Ultima actualizacion: 15 de junio de 2026*
