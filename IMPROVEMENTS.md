@@ -329,7 +329,9 @@ All 9 bundled plugin `__init__.py` files silently discard the `title` parameter 
 **Closed in this iteration:**
 - WiFi Manager: `nmcli -t` output is now split on unescaped colons so SSIDs containing `:` (encoded as `\: ` by `nmcli -t`) are preserved.
 - WiFi Manager: password is always sent via stdin (nmcli `--ask`) on the first attempt; the CLI-arg fallback only runs on releases that lack `--ask`.
-- Snake: back-to-back difficulty changes keep the menu checkmark in sync (new unit test covers the sequence).
+- Snake: back-to-back difficulty changes keep the menu checkmark in sync (new unit test covers the sequence); `_update_menu_checks` now looks up the difficulty name via the action instead of parsing the previous label.
 - Settings: renamed `_committed` to `_finalized` so the flag is no longer misleading when the user chooses Cancel.
 - Control Panel: removed the unused `_committed` attribute.
+- Hex Viewer: now mixes in `SelectableTextMixin` for `clear_selection`/`has_selection` and stores row spans as `(row, 0)` tuples so the mixin's bounds/span helpers apply.
+- Terminal: introduced a `TerminalScreenBuffer` 2D rows x cols class (22 unit tests) and a `TerminalScreen` wrapper that holds the normal and alt screens separately. Both landed in `core/terminal_session.py`.
 - Hex Viewer: now mixes in `SelectableTextMixin` for `clear_selection`/`has_selection` and stores row spans as `(row, 0)` tuples so the mixin's bounds/span helpers apply.
