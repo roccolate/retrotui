@@ -323,7 +323,6 @@ All 9 bundled plugin `__init__.py` files silently discard the `title` parameter 
 
 **MEDIUM remaining:**
 - RetroNet HTML regex parser does not handle nested or malformed tags (returns best-effort text).
-- Clock `always_on_top` toggle keybinding (`kc == 1`) collides with Ctrl+A — kept for legacy reasons; documented in code.
 
 **LOW remaining:** Cosmetic polish (Clock separator string, Snake obs_attr theme_attr alignment).
 

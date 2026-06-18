@@ -205,6 +205,15 @@ class SnakeWindow(Window):
             return ActionResult(ActionType.EXECUTE, _SNAKE_CLOSE)
         return None
 
+    # Map of menu actions to the difficulty name they toggle. Stored as
+    # a class attribute so ``_update_menu_checks`` can recover the name
+    # from the action without parsing the previous label.
+    _DIFFICULTY_NAMES = {
+        _SNAKE_DIFF_EASY: "Easy",
+        _SNAKE_DIFF_NORMAL: "Normal",
+        _SNAKE_DIFF_HARD: "Hard",
+    }
+
     def _update_menu_checks(self):
         items = self.window_menu.items.get("Options", [])
         for i, (label, action) in enumerate(items):
@@ -215,12 +224,13 @@ class SnakeWindow(Window):
                 mark = "√" if self.obstacles_mode else " "
                 items[i] = (f"{mark} Obstacles", action)
 
-        # Update difficulty marks. The current implementation uses a stable
-        # 2-character prefix so `label[2:]` always recovers the difficulty
-        # name regardless of the previous mark.
+        # Update difficulty marks. The previous implementation parsed
+        # ``label[2:]`` to recover the difficulty name, which is fragile
+        # when the prefix character changes. Look up the name from the
+        # action instead so any prefix width is supported.
         diff_items = self.window_menu.items.get("Difficulty", [])
         for i, (label, action) in enumerate(diff_items):
-            base_label = label[2:] if len(label) > 2 else label
+            base_label = self._DIFFICULTY_NAMES.get(action, label)
             mark = "√" if base_label == self.difficulty else " "
             diff_items[i] = (f"{mark} {base_label}", action)
 
