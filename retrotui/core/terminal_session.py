@@ -14,6 +14,205 @@ _BACKENDS_CACHE = {"value": _BACKENDS_UNSET}
 _WIN_BACKEND_CACHE = {"value": _BACKENDS_UNSET}
 
 
+class TerminalScreenBuffer:
+    """2D rows x cols grid of (character, attribute) cells with a cursor.
+
+    Introduced for v0.9.5 so the embedded terminal can hold a stable
+    grid representation independent of the alt-screen overlay and the
+    scrollback list. The class is deliberately framework-free: it does
+    not touch curses, the PTY session, or the application event loop.
+    The next milestone will route the normal-screen rendering through
+    this buffer.
+    """
+
+    __slots__ = ("rows", "cols", "_grid", "_cursor_row", "_cursor_col",
+                 "_default_attr")
+
+    def __init__(self, rows, cols, default_attr=0):
+        rows = max(1, int(rows))
+        cols = max(1, int(cols))
+        self.rows = rows
+        self.cols = cols
+        self._default_attr = int(default_attr)
+        self._grid = [
+            [(" ", self._default_attr) for _ in range(cols)] for _ in range(rows)
+        ]
+        self._cursor_row = 0
+        self._cursor_col = 0
+
+    # ------------------------------------------------------------------
+    # Cursor management
+    # ------------------------------------------------------------------
+
+    @property
+    def cursor_row(self):
+        return self._cursor_row
+
+    @property
+    def cursor_col(self):
+        return self._cursor_col
+
+    def set_cursor(self, row, col):
+        """Move the cursor to ``(row, col)`` clamped to the grid."""
+        self._cursor_row = max(0, min(self.rows - 1, int(row)))
+        self._cursor_col = max(0, min(self.cols - 1, int(col)))
+
+    # ------------------------------------------------------------------
+    # Cell access
+    # ------------------------------------------------------------------
+
+    def get_cell(self, row, col):
+        """Return the ``(char, attr)`` at ``(row, col)`` or a space."""
+        if 0 <= row < self.rows and 0 <= col < self.cols:
+            return self._grid[row][col]
+        return (" ", self._default_attr)
+
+    def get_row(self, row):
+        """Return the list of ``(char, attr)`` for ``row``."""
+        if 0 <= row < self.rows:
+            return list(self._grid[row])
+        return []
+
+    def put_char(self, ch, attr=None):
+        """Write one character at the cursor and advance the column.
+
+        Wraps to the next line on overflow; the bottom row scrolls up.
+        ``\\n`` and ``\\r`` are not interpreted here: callers should use
+        :meth:`line_feed` and :meth:`carriage_return` for those.
+        """
+        attr = self._default_attr if attr is None else attr
+        if self._cursor_col >= self.cols:
+            # Wrap to the next line: line_feed scrolls if needed, then
+            # we reset the column so the cell write below stays in range.
+            self.line_feed()
+            self._cursor_col = 0
+        if 0 <= self._cursor_row < self.rows:
+            self._grid[self._cursor_row][self._cursor_col] = (ch, attr)
+        self._cursor_col += 1
+
+    def carriage_return(self):
+        """Move the cursor to column 0."""
+        self._cursor_col = 0
+
+    def line_feed(self):
+        """Scroll up if the cursor is on the last line, else advance."""
+        if self._cursor_row >= self.rows - 1:
+            self.scroll_up()
+        else:
+            self._cursor_row += 1
+
+    def backspace(self):
+        """Move the cursor one column to the left without wrapping."""
+        if self._cursor_col > 0:
+            self._cursor_col -= 1
+
+    # ------------------------------------------------------------------
+    # Line / screen ops
+    # ------------------------------------------------------------------
+
+    def clear_line(self, row=None):
+        """Reset every cell in ``row`` (defaults to the cursor row)."""
+        if row is None:
+            row = self._cursor_row
+        if 0 <= row < self.rows:
+            self._grid[row] = [(" ", self._default_attr) for _ in range(self.cols)]
+            if row == self._cursor_row:
+                self._cursor_col = 0
+
+    def clear_screen(self, mode="all"):
+        """Clear the buffer.
+
+        ``mode`` follows the CSI ``ED`` semantics:
+        - ``"all"`` (default): clear the whole grid and home the cursor.
+        - ``"below"``: clear from the cursor (inclusive) to the end of
+          the screen. The cursor row is only blanked from the cursor
+          column onward; columns before the cursor are preserved.
+        - ``"above"``: clear from the top of the screen up to the
+          cursor (inclusive).
+        """
+        if mode == "all":
+            self._grid = [
+                [(" ", self._default_attr) for _ in range(self.cols)]
+                for _ in range(self.rows)
+            ]
+            self._cursor_row = 0
+            self._cursor_col = 0
+            return
+        if mode == "below":
+            # Preserve columns before the cursor on the cursor row.
+            for c in range(self._cursor_col, self.cols):
+                self._grid[self._cursor_row][c] = (" ", self._default_attr)
+            for r in range(self._cursor_row + 1, self.rows):
+                self._grid[r] = [(" ", self._default_attr) for _ in range(self.cols)]
+            return
+        if mode == "above":
+            for r in range(0, self._cursor_row):
+                self._grid[r] = [(" ", self._default_attr) for _ in range(self.cols)]
+            # Clear up to and including the cursor column; columns
+            # after the cursor are preserved.
+            for c in range(0, self._cursor_col + 1):
+                self._grid[self._cursor_row][c] = (" ", self._default_attr)
+            return
+        raise ValueError(f"unknown clear_screen mode: {mode!r}")
+
+    def scroll_up(self, count=1):
+        """Scroll the whole buffer up by ``count`` rows."""
+        if count <= 0 or self.rows <= 0:
+            return
+        blank = [(" ", self._default_attr) for _ in range(self.cols)]
+        for _ in range(min(count, self.rows)):
+            self._grid.pop(0)
+            self._grid.append(list(blank))
+
+    def scroll_down(self, count=1):
+        """Scroll the whole buffer down by ``count`` rows."""
+        if count <= 0 or self.rows <= 0:
+            return
+        blank = [(" ", self._default_attr) for _ in range(self.cols)]
+        for _ in range(min(count, self.rows)):
+            self._grid.insert(0, list(blank))
+
+    def insert_line(self, count=1):
+        """Insert ``count`` blank rows at the cursor position."""
+        if count <= 0:
+            return
+        blank = [(" ", self._default_attr) for _ in range(self.cols)]
+        for _ in range(min(count, self.rows)):
+            self._grid.insert(self._cursor_row, list(blank))
+            self._grid.pop()
+
+    def delete_line(self, count=1):
+        """Delete ``count`` rows at the cursor position; bottom scrolls up."""
+        if count <= 0:
+            return
+        blank = [(" ", self._default_attr) for _ in range(self.cols)]
+        for _ in range(min(count, self.rows)):
+            self._grid.pop(self._cursor_row)
+            self._grid.append(list(blank))
+
+    # ------------------------------------------------------------------
+    # Resize
+    # ------------------------------------------------------------------
+
+    def resize(self, rows, cols):
+        """Resize the buffer, preserving cells that stay on screen."""
+        rows = max(1, int(rows))
+        cols = max(1, int(cols))
+        new_grid = [
+            [(" ", self._default_attr) for _ in range(cols)] for _ in range(rows)
+        ]
+        common_rows = min(rows, self.rows)
+        common_cols = min(cols, self.cols)
+        for r in range(common_rows):
+            row_src = self._grid[r][:common_cols]
+            new_grid[r][:common_cols] = row_src
+        self._grid = new_grid
+        self.rows = rows
+        self.cols = cols
+        self._cursor_row = min(self._cursor_row, rows - 1)
+        self._cursor_col = min(self._cursor_col, cols - 1)
+
+
 def _resolve_posix_backends():
     """Resolve and cache POSIX modules needed for PTY sessions."""
     cached = _BACKENDS_CACHE["value"]
