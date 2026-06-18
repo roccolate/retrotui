@@ -1,10 +1,10 @@
 # RetroTUI
 
-[![CI](https://github.com/roccolate/RetroTUI/actions/workflows/ci.yml/badge.svg)](https://github.com/roccolate/RetroTUI/actions/workflows/ci.yml)
-[![Release](https://github.com/roccolate/RetroTUI/actions/workflows/release.yml/badge.svg)](https://github.com/roccolate/RetroTUI/actions/workflows/release.yml)
+[![CI](https://github.com/roccolate/retrotui/actions/workflows/ci.yml/badge.svg)](https://github.com/roccolate/retrotui/actions/workflows/ci.yml)
+[![Release](https://github.com/roccolate/retrotui/actions/workflows/release.yml/badge.svg)](https://github.com/roccolate/retrotui/actions/workflows/release.yml)
 [![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/I2I1WKMLQ)
 
-**Un entorno de escritorio retro para tu terminal.** *(English below)*
+**A retro desktop environment for your terminal.**
 
 ```text
 ╔══════════════════════════════════════════════════════════════╗
@@ -23,67 +23,6 @@
 ║ RetroTUI v0.9.4 │ Windows: 1/1 │ Mouse: Enabled │ Ctrl+Q: Exit║
 ╚══════════════════════════════════════════════════════════════╝
 ```
-
-## Descripcion
-
-RetroTUI es un entorno de escritorio estilo Windows 3.1 que corre completamente en la terminal. Sin X11, sin Wayland, solo Python y `curses`. Funciona en Linux, WSL y Windows nativo.
-
-### Caracteristicas
-
-*   **Gestor de Ventanas**: Mover, redimensionar, maximizar, minimizar, arrastrar y soltar.
-*   **Soporte de Mouse**: Funciona en consola TTY (via `gpm`) y emuladores de terminal (protocolo xterm).
-*   **Terminal Embebida**: Shell PTY completo dentro de una ventana (POSIX y Windows via `pywinpty`).
-*   **Perfil base estable**: Explorador de Archivos, Bloc de Notas y Terminal son las unicas apps visibles por defecto.
-*   **Apps secundarias instaladas pero deshabilitadas por defecto**: Calculadora, Visor Hex, Visor Markdown, Monitor de Procesos, Monitor de Sistema, Visor de Logs, Clipboard Viewer, Settings, Panel de Control, Papelera, Editor de Iconos y Editor de Menus.
-*   **Juegos y plugins opcionales**: Buscaminas, Solitario, Snake, Tetris, RetroNet Explorer, Mapa de Caracteres, Reloj/Calendario, Visor de Imagenes y WiFi Manager quedan fuera del perfil base.
-*   **Temas**: Windows 3.1, DOS, Windows 95, Hacker, Amiga.
-*   **Sistema de Plugins**: Plugins bundled, de ejemplo/desarrollo y propios desde directorios configurables; se mantienen deshabilitados en el perfil base hasta que la configuracion los habilite.
-*   **Sin dependencias en Linux**: Solo Python 3.10+ estandar. En Windows requiere `pywinpty` (Python 3.13 o anterior; en 3.14+ curses ya viene nativo).
-
-## Instalacion
-
-```bash
-git clone https://github.com/roccolate/RetroTUI.git
-cd RetroTUI
-python -m retrotui
-```
-
-### Requisitos
-
-| Plataforma | Requisitos |
-| :--- | :--- |
-| **Linux/WSL** | Python 3.10+, terminal 80x24 minimo, UTF-8 recomendado |
-| **Windows** | Python 3.10+. En 3.13 o anterior: `pip install pywinpty`. En 3.14+ no se requieren dependencias extra (curses ya viene nativo y la PTY usa ConPTY). |
-
-## Controles
-
-| Tecla | Accion |
-| :--- | :--- |
-| `Tab` | Cambiar ventana activa |
-| `F10` | Abrir menu |
-| `Ctrl+Q` | Salir |
-| `Alt+Tab` | Ciclar ventanas |
-| Click derecho | Menu contextual |
-
-### Apps
-*   **File Manager**: `Enter` abrir, `F5` Copiar, `F4`/`F6` Mover, `F2` Renombrar, `F7` Nueva carpeta, `F8` Nuevo archivo, `U` Deshacer borrado, `D` doble panel.
-*   **Notepad**: `Ctrl+S` Guardar, `Ctrl+O` Abrir, `Ctrl+W` Ajuste de linea.
-*   **Terminal**: `Ctrl+C` Copiar/Interrumpir, `Ctrl+V` Pegar, `F6` Interrumpir, `F7` Terminar.
-
-## Documentacion
-*   [ARCHITECTURE.md](ARCHITECTURE.md) - Arquitectura del sistema.
-*   [ROADMAP.md](ROADMAP.md) - Estado del proyecto y plan de versiones.
-*   [CONTRIBUTING.md](CONTRIBUTING.md) - Guia de contribucion.
-*   [CHANGELOG.md](CHANGELOG.md) - Historial de cambios.
-*   [docs/plugin-guide.md](docs/plugin-guide.md) - Guia para crear plugins.
-*   [tools/TESTING.md](tools/TESTING.md) - Checklist de pruebas manuales.
-*   [IMPROVEMENTS.md](IMPROVEMENTS.md) - Auditoria tecnica y backlog de mejoras.
-
----
-
-# RetroTUI (English)
-
-**A retro desktop environment for your terminal.**
 
 ## Overview
 
@@ -104,9 +43,19 @@ RetroTUI is a Windows 3.1-style desktop environment that runs entirely in the te
 ## Installation
 
 ```bash
-git clone https://github.com/roccolate/RetroTUI.git
-cd RetroTUI
-python -m retrotui
+pip install retrotui
+retrotui
+```
+
+The `retrotui` command is installed as a console script by `pyproject.toml` and works the same as `python -m retrotui`.
+
+### From source
+
+```bash
+git clone https://github.com/roccolate/retrotui.git
+cd retrotui
+python -m pip install -e .
+retrotui
 ```
 
 ### Requirements
