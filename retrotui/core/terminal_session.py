@@ -213,6 +213,104 @@ class TerminalScreenBuffer:
         self._cursor_col = min(self._cursor_col, cols - 1)
 
 
+class TerminalScreen:
+    """Holds the normal-screen and alt-screen buffers for one terminal.
+
+    The alt-screen is used by full-screen apps (vim, htop, less) and
+    must be kept separate from the normal-screen grid and the
+    scrollback. Switching modes via :meth:`set_alt_screen` swaps the
+    active buffer; the inactive buffer is preserved so toggling back
+    to the original mode restores the previous view.
+
+    Introduced for v0.9.5 to keep the alt-screen isolated from the
+    normal-screen; the ``TerminalWindow`` will route the CSI ``?1049``
+    private mode through this class once the buffer wiring lands.
+    """
+
+    __slots__ = ("_normal", "_alt", "_active")
+
+    def __init__(self, rows, cols, default_attr=0):
+        self._normal = TerminalScreenBuffer(rows, cols, default_attr=default_attr)
+        self._alt = TerminalScreenBuffer(rows, cols, default_attr=default_attr)
+        self._active = self._normal
+
+    # ------------------------------------------------------------------
+    # Mode switching
+    # ------------------------------------------------------------------
+
+    @property
+    def alt_screen(self):
+        return self._active is self._alt
+
+    def set_alt_screen(self, enabled):
+        """Switch to the alt-screen or back to the normal-screen."""
+        self._active = self._alt if enabled else self._normal
+
+    # ------------------------------------------------------------------
+    # Pass-through to the active buffer
+    # ------------------------------------------------------------------
+
+    @property
+    def rows(self):
+        return self._active.rows
+
+    @property
+    def cols(self):
+        return self._active.cols
+
+    @property
+    def cursor_row(self):
+        return self._active.cursor_row
+
+    @property
+    def cursor_col(self):
+        return self._active.cursor_col
+
+    def set_cursor(self, row, col):
+        self._active.set_cursor(row, col)
+
+    def put_char(self, ch, attr=None):
+        self._active.put_char(ch, attr=attr)
+
+    def carriage_return(self):
+        self._active.carriage_return()
+
+    def line_feed(self):
+        self._active.line_feed()
+
+    def backspace(self):
+        self._active.backspace()
+
+    def clear_line(self, row=None):
+        self._active.clear_line(row)
+
+    def clear_screen(self, mode="all"):
+        self._active.clear_screen(mode)
+
+    def scroll_up(self, count=1):
+        self._active.scroll_up(count)
+
+    def scroll_down(self, count=1):
+        self._active.scroll_down(count)
+
+    def insert_line(self, count=1):
+        self._active.insert_line(count)
+
+    def delete_line(self, count=1):
+        self._active.delete_line(count)
+
+    def get_cell(self, row, col):
+        return self._active.get_cell(row, col)
+
+    def get_row(self, row):
+        return self._active.get_row(row)
+
+    def resize(self, rows, cols):
+        """Resize both buffers in lockstep so dimensions stay aligned."""
+        self._normal.resize(rows, cols)
+        self._alt.resize(rows, cols)
+
+
 def _resolve_posix_backends():
     """Resolve and cache POSIX modules needed for PTY sessions."""
     cached = _BACKENDS_CACHE["value"]

@@ -2,7 +2,7 @@
 
 import unittest
 
-from retrotui.core.terminal_session import TerminalScreenBuffer
+from retrotui.core.terminal_session import TerminalScreenBuffer, TerminalScreen
 
 
 class TerminalScreenBufferTests(unittest.TestCase):
@@ -233,6 +233,64 @@ class TerminalScreenBufferTests(unittest.TestCase):
         self.assertEqual(buf.get_row(0), [(" ", 0x55)] * 3)
         buf.clear_screen("all")
         self.assertEqual(buf.get_row(0), [(" ", 0x55)] * 3)
+
+
+class TerminalScreenTests(unittest.TestCase):
+    """Tests for the dual-screen (normal + alt) wrapper."""
+
+    def setUp(self):
+        self.screen = TerminalScreen(2, 3)
+
+    def test_default_active_is_normal(self):
+        self.assertFalse(self.screen.alt_screen)
+        self.assertEqual(self.screen.cursor_row, 0)
+        self.assertEqual(self.screen.cursor_col, 0)
+
+    def test_alt_screen_isolates_writes(self):
+        # Write to normal screen, then switch and write to alt.
+        for ch in "abc":
+            self.screen.put_char(ch)
+        self.assertEqual(self.screen.get_row(0)[:3], [("a", 0), ("b", 0), ("c", 0)])
+        self.screen.set_alt_screen(True)
+        self.assertTrue(self.screen.alt_screen)
+        # Alt screen is blank.
+        self.assertEqual(self.screen.get_row(0), [(" ", 0)] * 3)
+        for ch in "xyz":
+            self.screen.put_char(ch)
+        self.assertEqual(self.screen.get_row(0), [("x", 0), ("y", 0), ("z", 0)])
+
+    def test_alt_screen_round_trip_preserves_normal(self):
+        for ch in "abc":
+            self.screen.put_char(ch)
+        self.screen.set_alt_screen(True)
+        for ch in "xyz":
+            self.screen.put_char(ch)
+        # Back to normal: the original content must be intact.
+        self.screen.set_alt_screen(False)
+        self.assertEqual(
+            self.screen.get_row(0)[:3],
+            [("a", 0), ("b", 0), ("c", 0)],
+        )
+        # And the alt content is still there for the next round trip.
+        self.screen.set_alt_screen(True)
+        self.assertEqual(
+            self.screen.get_row(0),
+            [("x", 0), ("y", 0), ("z", 0)],
+        )
+
+    def test_resize_keeps_both_buffers_in_sync(self):
+        self.screen.set_alt_screen(True)
+        for ch in "abc":
+            self.screen.put_char(ch)
+        self.screen.resize(4, 5)
+        # Both buffers report the new dimensions.
+        self.assertEqual(self.screen.rows, 4)
+        self.assertEqual(self.screen.cols, 5)
+        # The alt content survives the resize (within the overlap).
+        self.assertEqual(
+            self.screen.get_row(0)[:3],
+            [("a", 0), ("b", 0), ("c", 0)],
+        )
 
 
 if __name__ == "__main__":
