@@ -5,9 +5,16 @@ import curses
 from typing import List
 
 from ..ui.window import Window
-from ..utils import safe_addstr, theme_attr
+from ..utils import safe_addstr, theme_attr, normalize_key_code
 from ..core.clipboard import paste_text, copy_text, clear_clipboard
 from ..constants import _CURSES_ERROR
+
+try:
+    _KEY_UP = curses.KEY_UP
+    _KEY_DOWN = curses.KEY_DOWN
+except (AttributeError, _CURSES_ERROR):
+    _KEY_UP = -1
+    _KEY_DOWN = -2
 _OPTIONAL_PYPERCLIP_IMPORT_ERRORS = (
     ImportError,
     ModuleNotFoundError,
@@ -41,6 +48,7 @@ _KEYMAP_RESOLVE_ERRORS = (
     RuntimeError,
     TypeError,
     ValueError,
+    _CURSES_ERROR,
 )
 try:
     import pyperclip
@@ -87,12 +95,20 @@ class ClipboardViewerWindow(Window):
             self._unsub_clipboard()
             self._unsub_clipboard = None
 
+    def tick(self):
+        """Poll system clipboard as a fallback outside the render path.
+
+        The event bus only fires for internal copies; external clipboard
+        changes (other apps) need polling.
+        """
+        before = self.history[:1] if self.history else None
+        self._refresh_from_clipboard()
+        after = self.history[:1] if self.history else None
+        return before != after
+
     def draw(self, stdscr):
         if not self.visible:
             return
-        # Poll system clipboard as fallback — the bus only fires for internal
-        # copies; external clipboard changes (other apps) need polling.
-        self._refresh_from_clipboard()
         body_attr = self.draw_frame(stdscr)
         bx, by, bw, bh = self.body_rect()
         for i, item in enumerate(self.history[: bh]):
@@ -125,43 +141,34 @@ class ClipboardViewerWindow(Window):
         return None
 
     def handle_key(self, key):
+        kc = normalize_key_code(key)
+        if kc is None:
+            return None
         # 'c' clears clipboard
-        if getattr(key, '__int__', None) and int(key) == ord('c'):
+        if kc == ord('c'):
             clear_clipboard()
             self.history = []
             self.selected_index = 0
         # 'y' yank top history to system clipboard if available
-        if getattr(key, '__int__', None) and int(key) == ord('y') and self.history:
+        if kc == ord('y') and self.history:
             if pyperclip:
                 try:
                     pyperclip.copy(self.history[0])
                 except _CLIPBOARD_SYNC_ERRORS:
                     pass
-        # navigation: up/down and enter to copy
-        if getattr(key, '__int__', None):
-            k = int(key)
-            try:
-                import curses as _c
 
-                KEY_UP = _c.KEY_UP
-                KEY_DOWN = _c.KEY_DOWN
-            except _KEYMAP_RESOLVE_ERRORS:
-                KEY_UP = -1
-                KEY_DOWN = -2
-
-            if k in (KEY_UP, ord('k')):
-                if self.history:
-                    self.selected_index = max(0, self.selected_index - 1)
-            if k in (KEY_DOWN, ord('j')):
-                if self.history:
-                    self.selected_index = min(len(self.history) - 1, self.selected_index + 1)
-            # Enter/Return to copy selected
-            if k in (10, 13):
-                if self.history and 0 <= self.selected_index < len(self.history):
-                    copy_text(self.history[self.selected_index])
-                    if pyperclip:
-                        try:
-                            pyperclip.copy(self.history[self.selected_index])
-                        except _CLIPBOARD_SYNC_ERRORS:
-                            pass
+        if kc in (_KEY_UP, ord('k')):
+            if self.history:
+                self.selected_index = max(0, self.selected_index - 1)
+        elif kc in (_KEY_DOWN, ord('j')):
+            if self.history:
+                self.selected_index = min(len(self.history) - 1, self.selected_index + 1)
+        elif kc in (10, 13):
+            if self.history and 0 <= self.selected_index < len(self.history):
+                copy_text(self.history[self.selected_index])
+                if pyperclip:
+                    try:
+                        pyperclip.copy(self.history[self.selected_index])
+                    except _CLIPBOARD_SYNC_ERRORS:
+                        pass
         return None

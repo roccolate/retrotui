@@ -1,6 +1,8 @@
 """Unified Control Panel for RetroTUI."""
 import curses
+from retrotui import __version__ as APP_VERSION
 from ..core.actions import AppAction, ActionResult, ActionType
+from ..theme import list_themes
 from ..ui.window import Window
 from ..utils import safe_addstr, theme_attr, normalize_key_code
 from .settings import SettingsWindow
@@ -13,6 +15,12 @@ class ControlPanelWindow(Window):
         ("Desktop", "Icons & Layout"),
         ("Regional", "Clock & Calendar"),
         ("System", "Version & Welcome"),
+    ]
+    _TOGGLE_TWO = [
+        (False, False),
+        (True, False),
+        (False, True),
+        (True, True),
     ]
 
     def __init__(self, x, y, w, h, app):
@@ -29,7 +37,6 @@ class ControlPanelWindow(Window):
         self.show_welcome = bool(app.config.show_welcome)
         
         # For Theme selection
-        from ..theme import list_themes
         self._themes = list_themes()
         self._theme_scroll = 0
 
@@ -86,7 +93,6 @@ class ControlPanelWindow(Window):
             safe_addstr(stdscr, ry, rx, "System Configuration:", body_attr | curses.A_BOLD)
             w_mark = "[x]" if self.show_welcome else "[ ]"
             safe_addstr(stdscr, ry + 2, rx, f"{w_mark} Show Welcome Screen", body_attr)
-            from ..core.app import APP_VERSION
             safe_addstr(stdscr, ry + 6, rx, f"RetroTUI Version: {APP_VERSION}", theme_attr('status'))
 
         # Buttons at bottom right
@@ -108,15 +114,23 @@ class ControlPanelWindow(Window):
                 self.theme_name = self._themes[(idx + 1) % len(self._themes)].key
                 self.app.apply_theme(self.theme_name)
             elif self.selected_cat == 1:
-                self.show_hidden = not self.show_hidden
-                self.app.apply_preferences(show_hidden=self.show_hidden)
+                # Cycle hidden / word-wrap defaults so both are reachable.
+                idx = next(
+                    (i for i, t in enumerate(self._TOGGLE_TWO) if t == (self.show_hidden, self.word_wrap_default)),
+                    0,
+                )
+                self.show_hidden, self.word_wrap_default = self._TOGGLE_TWO[(idx + 1) % len(self._TOGGLE_TWO)]
+                self.app.apply_preferences(
+                    show_hidden=self.show_hidden,
+                    word_wrap_default=self.word_wrap_default,
+                )
             elif self.selected_cat == 2:
                 self.sunday_first = not self.sunday_first
                 self.app.apply_preferences(sunday_first=self.sunday_first)
             elif self.selected_cat == 3:
                 self.show_welcome = not self.show_welcome
-                self.app.show_welcome = self.show_welcome
-            
+                self.app.apply_preferences(show_welcome=self.show_welcome)
+
             # Auto-save when changing
             self.app.persist_config()
 
@@ -131,7 +145,7 @@ class ControlPanelWindow(Window):
                 if y <= my < y + 3:
                     self.selected_cat = i
                     return None
-        
+
         # Check buttons
         btn_y = by + bh - 2
         if my == btn_y:

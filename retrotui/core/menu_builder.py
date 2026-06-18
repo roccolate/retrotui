@@ -22,6 +22,14 @@ def get_hidden_menu_keys(config):
     return split_config_csv(raw)
 
 
+def is_menu_key_hidden(item_key, hidden_menu_items):
+    """Return True when a menu key is explicitly or wildcard-hidden."""
+    key = str(item_key or "").strip().lower()
+    if key in hidden_menu_items:
+        return True
+    return key.startswith("plugin:") and "plugin:*" in hidden_menu_items
+
+
 def build_global_menu_items(app):
     """Return global menu items with hidden-label filtering and plugin section."""
     from .plugin_manager import build_categorized_plugin_menu_items
@@ -34,7 +42,7 @@ def build_global_menu_items(app):
         filtered_items = []
         for label, action in items:
             item_key = menu_item_visibility_key(label, action)
-            if item_key not in hidden_menu_items:
+            if not is_menu_key_hidden(item_key, hidden_menu_items):
                 filtered_items.append((label, action))
         if filtered_items:
             filtered_menu_items[category] = filtered_items
@@ -44,7 +52,7 @@ def build_global_menu_items(app):
         filtered_menu_items["Games"] = games
     if plugins:
         filtered_menu_items["Plugins"] = plugins
-    if not games and not plugins:
+    if not games and not plugins and "plugin:*" not in hidden_menu_items:
         filtered_menu_items["Plugins"] = [("(No plugins installed)", None)]
 
     return filtered_menu_items

@@ -707,6 +707,14 @@ def get_hidden_icon_labels(config):
     return split_config_csv(raw)
 
 
+def is_icon_key_hidden(icon_key, hidden_keys):
+    """Return True when an icon key is explicitly or wildcard-hidden."""
+    key = str(icon_key or "").strip().lower()
+    if key in hidden_keys:
+        return True
+    return key.startswith("plugin:") and "plugin:*" in hidden_keys
+
+
 def plugin_icon_art(name, use_unicode, token=None):
     """Build compact 3x4 icon art for plugin desktop entries."""
     if not token:
@@ -766,7 +774,7 @@ def refresh_icons(app):
         getattr(app, "_plugins", None),
         app.use_unicode,
     )
-    visible = [icon for icon in catalog if icon_visibility_key(icon) not in hidden_keys]
+    visible = [icon for icon in catalog if not is_icon_key_hidden(icon_visibility_key(icon), hidden_keys)]
     app.icons = [
         styled_icon_entry(icon, getattr(app, "icon_style", ICON_STYLE_DEFAULT), app.use_unicode)
         for icon in visible

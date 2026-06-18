@@ -200,13 +200,16 @@ class SettingsWindow(Window):
                 return self._activate_selection()
             if self._selection == self._toggle_show_hidden_index() and self.show_hidden:
                 self.show_hidden = False
+                self.app.apply_preferences(show_hidden=False, apply_to_open_windows=True)
             if self._selection == self._toggle_wrap_index() and self.word_wrap_default:
                 self.word_wrap_default = False
                 self.app.apply_preferences(word_wrap_default=False, apply_to_open_windows=True)
             if self._selection == self._toggle_sunday_first_index() and self.sunday_first:
                 self.sunday_first = False
+                self.app.apply_preferences(sunday_first=False, apply_to_open_windows=True)
             if self._selection == self._toggle_show_welcome_index() and self.show_welcome:
                 self.show_welcome = False
+                self.app.show_welcome = False
             return None
         if key_code == curses.KEY_RIGHT:
             if self._selection < self._theme_count():
@@ -214,13 +217,16 @@ class SettingsWindow(Window):
                 return self._activate_selection()
             if self._selection == self._toggle_show_hidden_index() and not self.show_hidden:
                 self.show_hidden = True
+                self.app.apply_preferences(show_hidden=True, apply_to_open_windows=True)
             if self._selection == self._toggle_wrap_index() and not self.word_wrap_default:
                 self.word_wrap_default = True
                 self.app.apply_preferences(word_wrap_default=True, apply_to_open_windows=True)
             if self._selection == self._toggle_sunday_first_index() and not self.sunday_first:
                 self.sunday_first = True
+                self.app.apply_preferences(sunday_first=True, apply_to_open_windows=True)
             if self._selection == self._toggle_show_welcome_index() and not self.show_welcome:
                 self.show_welcome = True
+                self.app.show_welcome = True
             return None
         if key_code in (curses.KEY_ENTER, 10, 13, 32):
             return self._activate_selection()

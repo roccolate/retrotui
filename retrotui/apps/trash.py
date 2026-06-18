@@ -8,7 +8,11 @@ from ..core.actions import ActionResult, ActionType, AppAction
 from ..ui.menu import WindowMenu
 from ..utils import normalize_key_code
 from .filemanager import FileManagerWindow
-from .filemanager.operations import _trash_base_dir
+from .filemanager.operations import (
+    _trash_base_dir,
+    clear_trash_metadata,
+    perform_restore,
+)
 
 
 class TrashWindow(FileManagerWindow):
@@ -30,6 +34,7 @@ class TrashWindow(FileManagerWindow):
             {
                 "File": [
                     ("Open       Enter", AppAction.FM_OPEN),
+                    ("Restore       R", "trash_restore"),
                     ("Delete       Del", AppAction.FM_DELETE),
                     ("Empty Trash    E", "trash_empty"),
                     ("-------------", None),
@@ -53,11 +58,20 @@ class TrashWindow(FileManagerWindow):
     def _build_listing(self, path):
         """Build listing and hide parent entry at trash root level."""
         entries, content, error_message = super()._build_listing(path)
-        if os.path.realpath(path) == self._trash_root():
-            if entries and entries[0].name == "..":
-                entries = entries[1:]
-                if len(content) > 2:
-                    content = content[:2] + content[3:]
+        if os.path.realpath(path) != self._trash_root():
+            return entries, content, error_message
+        if not entries or entries[0].name != "..":
+            return entries, content, error_message
+        entries = entries[1:]
+        # Drop the row that represented the parent entry from the rendered
+        # content too. Locate the index by label rather than hardcoding a
+        # numeric slice so the layout stays correct if upstream formatting
+        # changes.
+        for idx, line in enumerate(content):
+            stripped = line.lstrip()
+            if stripped.startswith(".."):
+                content = content[:idx] + content[idx + 1:]
+                break
         return entries, content, error_message
 
     def _update_title(self):
@@ -96,6 +110,7 @@ class TrashWindow(FileManagerWindow):
             self._delete_path(entry.full_path)
         except OSError as exc:
             return ActionResult(ActionType.ERROR, str(exc))
+        clear_trash_metadata(entry.full_path)
 
         self._rebuild_content()
         if self.entries:
@@ -106,6 +121,18 @@ class TrashWindow(FileManagerWindow):
     def undo_last_delete(self):
         """Undo is not applicable inside Trash window."""
         return ActionResult(ActionType.ERROR, "Undo Delete is not available in Trash.")
+
+    def restore_selected(self):
+        """Restore selected trash entry to its original location."""
+        entry = self._selected_entry()
+        if entry is None:
+            return ActionResult(ActionType.ERROR, "No item selected.")
+        if entry.name == "..":
+            return ActionResult(ActionType.ERROR, "Cannot restore parent entry.")
+        result, _ = perform_restore(entry.full_path)
+        if result.type == ActionType.REFRESH:
+            self._rebuild_content()
+        return result
 
     def empty_trash(self):
         """Permanently remove all entries under trash root."""
@@ -125,6 +152,7 @@ class TrashWindow(FileManagerWindow):
                 self._delete_path(path)
             except OSError as exc:
                 errors.append(f"{name}: {exc}")
+            clear_trash_metadata(path)
 
         self.current_path = root
         self._rebuild_content()
@@ -134,12 +162,14 @@ class TrashWindow(FileManagerWindow):
 
     def _confirm_empty_trash(self):
         """Request confirmation before emptying trash."""
-        return ActionResult(ActionType.REQUEST_DELETE_CONFIRM)
+        return ActionResult(ActionType.REQUEST_EMPTY_TRASH_CONFIRM)
 
     def execute_action(self, action):
         """Execute trash-specific menu actions."""
         if action == "trash_empty":
             return self._confirm_empty_trash()
+        if action == "trash_restore":
+            return self.restore_selected()
         if action == "trash_close":
             return ActionResult(ActionType.EXECUTE, AppAction.CLOSE_WINDOW)
         return super().execute_action(action)
@@ -149,7 +179,14 @@ class TrashWindow(FileManagerWindow):
         key_code = normalize_key_code(key)
         if key_code in (ord("e"), ord("E")):
             return self._confirm_empty_trash()
-        if key_code in (ord("r"), ord("R"), self.KEY_F5):
+        if key_code in (ord("r"), ord("R")) and not (
+            self.window_menu and self.window_menu.active
+        ):
+            result = self.restore_selected()
+            if result and getattr(result, "type", None) == ActionType.REFRESH:
+                return result
+            return result
+        if key_code in (self.KEY_F5,):
             self._rebuild_content()
             return None
         return super().handle_key(key)

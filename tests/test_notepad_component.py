@@ -95,6 +95,57 @@ class NotepadComponentTests(unittest.TestCase):
         win._compute_wrap(6)
         self.assertEqual(win._wrap_cache_w, 6)
 
+    def test_visible_wrapped_chunks_reuses_wrap_cache(self):
+        win = self._make_window()
+        win.buffer = ["abcdef"]
+        win.wrap_mode = True
+
+        first = win._get_visible_wrapped_chunks(0, 1, 4)
+        self.assertEqual(first, [(0, 0, "abcd")])
+
+        with mock.patch.object(win, "_get_wrapped_lines_for", wraps=win._get_wrapped_lines_for) as wrapped:
+            second = win._get_visible_wrapped_chunks(1, 1, 4)
+
+        self.assertEqual(second, [(0, 4, "ef")])
+        wrapped.assert_not_called()
+
+    def test_set_cursor_from_screen_uses_cell_width_for_wide_chars(self):
+        win = self._make_window()
+        win.wrap_mode = False
+        win.buffer = ["a界b"]
+        win.view_top = 0
+        win.view_left = 0
+        win.body_rect = mock.Mock(return_value=(0, 0, 20, 5))
+
+        win._set_cursor_from_screen(3, 0)
+
+        self.assertEqual((win.cursor_line, win.cursor_col), (0, 2))
+
+    def test_undo_history_skips_buffers_over_size_limit(self):
+        win = self._make_window()
+        win.UNDO_MAX_CHARS = 5
+        win.buffer = ["abcdef"]
+
+        win._push_undo()
+
+        self.assertEqual(win._undo_stack, [])
+        self.assertEqual(win._redo_stack, [])
+
+    def test_undo_history_trims_by_total_character_budget(self):
+        win = self._make_window()
+        win.UNDO_MAX_CHARS = 12
+        win.buffer = ["abc"]
+
+        for col in range(4):
+            win.cursor_col = col
+            win._push_undo()
+
+        self.assertLessEqual(
+            sum(win._buffer_char_count(state["buffer"]) for state in win._undo_stack),
+            win.UNDO_MAX_CHARS,
+        )
+        self.assertLess(len(win._undo_stack), 4)
+
     def test_cursor_to_wrap_row_returns_last_segment_for_end_column(self):
         win = self._make_window()
         win.buffer = ["abcdef"]
@@ -341,6 +392,26 @@ class NotepadComponentTests(unittest.TestCase):
         with mock.patch.object(self.notepad_mod, "safe_addstr"):
             win.draw(None)
         self.assertEqual(win.title, "Notepad")
+
+    def test_draw_uses_cached_title_for_file_path(self):
+        win = self._make_window()
+        win.filepath = "/tmp/demo.txt"
+        win.modified = False
+        win.draw_frame = mock.Mock(return_value=0)
+
+        with (
+            mock.patch.object(self.notepad_mod, "safe_addstr"),
+            mock.patch.object(self.notepad_mod.os.path, "basename", wraps=self.notepad_mod.os.path.basename) as basename,
+        ):
+            win.draw(None)
+            win.draw(None)
+            self.assertEqual(basename.call_count, 1)
+
+            win.modified = True
+            win.draw(None)
+            self.assertEqual(basename.call_count, 2)
+
+        self.assertEqual(win.title, "Notepad - * demo.txt")
 
     def test_draw_wrap_mode_renders_visible_wrapped_rows_and_cursor(self):
         win = self._make_window(w=20, h=10)

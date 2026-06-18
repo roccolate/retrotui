@@ -15,6 +15,7 @@ class ActionType(str, Enum):
     REQUEST_OPEN_PATH = "request_open_path"
     REQUEST_RENAME_ENTRY = "request_rename_entry"
     REQUEST_DELETE_CONFIRM = "request_delete_confirm"
+    REQUEST_EMPTY_TRASH_CONFIRM = "request_empty_trash_confirm"
     REQUEST_COPY_ENTRY = "request_copy_entry"
     REQUEST_MOVE_ENTRY = "request_move_entry"
     REQUEST_COPY_BETWEEN_PANES = "request_copy_between_panes"

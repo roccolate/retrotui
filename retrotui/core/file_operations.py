@@ -110,6 +110,37 @@ class FileOperationManager:
         )
         self._app.dialog = dialog
 
+    def show_empty_trash_confirm_dialog(self, win):
+        """Show confirmation dialog before permanently emptying the trash."""
+        try:
+            trash_root = win._trash_root() if hasattr(win, '_trash_root') else None
+        except Exception:
+            trash_root = None
+        if trash_root is None:
+            self._notify_error('Trash is unavailable.')
+            return
+        try:
+            names = os.listdir(trash_root)
+        except OSError as exc:
+            self._notify_error(str(exc))
+            return
+        if not names:
+            self._notify_error('Trash is already empty.')
+            return
+        sample = ", ".join(names[:5])
+        if len(names) > 5:
+            sample += f" (and {len(names) - 5} more)"
+        message = (
+            f"Permanently delete all {len(names)} item(s) from Trash?\n\n"
+            f"{sample}\n\n"
+            "This cannot be undone."
+        )
+        dialog = Dialog('Empty Trash', message, ['Empty', 'Cancel'], width=64)
+        empty = getattr(win, 'empty_trash', None)
+        if callable(empty):
+            dialog.callback = lambda target=win: target.empty_trash()
+        self._app.dialog = dialog
+
     def show_copy_dialog(self, win):
         """Show destination input for copy operation in File Manager."""
         entry = self._window_selected_entry(win)

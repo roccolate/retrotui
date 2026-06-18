@@ -3,6 +3,7 @@ Notepad Application.
 """
 import curses
 import os
+import unicodedata
 from ..ui.selectable_text import SelectableTextMixin
 from ..ui.window import Window
 from ..ui.menu import WindowMenu
@@ -11,11 +12,87 @@ from ..core.clipboard import copy_text, paste_text
 from ..utils import safe_addstr, normalize_key_code, theme_attr
 from ..constants import C_STATUS, C_SCROLLBAR
 
+
+def _cell_width(ch):
+    """Return terminal cell width for one character."""
+    if not ch:
+        return 0
+    if unicodedata.combining(ch):
+        return 0
+    if unicodedata.east_asian_width(ch) in ('W', 'F'):
+        return 2
+    return 1
+
+
+def _text_cell_width(text):
+    return sum(_cell_width(ch) for ch in text)
+
+
+def _fit_text_to_cells(text, max_cells):
+    if max_cells <= 0:
+        return ''
+    out = []
+    used = 0
+    for ch in text:
+        width = _cell_width(ch)
+        if used + width > max_cells:
+            break
+        out.append(ch)
+        used += width
+    return ''.join(out)
+
+
+def _cell_offset_for_col(text, char_col):
+    """Return display-cell offset for a character index."""
+    char_col = max(0, min(char_col, len(text)))
+    return _text_cell_width(text[:char_col])
+
+
+def _char_col_for_cell_offset(text, cell_offset):
+    """Return nearest character index for a display-cell offset."""
+    target = max(0, int(cell_offset))
+    used = 0
+    for pos, ch in enumerate(text):
+        width = _cell_width(ch)
+        if used + width > target:
+            return pos
+        used += width
+    return len(text)
+
+
+def _wrap_line_to_cells(buf_line_idx, line, wrap_w):
+    """Return wrapped chunks as (line index, char start, text)."""
+    if not line:
+        return [(buf_line_idx, 0, '')]
+    if wrap_w <= 0 or _text_cell_width(line) <= wrap_w:
+        return [(buf_line_idx, 0, line)]
+
+    chunks = []
+    start = 0
+    used = 0
+    for pos, ch in enumerate(line):
+        width = _cell_width(ch)
+        if used > 0 and used + width > wrap_w:
+            chunks.append((buf_line_idx, start, line[start:pos]))
+            start = pos
+            used = 0
+        used += width
+        if width >= wrap_w:
+            chunks.append((buf_line_idx, start, line[start:pos + 1]))
+            start = pos + 1
+            used = 0
+    if start < len(line):
+        chunks.append((buf_line_idx, start, line[start:]))
+    return chunks
+
+
 class NotepadWindow(SelectableTextMixin, Window):
     """Editable text editor window with word wrap support."""
 
     KEY_F6 = getattr(curses, 'KEY_F6', -1)
     KEY_INSERT = getattr(curses, 'KEY_IC', -1)
+    UNDO_MAX_STATES = 100
+    UNDO_MAX_CHARS = 1_000_000
 
     def __init__(self, x, y, w, h, filepath=None, wrap_default=False):
         title = 'Notepad'
@@ -23,6 +100,7 @@ class NotepadWindow(SelectableTextMixin, Window):
         self.buffer = ['']  # list[str] — one string per logical line
         self.filepath = filepath
         self.modified = False
+        self._title_cache_key = None
         self.cursor_line = 0
         self.cursor_col = 0
         self.view_top = 0    # First visible line in buffer
@@ -33,6 +111,9 @@ class NotepadWindow(SelectableTextMixin, Window):
         self._search_mode = False
         self._search_query = ''
         self._force_close = False
+        self._wrap_cache = []
+        self._wrap_cache_w = None
+        self._wrap_stale = True
         self._init_selection()
         self.window_menu = WindowMenu({
             'File': [
@@ -55,8 +136,6 @@ class NotepadWindow(SelectableTextMixin, Window):
     def _load_file(self, filepath):
         """Load file content into buffer."""
         self.filepath = filepath
-        filename = os.path.basename(filepath)
-        self.title = f'Notepad - {filename}'
         try:
             with open(filepath, 'r', encoding='utf-8', errors='replace', newline='') as f:
                 raw = f.read()
@@ -73,6 +152,8 @@ class NotepadWindow(SelectableTextMixin, Window):
         self._undo_stack.clear()
         self._redo_stack.clear()
         self._force_close = False
+        self._invalidate_wrap()
+        self._update_title()
 
     def _save_file(self):
         """Save buffer to file. Returns True or ActionResult."""
@@ -82,6 +163,7 @@ class NotepadWindow(SelectableTextMixin, Window):
             with open(self.filepath, 'w', encoding='utf-8', newline='\n') as f:
                 f.write('\n'.join(self.buffer))
             self.modified = False
+            self._update_title()
             return True
         except (PermissionError, OSError) as e:
             return ActionResult(ActionType.SAVE_ERROR, str(e))
@@ -89,8 +171,24 @@ class NotepadWindow(SelectableTextMixin, Window):
     def save_as(self, filepath):
         """Set filepath and save."""
         self.filepath = filepath
-        self.title = f'Notepad - {os.path.basename(filepath)}'
-        return self._save_file()
+        result = self._save_file()
+        self._update_title()
+        return result
+
+    def _update_title(self):
+        """Refresh the title only when filepath or modified state changes."""
+        key = (self.filepath, self.modified)
+        if key == self._title_cache_key:
+            return
+        if self.filepath:
+            filename = os.path.basename(self.filepath)
+            prefix = '* ' if self.modified else ''
+            self.title = f'Notepad - {prefix}{filename}'
+        elif self.modified:
+            self.title = 'Notepad *'
+        else:
+            self.title = 'Notepad'
+        self._title_cache_key = key
 
     def open_path(self, filepath):
         """Load a file path into current notepad buffer."""
@@ -103,8 +201,42 @@ class NotepadWindow(SelectableTextMixin, Window):
 
 
     def _invalidate_wrap(self):
-        """Deprecated."""
-        pass
+        """Invalidate cached wrapped line data."""
+        self._wrap_stale = True
+
+    def _compute_wrap(self, body_w):
+        """Build wrapped-line cache for compatibility and tests."""
+        wrap_w = max(1, int(body_w) - 1)
+        if (
+            not self._wrap_stale
+            and self._wrap_cache_w == body_w
+            and self._wrap_cache
+        ):
+            return self._wrap_cache
+        chunks = []
+        for idx, line in enumerate(self.buffer):
+            chunks.extend(_wrap_line_to_cells(idx, line, wrap_w))
+        self._wrap_cache = chunks
+        self._wrap_cache_w = body_w
+        self._wrap_stale = False
+        return chunks
+
+    def _cursor_to_wrap_row(self, body_w):
+        """Return wrapped row index containing the cursor."""
+        if not self.wrap_mode:
+            return max(0, min(self.cursor_line, len(self.buffer) - 1))
+        if not (0 <= self.cursor_line < len(self.buffer)):
+            return 0
+        chunks = self._compute_wrap(body_w)
+        fallback = 0
+        for idx, (line_idx, start_col, text) in enumerate(chunks):
+            if line_idx != self.cursor_line:
+                continue
+            fallback = idx
+            end_col = start_col + len(text)
+            if start_col <= self.cursor_col <= end_col:
+                return idx
+        return fallback
 
     def _selected_text(self):
         """Return selected text as plain string."""
@@ -121,47 +253,68 @@ class NotepadWindow(SelectableTextMixin, Window):
         parts.append(self.buffer[e_line][:e_col])
         return '\n'.join(parts)
 
-    def _push_undo(self):
-        self._force_close = False
-        self._undo_stack.append({
+    def _buffer_char_count(self, buffer=None):
+        """Return approximate buffer size used for undo pressure limits."""
+        target = self.buffer if buffer is None else buffer
+        return sum(len(line) + 1 for line in target)
+
+    def _state_for_undo(self, clear_history=True):
+        """Build an undo state unless the current buffer is too large to copy."""
+        if self._buffer_char_count() > self.UNDO_MAX_CHARS:
+            if clear_history:
+                self._undo_stack.clear()
+                self._redo_stack.clear()
+            return None
+        return {
             'buffer': self.buffer.copy(),
             'cursor_line': self.cursor_line,
             'cursor_col': self.cursor_col,
             'modified': self.modified
-        })
+        }
+
+    def _trim_history_stack(self, stack):
+        """Keep undo/redo history within state-count and character budgets."""
+        total = sum(self._buffer_char_count(state['buffer']) for state in stack)
+        while stack and (len(stack) > self.UNDO_MAX_STATES or total > self.UNDO_MAX_CHARS):
+            removed = stack.pop(0)
+            total -= self._buffer_char_count(removed['buffer'])
+
+    def _push_undo(self):
+        self._force_close = False
+        state = self._state_for_undo()
+        if state is None:
+            return
+        self._undo_stack.append(state)
         self._redo_stack.clear()
-        if len(self._undo_stack) > 100:
-            self._undo_stack.pop(0)
+        self._trim_history_stack(self._undo_stack)
 
     def undo(self):
         if not self._undo_stack: return None
-        self._redo_stack.append({
-            'buffer': self.buffer.copy(),
-            'cursor_line': self.cursor_line,
-            'cursor_col': self.cursor_col,
-            'modified': self.modified
-        })
+        redo_state = self._state_for_undo(clear_history=False)
+        if redo_state is not None:
+            self._redo_stack.append(redo_state)
+            self._trim_history_stack(self._redo_stack)
         state = self._undo_stack.pop()
         self.buffer = state['buffer']
         self.cursor_line = state['cursor_line']
         self.cursor_col = state['cursor_col']
         self.modified = state['modified']
+        self._invalidate_wrap()
         self._ensure_cursor_visible()
         return None
 
     def redo(self):
         if not self._redo_stack: return None
-        self._undo_stack.append({
-            'buffer': self.buffer.copy(),
-            'cursor_line': self.cursor_line,
-            'cursor_col': self.cursor_col,
-            'modified': self.modified
-        })
+        undo_state = self._state_for_undo(clear_history=False)
+        if undo_state is not None:
+            self._undo_stack.append(undo_state)
+            self._trim_history_stack(self._undo_stack)
         state = self._redo_stack.pop()
         self.buffer = state['buffer']
         self.cursor_line = state['cursor_line']
         self.cursor_col = state['cursor_col']
         self.modified = state['modified']
+        self._invalidate_wrap()
         self._ensure_cursor_visible()
         return None
 
@@ -219,56 +372,42 @@ class NotepadWindow(SelectableTextMixin, Window):
 
     def _get_wrapped_lines_for(self, buf_line_idx, wrap_w):
         line = self.buffer[buf_line_idx]
-        if not line:
-            return [(buf_line_idx, 0, '')]
-        if not self.wrap_mode or len(line) <= wrap_w:
+        if not self.wrap_mode:
             return [(buf_line_idx, 0, line)]
-        res = []
-        pos = 0
-        while pos < len(line):
-            res.append((buf_line_idx, pos, line[pos:pos+wrap_w]))
-            pos += wrap_w
-        return res
+        return _wrap_line_to_cells(buf_line_idx, line, wrap_w)
 
     def _get_visible_wrapped_chunks(self, start_logical, max_chunks, wrap_w):
-        chunks = []
-        for i in range(start_logical, len(self.buffer)):
-            chunks.extend(self._get_wrapped_lines_for(i, wrap_w))
-            if len(chunks) >= max_chunks:
-                break
-        return chunks[:max_chunks]
+        if self.wrap_mode:
+            chunks = self._compute_wrap(wrap_w + 1)
+        else:
+            chunks = [(i, 0, line) for i, line in enumerate(self.buffer)]
+        return chunks[start_logical:start_logical + max_chunks]
 
     def _ensure_cursor_visible(self):
         """Auto-scroll viewport to keep cursor visible."""
         bx, by, bw, bh = self.body_rect()
         body_h = bh - 1  # -1 for status bar row
 
+        if self.wrap_mode:
+            cursor_row = self._cursor_to_wrap_row(bw)
+            if cursor_row < self.view_top:
+                self.view_top = cursor_row
+            elif cursor_row >= self.view_top + body_h:
+                self.view_top = cursor_row - body_h + 1
+            self.view_left = 0
+            return
+
+        # Vertical
         if self.cursor_line < self.view_top:
             self.view_top = self.cursor_line
-        else:
-            if self.wrap_mode:
-                wrap_w = max(1, bw - 1)
-                chunks = self._get_visible_wrapped_chunks(self.view_top, body_h, wrap_w)
-                cursor_visible = False
-                for (buf_idx, start_col, text) in chunks:
-                    if buf_idx == self.cursor_line:
-                        if start_col <= self.cursor_col <= start_col + len(text):
-                            cursor_visible = True
-                            break
-                if not cursor_visible:
-                    self.view_top = max(0, self.cursor_line - body_h // 2)
-            else:
-                # Vertical
-                if self.cursor_line < self.view_top:
-                    self.view_top = self.cursor_line
-                elif self.cursor_line >= self.view_top + body_h:
-                    self.view_top = self.cursor_line - body_h + 1
-                # Horizontal
-                col_w = bw - 1  # -1 for scrollbar
-                if self.cursor_col < self.view_left:
-                    self.view_left = self.cursor_col
-                elif self.cursor_col >= self.view_left + col_w:
-                    self.view_left = self.cursor_col - col_w + 1
+        elif self.cursor_line >= self.view_top + body_h:
+            self.view_top = self.cursor_line - body_h + 1
+        # Horizontal
+        col_w = bw - 1  # -1 for scrollbar
+        if self.cursor_col < self.view_left:
+            self.view_left = self.cursor_col
+        elif self.cursor_col >= self.view_left + col_w:
+            self.view_left = self.cursor_col - col_w + 1
 
     def _clamp_cursor(self):
         """Ensure cursor is within valid buffer bounds."""
@@ -323,7 +462,11 @@ class NotepadWindow(SelectableTextMixin, Window):
             if row_in_view < len(chunks):
                 buf_line, start_col, _ = chunks[row_in_view]
                 self.cursor_line = buf_line
-                self.cursor_col = min(start_col + col_in_view, len(self.buffer[buf_line]))
+                chunk_text = self.buffer[buf_line][start_col:]
+                self.cursor_col = min(
+                    start_col + _char_col_for_cell_offset(chunk_text, col_in_view),
+                    len(self.buffer[buf_line]),
+                )
             else:
                 self.cursor_line = len(self.buffer) - 1
                 self.cursor_col = len(self.buffer[self.cursor_line])
@@ -331,7 +474,11 @@ class NotepadWindow(SelectableTextMixin, Window):
             target_line = self.view_top + row_in_view
             if target_line < len(self.buffer):
                 self.cursor_line = target_line
-                self.cursor_col = min(self.view_left + col_in_view, len(self.buffer[target_line]))
+                visible_text = self.buffer[target_line][self.view_left:]
+                self.cursor_col = min(
+                    self.view_left + _char_col_for_cell_offset(visible_text, col_in_view),
+                    len(self.buffer[target_line]),
+                )
             else:
                 self.cursor_line = len(self.buffer) - 1
                 self.cursor_col = len(self.buffer[self.cursor_line])
@@ -342,15 +489,7 @@ class NotepadWindow(SelectableTextMixin, Window):
         if not self.visible:
             return
 
-        # Update title with modified indicator
-        if self.filepath:
-            filename = os.path.basename(self.filepath)
-            prefix = '* ' if self.modified else ''
-            self.title = f'Notepad - {prefix}{filename}'
-        elif self.modified:
-            self.title = 'Notepad *'
-        else:
-            self.title = 'Notepad'
+        self._update_title()
 
         body_attr = self.draw_frame(stdscr)
         bx, by, bw, bh = self.body_rect()
@@ -365,7 +504,7 @@ class NotepadWindow(SelectableTextMixin, Window):
             visible = self._get_visible_wrapped_chunks(self.view_top, body_h, wrap_w)
 
             for i, (buf_line, start_col, text) in enumerate(visible):
-                display = text[:bw - 1]
+                display = _fit_text_to_cells(text, bw - 1)
                 safe_addstr(stdscr, by + i, bx, display, body_attr)
                 span = self._line_selection_span(buf_line, len(self.buffer[buf_line]))
                 if span is not None:
@@ -379,9 +518,10 @@ class NotepadWindow(SelectableTextMixin, Window):
                 )
                 # Draw cursor
                 if buf_line == self.cursor_line and start_col <= self.cursor_col <= start_col + len(text):
-                    cx = self.cursor_col - start_col
+                    rel_col = self.cursor_col - start_col
+                    cx = _cell_offset_for_col(text, rel_col)
                     if 0 <= cx < bw - 1:
-                        ch = text[cx] if cx < len(text) else ' '
+                        ch = text[rel_col] if rel_col < len(text) else ' '
                         safe_addstr(stdscr, by + i, bx + cx, ch, body_attr | curses.A_REVERSE)
         else:
             col_w = bw - 1  # -1 for scrollbar column
@@ -404,7 +544,8 @@ class NotepadWindow(SelectableTextMixin, Window):
                 )
                 # Draw cursor
                 if buf_idx == self.cursor_line:
-                    cx = self.cursor_col - self.view_left
+                    visible_prefix = line[self.view_left:self.cursor_col]
+                    cx = _text_cell_width(visible_prefix)
                     if 0 <= cx < col_w:
                         ch = line[self.cursor_col] if self.cursor_col < len(line) else ' '
                         safe_addstr(stdscr, by + i, bx + cx, ch, body_attr | curses.A_REVERSE)
@@ -667,8 +808,7 @@ class NotepadWindow(SelectableTextMixin, Window):
 
     def _key_toggle_wrap(self):
         self.clear_selection()
-        self._toggle_wrap()
-        return None
+        return self._toggle_wrap()
 
     def _key_printable(self, ch):
         self._push_undo()
@@ -842,19 +982,8 @@ class NotepadWindow(SelectableTextMixin, Window):
         self._mouse_selecting = True
         return None
 
-    def handle_right_click(self, mx, my, bstate):
-        """Handle right-click: show context menu."""
-        bx, by, bw, bh = self.body_rect()
-        if not (bx <= mx < bx + bw and by <= my < by + bh):
-             return False
-
-        # Move cursor to click position if not already selecting
-        # For simple notepad, let's always move cursor to click position
-        self._set_cursor_from_screen(mx, my)
-        self._ensure_cursor_visible()
-
-        # Actions for context menu
-        # We use lambdas or AppActions where possible
+    def _context_menu_items(self):
+        """Build context menu items for current cursor/selection state."""
         items = [
             {'label': 'Cut Line', 'action': self._cut_current_line},
             {'label': 'Copy Line', 'action': lambda: copy_text(self.buffer[self.cursor_line]) if self.buffer else None},
@@ -874,9 +1003,22 @@ class NotepadWindow(SelectableTextMixin, Window):
 
         return items
 
+    def handle_right_click(self, mx, my, bstate):
+        """Handle right-click: show context menu."""
+        bx, by, bw, bh = self.body_rect()
+        if not (bx <= mx < bx + bw and by <= my < by + bh):
+             return False
+
+        self._set_cursor_from_screen(mx, my)
+        self._ensure_cursor_visible()
+        return self._context_menu_items()
+
     def get_context_menu_items(self, mx=None, my=None, bstate=None):
-        """Deprecated."""
-        return []
+        """Return context menu items for compatibility callers."""
+        if mx is not None and my is not None:
+            return self.handle_right_click(mx, my, bstate)
+        return self._context_menu_items()
+
 
     def scroll_up(self):
         """Scroll viewport up (for scroll wheel)."""
@@ -885,8 +1027,11 @@ class NotepadWindow(SelectableTextMixin, Window):
 
     def scroll_down(self):
         """Scroll viewport down (for scroll wheel)."""
-        _, _, _, bh = self.body_rect()
+        _, _, bw, bh = self.body_rect()
         body_h = bh - 1
-        max_top = max(0, len(self.buffer) - body_h)
+        if self.wrap_mode:
+            max_top = max(0, len(self._compute_wrap(bw)) - body_h)
+        else:
+            max_top = max(0, len(self.buffer) - body_h)
         if self.view_top < max_top:
             self.view_top += 1

@@ -43,8 +43,8 @@ class FileEntry:
         self.size = size
         self.use_unicode = use_unicode
 
-        dir_icon = '[D]'
-        file_icon = '[F]'
+        dir_icon = '📁' if use_unicode else '[D]'
+        file_icon = '📄' if use_unicode else '[F]'
         if name == '..':
             self.display_text = f'  {dir_icon} ..'
         elif is_dir:
@@ -53,12 +53,15 @@ class FileEntry:
             self.display_text = f'  {file_icon} {name:<30} {self._format_size():>8}'
 
     def _format_size(self):
-        if self.size > 1048576:
-            return f'{self.size / 1048576:.1f}M'
-        elif self.size > 1024:
-            return f'{self.size / 1024:.1f}K'
-        else:
-            return f'{self.size}B'
+        units = ('B', 'K', 'M', 'G', 'T')
+        value = float(self.size)
+        unit_index = 0
+        while value >= 1024 and unit_index < len(units) - 1:
+            value /= 1024
+            unit_index += 1
+        if unit_index == 0:
+            return f'{int(value)}B'
+        return f'{value:.1f}{units[unit_index]}'
 
 
 class PaneState:
@@ -100,7 +103,7 @@ class PaneState:
             )
         else:
             self.selected_index = 0
-        max_scroll = max(0, len(self.content) - 1)
+        max_scroll = max(0, len(self.entries) - 1)
         self.scroll_offset = max(0, min(self.scroll_offset, max_scroll))
 
     def select_by_name(self, name, display_h):

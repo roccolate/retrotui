@@ -93,7 +93,9 @@ class HexViewerWindow(Window):
     def _rows_visible(self):
         """Return number of hex rows visible in current body."""
         _, _, _, bh = self.body_rect()
-        return max(1, bh - 3)
+        # ``draw`` reserves the first row for the column header and the last
+        # row for the status line, leaving ``bh - 2`` rows for hex data.
+        return max(1, bh - 2)
 
     def _max_top_offset(self):
         """Return max aligned top offset for current file/viewport."""
@@ -189,13 +191,19 @@ class HexViewerWindow(Window):
                 return None
             if any(ch not in _HEX_DIGITS for ch in hex_blob):
                 return None
-            return bytes.fromhex(hex_blob)
+            try:
+                return bytes.fromhex(hex_blob)
+            except ValueError:
+                return None
 
         if " " in text:
             chunks = [token for token in text.split(" ") if token]
             if chunks and all(1 <= len(token) <= 2 for token in chunks):
                 if all(all(ch in _HEX_DIGITS for ch in token) for token in chunks):
-                    return bytes(int(token, 16) for token in chunks)
+                    try:
+                        return bytes(int(token, 16) for token in chunks)
+                    except ValueError:
+                        pass
 
         return text.encode("utf-8", errors="replace")
 
@@ -381,6 +389,17 @@ class HexViewerWindow(Window):
             return ActionResult(ActionType.EXECUTE, AppAction.CLOSE_WINDOW)
         return None
 
+    def tick(self):
+        """Warm view cache outside the render path."""
+        if not self.filepath:
+            return False
+        _, _, _, bh = self.body_rect()
+        data_rows = max(0, bh - 3)
+        if data_rows <= 0:
+            return False
+        self._read_slice(self.top_offset, data_rows * self.BYTES_PER_ROW)
+        return False
+
     def draw(self, stdscr):
         """Draw hex table body and status line."""
         if not self.visible:
@@ -392,8 +411,10 @@ class HexViewerWindow(Window):
 
         for row in range(bh):
             safe_addstr(stdscr, by + row, bx, " " * bw, body_attr)
-            
-        data_rows = max(0, bh - 3)
+
+        # Header (1 row) + data + status (1 row) so subtract 2 from the body
+        # height to get the data area, matching ``_rows_visible``.
+        data_rows = max(0, bh - 2)
         if data_rows > 0:
             safe_addstr(stdscr, by + 1, bx, self._format_header()[:bw].ljust(bw), theme_attr("menubar"))
 

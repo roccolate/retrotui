@@ -33,6 +33,10 @@ _RUNTIME_ISOLATION_ERRORS = (
 def load_plugins_runtime(app):
     """Discover and register plugins (best effort; never crash startup)."""
     app._plugins = {}
+    if plugins_disabled_by_visibility(app):
+        app.refresh_icons()
+        app._rebuild_global_menu()
+        return
     try:
         from ..plugins.loader import discover_plugins, load_plugin
     except _PLUGIN_DISCOVERY_IMPORT_ERRORS:
@@ -45,6 +49,17 @@ def load_plugins_runtime(app):
         register_plugin_manifest(app, manifest, load_plugin)
     app.refresh_icons()
     app._rebuild_global_menu()
+
+
+def plugins_disabled_by_visibility(app):
+    """Return True when config disables plugin menu entries and desktop icons."""
+    from .icon_styles import get_hidden_icon_labels
+    from .menu_builder import get_hidden_menu_keys
+
+    return (
+        "plugin:*" in get_hidden_icon_labels(getattr(app, "config", None))
+        and "plugin:*" in get_hidden_menu_keys(getattr(app, "config", None))
+    )
 
 
 def register_plugin_manifest(app, manifest, load_plugin):
@@ -74,7 +89,7 @@ def _get_plugin_category(info):
 
 def build_plugin_menu_items(app):
     """Build dynamic plugin entries as menu tuples ``(label, action)``."""
-    from .menu_builder import menu_item_visibility_key, get_hidden_menu_keys
+    from .menu_builder import is_menu_key_hidden, menu_item_visibility_key, get_hidden_menu_keys
 
     hidden_menu_items = get_hidden_menu_keys(app.config)
     entries = []
@@ -83,7 +98,7 @@ def build_plugin_menu_items(app):
         name = str(plugin_info.get("name") or plugin_id)
         action = f"plugin:{plugin_id}"
         item_key = menu_item_visibility_key(name, action)
-        if item_key in hidden_menu_items:
+        if is_menu_key_hidden(item_key, hidden_menu_items):
             continue
         entries.append((name, action))
     entries.sort(key=lambda item: (item[0].lower(), item[1]))
@@ -96,7 +111,7 @@ def build_categorized_plugin_menu_items(app):
     Returns ``(games, plugins)`` where each is a list of
     ``(label, action)`` tuples.
     """
-    from .menu_builder import menu_item_visibility_key, get_hidden_menu_keys
+    from .menu_builder import is_menu_key_hidden, menu_item_visibility_key, get_hidden_menu_keys
 
     hidden_menu_items = get_hidden_menu_keys(app.config)
     games = []
@@ -106,7 +121,7 @@ def build_categorized_plugin_menu_items(app):
         name = str(plugin_info.get("name") or plugin_id)
         action = f"plugin:{plugin_id}"
         item_key = menu_item_visibility_key(name, action)
-        if item_key in hidden_menu_items:
+        if is_menu_key_hidden(item_key, hidden_menu_items):
             continue
         category = _get_plugin_category(info)
         if category == "game":

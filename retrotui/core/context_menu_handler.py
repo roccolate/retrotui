@@ -85,24 +85,61 @@ def handle_desktop_right_click(app, mx, my, bstate):
         ]
     else:
         items = [
+            {'label': 'File Manager', 'action': AppAction.FILE_MANAGER},
             {'label': 'New Terminal', 'action': AppAction.TERMINAL},
             {'label': 'New Notepad', 'action': AppAction.NOTEPAD},
             {'separator': True},
             {'label': 'Desktop Icons', 'action': AppAction.DESKTOP_ICON_MANAGER},
             {'label': 'Icons', 'action': AppAction.ICONS},
             {'label': 'Menu Editor', 'action': AppAction.MENU_EDITOR},
-            {'label': 'Sort Icons (A-Z)', 'action': app.sort_desktop_icons},
+            {
+                'label': 'Sort Icons (A-Z)',
+                'action': app.sort_desktop_icons,
+                'hide_key': AppAction.DESKTOP_ICON_MANAGER.value,
+            },
             {'separator': True},
             {'label': 'Settings', 'action': AppAction.SETTINGS},
             {'separator': True},
             {'label': 'About', 'action': AppAction.ABOUT},
             {'label': 'Exit', 'action': AppAction.EXIT},
         ]
+        items = _filter_context_menu_items(app, items)
 
     from ..ui.context_menu import ContextMenu
     app.context_menu = ContextMenu(app.theme)
     app.context_menu.show(mx, my, items)
     return True
+
+
+def _filter_context_menu_items(app, items):
+    """Apply global menu visibility settings to desktop context menu items."""
+    from .menu_builder import (
+        get_hidden_menu_keys,
+        is_menu_key_hidden,
+        menu_item_visibility_key,
+    )
+
+    hidden = get_hidden_menu_keys(getattr(app, "config", None))
+    visible = []
+    for item in items:
+        if item.get('separator'):
+            if visible and not visible[-1].get('separator'):
+                visible.append(dict(item))
+            continue
+
+        item_key = item.get('hide_key')
+        if item_key is None:
+            item_key = menu_item_visibility_key(item.get('label'), item.get('action'))
+        if is_menu_key_hidden(item_key, hidden):
+            continue
+
+        cleaned = dict(item)
+        cleaned.pop('hide_key', None)
+        visible.append(cleaned)
+
+    while visible and visible[-1].get('separator'):
+        visible.pop()
+    return visible
 
 
 def show_icon_properties(app, icon):

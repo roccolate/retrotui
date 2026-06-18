@@ -215,17 +215,19 @@ class SnakeWindow(Window):
                 mark = "√" if self.obstacles_mode else " "
                 items[i] = (f"{mark} Obstacles", action)
 
-        # Update difficulty marks
+        # Update difficulty marks. The current implementation uses a stable
+        # 2-character prefix so `label[2:]` always recovers the difficulty
+        # name regardless of the previous mark.
         diff_items = self.window_menu.items.get("Difficulty", [])
         for i, (label, action) in enumerate(diff_items):
-            base_label = label[2:]  # strip mark + space prefix
+            base_label = label[2:] if len(label) > 2 else label
             mark = "√" if base_label == self.difficulty else " "
             diff_items[i] = (f"{mark} {base_label}", action)
 
     def step(self, now: float | None = None, force: bool = False):
         if self.game_over or self.paused:
             return
-        
+
         if now is None:
             now = time.time()
             force = True
@@ -277,12 +279,16 @@ class SnakeWindow(Window):
         else:
             self.snake.pop()
 
+    def tick(self):
+        """Run game update outside the render path."""
+        before = (self.snake[0] if self.snake else None, self.score)
+        self.step()
+        return (self.snake[0] if self.snake else None, self.score) != before
+
     def draw(self, stdscr):
         if not self.visible:
             return
-            
-        self.step(time.time())  # Update game state
-        
+
         bx, by, bw, bh = self.body_rect()
         # Update grid dimensions if window was resized
         if bh != self.rows or bw != self.cols:

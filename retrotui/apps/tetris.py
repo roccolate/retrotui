@@ -23,6 +23,15 @@ class TetrisWindow(Window):
     def __init__(self, x, y):
         # 10x20 grid, each block is 2 chars wide
         super().__init__('Tetris', x, y, 44, 24, resizable=False)
+        # Track whether the object is fully constructed so that a key-driven
+        # restart in `handle_key` (which may run during early construction)
+        # does not call `__init__` again on a partially built object.
+        self._ready = False
+        self._reset_game()
+        self._ready = True
+
+    def reset_game(self):
+        """Public re-init helper that does not re-run `__init__`."""
         self._reset_game()
 
     def _reset_game(self):
@@ -114,19 +123,23 @@ class TetrisWindow(Window):
             self.level = self.lines // 10 + 1
             self.drop_interval = max(0.1, 0.8 - (self.level - 1) * 0.1)
 
+    def tick(self):
+        """Run piece drop logic outside the render path."""
+        if self.game_over or self.paused or not self.curr_piece:
+            return False
+        now = time.time()
+        if (now - self.last_drop_time) <= self.drop_interval:
+            return False
+        test_pos = [self.curr_pos[0], self.curr_pos[1] + 1]
+        if not self._check_collision(self.curr_piece, test_pos):
+            self.curr_pos = test_pos
+        else:
+            self._lock_piece()
+        self.last_drop_time = now
+        return True
+
     def draw(self, stdscr):
         if not self.visible: return
-        
-        # Game loop logic
-        now = time.time()
-        if not self.game_over and not self.paused:
-            if now - self.last_drop_time > self.drop_interval:
-                test_pos = [self.curr_pos[0], self.curr_pos[1] + 1]
-                if not self._check_collision(self.curr_piece, test_pos):
-                    self.curr_pos = test_pos
-                else:
-                    self._lock_piece()
-                self.last_drop_time = now
 
         body_attr = self.draw_frame(stdscr)
         bx, by, bw, bh = self.body_rect()
@@ -180,39 +193,41 @@ class TetrisWindow(Window):
             safe_addstr(stdscr, board_y + 10, board_x + 5, " PAUSED ", theme_attr('window_title') | curses.A_BOLD)
 
     def handle_key(self, key):
-        key = normalize_key_code(key)
+        key_code = normalize_key_code(key)
 
         if self.game_over:
-            if key in ('r', 'R'):
-                self._reset_game()
+            if key_code in (ord('r'), ord('R')):
+                self.reset_game()
                 return None
             return super().handle_key(key)
 
-        if key in ('p', 'P'):
+        if key_code in (ord('p'), ord('P')):
             self.paused = not self.paused
             return None
 
-        if self.paused: return None
+        if self.paused:
+            return None
 
-        if key == curses.KEY_LEFT:
+        if key_code == curses.KEY_LEFT:
             test_pos = [self.curr_pos[0] - 1, self.curr_pos[1]]
             if not self._check_collision(self.curr_piece, test_pos):
                 self.curr_pos = test_pos
-        elif key == curses.KEY_RIGHT:
+        elif key_code == curses.KEY_RIGHT:
             test_pos = [self.curr_pos[0] + 1, self.curr_pos[1]]
             if not self._check_collision(self.curr_piece, test_pos):
                 self.curr_pos = test_pos
-        elif key == curses.KEY_DOWN:
+        elif key_code == curses.KEY_DOWN:
             test_pos = [self.curr_pos[0], self.curr_pos[1] + 1]
             if not self._check_collision(self.curr_piece, test_pos):
                 self.curr_pos = test_pos
-        elif key == curses.KEY_UP:
+        elif key_code == curses.KEY_UP:
             self._rotate_piece()
-        elif key == ' ':
+        elif key_code == ord(' '):
             # Hard drop
-            while not self._check_collision(self.curr_piece, [self.curr_pos[0], self.curr_pos[1] + 1]):
-                self.curr_pos[1] += 1
-            self._lock_piece()
-            self.last_drop_time = time.time()
+            if self.curr_piece:
+                while not self._check_collision(self.curr_piece, [self.curr_pos[0], self.curr_pos[1] + 1]):
+                    self.curr_pos[1] += 1
+                self._lock_piece()
+                self.last_drop_time = time.time()
 
         return super().handle_key(key)

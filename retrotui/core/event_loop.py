@@ -148,6 +148,26 @@ def _has_animated_windows(app):
     return False
 
 
+def _tick_visible_windows(app):
+    """Run per-window update hooks outside rendering.
+
+    Window ``tick`` methods may poll background state or collect pending output,
+    but must not call curses drawing APIs.
+    """
+    changed = False
+    for w in app.windows:
+        if not getattr(w, "visible", True):
+            continue
+        tick = getattr(w, "tick", None)
+        if not callable(tick):
+            continue
+        try:
+            changed = bool(tick()) or changed
+        except _INPUT_TIMEOUT_APPLY_ERRORS:
+            LOGGER.debug("window tick failed", exc_info=True)
+    return changed
+
+
 def _select_input_timeout_ms(app):
     """Return the target input timeout for the current runtime state."""
     idle = int(getattr(app, "input_timeout_idle_ms", TERMINAL_INPUT_TIMEOUT_MS))
@@ -332,6 +352,8 @@ def run_app_loop(app):
                         app._dirty = True
                     if _notif.has_visible:
                         app._dirty = True
+                if _tick_visible_windows(app):
+                    app._dirty = True
                 # Always redraw when live terminals or animated windows are active.
                 if _has_live_terminals(app) or _has_animated_windows(app):
                     app._dirty = True

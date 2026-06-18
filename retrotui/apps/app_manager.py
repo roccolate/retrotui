@@ -39,7 +39,7 @@ class _BaseSelectionEditorWindow(Window):
             value = str(entry.get("value") or "").strip().lower()
             if not label or not value:
                 continue
-            choices.setdefault(category, []).append([label, value, value not in hidden])
+            choices.setdefault(category, []).append([label, value, not self._is_hidden_value(value, hidden)])
 
         for cat_entries in choices.values():
             cat_entries.sort(key=lambda item: item[0].lower())
@@ -57,6 +57,12 @@ class _BaseSelectionEditorWindow(Window):
 
     def _current_hidden_set(self):
         raise NotImplementedError
+
+    def _is_hidden_value(self, value, hidden):
+        """Return True when a catalog value is hidden by exact key or plugin wildcard."""
+        if value in hidden:
+            return True
+        return value.startswith("plugin:") and "plugin:*" in hidden
 
     def _save_hidden_values(self, hidden_values):
         raise NotImplementedError
@@ -344,6 +350,7 @@ class IconsWindow(DesktopIconManagerWindow):
             refresher = getattr(self.app, "refresh_icons", None)
             if callable(refresher):
                 refresher()
+        self._invalidate_catalog_cache()
 
     def _list_rect(self):
         """Leave room for style preview above the checkbox list."""
@@ -372,14 +379,25 @@ class IconsWindow(DesktopIconManagerWindow):
             return str(getter(style_key, action_key))
         return "[]"
 
+    def _catalog_lookup(self):
+        """Cache the icon catalog by label so the render path stays cheap."""
+        cached = getattr(self, "_catalog_cache", None)
+        if cached is not None:
+            return cached
+        catalog = {str(entry.get("label", "")): entry for entry in self._iter_catalog_entries()}
+        self._catalog_cache = catalog
+        return catalog
+
+    def _invalidate_catalog_cache(self):
+        self._catalog_cache = None
+
     def draw(self, stdscr):
         if not self.visible:
             return
 
-        Window.draw(self, stdscr)
+        super().draw(stdscr)
         body_attr = theme_attr("window_body")
         selected_attr = body_attr | curses.A_REVERSE
-        bold_attr = body_attr | curses.A_BOLD
         _key, style_label = self.STYLE_OPTIONS[self._style_index]
         style_text = f" Style: {style_label}  (F2/S: Change)  |  Enter=Save"
         safe_addstr(
@@ -409,17 +427,6 @@ class IconsWindow(DesktopIconManagerWindow):
             safe_addstr(stdscr, box_y + 2, px, token.ljust(col_w - 1)[: col_w - 1], attr)
             safe_addstr(stdscr, box_y + 3, px, f"[{style_key}]".ljust(col_w - 1)[: col_w - 1], attr)
 
-        # Tabs
-        tab_y = self.y + 9
-        tab_x = self.x + 2
-        self._tab_ranges = []
-        for idx, cat in enumerate(self.categories):
-            tab = f" {cat} "
-            attr = selected_attr if (self.active and self.in_list and idx == self.active_cat_idx) else bold_attr
-            safe_addstr(stdscr, tab_y, tab_x, tab, attr)
-            self._tab_ranges.append((tab_x, tab_x + len(tab), idx))
-            tab_x += len(tab) + 1
-
         # Icon list (no checkboxes)
         list_x, list_y, list_w, list_h = self._list_rect()
         draw_box(stdscr, list_y - 1, list_x - 1, list_h + 2, list_w + 2, body_attr, double=False)
@@ -427,7 +434,7 @@ class IconsWindow(DesktopIconManagerWindow):
         items = self.choices.get(category, []) if category else []
         offset = self.offsets.get(category, 0) if category else 0
         selected_idx = self.sel_indices.get(category, 0) if category else 0
-        catalog = {str(entry.get("label", "")): entry for entry in self._iter_catalog_entries()}
+        catalog = self._catalog_lookup()
 
         for row in range(list_h):
             idx = offset + row
@@ -449,18 +456,6 @@ class IconsWindow(DesktopIconManagerWindow):
                 ch = "█" if row == thumb else "░"
                 safe_addstr(stdscr, list_y + row, sb_x, ch, theme_attr("scrollbar"))
 
-        # Buttons
-        btn_y = self.y + self.h - 2
-        total_w = sum(len(btn) + 4 for btn in self.buttons) + (len(self.buttons) - 1) * 2
-        btn_x = self.x + max(0, (self.w - total_w) // 2)
-        self._btn_ranges = []
-        for idx, text in enumerate(self.buttons):
-            label = f"[ {text} ]"
-            attr = theme_attr("button_selected") if (self.active and not self.in_list and idx == self.selected_button) else theme_attr("button")
-            safe_addstr(stdscr, btn_y, btn_x, label, attr)
-            self._btn_ranges.append((btn_x, btn_x + len(label), idx))
-            btn_x += len(label) + 2
-
     def handle_key(self, key):
         key_code = normalize_key_code(key)
         if key_code in (getattr(curses, "KEY_F2", -1), ord("s"), ord("S")):
@@ -468,40 +463,9 @@ class IconsWindow(DesktopIconManagerWindow):
             return None
         if key_code == 27:
             return ActionResult(ActionType.EXECUTE, AppAction.CLOSE_WINDOW)
-        if key_code == 9:  # Tab
-            self.in_list = not self.in_list
-            return None
-        if self.in_list and key_code in (curses.KEY_LEFT, curses.KEY_RIGHT):
-            if key_code == curses.KEY_LEFT:
-                self.active_cat_idx = max(0, self.active_cat_idx - 1)
-            else:
-                self.active_cat_idx = min(len(self.categories) - 1, self.active_cat_idx + 1)
-            return None
-        if not self.in_list and key_code in (curses.KEY_LEFT, curses.KEY_RIGHT):
-            if key_code == curses.KEY_LEFT:
-                self.selected_button = max(0, self.selected_button - 1)
-            else:
-                self.selected_button = min(len(self.buttons) - 1, self.selected_button + 1)
-            return None
-        if key_code == curses.KEY_UP:
-            if not self.in_list:
-                self.in_list = True
-                return None
-            self._move_selection(-1)
-            return None
-        if key_code == curses.KEY_DOWN:
-            if not self.in_list:
-                self.in_list = True
-                return None
-            self._move_selection(1)
-            return None
-        if key_code in (10, 13, curses.KEY_ENTER):
-            if not self.in_list:
-                return self._activate_button()
-            return None
-        if key_code == 32 and not self.in_list:
+        if key_code in (10, 13, curses.KEY_ENTER, 32):
             return self._activate_button()
-        return None
+        return super().handle_key(key)
 
     def handle_click(self, mx, my):
         if my == self.y + 9:
@@ -522,14 +486,7 @@ class IconsWindow(DesktopIconManagerWindow):
                 self.in_list = True
                 self.sel_indices[category] = click_idx
             return True
-
-        if my == self.y + self.h - 2:
-            for start_x, end_x, idx in self._btn_ranges:
-                if start_x <= mx < end_x:
-                    self.in_list = False
-                    self.selected_button = idx
-                    return self._activate_button()
-        return False
+        return super().handle_click(mx, my)
 
     def _activate_button(self):
         if self.selected_button != 0:

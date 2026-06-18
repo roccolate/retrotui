@@ -32,6 +32,7 @@ _RETRONET_FETCH_ERRORS = (
     UnicodeDecodeError,
     ssl.SSLError,
     http.client.HTTPException,
+    ConnectionError,
 )
 _RESPONSE_CLOSE_ERRORS = (
     AttributeError,
@@ -87,6 +88,7 @@ class RetroNetWindow(Window):
         self.attr_inactive = theme_attr('window_inactive')
         self.attr_body = theme_attr('window_body')
 
+        # Shared state lock for fetch thread.
         self._lock = threading.Lock()
         self._load_url(self.url)
 
@@ -126,33 +128,40 @@ class RetroNetWindow(Window):
         sanitized_url = self._sanitize_url(url)
 
         if _push_history and self.url:
-            self._back_stack.append(self.url)
-            if len(self._back_stack) > _MAX_HISTORY:
-                self._back_stack = self._back_stack[-_MAX_HISTORY:]
-            self._forward_stack.clear()
+            with self._lock:
+                # Deduplicate the previous entry to keep consecutive
+                # reloads from polluting the back stack.
+                if not self._back_stack or self._back_stack[-1] != self.url:
+                    self._back_stack.append(self.url)
+                    if len(self._back_stack) > _MAX_HISTORY:
+                        self._back_stack = self._back_stack[-_MAX_HISTORY:]
+                self._forward_stack.clear()
 
-        self.url = clean_url
-        self.content = [RichLine("Loading...", self.attr_title)]
-        self.is_loading = True
-        self.scroll_y = 0
+        with self._lock:
+            self.url = clean_url
+            self.content = [RichLine("Loading...", self.attr_title)]
+            self.is_loading = True
+            self.scroll_y = 0
         self._clear_search()
 
         thread = threading.Thread(target=self._fetch_thread, args=(sanitized_url,), daemon=True)
         thread.start()
 
     def _go_back(self):
-        if not self._back_stack:
-            return None
-        self._forward_stack.append(self.url)
-        prev = self._back_stack.pop()
+        with self._lock:
+            if not self._back_stack:
+                return None
+            self._forward_stack.append(self.url)
+            prev = self._back_stack.pop()
         self._load_url(prev, _push_history=False)
         return ActionResult(ActionType.REFRESH)
 
     def _go_forward(self):
-        if not self._forward_stack:
-            return None
-        self._back_stack.append(self.url)
-        nxt = self._forward_stack.pop()
+        with self._lock:
+            if not self._forward_stack:
+                return None
+            self._back_stack.append(self.url)
+            nxt = self._forward_stack.pop()
         self._load_url(nxt, _push_history=False)
         return ActionResult(ActionType.REFRESH)
 
@@ -391,22 +400,27 @@ class RetroNetWindow(Window):
             for i in range(bh):
                 safe_addstr(stdscr, by + i, bx + sidebar_w - 1, "│", self.attr_inactive)
             safe_addstr(stdscr, by, bx + 1, "HISTORY", self.attr_title)
-            hist = self._back_stack[-max(1, bh - 2):]
+            with self._lock:
+                hist = list(self._back_stack[-max(1, bh - 2):])
             for i, h_url in enumerate(hist):
                 display = urllib.parse.unquote(h_url)[:sidebar_w - 3]
                 safe_addstr(stdscr, by + 1 + i, bx + 1, display, self.attr_dim)
 
         # Navigation bar: ◀ ▶ 🔒 [url...]
         nav_y = by
-        lock_icon = "🔒" if self.url.startswith('https') else "🔓"
-        back_ch = "◀" if self._back_stack else "◁"
-        fwd_ch = "▶" if self._forward_stack else "▷"
+        with self._lock:
+            current_url = self.url
+            has_back = bool(self._back_stack)
+            has_fwd = bool(self._forward_stack)
+        lock_icon = "🔒" if current_url.startswith('https') else "🔓"
+        back_ch = "◀" if has_back else "◁"
+        fwd_ch = "▶" if has_fwd else "▷"
         nav_prefix = f" {back_ch} {fwd_ch} {lock_icon} "
         safe_addstr(stdscr, nav_y, content_x + 1, nav_prefix, body_attr | self.attr_bold)
 
         addr_start = content_x + 1 + len(nav_prefix)
         addr_width = max(1, content_w - len(nav_prefix) - 4)
-        display_url = urllib.parse.unquote(self.url)
+        display_url = urllib.parse.unquote(current_url)
         safe_addstr(stdscr, nav_y, addr_start, display_url.ljust(addr_width)[:addr_width], self.attr_inactive)
 
         # Loading animation
@@ -466,7 +480,8 @@ class RetroNetWindow(Window):
         # Sidebar click — navigate to history entry
         if self.show_sidebar and bx <= mx < bx + sidebar_w - 1:
             idx = my - (by + 1)
-            hist = self._back_stack[-max(1, bh - 2):]
+            with self._lock:
+                hist = list(self._back_stack[-max(1, bh - 2):])
             if 0 <= idx < len(hist):
                 self._load_url(hist[idx])
                 return ActionResult(ActionType.REFRESH)
@@ -478,7 +493,9 @@ class RetroNetWindow(Window):
                 return self._go_back() or ActionResult(ActionType.REFRESH)
             if 4 <= rel <= 7:
                 return self._go_forward() or ActionResult(ActionType.REFRESH)
-            return ActionResult(ActionType.REQUEST_URL, self.url)
+            with self._lock:
+                current_url = self.url
+            return ActionResult(ActionType.REQUEST_URL, current_url)
 
         # Content area clicks
         content_y_start = by + 2
@@ -487,6 +504,7 @@ class RetroNetWindow(Window):
             line_idx = self.scroll_y + (my - content_y_start)
             with self._lock:
                 rline = self.content[line_idx] if line_idx < len(self.content) else None
+                current_url = self.url
             if rline:
                 relative_mx = mx - content_x
                 for span in rline.spans:
@@ -494,11 +512,11 @@ class RetroNetWindow(Window):
                         if span.type == 'link':
                             target_url = span.payload
                             if not target_url.startswith('http'):
-                                target_url = urllib.parse.urljoin(self.url, target_url)
+                                target_url = urllib.parse.urljoin(current_url, target_url)
                             self._load_url(target_url)
                             return ActionResult(ActionType.REFRESH)
                         elif span.type == 'input':
-                            if "google" in self.url or "duckduckgo" in self.url:
+                            if "google" in current_url or "duckduckgo" in current_url:
                                 return ActionResult(ActionType.REQUEST_URL, "duckduckgo.com/html/?q=")
                             return ActionResult(ActionType.REQUEST_URL, span.payload)
 
@@ -552,7 +570,9 @@ class RetroNetWindow(Window):
         elif code in (ord('h'), ord('H')):
             self.show_sidebar = not self.show_sidebar
         elif code in (ord('g'), ord('G')):
-            return ActionResult(ActionType.REQUEST_URL, self.url)
+            with self._lock:
+                current_url = self.url
+            return ActionResult(ActionType.REQUEST_URL, current_url)
         elif code == ord('/'):
             return ActionResult(ActionType.REQUEST_URL, "search:")
         return super().handle_key(key)

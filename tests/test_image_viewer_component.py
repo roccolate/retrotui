@@ -147,8 +147,14 @@ class ImageViewerComponentTests(unittest.TestCase):
 
         with mock.patch.object(win, "_render_image", return_value=["one"]) as render:
             first = win._cached_render_lines(20, 8)
+            # First call schedules a background render, so the placeholder
+            # is returned immediately and `_render_image` is invoked from
+            # the worker thread once it starts running.
+            self.assertEqual(first, ["[rendering...]"])
+            render_thread = win._render_thread
+            self.assertIsNotNone(render_thread)
+            render_thread.join(timeout=2.0)
             second = win._cached_render_lines(20, 8)
-        self.assertEqual(first, ["one"])
         self.assertEqual(second, ["one"])
         render.assert_called_once()
 
@@ -156,6 +162,11 @@ class ImageViewerComponentTests(unittest.TestCase):
             mock.patch.object(self.image_mod.os, "stat", side_effect=OSError("oops")),
             mock.patch.object(win, "_render_image", return_value=["two"]) as render,
         ):
+            lines = win._cached_render_lines(21, 8)
+            # Placeholder is returned until the background render completes.
+            self.assertEqual(lines, ["[rendering...]"])
+            if win._render_thread is not None:
+                win._render_thread.join(timeout=2.0)
             lines = win._cached_render_lines(21, 8)
         self.assertEqual(lines, ["two"])
         render.assert_called_once()
@@ -173,7 +184,7 @@ class ImageViewerComponentTests(unittest.TestCase):
         self.addCleanup(lambda: os.path.exists(image) and os.unlink(image))
         win = self._make_window(image)
         win.body_rect = mock.Mock(return_value=(2, 3, 80, 6))
-        win.status_message = "Loaded"
+        win._set_status("Loaded")
 
         class _Dummy:
             def getmaxyx(self):
@@ -195,6 +206,9 @@ class ImageViewerComponentTests(unittest.TestCase):
         rendered = [str(call.args[3]) for call in safe_addstr.call_args_list if len(call.args) >= 4]
         self.assertTrue(any("x" in text for text in rendered))
         self.assertTrue(any("Loaded" in text for text in rendered))
+        # Status message clears once the TTL drains through tick().
+        for _ in range(win._status_ttl + 1):
+            win.tick()
         self.assertEqual(win.status_message, "")
 
         # Default status branch

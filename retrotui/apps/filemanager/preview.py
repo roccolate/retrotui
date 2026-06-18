@@ -15,6 +15,8 @@ from .core import FileEntry
 IMAGE_EXTENSIONS = {
     '.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp', '.tiff', '.tif'
 }
+_IMAGE_PREVIEW_BACKEND_UNSET = object()
+_IMAGE_PREVIEW_BACKEND = _IMAGE_PREVIEW_BACKEND_UNSET
 
 def _owner_name(uid):
     """Resolve uid to a displayable owner name."""
@@ -74,11 +76,27 @@ def _read_text_preview(path, max_lines):
 
 def _detect_image_preview_backend():
     """Select available command backend for image preview."""
-    if shutil.which('chafa'):
-        return 'chafa'
-    if shutil.which('timg'):
-        return 'timg'
-    return None
+    global _IMAGE_PREVIEW_BACKEND
+    resolver = shutil.which
+    if (
+        _IMAGE_PREVIEW_BACKEND is not _IMAGE_PREVIEW_BACKEND_UNSET
+        and _IMAGE_PREVIEW_BACKEND[0] is resolver
+    ):
+        return _IMAGE_PREVIEW_BACKEND[1]
+    if resolver('chafa'):
+        _IMAGE_PREVIEW_BACKEND = (resolver, 'chafa')
+        return _IMAGE_PREVIEW_BACKEND[1]
+    if resolver('timg'):
+        _IMAGE_PREVIEW_BACKEND = (resolver, 'timg')
+        return _IMAGE_PREVIEW_BACKEND[1]
+    _IMAGE_PREVIEW_BACKEND = (resolver, None)
+    return _IMAGE_PREVIEW_BACKEND[1]
+
+
+def _reset_image_preview_backend_cache():
+    """Reset backend detection cache for tests."""
+    global _IMAGE_PREVIEW_BACKEND
+    _IMAGE_PREVIEW_BACKEND = _IMAGE_PREVIEW_BACKEND_UNSET
 
 def _read_image_preview(path, max_lines, max_cols):
     """Read image preview using chafa/timg when available."""

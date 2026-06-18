@@ -105,6 +105,45 @@ class FileManagerMore3Tests(unittest.TestCase):
                 lines3 = self.win._entry_preview_lines(entry_img, 2, max_cols=20)
                 self.assertTrue(len(lines3) >= 1)
 
+    def test_image_preview_with_backend_starts_async(self):
+        img = os.path.join(self.td, 'async.png')
+        with open(img, 'wb') as f:
+            f.write(b'PNG')
+        entry_img = fm.FileEntry('async.png', False, img)
+
+        thread_start = mock.Mock()
+        fake_thread = mock.Mock()
+        fake_thread.start = thread_start
+        with mock.patch.object(self.win, '_should_preview_image_async', return_value=True), \
+             mock.patch('retrotui.apps.filemanager.window.threading.Thread', return_value=fake_thread):
+            lines = self.win._entry_preview_lines(entry_img, 2, max_cols=20)
+
+        self.assertEqual(lines, ['[image preview loading]'])
+        thread_start.assert_called_once_with()
+
+    def test_image_preview_worker_failure_clears_pending(self):
+        img = os.path.join(self.td, 'broken.png')
+        with open(img, 'wb') as f:
+            f.write(b'PNG')
+        entry_img = fm.FileEntry('broken.png', False, img)
+        cache_key = (*self.win._preview_stat_key(entry_img.full_path), 2, 20)
+
+        class ImmediateThread:
+            def __init__(self, target, **kwargs):
+                self.target = target
+
+            def start(self):
+                self.target()
+
+        method_globals = self.win._start_image_preview.__globals__
+        with mock.patch.dict(method_globals, {'get_preview_lines': mock.Mock(side_effect=RuntimeError('boom'))}), \
+             mock.patch.object(method_globals['threading'], 'Thread', side_effect=ImmediateThread):
+            lines = self.win._start_image_preview(cache_key, entry_img, 2, 20)
+
+        self.assertEqual(lines, ['[image preview loading]'])
+        self.assertEqual(self.win._preview_cache['lines'], ['[preview failed]'])
+        self.assertNotIn(cache_key, self.win._preview_pending)
+
     def test_panel_layout_and_dual_toggle(self):
         # wide window should allow preview
         self.win.w = 100
