@@ -39,10 +39,11 @@ retrotui/
 │   ├── plugin_manager.py   # Plugin lifecycle (discover, register, spawn)
 │   ├── menu_builder.py     # Global menu construction + plugin menu items
 │   ├── icon_manager.py     # Desktop icon positions (draggable, persisted)
-│   ├── icon_styles.py      # Icon style system (default, mini, braille, codex)
+│   ├── icon_styles.py      # Icon style system (default, mini, braille)
 │   ├── config.py           # AppConfig dataclass, TOML load/save
 │   ├── clipboard.py        # Internal clipboard + system clipboard bridge
 │   ├── file_operations.py  # File dialogs + background copy/move with progress
+│   ├── bookmarks.py        # RetroNet bookmarks (load/save to ~/.config/retrotui/bookmarks.toml)
 │   ├── terminal_session.py # PTY session (POSIX pty + Windows ConPTY via pywinpty)
 │   ├── ansi.py             # ANSI escape code state machine for terminal emulation
 │   ├── viewer.py           # File type detection → viewer window dispatch
@@ -391,7 +392,7 @@ Falls back to internal-only if no system tool is found. Backend detection is cac
 
 ## Testing
 
-The repo currently has 97 `tests/test_*.py` files. The v0.9.3 release notes recorded 970 collected tests. Most tests use `unittest.TestCase` + `unittest.mock`, and can run without a real terminal.
+The repo currently has 102 `tests/test_*.py` files. The current suite runs ~1040 collected tests (v0.9.5). Most tests use `unittest.TestCase` + `unittest.mock`, and can run without a real terminal.
 
 ### Fake Curses
 

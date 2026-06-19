@@ -108,7 +108,7 @@ from .context_menu_handler import (
 
 LOGGER = logging.getLogger(__name__)
 
-APP_VERSION = '0.9.3'
+APP_VERSION = '0.9.5'
 _CONFIG_PERSIST_ERRORS = (OSError, UnicodeError, ValueError, TypeError)
 _RUNTIME_ISOLATION_ERRORS = (
     ArithmeticError,
@@ -809,6 +809,42 @@ class RetroTUI:
     def show_url_dialog(self, source_win, default_url=None):
         """Show input dialog for web URLs."""
         _show_url_dialog(self, source_win, default_url=default_url)
+
+    def show_bookmarks_window(self, source_win):
+        """Open the RetroNet bookmarks window anchored to the source browser."""
+        from ..apps.retronet import BookmarksWindow
+        from ..ui.window import Window
+        h, w = self.stdscr.getmaxyx()
+        ox, oy = self._next_window_offset(20, 4)
+        win: Window = BookmarksWindow(
+            ox, oy,
+            min(64, w - 4),
+            min(20, h - 4),
+            source_win=source_win,
+        )
+        self._spawn_window(win)
+
+    def show_add_bookmark_dialog(self, source_win):
+        """Prompt for a title and add the source window's URL to bookmarks."""
+        from ..ui.dialog import InputDialog
+        from .actions import ActionResult, ActionType
+        from .bookmarks import add_bookmark
+
+        url = getattr(source_win, 'url', '') or ''
+        title = url.split('//', 1)[-1].split('/', 1)[0] or url or "Bookmark"
+
+        def _on_title(value):
+            clean = (value or "").strip() or title
+            add_bookmark(clean, url)
+            return ActionResult(ActionType.REFRESH)
+
+        self.dialog = InputDialog(
+            'Add Bookmark',
+            'Title for this URL:',
+            initial_value=title,
+            width=54,
+        )
+        self.dialog.callback = _on_title
 
     def show_video_open_dialog(self):
         """Open dialog flow to play a video path without using File Manager."""

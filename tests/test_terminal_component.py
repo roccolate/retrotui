@@ -153,10 +153,13 @@ class TerminalComponentTests(unittest.TestCase):
         return win
 
     def _get_text(self, win):
-        return "".join(c[0] for c in win._line_cells)
+        # _line_cells is now the whole buffer row (text_cols wide); the
+        # legacy contract was "the cells actually written", so rstrip before
+        # asserting so trailing-space padding doesn't leak into comparisons.
+        return "".join(c[0] for c in win._line_cells).rstrip()
 
     def _get_scroll_text(self, win):
-        return ["".join(c[0] for c in line) for line in win._scroll_lines]
+        return ["".join(c[0] for c in line).rstrip() for line in win._scroll_lines]
 
     def test_strip_ansi_handles_partial_and_osc_sequences(self):
         # This test targets _strip_ansi which was removed/replaced by AnsiStateMachine.
@@ -309,16 +312,18 @@ class TerminalComponentTests(unittest.TestCase):
         win.scrollback_offset = 999
 
         visible, start, total = win._visible_slice(3)
-        self.assertEqual(total, 5)
+        # v0.9.5: scrollback + the full visible buffer (text_rows rows). With
+        # body_rect mocked to text_rows=7, total = 4 (scrollback) + 7 (buffer).
+        self.assertEqual(total, 4 + win._normal_buf.rows)
         self.assertEqual(start, 0)
-        # visible returns list of cell-lists
+        # visible shows the first 3 lines (top of scrollback).
         visible_text = ["".join(c[0] for c in line) for line in visible]
         self.assertEqual(visible_text, ["a", "b", "c"])
-        
-        # _fit_line now returns cells
+
+        # _fit_line clips/pads a cell list to the requested width.
         fitted = win._fit_line([(c, 0) for c in "xy"], 5)
         self.assertEqual("".join(c[0] for c in fitted), "xy   ")
-        
+
         win._line_cells = []
         win._cursor_col = 3
         win._write_char("Z", 0)

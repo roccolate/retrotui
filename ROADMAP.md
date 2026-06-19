@@ -6,6 +6,8 @@
 
 **Regla:** después de v0.9.8 no entran features nuevas para 1.0. Todo lo nuevo pasa a post-1.0.
 
+**Estado actual:** v0.9.5 cerrado (release 2026-06-19). Próximo: v0.9.6 certificación cross-terminal. La auditoria tecnica viva esta en [IMPROVEMENTS.md](IMPROVEMENTS.md).
+
 ---
 
 ## Estado completado
@@ -60,14 +62,14 @@
 - [x] Crear `TerminalScreenBuffer` normal-screen `rows x cols`.
 - [x] Separar normal-screen, alt-screen y scrollback.
 - [x] Soportar wrap, scroll, clear, insert/delete char/line y resize.
-- [ ] Cablear `TerminalScreenBuffer` dentro de `TerminalWindow` como fuente única de verdad.
-- [ ] Cursor real por fila/columna.
-- [ ] Atributos por celda para selección/copy.
-- [ ] Mouse pass-through opcional cuando el programa hijo active mouse reporting.
-- [ ] Mantener compatibilidad GPM para menús/selección de RetroTUI.
-- [ ] Validar `nano`, `vim`, `mc`, `htop`, `less` y `top`.
-- [ ] Pruebas de regresión: alt-screen, resize, cursor, copy/select y atributos.
-- [ ] Sincronizar versión en `pyproject.toml` y `APP_VERSION`.
+- [x] Cablear `TerminalScreenBuffer` dentro de `TerminalWindow` como fuente única de verdad (13 tests en `tests/test_terminal_buffer_wiring.py`).
+- [x] Cursor real por fila/columna (la API del buffer expone `cursor_row/col` y `_draw_live_cursor` los lee directamente).
+- [x] Atributos por celda para selección/copy (cada celda guarda `(char, attr)`; el sistema de selección los expone via `_line_cells` rstrípeado).
+- [x] Mouse pass-through opcional cuando el programa hijo active mouse reporting (14 tests en `tests/test_terminal_mouse_passthrough.py`; tracking de DEC private modes `_mouse_modes`, encode SGR `\e[<Cb;Cx;CyM`/`m`, reenvío via `_forward_payload`).
+- [x] Mantener compatibilidad GPM para menús/selección de RetroTUI (cubierto por la rama "sin modes" del mismo handler).
+- [x] Sincronizar versión en `pyproject.toml` y `APP_VERSION` (v0.9.5).
+- [ ] Validar `nano`, `vim`, `mc`, `htop`, `less` y `top` (manual; cae en v0.9.6 cert).
+- [ ] Pruebas de regresión: alt-screen, resize, cursor, copy/select y atributos (cubierto parcialmente; ampliar en v0.9.6).
 
 **Criterio de salida:** Terminal usable con apps TUI comunes y sin grids paralelos inconsistentes.
 

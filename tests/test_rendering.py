@@ -260,7 +260,7 @@ class RenderingTests(unittest.TestCase):
 
         with mock.patch.object(self.rendering, "safe_addstr"):
             self.rendering.draw_taskbar(app)
-            self.rendering.draw_statusbar(app, "0.9.3")
+            self.rendering.draw_statusbar(app, "0.9.5")
 
         self.assertEqual(windows.iter_calls, 1)
 

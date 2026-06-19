@@ -218,7 +218,7 @@ class TerminalScreen:
 
     The alt-screen is used by full-screen apps (vim, htop, less) and
     must be kept separate from the normal-screen grid and the
-    scrollback. Switching modes via :meth:`set_alt_screen` swaps the
+    scrollback list. Switching modes via :meth:`set_alt_screen` swaps the
     active buffer; the inactive buffer is preserved so toggling back
     to the original mode restores the previous view.
 
@@ -229,9 +229,11 @@ class TerminalScreen:
 
     __slots__ = ("_normal", "_alt", "_active")
 
-    def __init__(self, rows, cols, default_attr=0):
-        self._normal = TerminalScreenBuffer(rows, cols, default_attr=default_attr)
-        self._alt = TerminalScreenBuffer(rows, cols, default_attr=default_attr)
+    def __init__(self, rows, cols, default_attr=0, normal_cls=None, alt_cls=None):
+        n_cls = normal_cls or TerminalScreenBuffer
+        a_cls = alt_cls or n_cls
+        self._normal = n_cls(rows, cols, default_attr=default_attr)
+        self._alt = a_cls(rows, cols, default_attr=default_attr)
         self._active = self._normal
 
     # ------------------------------------------------------------------

@@ -1,7 +1,7 @@
 [plugin]
 id = "charmap"
 name = "Character Map"
-version = "0.9.3"
+version = "0.9.5"
 description = "Unicode character map browser"
 
 [plugin.window]

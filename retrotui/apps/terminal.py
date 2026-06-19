@@ -3,16 +3,44 @@ Embedded terminal window implementation.
 """
 import curses
 import shlex
+from collections import deque
 
 from ..constants import C_SCROLLBAR, C_STATUS
 from ..core.actions import ActionResult, ActionType, AppAction
 from ..core.clipboard import copy_text, paste_text
-from ..core.terminal_session import TerminalSession
+from ..core.terminal_session import TerminalScreen, TerminalScreenBuffer, TerminalSession
 from ..core.ansi import AnsiStateMachine
 from ..ui.menu import WindowMenu
 from ..ui.selectable_text import SelectableTextMixin
 from ..ui.window import Window
 from ..utils import normalize_key_code, safe_addstr, theme_attr
+
+
+class _ScrollbackBuffer(TerminalScreenBuffer):
+    """TerminalScreenBuffer variant kept around for compatibility.
+
+    In v0.9.5 the terminal captures the cursor row into scrollback from
+    :meth:`TerminalWindow._append_newline` (so every newline lands in the
+    scrollback regardless of buffer overflow). The buffer's own
+    ``scroll_up`` therefore no longer needs to capture — but the class
+    is still wired into ``TerminalScreen`` so external callers can reach
+    the same ``_scrollback`` reference via the buffer instance.
+    """
+
+    __slots__ = ("_scrollback",)
+
+    def __init__(self, rows, cols, scrollback, default_attr=0):
+        super().__init__(rows, cols, default_attr=default_attr)
+        self._scrollback = scrollback
+
+
+# DEC private mouse modes that the child program can enable to receive
+# mouse events as ANSI escape sequences. ``1006`` (SGR encoding) is the
+# modern default; ``1000``/``1002``/``1003`` are the legacy X11 modes that
+# use byte-encoded coordinates. ``1005`` (UTF-8) and ``1015`` (urxvt) are
+# tracked but rendered with the SGR encoding — close enough for the common
+# cases and clearly wrong only for clients that probe the mode byte exactly.
+_MOUSE_REPORT_MODES = frozenset({1000, 1002, 1003, 1005, 1006, 1015})
 
 
 class TerminalWindow(SelectableTextMixin, Window):
@@ -41,18 +69,33 @@ class TerminalWindow(SelectableTextMixin, Window):
 
         self.ansi = AnsiStateMachine()
 
-        # Buffer storage: list of list of (char, attr) tuples
-        self._scroll_lines = [] 
-        self._line_cells = [] 
-        self._cursor_col = 0
-        self.scrollback_offset = 0
-        
-        self._init_selection()
+        # v0.9.5: the normal-screen and alt-screen are now two TerminalScreenBuffer
+        # cells inside a single ``TerminalScreen``. The normal-screen buffer
+        # captures rows into ``self._scrollback`` as they scroll off the top,
+        # so the ANSI state machine writes through ``put_char`` / ``line_feed``
+        # / ``clear_screen`` and the buffer stays the source of truth.
+        text_cols, text_rows = self._text_area_size()
+        self._scrollback: deque = deque(maxlen=self.max_scrollback)
+        self._normal_buf = _ScrollbackBuffer(
+            text_rows, text_cols, scrollback=self._scrollback
+        )
+        self._alt_buf = TerminalScreenBuffer(text_rows, text_cols)
+        self._screen = TerminalScreen.__new__(TerminalScreen)
+        self._screen._normal = self._normal_buf
+        self._screen._alt = self._alt_buf
+        self._screen._active = self._normal_buf
 
-        self._alt_screen = False
-        self._alt_lines = []
-        self._alt_cursor_col = 0
-        self._alt_cursor_row = 0
+        # DEC private mouse modes enabled by the child via CSI ?nh.
+        # When non-empty the child wants raw mouse events, so RetroTUI
+        # forwards clicks/drags/scroll instead of using them for selection
+        # and window control. This is what makes full-screen TUI apps like
+        # vim/htop receive the mouse — and it's the GPM-compat switch:
+        # when no mode is set, RetroTUI keeps the mouse for menus/selection.
+        self._mouse_modes: set = set()
+
+        self.scrollback_offset = 0
+
+        self._init_selection()
 
         self.window_menu = WindowMenu({
             'Terminal': [
@@ -65,6 +108,133 @@ class TerminalWindow(SelectableTextMixin, Window):
                 ('Close', AppAction.CLOSE_WINDOW),
             ],
         })
+
+    # ------------------------------------------------------------------
+    # Backward-compatible state properties. The buffer is the source of
+    # truth; these mirror the legacy field names so existing callers and
+    # tests keep working while reads/writes route through the buffer.
+    # ------------------------------------------------------------------
+
+    @property
+    def _alt_screen(self) -> bool:
+        return self._screen.alt_screen
+
+    @_alt_screen.setter
+    def _alt_screen(self, value: bool):
+        self._screen.set_alt_screen(bool(value))
+
+    @property
+    def _cursor_col(self) -> int:
+        return self._screen.cursor_col
+
+    @_cursor_col.setter
+    def _cursor_col(self, value: int):
+        self._screen.set_cursor(self._screen.cursor_row, int(value))
+
+    @property
+    def _cursor_row(self) -> int:
+        return self._screen.cursor_row
+
+    @_cursor_row.setter
+    def _cursor_row(self, value: int):
+        self._screen.set_cursor(int(value), self._screen.cursor_col)
+
+    @property
+    def _alt_cursor_row(self) -> int:
+        return self._screen._alt.cursor_row
+
+    @_alt_cursor_row.setter
+    def _alt_cursor_row(self, value: int):
+        self._screen._alt.set_cursor(int(value), self._screen._alt.cursor_col)
+
+    @property
+    def _alt_cursor_col(self) -> int:
+        return self._screen._alt.cursor_col
+
+    @_alt_cursor_col.setter
+    def _alt_cursor_col(self, value: int):
+        self._screen._alt.set_cursor(self._screen._alt.cursor_row, int(value))
+
+    @property
+    def _line_cells(self) -> list:
+        """Return the cells of the row that holds the cursor.
+
+        Normal-screen: the cursor always sits on the bottom row. Alt-screen:
+        the row at the current cursor position. The list is rstripped to
+        keep the legacy contract where the row is only as long as the
+        non-space content (the underlying buffer keeps the full width).
+        """
+        row = self._screen._active.get_row(self._screen._active.cursor_row)
+        trimmed = list(row)
+        while trimmed and trimmed[-1] == (" ", self._screen._active._default_attr):
+            trimmed.pop()
+        return trimmed
+
+    @_line_cells.setter
+    def _line_cells(self, value: list):
+        active = self._screen._active
+        # Legacy callers expect ``_line_cells`` to map onto the "current"
+        # line (the bottom of the visible window). On the buffer we model
+        # that as the last row; recenter the cursor there so reads via
+        # ``cursor_row`` / ``cursor_col`` agree with what was written.
+        row = active.rows - 1
+        active.set_cursor(row, active.cursor_col)
+        row_cells = list(value)
+        if len(row_cells) < active.cols:
+            row_cells.extend([(" ", active._default_attr)] * (active.cols - len(row_cells)))
+        elif len(row_cells) > active.cols:
+            row_cells = row_cells[:active.cols]
+        active._grid[row] = row_cells
+
+    @property
+    def _scroll_lines(self) -> list:
+        """Return the captured scrollback (lines that scrolled off the top).
+
+        Does not include the rows still in the normal buffer; those are
+        reachable via ``self._normal_buf.get_row(r)``.
+        """
+        return list(self._scrollback)
+
+    @_scroll_lines.setter
+    def _scroll_lines(self, value: list):
+        # Replace the scrollback deque contents (keeping the maxlen cap).
+        self._scrollback = deque(list(value), maxlen=self.max_scrollback)
+        self._normal_buf._scrollback = self._scrollback
+
+    @property
+    def _alt_lines(self) -> list:
+        return [self._screen._alt.get_row(r) for r in range(self._screen._alt.rows)]
+
+    @_alt_lines.setter
+    def _alt_lines(self, value: list):
+        alt = self._screen._alt
+        new_rows = len(value)
+        new_cols = max((len(row) for row in value), default=alt.cols)
+        if new_rows == 0:
+            # Preserve the buffer's column count so the cell writes below stay
+            # in range when ``value`` is empty.
+            new_cols = max(new_cols, alt.cols)
+        alt.resize(new_rows, new_cols)
+        for r in range(alt.rows):
+            if r < len(value):
+                row = list(value[r])
+                if len(row) < alt.cols:
+                    row.extend([(" ", alt._default_attr)] * (alt.cols - len(row)))
+                alt._grid[r] = row[:alt.cols]
+            else:
+                alt._grid[r] = [(" ", alt._default_attr) for _ in range(alt.cols)]
+
+
+    def _sync_screen_size(self):
+        """Resize both buffers to match the current text area dimensions."""
+        text_cols, text_rows = self._text_area_size()
+        if (
+            self._normal_buf.rows == text_rows
+            and self._normal_buf.cols == text_cols
+        ):
+            return
+        self._normal_buf.resize(text_rows, text_cols)
+        self._alt_buf.resize(text_rows, text_cols)
 
     def _get_line_text(self, line_cells):
         """Helper to convert cell list to plain string."""
@@ -180,140 +350,65 @@ class TerminalWindow(SelectableTextMixin, Window):
     # OLD _strip_ansi removed, replaced by self.ansi usage
 
     def _write_char(self, ch, attr):
-        """Write one character with attribute at current cursor."""
-        if getattr(self, '_alt_screen', False):
-            cols, rows = self._text_area_size()
-            row = self._alt_cursor_row
-            col = self._alt_cursor_col
-            if row < len(self._alt_lines):
-                line = self._alt_lines[row]
-                if col < cols:
-                    while len(line) <= col:
-                        line.append((' ', 0))
-                    line[col] = (ch, attr)
-            self._advance_alt_cursor(cols, rows)
-            return
-
-        if self._cursor_col < len(self._line_cells):
-            self._line_cells[self._cursor_col] = (ch, attr)
-        else:
-            # Pad with spaces if cursor jumped ahead
-            while len(self._line_cells) < self._cursor_col:
-                self._line_cells.append((' ', 0))
-            self._line_cells.append((ch, attr))
-        self._cursor_col += 1
+        """Write one character with attribute at current cursor via the buffer."""
+        self._sync_screen_size()
+        self._screen.put_char(ch, attr=attr)
 
     def _advance_alt_cursor(self, cols, rows):
         """Advance alt-screen cursor with terminal-style right-edge wrapping."""
-        self._alt_cursor_col += 1
-        if self._alt_cursor_col < cols:
-            return
-        self._alt_cursor_col = 0
-        self._alt_cursor_row += 1
-        if self._alt_cursor_row < rows:
-            return
-        self._alt_cursor_row = rows - 1
-        self._alt_lines.pop(0)
-        self._alt_lines.append([(' ', 0) for _ in range(cols)])
+        # The buffer's put_char already wraps with a scroll if needed; this
+        # helper is only kept so legacy call sites that call it directly still
+        # compile. New code should rely on the buffer's put_char.
+        active = self._screen._active
+        active.set_cursor(active.cursor_row, active.cursor_col + 1)
 
     def _append_newline(self):
-        """Commit current line to scrollback."""
-        if getattr(self, '_alt_screen', False):
-            cols, rows = self._text_area_size()
-            self._alt_cursor_row += 1
-            self._alt_cursor_col = 0
-            if self._alt_cursor_row >= rows:
-                self._alt_cursor_row = rows - 1
-                self._alt_lines.pop(0)
-                self._alt_lines.append([(' ', 0) for _ in range(cols)])
-            return
+        """Commit the current row to scrollback and move the cursor down.
 
-        # We store the list of cells directly
-        self._scroll_lines.append(list(self._line_cells))
-        self._line_cells = []
-        self._cursor_col = 0
-        overflow = len(self._scroll_lines) - self.max_scrollback
-        if overflow > 0:
-            del self._scroll_lines[:overflow]
+        Emulates the LF+CR sequence shells typically emit: line feed moves
+        the row down, and the carriage return snaps the column back to 0.
+        Every newline is captured into scrollback (matching the legacy
+        behaviour where the visible window was always 1 line and the
+        scrollback held the full history); the buffer's own scroll_up
+        happens on top of that when the buffer overflows.
+        """
+        if not self._alt_screen:
+            self._scrollback.append(self._normal_buf.get_row(self._normal_buf.cursor_row))
+            # Enforce the maxlen cap even when the caller changed
+            # ``max_scrollback`` after the deque was created.
+            if len(self._scrollback) > self.max_scrollback:
+                self._scrollback = deque(
+                    list(self._scrollback)[-self.max_scrollback:],
+                    maxlen=self.max_scrollback,
+                )
+                self._normal_buf._scrollback = self._scrollback
+        self._screen.line_feed()
+        self._screen.carriage_return()
 
     def _erase_line(self, mode):
-        """Apply CSI K (erase in line) mode."""
-        fill_attr = self.ansi.attr
-        if getattr(self, '_alt_screen', False):
-            cols, rows = self._text_area_size()
-            row = self._alt_cursor_row
-            if row < len(self._alt_lines):
-                line = self._alt_lines[row]
-                if mode == 2:
-                    for i in range(cols):
-                        if i < len(line): line[i] = (' ', fill_attr)
-                        else: line.append((' ', fill_attr))
-                elif mode == 1:
-                    end = min(cols, self._alt_cursor_col + 1)
-                    for i in range(end):
-                        if i < len(line): line[i] = (' ', fill_attr)
-                        else: line.append((' ', fill_attr))
-                else:
-                    col = self._alt_cursor_col
-                    if col < len(line):
-                        for i in range(col, len(line)):
-                            line[i] = (' ', fill_attr)
+        """Apply CSI K (erase in line) mode using the active buffer."""
+        active = self._screen._active
+        if mode == 2:
+            active.clear_line()
             return
-
-        if mode == 2:  # Clear entire line
-            self._line_cells = []
-            self._cursor_col = 0
+        if mode == 1:
+            for c in range(0, active.cursor_col + 1):
+                active._grid[active.cursor_row][c] = (" ", active._default_attr)
             return
-
-        if mode == 1:  # Clear from beginning to cursor
-            end = min(len(self._line_cells), self._cursor_col + 1)
-            for i in range(end):
-                self._line_cells[i] = (' ', fill_attr)
-            return
-
-        # mode 0 (default): erase from cursor to end
-        if self._cursor_col < len(self._line_cells):
-            del self._line_cells[self._cursor_col:]
+        for c in range(active.cursor_col, active.cols):
+            active._grid[active.cursor_row][c] = (" ", active._default_attr)
 
     def _erase_display(self, mode):
-        """Apply CSI J (erase in display) for supported screen buffers."""
-        fill_attr = self.ansi.attr
-        if getattr(self, '_alt_screen', False):
-            cols, rows = self._text_area_size()
-            while len(self._alt_lines) < rows:
-                self._alt_lines.append([(' ', fill_attr) for _ in range(cols)])
-            for idx, line in enumerate(self._alt_lines[:rows]):
-                if len(line) < cols:
-                    line.extend([(' ', fill_attr)] * (cols - len(line)))
-                self._alt_lines[idx] = line[:cols]
-
-            row = max(0, min(rows - 1, self._alt_cursor_row))
-            col = max(0, min(cols - 1, self._alt_cursor_col))
-            if mode == 2:
-                self._alt_lines = [[(' ', fill_attr) for _ in range(cols)] for _ in range(rows)]
-                self._alt_cursor_col = 0
-                self._alt_cursor_row = 0
-            elif mode == 1:
-                for y in range(0, row):
-                    self._alt_lines[y] = [(' ', fill_attr) for _ in range(cols)]
-                for x in range(0, col + 1):
-                    self._alt_lines[row][x] = (' ', fill_attr)
-            else:
-                for x in range(col, cols):
-                    self._alt_lines[row][x] = (' ', fill_attr)
-                for y in range(row + 1, rows):
-                    self._alt_lines[y] = [(' ', fill_attr) for _ in range(cols)]
-            return
-
+        """Apply CSI J (erase in display) for the active buffer."""
+        active = self._screen._active
         if mode == 2:
-            self._scroll_lines = []
-            self._line_cells = []
-            self._cursor_col = 0
+            self._screen.clear_screen("all")
             self.scrollback_offset = 0
-        elif mode == 1:
-            self._erase_line(1)
-        else:
-            self._erase_line(0)
+            return
+        if mode == 1:
+            self._screen.clear_screen("above")
+            return
+        self._screen.clear_screen("below")
 
     def _apply_csi(self, params, final):
         """Handle CSI controls for layout (attributes handled by AnsiStateMachine)."""
@@ -323,69 +418,54 @@ class TerminalWindow(SelectableTextMixin, Window):
             return params[index]
 
         if final == 'h':
-            if _num(0, 0) in (1049, 1047, 47):
+            mode = _num(0, 0)
+            if mode in (1049, 1047, 47):
                 self._alt_screen = True
-                cols, rows = self._text_area_size()
-                self._alt_lines = [[(' ', 0) for _ in range(cols)] for _ in range(rows)]
-                self._alt_cursor_col = 0
-                self._alt_cursor_row = 0
+            elif mode in _MOUSE_REPORT_MODES:
+                self._mouse_modes.add(mode)
             return
         if final == 'l':
-            if _num(0, 0) in (1049, 1047, 47):
+            mode = _num(0, 0)
+            if mode in (1049, 1047, 47):
                 self._alt_screen = False
-                self._alt_lines = []
+            elif mode in _MOUSE_REPORT_MODES:
+                self._mouse_modes.discard(mode)
             return
 
+        active = self._screen._active
+        rows, cols = active.rows, active.cols
+
         if final == 'A':
-            if getattr(self, '_alt_screen', False): self._alt_cursor_row = max(0, self._alt_cursor_row - max(1, _num(0, 1)))
+            active.set_cursor(max(0, active.cursor_row - max(1, _num(0, 1))), active.cursor_col)
             return
         if final == 'B':
-            if getattr(self, '_alt_screen', False):
-                _, rows = self._text_area_size()
-                self._alt_cursor_row = min(rows - 1, max(0, self._alt_cursor_row + max(1, _num(0, 1))))
+            active.set_cursor(min(rows - 1, active.cursor_row + max(1, _num(0, 1))), active.cursor_col)
             return
         if final == 'D':
-            if getattr(self, '_alt_screen', False): self._alt_cursor_col = max(0, self._alt_cursor_col - max(1, _num(0, 1)))
-            else: self._cursor_col = max(0, self._cursor_col - max(1, _num(0, 1)))
+            active.set_cursor(active.cursor_row, max(0, active.cursor_col - max(1, _num(0, 1))))
             return
         if final == 'C':
-            cols, _ = self._text_area_size()
-            if getattr(self, '_alt_screen', False): self._alt_cursor_col = min(cols - 1, max(0, self._alt_cursor_col + max(1, _num(0, 1))))
-            else: self._cursor_col = max(0, self._cursor_col + max(1, _num(0, 1)))
+            active.set_cursor(active.cursor_row, min(cols - 1, active.cursor_col + max(1, _num(0, 1))))
             return
         if final == 'G':
-            cols, _ = self._text_area_size()
-            if getattr(self, '_alt_screen', False): self._alt_cursor_col = min(cols - 1, max(0, _num(0, 1) - 1))
-            else: self._cursor_col = max(0, _num(0, 1) - 1)
+            active.set_cursor(active.cursor_row, min(cols - 1, max(0, _num(0, 1) - 1)))
             return
         if final in ('H', 'f'):
-            row = _num(0, 1)
-            col = _num(1, 1)
-            if getattr(self, '_alt_screen', False):
-                cols, rows = self._text_area_size()
-                self._alt_cursor_row = min(rows - 1, max(0, row - 1))
-                self._alt_cursor_col = min(cols - 1, max(0, col - 1))
-            else:
-                while len(self._scroll_lines) < max(0, row - 1):
-                    self._scroll_lines.append([])
-                self._cursor_col = max(0, col - 1)
+            row = max(0, min(rows - 1, _num(0, 1) - 1))
+            col = max(0, min(cols - 1, _num(1, 1) - 1))
+            active.set_cursor(row, col)
             return
         if final == 'K':
             self._erase_line(_num(0, 0))
             return
         if final == 'P':
             count = max(1, _num(0, 1))
-            if getattr(self, '_alt_screen', False):
-                row = self._alt_cursor_row
-                col = self._alt_cursor_col
-                if row < len(self._alt_lines):
-                    line = self._alt_lines[row]
-                    if col < len(line):
-                        del line[col:col + count]
-                        line.extend([(' ', self.ansi.attr)] * count)
-            else:
-                if self._cursor_col < len(self._line_cells):
-                    del self._line_cells[self._cursor_col:self._cursor_col + count]
+            row = active.cursor_row
+            col = active.cursor_col
+            line = active._grid[row]
+            if col < len(line):
+                del line[col:col + count]
+                line.extend([(" ", active._default_attr)] * count)
             return
         if final == 'J':
             self._erase_display(_num(0, 0))
@@ -395,7 +475,9 @@ class TerminalWindow(SelectableTextMixin, Window):
         """Feed text to ANSI state machine and update buffer."""
         if not text:
             return
-        
+
+        self._sync_screen_size()
+
         prev_total = len(self._all_lines())
         prev_offset = self.scrollback_offset
 
@@ -406,45 +488,31 @@ class TerminalWindow(SelectableTextMixin, Window):
                 if data == '\n':
                     self._append_newline()
                 elif data == '\r':
-                    if getattr(self, '_alt_screen', False): self._alt_cursor_col = 0
-                    else: self._cursor_col = 0
+                    self._screen.carriage_return()
                 elif data == '\b':
-                    if getattr(self, '_alt_screen', False): self._alt_cursor_col = max(0, self._alt_cursor_col - 1)
-                    else: self._cursor_col = max(0, self._cursor_col - 1)
+                    self._screen.backspace()
                 elif data == '\t':
-                    if getattr(self, '_alt_screen', False):
-                        spaces = 8 - (self._alt_cursor_col % 8)
-                        for _ in range(spaces): self._write_char(' ', self.ansi.attr)
-                    else:
-                        spaces = 8 - (self._cursor_col % 8)
-                        for _ in range(spaces): self._write_char(' ', self.ansi.attr)
+                    spaces = 8 - (self._screen.cursor_col % 8)
+                    for _ in range(spaces):
+                        self._write_char(' ', self.ansi.attr)
             elif kind == 'CSI':
                 # data is final char, attr is params list
                 self._apply_csi(attr, data)
-        
-        # Smart scrolling: if we were at the bottom, stay at the bottom.
-        # If we were scrolled up, try to maintain relative position?
-        # Actually standard behavior: if at bottom, autoscroll. If up, stay put.
-        # "at bottom" means scrollback_offset == 0.
-        
+
         if prev_offset > 0:
-            # We were looking at history.
             new_total = len(self._all_lines())
             appended = max(0, new_total - prev_total)
             if appended > 0:
-                # To keep viewing the same lines, we must increase offset?
-                # scrollback_offset is "lines back from end".
-                # If we add N lines to end, and want to show same lines,
-                # we must increase offset by N.
                 _, text_rows = self._text_area_size()
                 max_offset = self._max_scrollback_offset(text_rows)
                 self.scrollback_offset = min(max_offset, prev_offset + appended)
 
     def _all_lines(self):
         """Return all lines including current editable line (as lists of cells)."""
-        if getattr(self, '_alt_screen', False):
-            return self._alt_lines
-        return self._scroll_lines + [list(self._line_cells)]
+        if self._alt_screen:
+            return [self._screen._alt.get_row(r) for r in range(self._screen._alt.rows)]
+        normal_rows = [self._normal_buf.get_row(r) for r in range(self._normal_buf.rows)]
+        return list(self._scrollback) + normal_rows
 
     def _max_scrollback_offset(self, text_rows):
         return max(0, len(self._all_lines()) - max(1, text_rows))
@@ -454,10 +522,10 @@ class TerminalWindow(SelectableTextMixin, Window):
         lines = self._all_lines()
         total = len(lines)
         max_offset = max(0, total - text_rows)
-        
+
         if self.scrollback_offset > max_offset:
             self.scrollback_offset = max_offset
-            
+
         start = max(0, total - text_rows - self.scrollback_offset)
         return lines[start:start + text_rows], start, total
 
@@ -485,33 +553,41 @@ class TerminalWindow(SelectableTextMixin, Window):
         if total_lines <= 0:
             return
 
-        if getattr(self, '_alt_screen', False):
-            cursor_line_idx = self._alt_cursor_row
-            col = self._alt_cursor_col
+        active = self._screen._active
+        cursor_line_idx = active.cursor_row
+        col = active.cursor_col
+
+        if self._alt_screen:
             row = y + cursor_line_idx
             if row >= y + text_rows:
                 return
-            if cursor_line_idx < len(self._alt_lines):
-                line = self._alt_lines[cursor_line_idx]
-                if col < len(line): ch, attr = line[col]
-                else: ch, attr = ' ', 0
+            if cursor_line_idx < active.rows:
+                line = active.get_row(cursor_line_idx)
+                if col < len(line):
+                    ch, attr = line[col]
+                else:
+                    ch, attr = ' ', 0
             else:
                 ch, attr = ' ', 0
         else:
-            cursor_line_idx = total_lines - 1
-            if not (start_idx <= cursor_line_idx < start_idx + text_rows):
+            # In normal mode the cursor lives on the bottom row of the buffer;
+            # map that to the position in ``total_lines`` (scrollback + buffer).
+            buffer_first_line_idx = total_lines - active.rows
+            line_idx = buffer_first_line_idx + cursor_line_idx
+            if not (start_idx <= line_idx < start_idx + text_rows):
                 return
-            row = y + (cursor_line_idx - start_idx)
-            col = max(0, self._cursor_col)
-            current_cells = self._line_cells
-            if col < len(current_cells): ch, attr = current_cells[col]
-            else: ch, attr = ' ', 0
+            row = y + (line_idx - start_idx)
+            line = active.get_row(cursor_line_idx)
+            if col < len(line):
+                ch, attr = line[col]
+            else:
+                ch, attr = ' ', 0
 
         if col >= text_cols:
             col = text_cols - 1
 
         effective_attr = attr if attr else body_attr
-        
+
         if ch == ' ':
             safe_addstr(stdscr, row, x + col, '_', effective_attr | curses.A_BOLD)
             return
@@ -679,9 +755,10 @@ class TerminalWindow(SelectableTextMixin, Window):
     def execute_action(self, action):
         """Execute terminal window menu action."""
         if action == self.MENU_CLEAR:
-            self._scroll_lines = []
-            self._line_cells = []
-            self._cursor_col = 0
+            self._scrollback.clear()
+            self._normal_buf.clear_screen("all")
+            self._alt_buf.clear_screen("all")
+            self._screen.set_cursor(0, 0)
             self.scrollback_offset = 0
             self.clear_selection()
             return None
@@ -820,6 +897,16 @@ class TerminalWindow(SelectableTextMixin, Window):
                     return self.execute_action(action)
                 return None
 
+        # Mouse pass-through: when the child has enabled any DEC mouse
+        # reporting mode, encode the click as an SGR mouse sequence and
+        # forward it to the PTY. RetroTUI's selection/window logic stays
+        # out of the way so the TUI app receives the event.
+        if bstate is not None and self._mouse_modes:
+            forwarded = self._encode_mouse_event(mx, my, bstate, motion=False)
+            if forwarded is not None:
+                self._forward_payload(forwarded)
+                return None
+
         bx, by, bw, bh = self.body_rect()
         text_cols, text_rows = max(1, bw - 1), max(1, bh - 1)
         if bx <= mx < bx + text_cols and by <= my < by + text_rows:
@@ -833,6 +920,8 @@ class TerminalWindow(SelectableTextMixin, Window):
                     )
                 )
                 if has_button1:
+                    # Jump to live view so the user can see what they select.
+                    self.scrollback_offset = 0
                     cursor_pos = self._cursor_from_screen(mx, my)
                     if cursor_pos is not None:
                         self.selection_anchor = cursor_pos
@@ -868,11 +957,19 @@ class TerminalWindow(SelectableTextMixin, Window):
         items.append({'separator': True})
         items.append({'label': 'Properties', 'action': None})
         items.append({'label': 'Close', 'action': AppAction.CLOSE_WINDOW})
-        
+
         return items
 
     def handle_mouse_drag(self, mx, my, bstate):
         """Extend selection while primary mouse button is pressed."""
+        # Mouse pass-through: forward motion events to the child when it's
+        # in mouse reporting mode (SGR mode appends ``;Cx;CyM`` per move).
+        if self._mouse_modes and (bstate & getattr(curses, 'BUTTON1_PRESSED', 0)):
+            forwarded = self._encode_mouse_event(mx, my, bstate, motion=True)
+            if forwarded is not None:
+                self._forward_payload(forwarded)
+                return None
+
         if not (bstate & getattr(curses, 'BUTTON1_PRESSED', 0)):
             self._mouse_selecting = False
             return None
@@ -887,6 +984,16 @@ class TerminalWindow(SelectableTextMixin, Window):
 
     def handle_scroll(self, direction, steps=1):
         """Scroll terminal scrollback with mouse wheel."""
+        # Mouse pass-through: forward scroll wheel as a mouse-encoded event
+        # when the child wants mouse (BUTTON4/5 → Cb 64/65 in SGR mode).
+        if self._mouse_modes:
+            if direction == 'up':
+                self._forward_mouse_wheel('up')
+                return
+            if direction == 'down':
+                self._forward_mouse_wheel('down')
+                return
+
         count = max(1, steps)
         _, text_rows = self._text_area_size()
         max_offset = self._max_scrollback_offset(text_rows)
@@ -894,6 +1001,81 @@ class TerminalWindow(SelectableTextMixin, Window):
             self.scrollback_offset = min(max_offset, self.scrollback_offset + count)
         elif direction == 'down':
             self.scrollback_offset = max(0, self.scrollback_offset - count)
+
+    # ------------------------------------------------------------------
+    # Mouse pass-through helpers
+    # ------------------------------------------------------------------
+
+    def _mouse_body_position(self, mx, my):
+        """Return (col, row) inside the terminal body, or ``None``."""
+        bx, by, bw, bh = self.body_rect()
+        text_cols, text_rows = max(1, bw - 1), max(1, bh - 1)
+        if not (bx <= mx < bx + text_cols and by <= my < by + text_rows):
+            return None
+        col = max(0, min(text_cols, mx - bx))
+        row = max(0, min(text_rows, my - by))
+        return col, row
+
+    def _encode_mouse_event(self, mx, my, bstate, *, motion=False):
+        """Encode a mouse event as an SGR mouse escape sequence.
+
+        Returns the bytes to send to the child, or ``None`` when the event
+        should not be forwarded (e.g. pure motion without any button down
+        when the child has only enabled press/release tracking).
+
+        The SGR button codes follow xterm:
+            0 = left, 1 = middle, 2 = right,
+            32 = motion-without-button,
+            32 + button = motion-with-button,
+            64 = scroll up, 65 = scroll down.
+        """
+        pos = self._mouse_body_position(mx, my)
+        if pos is None:
+            return None
+        col, row = pos
+
+        b1 = getattr(curses, 'BUTTON1_PRESSED', 0)
+        b1_clicked = getattr(curses, 'BUTTON1_CLICKED', 0)
+        b1_double = getattr(curses, 'BUTTON1_DOUBLE_CLICKED', 0)
+        b1_released = getattr(curses, 'BUTTON1_RELEASED', 0)
+        b2 = getattr(curses, 'BUTTON2_PRESSED', 0)
+        b3 = getattr(curses, 'BUTTON3_PRESSED', 0)
+
+        cb = None
+        suffix = "M"
+        if bstate & b1:
+            cb = 0
+        elif bstate & b2:
+            cb = 1
+        elif bstate & b3:
+            cb = 2
+        elif bstate & (b1_clicked | b1_double):
+            cb = 0
+        elif bstate & b1_released:
+            cb = 0
+            suffix = "m"
+        elif motion:
+            # Pure motion (no button down): only when ?1003h is enabled.
+            if 1003 in self._mouse_modes:
+                cb = 32
+            else:
+                return None
+        else:
+            return None
+
+        # Motion with a button held: only forward when ?1002h / ?1003h
+        # explicitly enabled (1000/1006 alone = press/release only).
+        if motion and cb in (0, 1, 2):
+            if not (1002 in self._mouse_modes or 1003 in self._mouse_modes):
+                return None
+            cb += 32
+
+        return f"\x1b[<{cb};{col + 1};{row + 1}{suffix}"
+
+    def _forward_mouse_wheel(self, direction):
+        """Forward a scroll-wheel tick as SGR button 64/65 (no coords)."""
+        cb = 64 if direction == 'up' else 65
+        self._forward_payload(f"\x1b[<{cb};1;1M")
 
     def restart_session(self):
         """Reset scrollback state and start a fresh shell session lazily."""
@@ -906,6 +1088,8 @@ class TerminalWindow(SelectableTextMixin, Window):
         self._scroll_lines = []
         self._line_cells = []
         self._cursor_col = 0
+        # The fresh child has not re-enabled mouse reporting yet.
+        self._mouse_modes = set()
         self.scrollback_offset = 0
 
     def close(self):

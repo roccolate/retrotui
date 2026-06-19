@@ -67,6 +67,16 @@ class DialogDispatcher:
             self._app.show_url_dialog(source_win, result_payload)
             return True
 
+        if result_type == ActionType.REQUEST_BOOKMARKS:
+            if source_win is not None and hasattr(self._app, 'show_bookmarks_window'):
+                self._app.show_bookmarks_window(source_win)
+            return True
+
+        if result_type == ActionType.REQUEST_ADD_BOOKMARK:
+            if source_win is not None and hasattr(self._app, 'show_add_bookmark_dialog'):
+                self._app.show_add_bookmark_dialog(source_win)
+            return True
+
         if result_type == ActionType.EXECUTE:
             exec_action = self._app._normalize_action(result_payload)
             if exec_action == AppAction.CLOSE_WINDOW and source_win:

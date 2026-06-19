@@ -1,7 +1,7 @@
 [plugin]
 id = "tetris"
 name = "Tetris"
-version = "0.9.3"
+version = "0.9.5"
 description = "Classic Tetris block puzzle game"
 category = "game"
 

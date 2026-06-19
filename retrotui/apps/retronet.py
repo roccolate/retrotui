@@ -1,9 +1,12 @@
 """RetroNet Explorer Ultra: The state-of-the-art text browser."""
 import curses
+import hashlib
+import os
+import tempfile
 import urllib.request
 import urllib.parse
 import re
-import html
+import html.parser
 import threading
 import ssl
 import socket
@@ -13,7 +16,7 @@ from typing import List, Tuple
 
 from ..ui.window import Window
 from ..utils import safe_addstr, theme_attr, normalize_key_code
-from ..core.actions import ActionResult, ActionType
+from ..core.actions import ActionResult, ActionType, AppAction
 from ..constants import _CURSES_ERROR
 
 _URL_SANITIZE_ERRORS = (
@@ -45,6 +48,150 @@ _RESPONSE_CLOSE_ERRORS = (
 _MAX_HISTORY = 200
 
 
+class _RetroNetHTMLParser(html.parser.HTMLParser):
+    """Walk HTML and emit the same inline tokens the old regex pipeline emitted.
+
+    Produces a flat text stream plus a title string. Inline tokens ([H1], [H2],
+    [B], [I], [L]url|label[/L], [BT]label[/BT]) match what the downstream
+    post-processing in ``RetroNetWindow._parse_html`` already understands, so
+    swapping the parser is invisible to the renderer.
+
+    Handles nested tags correctly (the old ``re.sub`` pipeline flattened
+    ``<b><i>x</i></b>`` and similar into whatever order the global regexes
+    happened to fire). ``convert_charrefs=True`` decodes HTML entities in text
+    content and ``<title>``, matching the previous ``html.unescape`` call.
+    """
+
+    BLOCK_TAGS = frozenset({'p', 'div', 'li', 'tr', 'form'})
+    HEADERS = frozenset({'h1', 'h2', 'h3', 'h4', 'h5', 'h6'})
+    SKIP_TAGS = frozenset({'script', 'style', 'svg', 'noscript'})
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.parts = []
+        self.skip_depth = 0
+        self.in_title = False
+        self.title_parts = []
+        self.link_href = None
+        self.link_label = []
+        self.in_button = False
+        self.button_label = []
+
+    def handle_starttag(self, tag, attrs):
+        t = tag.lower()
+        if t in self.SKIP_TAGS or t == 'head':
+            self.skip_depth += 1
+            return
+        if t == 'title':
+            self.in_title = True
+            return
+        if t == 'br':
+            self._emit('\n')
+            return
+        if t == 'hr':
+            self._emit('\n\n')
+            return
+        if t in self.BLOCK_TAGS:
+            self._emit('\n')
+            return
+        if t in self.HEADERS:
+            self._emit('\n\n')
+            self._emit('[H1]' if t in ('h1', 'h2', 'h3') else '[H2]')
+            return
+        if t in ('b', 'strong'):
+            self._emit('[B]')
+            return
+        if t in ('i', 'em'):
+            self._emit('[I]')
+            return
+        if t == 'a':
+            href = dict(attrs).get('href', '') or ''
+            self.link_href = href
+            self.link_label = []
+            return
+        if t == 'input':
+            attrs_d = dict(attrs)
+            if attrs_d.get('type', '').lower() == 'hidden':
+                return
+            label = (attrs_d.get('value') or attrs_d.get('placeholder') or 'Submit').strip()
+            self._emit(f' [BT]{label} [/BT] ')
+            return
+        if t == 'button':
+            self.in_button = True
+            self.button_label = []
+            return
+
+    def handle_endtag(self, tag):
+        t = tag.lower()
+        if t in self.SKIP_TAGS or t == 'head':
+            if self.skip_depth > 0:
+                self.skip_depth -= 1
+            return
+        if t == 'title':
+            self.in_title = False
+            return
+        if t in self.HEADERS:
+            self._emit('[/H]')
+            return
+        if t in ('b', 'strong'):
+            self._emit('[/B]')
+            return
+        if t in ('i', 'em'):
+            self._emit('[/I]')
+            return
+        if t == 'a':
+            label = ''.join(self.link_label).strip()
+            url = (self.link_href or '#').replace('\n', '').strip()
+            if not label:
+                label = url[:20]
+            self.parts.append(f'[L]{url}|{label}[/L]')
+            self.link_href = None
+            self.link_label = []
+            return
+        if t == 'button':
+            label = ''.join(self.button_label).strip().replace('\n', ' ') or 'Submit'
+            self.parts.append(f' [BT]{label} [/BT] ')
+            self.in_button = False
+            self.button_label = []
+            return
+
+    def handle_data(self, data):
+        if self.in_title:
+            self.title_parts.append(data)
+            return
+        if self.skip_depth > 0:
+            return
+        if self.in_button:
+            self.button_label.append(data)
+            return
+        if self.link_href is not None:
+            self.link_label.append(data)
+            return
+        self.parts.append(data)
+
+    def handle_pi(self, data):
+        pass
+
+    def handle_decl(self, decl):
+        pass
+
+    def handle_comment(self, data):
+        pass
+
+    def _emit(self, text):
+        if self.in_button:
+            self.button_label.append(text)
+        elif self.link_href is not None:
+            self.link_label.append(text)
+        else:
+            self.parts.append(text)
+
+    def get_title(self):
+        return ''.join(self.title_parts).strip()
+
+    def get_text(self):
+        return ''.join(self.parts)
+
 @dataclass
 class InteractiveSpan:
     start_x: int
@@ -62,23 +209,45 @@ class RichLine:
         if self.spans is None:
             self.spans = []
 
+
+@dataclass
+class _TabState:
+    """Per-tab browser state. Mutated under ``RetroNetWindow._lock``."""
+
+    url: str = ""
+    title: str = ""
+    content: List[RichLine] = None
+    back_stack: list = None
+    forward_stack: list = None
+    scroll_y: int = 0
+    is_loading: bool = False
+    search_query: str = ""
+    search_matches: list = None
+    search_idx: int = -1
+    loading_frame: int = 0
+    raw_html: str = ""
+
+    def __post_init__(self):
+        if self.content is None:
+            self.content = []
+        if self.back_stack is None:
+            self.back_stack = []
+        if self.forward_stack is None:
+            self.forward_stack = []
+        if self.search_matches is None:
+            self.search_matches = []
+
+
+_DEFAULT_TAB_URL = "http://text.npr.org"
+
+
 class RetroNetWindow(Window):
     """Nostalgic yet ultra-modern text browser."""
 
     def __init__(self, x, y, w, h):
         super().__init__('RetroNet Explorer Ultra', x, y, w, h)
-        self.url = "http://text.npr.org"
-        self.content: List[RichLine] = []
-        self._back_stack: list = []
-        self._forward_stack: list = []
-        self.scroll_y = 0
-        self.is_loading = False
         self.show_sidebar = False
-        self.loading_frame = 0
         self.loading_chars = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
-        self._search_query = ""
-        self._search_matches: list = []
-        self._search_idx = -1
 
         # Pre-resolve attributes for thread safety
         self.attr_title = theme_attr('window_title')
@@ -88,9 +257,190 @@ class RetroNetWindow(Window):
         self.attr_inactive = theme_attr('window_inactive')
         self.attr_body = theme_attr('window_body')
 
-        # Shared state lock for fetch thread.
+        # Shared state lock for fetch thread + tab mutations.
         self._lock = threading.Lock()
-        self._load_url(self.url)
+
+        self.tabs: List[_TabState] = []
+        self.active_tab_idx = 0
+        self._new_tab(_DEFAULT_TAB_URL, activate=True, _push_history=False)
+        self._load_url(_DEFAULT_TAB_URL, _push_history=False)
+
+    # ------------------------------------------------------------------
+    # Tab management
+    # ------------------------------------------------------------------
+
+    def _cur(self) -> _TabState:
+        """Return the active tab, or None if tabs haven't been initialised yet."""
+        tabs = getattr(self, 'tabs', None)
+        if not tabs:
+            return None
+        if self.active_tab_idx >= len(tabs):
+            self.active_tab_idx = max(0, len(tabs) - 1)
+        return tabs[self.active_tab_idx]
+
+    def _new_tab(self, url="", *, activate=True, _push_history=True) -> int:
+        """Create a new tab. Returns the new tab index."""
+        with self._lock:
+            tab = _TabState(url=url)
+            self.tabs.append(tab)
+            new_idx = len(self.tabs) - 1
+            if activate:
+                self.active_tab_idx = new_idx
+        # The new tab has no prior URL to push to its back stack, so the
+        # initial load never pushes history even when the caller asked for it.
+        if url and activate:
+            self._load_url(url, _push_history=False, _tab_idx=new_idx)
+        elif activate:
+            self._refresh_window_title()
+        return new_idx
+
+    def _close_tab(self, idx: int) -> bool:
+        """Close a tab. Returns True if the window should be closed (last tab)."""
+        with self._lock:
+            if idx < 0 or idx >= len(self.tabs):
+                return False
+            del self.tabs[idx]
+            if not self.tabs:
+                return True
+            if self.active_tab_idx >= len(self.tabs):
+                self.active_tab_idx = len(self.tabs) - 1
+            elif self.active_tab_idx > idx:
+                self.active_tab_idx -= 1
+        self._refresh_window_title()
+        return False
+
+    def _switch_tab(self, idx: int):
+        with self._lock:
+            if idx < 0 or idx >= len(self.tabs):
+                return
+            self.active_tab_idx = idx
+        self._refresh_window_title()
+
+    def _cycle_tab(self, delta: int):
+        with self._lock:
+            if not self.tabs:
+                return
+            self.active_tab_idx = (self.active_tab_idx + delta) % len(self.tabs)
+        self._refresh_window_title()
+
+    def _refresh_window_title(self):
+        """Set self.title (window title bar) from the active tab."""
+        cur = self._cur()
+        if cur is None:
+            self.title = "RetroNet Explorer Ultra"
+            return
+        page_title = (cur.title or "").strip()
+        if page_title:
+            self.title = f"RetroNet Ultra - {page_title[:30]}"
+        elif cur.url:
+            self.title = f"RetroNet Ultra - {cur.url[:30]}"
+        else:
+            self.title = "RetroNet Explorer Ultra"
+
+    # ------------------------------------------------------------------
+    # Backward-compatible per-tab properties. External callers (tests,
+    # toolbar callbacks) can keep using ``win.url`` and get the active tab.
+    # Writes mutate the active tab.
+    # ------------------------------------------------------------------
+
+    @property
+    def url(self) -> str:
+        cur = self._cur()
+        return cur.url if cur else ""
+
+    @url.setter
+    def url(self, value: str):
+        cur = self._cur()
+        if cur is not None:
+            cur.url = value
+
+    @property
+    def content(self) -> list:
+        cur = self._cur()
+        return cur.content if cur else []
+
+    @content.setter
+    def content(self, value: list):
+        cur = self._cur()
+        if cur is not None and self.tabs:
+            cur.content = value
+
+    @property
+    def scroll_y(self) -> int:
+        cur = self._cur()
+        return cur.scroll_y if cur else 0
+
+    @scroll_y.setter
+    def scroll_y(self, value: int):
+        cur = self._cur()
+        if cur is not None:
+            cur.scroll_y = value
+
+    @property
+    def is_loading(self) -> bool:
+        cur = self._cur()
+        return cur.is_loading if cur else False
+
+    @is_loading.setter
+    def is_loading(self, value: bool):
+        cur = self._cur()
+        if cur is not None:
+            cur.is_loading = value
+
+    @property
+    def _back_stack(self) -> list:
+        cur = self._cur()
+        return cur.back_stack if cur else []
+
+    @_back_stack.setter
+    def _back_stack(self, value: list):
+        cur = self._cur()
+        if cur is not None:
+            cur.back_stack = value
+
+    @property
+    def _forward_stack(self) -> list:
+        cur = self._cur()
+        return cur.forward_stack if cur else []
+
+    @_forward_stack.setter
+    def _forward_stack(self, value: list):
+        cur = self._cur()
+        if cur is not None:
+            cur.forward_stack = value
+
+    @property
+    def _search_query(self) -> str:
+        cur = self._cur()
+        return cur.search_query if cur else ""
+
+    @_search_query.setter
+    def _search_query(self, value: str):
+        cur = self._cur()
+        if cur is not None:
+            cur.search_query = value
+
+    @property
+    def _search_matches(self) -> list:
+        cur = self._cur()
+        return cur.search_matches if cur else []
+
+    @_search_matches.setter
+    def _search_matches(self, value: list):
+        cur = self._cur()
+        if cur is not None:
+            cur.search_matches = value
+
+    @property
+    def _search_idx(self) -> int:
+        cur = self._cur()
+        return cur.search_idx if cur else -1
+
+    @_search_idx.setter
+    def _search_idx(self, value: int):
+        cur = self._cur()
+        if cur is not None:
+            cur.search_idx = value
 
     # ------------------------------------------------------------------
     # URL handling
@@ -121,47 +471,55 @@ class RetroNetWindow(Window):
     # Navigation (back / forward)
     # ------------------------------------------------------------------
 
-    def _load_url(self, url, *, _push_history=True):
+    def _load_url(self, url, *, _push_history=True, _tab_idx=None):
         if not url: return
 
         clean_url = url
         sanitized_url = self._sanitize_url(url)
 
-        if _push_history and self.url:
-            with self._lock:
-                # Deduplicate the previous entry to keep consecutive
-                # reloads from polluting the back stack.
-                if not self._back_stack or self._back_stack[-1] != self.url:
-                    self._back_stack.append(self.url)
-                    if len(self._back_stack) > _MAX_HISTORY:
-                        self._back_stack = self._back_stack[-_MAX_HISTORY:]
-                self._forward_stack.clear()
-
         with self._lock:
-            self.url = clean_url
-            self.content = [RichLine("Loading...", self.attr_title)]
-            self.is_loading = True
-            self.scroll_y = 0
-        self._clear_search()
+            tab_idx = _tab_idx if _tab_idx is not None else self.active_tab_idx
+            tab = self.tabs[tab_idx]
+            if _push_history and tab.url:
+                # Deduplicate the previous entry to keep consecutive reloads
+                # from polluting the back stack.
+                if not tab.back_stack or tab.back_stack[-1] != tab.url:
+                    tab.back_stack.append(tab.url)
+                    if len(tab.back_stack) > _MAX_HISTORY:
+                        tab.back_stack = tab.back_stack[-_MAX_HISTORY:]
+                tab.forward_stack.clear()
 
-        thread = threading.Thread(target=self._fetch_thread, args=(sanitized_url,), daemon=True)
+            tab.url = clean_url
+            tab.content = [RichLine("Loading...", self.attr_title)]
+            tab.is_loading = True
+            tab.scroll_y = 0
+            tab.search_query = ""
+            tab.search_matches = []
+            tab.search_idx = -1
+        self._refresh_window_title()
+
+        thread = threading.Thread(
+            target=self._fetch_thread, args=(sanitized_url, tab_idx), daemon=True
+        )
         thread.start()
 
     def _go_back(self):
         with self._lock:
-            if not self._back_stack:
+            tab = self._cur()
+            if not tab or not tab.back_stack:
                 return None
-            self._forward_stack.append(self.url)
-            prev = self._back_stack.pop()
+            tab.forward_stack.append(tab.url)
+            prev = tab.back_stack.pop()
         self._load_url(prev, _push_history=False)
         return ActionResult(ActionType.REFRESH)
 
     def _go_forward(self):
         with self._lock:
-            if not self._forward_stack:
+            tab = self._cur()
+            if not tab or not tab.forward_stack:
                 return None
-            self._back_stack.append(self.url)
-            nxt = self._forward_stack.pop()
+            tab.back_stack.append(tab.url)
+            nxt = tab.forward_stack.pop()
         self._load_url(nxt, _push_history=False)
         return ActionResult(ActionType.REFRESH)
 
@@ -169,7 +527,7 @@ class RetroNetWindow(Window):
     # Network
     # ------------------------------------------------------------------
 
-    def _fetch_thread(self, url):
+    def _fetch_thread(self, url, tab_idx):
         try:
             headers = {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -183,8 +541,6 @@ class RetroNetWindow(Window):
             ssl_warning = False
 
             req = urllib.request.Request(url, headers=headers)
-            # Some test doubles for urllib.request.urlopen don't implement the
-            # context manager protocol; use a plain call and close when possible.
             try:
                 response = urllib.request.urlopen(req, timeout=10, context=context)
             except ssl.SSLError:
@@ -201,77 +557,58 @@ class RetroNetWindow(Window):
                     response.close()
                 except _RESPONSE_CLOSE_ERRORS:
                     pass
-            parsed = self._parse_html(raw_html)
+            with self._lock:
+                if tab_idx < len(self.tabs):
+                    self.tabs[tab_idx].raw_html = raw_html
+            parsed = self._parse_html(raw_html, tab_idx=tab_idx)
             if ssl_warning:
                 parsed.insert(0, RichLine("[SSL: certificate verification failed — showing unverified content]", self.attr_error))
             with self._lock:
-                self.content = parsed
+                if tab_idx < len(self.tabs):
+                    self.tabs[tab_idx].content = parsed
+                    self.tabs[tab_idx].is_loading = False
+                    if tab_idx == self.active_tab_idx:
+                        self._refresh_window_title()
         except _RETRONET_FETCH_ERRORS as e:
             msg = str(e) if str(e) else "Unknown network error or crash."
             with self._lock:
-                self.content = [
-                    RichLine(f"Error loading {url}:", self.attr_error),
-                    RichLine(msg, self.attr_dim)
-                ]
-        finally:
+                if tab_idx < len(self.tabs):
+                    self.tabs[tab_idx].content = [
+                        RichLine(f"Error loading {url}:", self.attr_error),
+                        RichLine(msg, self.attr_dim)
+                    ]
+                    self.tabs[tab_idx].is_loading = False
+        except Exception:
             with self._lock:
-                self.is_loading = False
+                if tab_idx < len(self.tabs):
+                    self.tabs[tab_idx].is_loading = False
 
     # ------------------------------------------------------------------
     # HTML parsing
     # ------------------------------------------------------------------
 
-    def _parse_html(self, raw_html):
+    def _parse_html(self, raw_html, tab_idx=None):
         """Ultra parser with style and structure support."""
-        title_match = re.search(r'<title>(.*?)</title>', raw_html, re.IGNORECASE | re.DOTALL)
-        if title_match:
-            new_title = f"RetroNet Ultra - {html.unescape(title_match.group(1)).strip()[:30]}"
+        parser = _RetroNetHTMLParser()
+        try:
+            parser.feed(raw_html)
+            parser.close()
+        except Exception:
+            pass
+
+        title = parser.get_title()
+        if title:
             with self._lock:
-                self.title = new_title
+                # The fetch thread may have switched the active tab while
+                # the request was in flight; write the title to the tab
+                # that initiated the fetch, not whichever tab is active now.
+                target_idx = tab_idx if tab_idx is not None else self.active_tab_idx
+                if 0 <= target_idx < len(self.tabs):
+                    self.tabs[target_idx].title = title
+                if tab_idx is None or tab_idx == self.active_tab_idx:
+                    self._refresh_window_title()
 
-        # Clean scripts, styles, SVG, noscript
-        text = re.sub(r'<(script|style|svg|noscript).*?>.*?</\1>', '', raw_html, flags=re.DOTALL | re.IGNORECASE)
-
-        # 1. Headers
-        text = re.sub(r'<h[1-3].*?>(.*?)</h[1-3]>', r'\n\n[H1]\1[/H]\n', text, flags=re.DOTALL | re.IGNORECASE)
-        text = re.sub(r'<h[4-6].*?>(.*?)</h[4-6]>', r'\n\n[H2]\1[/H]\n', text, flags=re.DOTALL | re.IGNORECASE)
-
-        # 2. Bold/Strong and Italic/Em
-        text = re.sub(r'<(b|strong).*?>(.*?)</\1>', r'[B]\2[/B]', text, flags=re.DOTALL | re.IGNORECASE)
-        text = re.sub(r'<(i|em).*?>(.*?)</\1>', r'[I]\2[/I]', text, flags=re.DOTALL | re.IGNORECASE)
-
-        # 3. Inputs/Buttons
-        def render_input(match):
-            tag = match.group(0)
-            if 'type="hidden"' in tag.lower(): return ""
-            p = re.search(r'placeholder=["\'](.*?)["\']', tag, re.I)
-            v = re.search(r'value=["\'](.*?)["\']', tag, re.I)
-            lbl = (v or p).group(1) if (v or p) else "Submit"
-            lbl = lbl.replace('\n', ' ').strip()
-            return f" [BT]{lbl}[/BT] "
-        text = re.sub(r'<input.*?>', render_input, text, flags=re.I)
-
-        def render_button(match):
-            lbl = match.group(1).replace('\n', ' ').strip()
-            return f" [BT]{lbl}[/BT] "
-        text = re.sub(r'<button.*?>(.*?)</button>', render_button, text, flags=re.I | re.S)
-
-        # 4. Links
-        def render_link(match):
-            href_m = re.search(r'href=["\'](.*?)["\']', match.group(0), re.I)
-            url = href_m.group(1) if href_m else "#"
-            label = match.group(1)
-            url = url.replace('\n', '').strip()
-            label = label.replace('\n', ' ').strip()
-            if not label: label = url[:20]
-            return f"[L]{url}|{label}[/L]"
-
-        text = re.sub(r'<a\s+.*?>(.*?)</a>', render_link, text, flags=re.DOTALL | re.IGNORECASE)
-
-        # 5. Block elements & cleanup
-        text = re.sub(r'<(p|div|li|br|form|tr|hr).*?>', r'\n', text, flags=re.IGNORECASE)
-        text = re.sub(r'<.*?>', '', text)
-        text = html.unescape(text)
+        text = parser.get_text()
 
         # 6. Post-process tokens into RichLine objects
         final_lines = []
@@ -334,41 +671,81 @@ class RetroNetWindow(Window):
         return final_lines
 
     # ------------------------------------------------------------------
+    # View source
+    # ------------------------------------------------------------------
+
+    def _view_source_path(self) -> str | None:
+        """Write the active tab's raw HTML to a deterministic temp file.
+
+        The path is derived from a hash of the tab URL so two RetroNet
+        windows viewing the same page share the file (no accumulation).
+        Returns the file path or ``None`` when there's nothing to show.
+        """
+        with self._lock:
+            cur = self._cur()
+            if cur is None or not cur.raw_html:
+                return None
+            url = cur.url or "blank"
+            raw = cur.raw_html
+        digest = hashlib.sha256(url.encode("utf-8", errors="replace")).hexdigest()[:16]
+        tmp_dir = tempfile.gettempdir()
+        path = os.path.join(tmp_dir, f"retrotui_retronet_viewsource_{digest}.html")
+        try:
+            with open(path, "w", encoding="utf-8", errors="replace") as f:
+                f.write(raw)
+        except OSError:
+            return None
+        return path
+
+    # ------------------------------------------------------------------
     # In-page search
     # ------------------------------------------------------------------
 
     def _clear_search(self):
-        self._search_query = ""
-        self._search_matches = []
-        self._search_idx = -1
+        tab = self._cur()
+        if tab is None:
+            return
+        with self._lock:
+            tab.search_query = ""
+            tab.search_matches = []
+            tab.search_idx = -1
 
     def _find_matches(self, query):
         """Find all line indices containing query (case-insensitive)."""
         if not query:
             return []
+        tab = self._cur()
+        if tab is None:
+            return []
         q = query.lower()
-        return [i for i, rl in enumerate(self.content) if q in rl.text.lower()]
+        return [i for i, rl in enumerate(tab.content) if q in rl.text.lower()]
 
     def _search_next(self):
         """Jump to next search match."""
-        if not self._search_matches:
+        tab = self._cur()
+        if tab is None or not tab.search_matches:
             return
-        self._search_idx = (self._search_idx + 1) % len(self._search_matches)
-        self.scroll_y = max(0, self._search_matches[self._search_idx] - 2)
+        tab.search_idx = (tab.search_idx + 1) % len(tab.search_matches)
+        tab.scroll_y = max(0, tab.search_matches[tab.search_idx] - 2)
 
     def _search_prev(self):
         """Jump to previous search match."""
-        if not self._search_matches:
+        tab = self._cur()
+        if tab is None or not tab.search_matches:
             return
-        self._search_idx = (self._search_idx - 1) % len(self._search_matches)
-        self.scroll_y = max(0, self._search_matches[self._search_idx] - 2)
+        tab.search_idx = (tab.search_idx - 1) % len(tab.search_matches)
+        tab.scroll_y = max(0, tab.search_matches[tab.search_idx] - 2)
 
     def execute_search(self, query):
         """Called when search input dialog completes."""
-        self._search_query = query
-        self._search_matches = self._find_matches(query)
-        self._search_idx = -1
-        if self._search_matches:
+        tab = self._cur()
+        if tab is None:
+            return ActionResult(ActionType.REFRESH)
+        with self._lock:
+            tab.search_query = query
+            tab.search_matches = self._find_matches(query)
+            tab.search_idx = -1
+        if tab.search_matches:
             self._search_next()
         return ActionResult(ActionType.REFRESH)
 
@@ -392,6 +769,24 @@ class RetroNetWindow(Window):
         content_x = bx
         content_w = bw
 
+        # Snapshot active tab state under the lock so draw is thread-safe.
+        with self._lock:
+            cur = self._cur()
+            if cur is None:
+                return
+            current_url = cur.url
+            has_back = bool(cur.back_stack)
+            has_fwd = bool(cur.forward_stack)
+            is_loading = cur.is_loading
+            loading_frame = cur.loading_frame
+            scroll_y = cur.scroll_y
+            content_snapshot = list(cur.content)
+            search_query = cur.search_query
+            search_matches = list(cur.search_matches)
+            search_idx = cur.search_idx
+            tabs_snapshot = list(enumerate(self.tabs))
+            active_idx = self.active_tab_idx
+
         # Sidebar (History)
         if self.show_sidebar:
             sidebar_w = self._sidebar_width(bw)
@@ -401,19 +796,44 @@ class RetroNetWindow(Window):
                 safe_addstr(stdscr, by + i, bx + sidebar_w - 1, "│", self.attr_inactive)
             safe_addstr(stdscr, by, bx + 1, "HISTORY", self.attr_title)
             with self._lock:
-                hist = list(self._back_stack[-max(1, bh - 2):])
+                hist = list(cur.back_stack[-max(1, bh - 2):]) if cur else []
             for i, h_url in enumerate(hist):
                 display = urllib.parse.unquote(h_url)[:sidebar_w - 3]
                 safe_addstr(stdscr, by + 1 + i, bx + 1, display, self.attr_dim)
 
+        # Tab bar (above the nav bar). Only rendered when 2+ tabs are open —
+        # single-tab windows keep the pre-tabs layout so click/keyboard
+        # coordinates stay identical for the most common case.
+        tab_bar_y = by
+        if len(tabs_snapshot) > 1 and content_w > 4:
+            tab_x = content_x + 1
+            for idx, tab in tabs_snapshot:
+                if tab_x >= content_x + content_w - 4:
+                    break
+                label_source = tab.title or tab.url or "New Tab"
+                label = label_source.replace('\n', ' ').replace('\t', ' ')
+                if len(label) > 14:
+                    label = label[:13] + "…"
+                marker = "▶" if idx == active_idx else " "
+                chip = f"{marker}{label}×"
+                chip_w = min(len(chip) + 1, content_x + content_w - tab_x)
+                if chip_w <= 1:
+                    break
+                attr = (self.attr_bold | curses.A_REVERSE) if idx == active_idx else self.attr_inactive
+                safe_addstr(stdscr, tab_bar_y, tab_x, chip[:chip_w - 1].ljust(chip_w - 1), attr)
+                tab_x += chip_w - 1
+            # New-tab affordance
+            if tab_x < content_x + content_w - 2 and len(tabs_snapshot) < 12:
+                safe_addstr(stdscr, tab_bar_y, tab_x, " [+]", self.attr_dim)
+                tab_x += 4
+            # Move the nav bar down by one row to make room for the tab bar.
+            by += 1
+            bh = max(1, bh - 1)
+
         # Navigation bar: ◀ ▶ 🔒 [url...]
         nav_y = by
-        with self._lock:
-            current_url = self.url
-            has_back = bool(self._back_stack)
-            has_fwd = bool(self._forward_stack)
         lock_icon = "🔒" if current_url.startswith('https') else "🔓"
-        back_ch = "◀" if has_back else "◁"
+        back_ch = "◀" if has_back else "▷"
         fwd_ch = "▶" if has_fwd else "▷"
         nav_prefix = f" {back_ch} {fwd_ch} {lock_icon} "
         safe_addstr(stdscr, nav_y, content_x + 1, nav_prefix, body_attr | self.attr_bold)
@@ -424,23 +844,24 @@ class RetroNetWindow(Window):
         safe_addstr(stdscr, nav_y, addr_start, display_url.ljust(addr_width)[:addr_width], self.attr_inactive)
 
         # Loading animation
-        if self.is_loading:
-            spinner = self.loading_chars[self.loading_frame % len(self.loading_chars)]
-            self.loading_frame += 1
+        if is_loading:
+            spinner = self.loading_chars[loading_frame % len(self.loading_chars)]
+            with self._lock:
+                if cur is not None:
+                    cur.loading_frame = loading_frame + 1
             safe_addstr(stdscr, nav_y, bx + bw - 4, f" {spinner} ", self.attr_title | self.attr_bold)
 
         # Content area
         content_y_start = by + 2
         content_h = max(1, bh - 3)
-        with self._lock:
-            visible_lines = self.content[self.scroll_y : self.scroll_y + content_h]
+        visible_lines = content_snapshot[scroll_y : scroll_y + content_h]
 
-        search_set = set(self._search_matches) if self._search_query else set()
-        current_match = self._search_matches[self._search_idx] if 0 <= self._search_idx < len(self._search_matches) else -1
+        search_set = set(search_matches) if search_query else set()
+        current_match = search_matches[search_idx] if 0 <= search_idx < len(search_matches) else -1
         for i, rline in enumerate(visible_lines):
             line_attr = rline.attr if rline.attr else body_attr
             text = rline.text[:content_w - 2]
-            abs_idx = self.scroll_y + i
+            abs_idx = scroll_y + i
             if abs_idx in search_set:
                 if abs_idx == current_match:
                     line_attr = curses.A_REVERSE | curses.A_BOLD
@@ -449,23 +870,22 @@ class RetroNetWindow(Window):
             safe_addstr(stdscr, content_y_start + i, content_x + 1, text, line_attr)
 
         # Scrollbar
-        with self._lock:
-            total = len(self.content)
+        total = len(content_snapshot)
         if total > content_h and content_h > 0:
             scroll_h = max(1, int(content_h * content_h / total))
-            scroll_pos = int(self.scroll_y * content_h / total)
+            scroll_pos = int(scroll_y * content_h / total)
             for i in range(content_h):
                 char = "┃" if scroll_pos <= i < scroll_pos + scroll_h else "│"
                 safe_addstr(stdscr, content_y_start + i, bx + bw - 1, char, self.attr_inactive)
 
         # Footer
         help_y = by + bh - 1
-        if self._search_query:
-            idx_display = self._search_idx + 1 if self._search_idx >= 0 else 0
-            match_info = f" /{self._search_query}  [{idx_display}/{len(self._search_matches)}]  [n]Next [N]Prev [Esc]Clear "
+        if search_query:
+            idx_display = search_idx + 1 if search_idx >= 0 else 0
+            match_info = f" /{search_query}  [{idx_display}/{len(search_matches)}]  [n]Next [N]Prev [Esc]Clear "
             safe_addstr(stdscr, help_y, bx + 1, match_info[:bw - 2], self.attr_title)
         else:
-            help_txt = " [◀/▶]Nav [G]Go [H]Hist [/]Find [PgUp/Dn]Scroll "
+            help_txt = " [◀/▶]Nav [G]Go [H]Hist [/]Find [Ctrl+T]Tab [Ctrl+B]Bkm [Ctrl+U]Src [PgUp/Dn]Scroll "
             safe_addstr(stdscr, help_y, bx + 1, help_txt[:bw - 2], self.attr_title)
 
     # ------------------------------------------------------------------
@@ -477,11 +897,17 @@ class RetroNetWindow(Window):
         sidebar_w = self._sidebar_width(bw) if self.show_sidebar else 0
         content_x = bx + sidebar_w
 
+        # Tab bar click: switch or close tabs. Only when 2+ tabs are open
+        # (the bar isn't drawn for a single tab — see ``draw``).
+        if my == by and len(self.tabs) > 1 and content_x <= mx:
+            return self._handle_tab_bar_click(mx - content_x - 1, bw) or ActionResult(ActionType.REFRESH)
+
         # Sidebar click — navigate to history entry
         if self.show_sidebar and bx <= mx < bx + sidebar_w - 1:
             idx = my - (by + 1)
             with self._lock:
-                hist = list(self._back_stack[-max(1, bh - 2):])
+                cur = self._cur()
+                hist = list(cur.back_stack[-max(1, bh - 2):]) if cur else []
             if 0 <= idx < len(hist):
                 self._load_url(hist[idx])
                 return ActionResult(ActionType.REFRESH)
@@ -494,17 +920,21 @@ class RetroNetWindow(Window):
             if 4 <= rel <= 7:
                 return self._go_forward() or ActionResult(ActionType.REFRESH)
             with self._lock:
-                current_url = self.url
+                cur = self._cur()
+                current_url = cur.url if cur else ""
             return ActionResult(ActionType.REQUEST_URL, current_url)
 
         # Content area clicks
         content_y_start = by + 2
         content_h = max(1, bh - 3)
         if content_y_start <= my < content_y_start + content_h:
-            line_idx = self.scroll_y + (my - content_y_start)
             with self._lock:
-                rline = self.content[line_idx] if line_idx < len(self.content) else None
-                current_url = self.url
+                cur = self._cur()
+                if cur is None:
+                    return None
+                line_idx = cur.scroll_y + (my - content_y_start)
+                rline = cur.content[line_idx] if line_idx < len(cur.content) else None
+                current_url = cur.url
             if rline:
                 relative_mx = mx - content_x
                 for span in rline.spans:
@@ -522,6 +952,34 @@ class RetroNetWindow(Window):
 
         return super().handle_click(mx, my)
 
+    def _handle_tab_bar_click(self, rel_x: int, body_w: int):
+        """Translate a click on the tab bar into a switch/close action."""
+        if rel_x < 0:
+            return None
+        with self._lock:
+            tabs_snapshot = list(enumerate(self.tabs))
+            active_idx = self.active_tab_idx
+        cursor = 0
+        for idx, tab in tabs_snapshot:
+            label_source = tab.title or tab.url or "New Tab"
+            label = label_source.replace('\n', ' ').replace('\t', ' ')
+            if len(label) > 14:
+                label = label[:13] + "…"
+            chip_w = len(label) + 2  # marker + label + "×" + space
+            if rel_x < cursor + chip_w:
+                # Last char of the chip is the close marker.
+                if rel_x == cursor + chip_w - 1 and len(tabs_snapshot) > 1:
+                    if self._close_tab(idx):
+                        return ActionResult(ActionType.EXECUTE, AppAction.CLOSE_WINDOW)
+                else:
+                    self._switch_tab(idx)
+                return None
+            cursor += chip_w
+        # Click on the trailing "+" affordance: new tab.
+        if 0 <= rel_x - cursor <= 2 and len(tabs_snapshot) < 12:
+            self._new_tab(_DEFAULT_TAB_URL, activate=True)
+        return None
+
     # ------------------------------------------------------------------
     # Keyboard
     # ------------------------------------------------------------------
@@ -531,8 +989,12 @@ class RetroNetWindow(Window):
         _, _, _, bh = self.body_rect()
         content_h = max(1, bh - 3)
 
+        with self._lock:
+            cur = self._cur()
+            search_query = cur.search_query if cur else ""
+
         # Search mode: n/N/Esc override normal keys
-        if self._search_query:
+        if search_query:
             if code == ord('n'):
                 self._search_next()
                 return ActionResult(ActionType.REFRESH)
@@ -545,24 +1007,35 @@ class RetroNetWindow(Window):
 
         if code == curses.KEY_DOWN:
             with self._lock:
-                max_scroll = max(0, len(self.content) - content_h)
-            if self.scroll_y < max_scroll:
-                self.scroll_y += 1
+                if cur is None:
+                    return ActionResult(ActionType.REFRESH)
+                max_scroll = max(0, len(cur.content) - content_h)
+                if cur.scroll_y < max_scroll:
+                    cur.scroll_y += 1
         elif code == curses.KEY_UP:
-            if self.scroll_y > 0:
-                self.scroll_y -= 1
+            with self._lock:
+                if cur is not None and cur.scroll_y > 0:
+                    cur.scroll_y -= 1
         elif code == curses.KEY_NPAGE:  # Page Down
             with self._lock:
-                max_scroll = max(0, len(self.content) - content_h)
-            self.scroll_y = min(max_scroll, self.scroll_y + content_h)
+                if cur is None:
+                    return ActionResult(ActionType.REFRESH)
+                max_scroll = max(0, len(cur.content) - content_h)
+                cur.scroll_y = min(max_scroll, cur.scroll_y + content_h)
         elif code == curses.KEY_PPAGE:  # Page Up
-            self.scroll_y = max(0, self.scroll_y - content_h)
+            with self._lock:
+                if cur is not None:
+                    cur.scroll_y = max(0, cur.scroll_y - content_h)
         elif code == curses.KEY_HOME:
-            self.scroll_y = 0
+            with self._lock:
+                if cur is not None:
+                    cur.scroll_y = 0
         elif code == curses.KEY_END:
             with self._lock:
-                max_scroll = max(0, len(self.content) - content_h)
-            self.scroll_y = max_scroll
+                if cur is None:
+                    return ActionResult(ActionType.REFRESH)
+                max_scroll = max(0, len(cur.content) - content_h)
+                cur.scroll_y = max_scroll
         elif code == curses.KEY_LEFT:
             return self._go_back()
         elif code == curses.KEY_RIGHT:
@@ -571,10 +1044,32 @@ class RetroNetWindow(Window):
             self.show_sidebar = not self.show_sidebar
         elif code in (ord('g'), ord('G')):
             with self._lock:
-                current_url = self.url
+                current_url = cur.url if cur else ""
             return ActionResult(ActionType.REQUEST_URL, current_url)
         elif code == ord('/'):
             return ActionResult(ActionType.REQUEST_URL, "search:")
+        elif code == 2:  # Ctrl+B
+            return ActionResult(ActionType.REQUEST_BOOKMARKS)
+        elif code == 4:  # Ctrl+D
+            return ActionResult(ActionType.REQUEST_ADD_BOOKMARK)
+        elif code == 21:  # Ctrl+U — view source of active tab
+            path = self._view_source_path()
+            if path:
+                return ActionResult(ActionType.OPEN_FILE, path)
+            return ActionResult(ActionType.REFRESH)
+        elif code == 20:  # Ctrl+T — new tab
+            self._new_tab(_DEFAULT_TAB_URL, activate=True)
+            return ActionResult(ActionType.REFRESH)
+        elif code == 23:  # Ctrl+W — close current tab (or window if last)
+            if self._close_tab(self.active_tab_idx):
+                return ActionResult(ActionType.EXECUTE, AppAction.CLOSE_WINDOW)
+            return ActionResult(ActionType.REFRESH)
+        elif code == 9:  # Ctrl+I — next tab (Tab already used for cycling by some terminals)
+            self._cycle_tab(1)
+            return ActionResult(ActionType.REFRESH)
+        elif code == curses.KEY_BTAB:  # Shift+Tab — previous tab
+            self._cycle_tab(-1)
+            return ActionResult(ActionType.REFRESH)
         return super().handle_key(key)
 
     def open_path(self, path):
@@ -586,3 +1081,133 @@ class RetroNetWindow(Window):
             return None
         self._load_url(path)
         return None
+
+
+class BookmarksWindow(Window):
+    """Standalone bookmarks list for RetroNet.
+
+    Persists to ``~/.config/retrotui/bookmarks.toml`` via
+    ``retrotui.core.bookmarks``. Activating a bookmark navigates the source
+    RetroNet window and closes this list.
+    """
+
+    def __init__(self, x, y, w, h, source_win=None):
+        super().__init__('RetroNet Bookmarks', x, y, w, h)
+        self.source_win = source_win
+        self.bookmarks: list = []
+        self.selected_idx = 0
+        self.status_msg = ""
+        self.attr_title = theme_attr('window_title')
+        self.attr_dim = curses.A_DIM
+        self.attr_bold = curses.A_BOLD
+        self.attr_inactive = theme_attr('window_inactive')
+        self.attr_body = theme_attr('window_body')
+        self.attr_error = theme_attr('error')
+        self._reload()
+
+    def _reload(self):
+        from ..core.bookmarks import load_bookmarks
+        self.bookmarks = load_bookmarks()
+        if self.selected_idx >= len(self.bookmarks):
+            self.selected_idx = max(0, len(self.bookmarks) - 1)
+        self.scroll_offset = 0
+
+    def _delete_selected(self):
+        if not self.bookmarks:
+            return
+        from ..core.bookmarks import remove_bookmark
+        bm = self.bookmarks[self.selected_idx]
+        remove_bookmark(bm.title)
+        self.status_msg = f"Deleted '{bm.title}'"
+        self._reload()
+
+    def _activate_selected(self):
+        if not self.bookmarks:
+            return ActionResult(ActionType.REFRESH)
+        bm = self.bookmarks[self.selected_idx]
+        if self.source_win is not None:
+            self.source_win._load_url(bm.url)
+            return ActionResult(ActionType.EXECUTE, AppAction.CLOSE_WINDOW)
+        self.status_msg = f"No source window for '{bm.title}'"
+        return ActionResult(ActionType.REFRESH)
+
+    def handle_key(self, key):
+        code = normalize_key_code(key)
+        if code == 27:  # Esc
+            return ActionResult(ActionType.EXECUTE, AppAction.CLOSE_WINDOW)
+        if code in (curses.KEY_UP, ord('k')):
+            if self.selected_idx > 0:
+                self.selected_idx -= 1
+                self._adjust_scroll()
+        elif code in (curses.KEY_DOWN, ord('j')):
+            if self.selected_idx < len(self.bookmarks) - 1:
+                self.selected_idx += 1
+                self._adjust_scroll()
+        elif code in (curses.KEY_HOME,):
+            self.selected_idx = 0
+            self._adjust_scroll()
+        elif code in (curses.KEY_END,):
+            self.selected_idx = max(0, len(self.bookmarks) - 1)
+            self._adjust_scroll()
+        elif code in (curses.KEY_ENTER, 10, 13):
+            return self._activate_selected()
+        elif code in (ord('d'), ord('D')):
+            self._delete_selected()
+        elif code in (ord('r'), ord('R')):
+            self._reload()
+            self.status_msg = "Reloaded"
+        return ActionResult(ActionType.REFRESH)
+
+    def handle_click(self, mx, my):
+        if not self.contains(mx, my):
+            return None
+        bx, by, bw, bh = self.body_rect()
+        if by <= my < by + bh:
+            row = my - by + self.scroll_offset
+            if 0 <= row < len(self.bookmarks):
+                self.selected_idx = row
+                return self._activate_selected()
+        return None
+
+    def _adjust_scroll(self):
+        _, _, _, bh = self.body_rect()
+        if bh <= 0:
+            return
+        if self.selected_idx < self.scroll_offset:
+            self.scroll_offset = self.selected_idx
+        elif self.selected_idx >= self.scroll_offset + bh:
+            self.scroll_offset = self.selected_idx - bh + 1
+
+    def draw(self, stdscr):
+        if not self.visible:
+            return
+        body_attr = self.draw_frame(stdscr)
+        bx, by, bw, bh = self.body_rect()
+        if bh <= 0:
+            return
+
+        # Empty state
+        if not self.bookmarks:
+            msg = " No bookmarks yet. Press Ctrl+D in RetroNet to add one. "
+            safe_addstr(stdscr, by + 1, bx + 1, msg[:bw - 2], self.attr_dim)
+            hint = " [Esc]Close"
+            safe_addstr(stdscr, by + bh - 1, bx + 1, hint[:bw - 2], self.attr_title)
+            return
+
+        # List
+        for i in range(bh - 1):
+            idx = self.scroll_offset + i
+            if idx >= len(self.bookmarks):
+                break
+            bm = self.bookmarks[idx]
+            is_sel = (idx == self.selected_idx)
+            attr = (self.attr_bold | curses.A_REVERSE) if is_sel else body_attr
+            line = f"  {bm.title[:18].ljust(18)}  {bm.url[:bw - 26]}"
+            safe_addstr(stdscr, by + i, bx + 1, line.ljust(bw - 2)[:bw - 2], attr)
+
+        # Footer
+        footer = f" [Enter]Open  [D]Delete  [R]Reload  [Esc]Close"
+        safe_addstr(stdscr, by + bh - 1, bx + 1, footer[:bw - 2], self.attr_title)
+        if self.status_msg:
+            msg = self.status_msg[:bw - 2]
+            safe_addstr(stdscr, by + bh - 2, bx + 1, msg, self.attr_dim)

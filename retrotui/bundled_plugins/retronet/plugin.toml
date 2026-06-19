@@ -1,7 +1,7 @@
 [plugin]
 id = "retronet"
 name = "RetroNet Explorer"
-version = "0.9.3"
+version = "0.9.5"
 description = "Retro-style web browser"
 
 [plugin.window]
