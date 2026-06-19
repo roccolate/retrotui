@@ -88,6 +88,20 @@ class ClockComponentTests(unittest.TestCase):
 
         self.curses.beep.assert_called_once_with()
 
+    def test_tick_marks_dirty_once_per_second(self):
+        win = self._make_window()
+        times = [
+            datetime(2026, 2, 16, 10, 0, 1),
+            datetime(2026, 2, 16, 10, 0, 1),
+            datetime(2026, 2, 16, 10, 0, 2),
+        ]
+
+        with mock.patch.object(self.clock_mod, "datetime") as fake_datetime:
+            fake_datetime.now.side_effect = times
+            self.assertTrue(win.tick())
+            self.assertFalse(win.tick())
+            self.assertTrue(win.tick())
+
     def test_missing_branches_for_coverage(self):
         win = self._make_window()
         win.chime_enabled = True

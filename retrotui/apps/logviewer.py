@@ -24,10 +24,6 @@ _LOG_COLOR_ERRORS = (
 class LogViewerWindow(SelectableTextMixin, Window):
     """Read-only log viewer with follow mode and vim-like search."""
 
-    @property
-    def needs_redraw(self):
-        return getattr(self, "follow_mode", False) and getattr(self, "filepath", None) is not None
-
     MAX_LINES = 5000
     READ_TAIL_BYTES = 512 * 1024
     POLL_INTERVAL_SECONDS = 0.4
@@ -168,7 +164,6 @@ class LogViewerWindow(SelectableTextMixin, Window):
             except _LOG_COLOR_ERRORS:
                 pass
         return base_attr | curses.A_BOLD
-        return base_attr | curses.A_BOLD
 
     def _visible_line_rows(self):
         _, _, _, bh = self.body_rect()
@@ -254,10 +249,10 @@ class LogViewerWindow(SelectableTextMixin, Window):
     def _poll_for_updates(self, force=False):
         """Read appended bytes while tail mode is enabled."""
         if not self.filepath:
-            return
+            return False
         now = time.monotonic()
         if not force and (now - self._last_poll) < self.POLL_INTERVAL_SECONDS:
-            return
+            return False
         self._last_poll = now
 
         try:
@@ -272,11 +267,12 @@ class LogViewerWindow(SelectableTextMixin, Window):
                 chunk = stream.read()
                 self.file_position = stream.tell()
         except OSError as exc:
+            old_error = self._error_message
             self._error_message = str(exc)
-            return
+            return self._error_message != old_error
 
         if not chunk:
-            return
+            return False
 
         text = self._tail_remainder + self._normalize_text(chunk)
         parts = text.split("\n")
@@ -286,6 +282,13 @@ class LogViewerWindow(SelectableTextMixin, Window):
             self._tail_remainder = parts.pop() if parts else text
         self._error_message = None
         self._append_lines(parts)
+        return True
+
+    def tick(self):
+        """Poll followed files and redraw only when new data arrives."""
+        if not self.follow_mode or self.freeze_scroll:
+            return False
+        return self._poll_for_updates(force=False)
 
     def _rebuild_search_matches(self):
         query = self.search_query.strip().lower()

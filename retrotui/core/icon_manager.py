@@ -31,6 +31,28 @@ class IconPositionManager:
         self.drag_offset_x = 0
         self.drag_offset_y = 0
 
+    @staticmethod
+    def _quote_toml_key(key):
+        return '"' + str(key).replace('\\', '\\\\').replace('"', '\\"') + '"'
+
+    @staticmethod
+    def _unquote_toml_key(key):
+        if len(key) < 2 or key[0] != '"' or key[-1] != '"':
+            return key
+        out = []
+        escape = False
+        for ch in key[1:-1]:
+            if escape:
+                out.append(ch)
+                escape = False
+            elif ch == '\\':
+                escape = True
+            else:
+                out.append(ch)
+        if escape:
+            out.append('\\')
+        return ''.join(out)
+
     # ------------------------------------------------------------------
     # Icon drag helpers
     # ------------------------------------------------------------------
@@ -101,7 +123,7 @@ class IconPositionManager:
             if '=' not in line:
                 continue
             key, val = line.split('=', 1)
-            key = key.strip()
+            key = self._unquote_toml_key(key.strip())
             val = val.strip().strip('"').strip("'")
             try:
                 x_str, y_str = val.split(',')
@@ -139,7 +161,7 @@ class IconPositionManager:
         out_lines.append('')
         out_lines.append('[icons]')
         for name, (x, y) in sorted(self.positions.items()):
-            out_lines.append(f'{name} = "{x},{y}"')
+            out_lines.append(f'{self._quote_toml_key(name)} = "{x},{y}"')
 
         cfg_path.parent.mkdir(parents=True, exist_ok=True)
         cfg_path.write_text('\n'.join(out_lines) + '\n', encoding='utf-8', newline='\n')

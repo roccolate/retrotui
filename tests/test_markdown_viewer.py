@@ -89,6 +89,20 @@ class TestMarkdownViewer(unittest.TestCase):
         self.assertIsNotNone(bold_call)
         self.assertTrue(bold_call[4] & 1) # A_BOLD
 
+    def test_draw_falls_back_when_color_capability_probe_fails(self):
+        win = self.MarkdownViewerWindow(0, 0, 80, 24)
+        win.raw_content = ["```", "code", "```", "- item", "`inline`"]
+        stdscr = mock.Mock()
+        stdscr.getmaxyx.return_value = (24, 80)
+
+        with mock.patch(
+            "retrotui.apps.markdown_viewer.curses.can_change_color",
+            side_effect=Exception("not initialized"),
+        ):
+            win.draw(stdscr)
+
+        self.assertTrue(self.mock_safe.called)
+
     def test_max_scroll_uses_raw_content_length(self):
         """Each raw line maps to one visible row, so raw count is correct."""
         win = self.MarkdownViewerWindow(0, 0, 80, 24)

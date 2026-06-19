@@ -353,12 +353,62 @@ class TerminalSessionTests(unittest.TestCase):
 
         with (
             mock.patch.object(self.mod.os, "close", side_effect=OSError("closed")),
-            mock.patch.object(self.mod.TerminalSession, "poll_exit", return_value=False) as poll_exit,
+            mock.patch.object(self.mod.os, "waitpid", return_value=(9003, 0)) as waitpid,
+            mock.patch.object(self.mod.TerminalSession, "terminate", return_value=True) as terminate,
+            mock.patch.object(self.mod.TerminalSession, "kill", return_value=True) as kill_process,
         ):
             session.close()
 
-        poll_exit.assert_called_once_with()
+        terminate.assert_called_once_with()
+        kill_process.assert_not_called()
+        waitpid.assert_called_once_with(9003, getattr(self.mod.os, "WNOHANG", 0))
         self.assertIsNone(session.master_fd)
+        self.assertIsNone(session.child_pid)
+        self.assertFalse(session.running)
+
+    def test_close_kills_and_reaps_when_child_does_not_exit_after_term(self):
+        session = self.mod.TerminalSession()
+        session.master_fd = 97
+        session.running = True
+        session.child_pid = 9004
+
+        with (
+            mock.patch.object(self.mod.os, "close"),
+            mock.patch.object(
+                self.mod.os,
+                "waitpid",
+                side_effect=[(0, 0), (9004, 0)],
+            ) as waitpid,
+            mock.patch.object(self.mod.time, "monotonic", side_effect=[0.0, 1.0, 1.0, 1.0]),
+            mock.patch.object(self.mod.TerminalSession, "terminate", return_value=True) as terminate,
+            mock.patch.object(self.mod.TerminalSession, "kill", return_value=True) as kill_process,
+        ):
+            session.close()
+
+        terminate.assert_called_once_with()
+        kill_process.assert_called_once_with()
+        self.assertEqual(waitpid.call_count, 2)
+        self.assertIsNone(session.child_pid)
+        self.assertFalse(session.running)
+
+    def test_close_reaps_stopped_session_with_child_pid(self):
+        session = self.mod.TerminalSession()
+        session.master_fd = 98
+        session.running = False
+        session.child_pid = 9005
+
+        with (
+            mock.patch.object(self.mod.os, "close"),
+            mock.patch.object(self.mod.os, "waitpid", return_value=(9005, 0)) as waitpid,
+            mock.patch.object(self.mod.TerminalSession, "terminate") as terminate,
+            mock.patch.object(self.mod.TerminalSession, "kill") as kill_process,
+        ):
+            session.close()
+
+        terminate.assert_not_called()
+        kill_process.assert_not_called()
+        waitpid.assert_called_once_with(9005, getattr(self.mod.os, "WNOHANG", 0))
+        self.assertIsNone(session.child_pid)
         self.assertFalse(session.running)
 
 

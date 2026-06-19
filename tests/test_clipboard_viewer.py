@@ -54,3 +54,15 @@ class ClipboardViewerTests(unittest.TestCase):
         # Clear via key
         win.handle_key(ord('c'))
         self.assertFalse(self.clip.has_clipboard_text())
+
+    def test_selected_row_uses_existing_theme_role(self):
+        win = self.mod.ClipboardViewerWindow(0, 0, 40, 12)
+        win.history = ["hello"]
+        win.selected_index = 0
+
+        with mock.patch.object(win, "draw_frame", return_value=0), mock.patch.object(
+            self.mod, "safe_addstr"
+        ), mock.patch.object(self.mod, "theme_attr", return_value=0) as theme_attr:
+            win.draw(None)
+
+        theme_attr.assert_any_call("file_selected")

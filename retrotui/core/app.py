@@ -197,11 +197,12 @@ class RetroTUI:
     def poll_background_operation(self):
         return self.file_ops.poll_background_operation()
 
-    def _run_file_operation_with_progress(self, win, *, operation, destination=None):
+    def _run_file_operation_with_progress(self, win, *, operation, destination=None, source_path=None):
         return self.file_ops._run_file_operation_with_progress(
             win,
             operation=operation,
             destination=destination,
+            source_path=source_path,
         )
 
     def _get_icon_mgr(self):
@@ -533,7 +534,15 @@ class RetroTUI:
         self.theme_name = self.theme.key
         init_colors(self.theme)
 
-    def apply_preferences(self, *, show_hidden=None, word_wrap_default=None, sunday_first=None, apply_to_open_windows=False):
+    def apply_preferences(
+        self,
+        *,
+        show_hidden=None,
+        word_wrap_default=None,
+        sunday_first=None,
+        show_welcome=None,
+        apply_to_open_windows=False,
+    ):
         """Apply runtime preferences used by app windows and defaults."""
         if show_hidden is not None:
             self.default_show_hidden = bool(show_hidden)
@@ -541,12 +550,15 @@ class RetroTUI:
             self.default_word_wrap = bool(word_wrap_default)
         if sunday_first is not None:
             self.default_sunday_first = bool(sunday_first)
+        if show_welcome is not None:
+            self.show_welcome = bool(show_welcome)
 
         if hasattr(self, '_event_bus'):
             self._event_bus.publish("config.changed", data={
                 "show_hidden": getattr(self, "default_show_hidden", None),
                 "word_wrap_default": getattr(self, "default_word_wrap", None),
                 "sunday_first": getattr(self, "default_sunday_first", None),
+                "show_welcome": getattr(self, "show_welcome", None),
             })
 
         if not apply_to_open_windows:

@@ -115,7 +115,7 @@ class ClipboardViewerWindow(Window):
             attr = body_attr
             if i == self.selected_index:
                 try:
-                    sel_attr = theme_attr("selected")
+                    sel_attr = theme_attr("file_selected")
                     # combine, but fall back to body_attr if theme_attr is not available
                     attr = body_attr | (sel_attr or 0)
                 except _CLIPBOARD_THEME_ERRORS:

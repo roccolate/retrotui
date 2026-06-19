@@ -218,6 +218,35 @@ class EventLoopTests(unittest.TestCase):
 
         app.stdscr.timeout.assert_called_once_with(120)
 
+    def test_runtime_metrics_use_default_for_invalid_profile_interval(self):
+        app = self._make_app()
+
+        with mock.patch.dict(
+            self.event_loop.os.environ,
+            {"RETROTUI_PROFILE_INTERVAL": "not-a-number"},
+        ):
+            metrics = self.event_loop._ensure_runtime_metrics(app)
+
+        self.assertEqual(metrics["report_interval_s"], 5.0)
+
+    def test_emit_runtime_metrics_uses_default_for_invalid_interval(self):
+        metrics = {
+            "enabled": True,
+            "started_at": 0.0,
+            "last_report_at": 0.0,
+            "report_interval_s": "not-a-number",
+            "loops": 1,
+            "redraws": 1,
+            "dispatched_events": 1,
+        }
+
+        with mock.patch.object(self.event_loop.time, "perf_counter", return_value=10.0):
+            with mock.patch.object(self.event_loop.LOGGER, "debug") as debug_mock:
+                self.event_loop._emit_runtime_metrics(metrics, final=False)
+
+        debug_mock.assert_called_once()
+        self.assertEqual(metrics["last_report_at"], 10.0)
+
     def test_run_app_loop_runs_once_and_cleans_up(self):
         app = self._make_app()
 

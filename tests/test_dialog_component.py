@@ -86,6 +86,27 @@ class DialogComponentTests(unittest.TestCase):
         self.assertEqual(dialog.handle_key(10), 0)
         self.assertEqual(dialog.handle_key(27), 2)  # Esc -> last button
 
+    def test_multiselect_click_uses_drawn_geometry_without_initscr(self):
+        dialog = self.dialog_mod.MultiSelectDialog(
+            "Choose",
+            "Pick one",
+            [("Alpha", "alpha", False)],
+            width=30,
+        )
+        dialog._dialog_x = 10
+        dialog._dialog_y = 5
+
+        with mock.patch.object(
+            self.dialog_mod.curses,
+            "initscr",
+            side_effect=AssertionError("no initscr"),
+            create=True,
+        ):
+            result = dialog.handle_click(13, 5 + len(dialog.lines) + 4)
+
+        self.assertEqual(result, -1)
+        self.assertTrue(dialog.choices[0][2])
+
     def test_input_dialog_handle_key_editing_and_actions(self):
         dialog = self.dialog_mod.InputDialog("Save As", "Name:", initial_value="ab", width=24)
 

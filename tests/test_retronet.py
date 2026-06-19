@@ -21,6 +21,14 @@ class RetroNetTests(unittest.TestCase):
             with mock.patch('retrotui.apps.retronet.threading.Thread'):
                 self.win = RetroNetWindow(0, 0, 80, 24)
 
+    def test_constructor_loads_default_tab_once(self):
+        with mock.patch('retrotui.apps.retronet.theme_attr', return_value=0), mock.patch.object(
+            RetroNetWindow, "_load_url", autospec=True
+        ) as load_url:
+            RetroNetWindow(0, 0, 80, 24)
+
+        self.assertEqual(load_url.call_count, 1)
+
     def test_sanitize_url(self):
         # Basic HTTP prepend
         self.assertEqual(self.win._sanitize_url("google.com"), "http://google.com")

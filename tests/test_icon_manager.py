@@ -1,6 +1,8 @@
 import sys
 import types
 import unittest
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from unittest import mock
 
 
@@ -80,6 +82,26 @@ class IconManagerTests(unittest.TestCase):
 
         self.assertEqual(mgr.get_icon_at(10, 6), 0)
         self.assertEqual(mgr.get_icon_at(9, 5), -1)
+
+    def test_save_and_load_quotes_icon_keys(self):
+        app = types.SimpleNamespace(
+            icons=[],
+            stdscr=types.SimpleNamespace(getmaxyx=lambda: (24, 120)),
+        )
+        mgr = IconPositionManager(app)
+        mgr.positions = {'ASCII Vid': (7, 9), 'Quote "App"': (1, 2)}
+
+        with TemporaryDirectory() as tmp:
+            path = f"{tmp}/config.toml"
+            mgr.save(path)
+            text = Path(path).read_text(encoding="utf-8")
+            self.assertIn('"ASCII Vid" = "7,9"', text)
+            self.assertIn('"Quote \\"App\\"" = "1,2"', text)
+
+            loaded = IconPositionManager(app).load(path)
+
+        self.assertEqual(loaded['ASCII Vid'], (7, 9))
+        self.assertEqual(loaded['Quote "App"'], (1, 2))
 
 
 if __name__ == "__main__":

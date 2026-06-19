@@ -67,7 +67,7 @@
 - [x] Atributos por celda para selección/copy (cada celda guarda `(char, attr)`; el sistema de selección los expone via `_line_cells` rstrípeado).
 - [x] Mouse pass-through opcional cuando el programa hijo active mouse reporting (14 tests en `tests/test_terminal_mouse_passthrough.py`; tracking de DEC private modes `_mouse_modes`, encode SGR `\e[<Cb;Cx;CyM`/`m`, reenvío via `_forward_payload`).
 - [x] Mantener compatibilidad GPM para menús/selección de RetroTUI (cubierto por la rama "sin modes" del mismo handler).
-- [x] Sincronizar versión en `pyproject.toml` y `APP_VERSION` (v0.9.5).
+- [x] Sincronizar versión en `pyproject.toml`, `retrotui/__init__.py`, `APP_VERSION` y `setup.sh` (v0.9.5).
 - [ ] Validar `nano`, `vim`, `mc`, `htop`, `less` y `top` (manual; cae en v0.9.6 cert).
 - [ ] Pruebas de regresión: alt-screen, resize, cursor, copy/select y atributos (cubierto parcialmente; ampliar en v0.9.6).
 
@@ -154,7 +154,7 @@
 
 **Objetivo:** publicar la primera versión estable.
 
-- [ ] Actualizar versión a `1.0.0` en `pyproject.toml` y `APP_VERSION`.
+- [ ] Actualizar versión a `1.0.0` en `pyproject.toml`, `retrotui/__init__.py`, `APP_VERSION` y `setup.sh`.
 - [ ] Crear changelog de 1.0.
 - [ ] Crear tag `v1.0.0`.
 - [ ] Publicar release notes.

@@ -11,6 +11,20 @@ from ..ui.window import Window
 from ..utils import normalize_key_code, safe_addstr, theme_attr
 
 _CODE_PAIR = C_ANSI_START + 4 if C_ANSI_START + 4 <= 255 else 0
+_CURSES_COLOR_ERRORS = (
+    AttributeError,
+    RuntimeError,
+    TypeError,
+    ValueError,
+    getattr(curses, "error", Exception),
+)
+
+
+def _can_change_color():
+    try:
+        return bool(curses.can_change_color())
+    except _CURSES_COLOR_ERRORS:
+        return False
 
 
 class MarkdownViewerWindow(Window):
@@ -111,7 +125,7 @@ class MarkdownViewerWindow(Window):
             if in_code_block:
                 # Use a specific color for code. Only apply color pair when the
                 # terminal allows it; otherwise fall back to body attribute.
-                if curses.can_change_color() and _CODE_PAIR:
+                if _can_change_color() and _CODE_PAIR:
                     code_attr = curses.color_pair(_CODE_PAIR)
                 else:
                     code_attr = body_attr
@@ -131,7 +145,7 @@ class MarkdownViewerWindow(Window):
             # 3. List detection
             stripped = line.lstrip()
             if stripped.startswith(("- ", "* ", "+ ")):
-                bullet = "\u2022" if curses.can_change_color() else "-"
+                bullet = "\u2022" if _can_change_color() else "-"
                 indent = "  " * ( (len(line) - len(stripped)) // 2 + 1)
                 safe_addstr(stdscr, by + row, bx, indent + bullet + " ", curses.A_BOLD)
                 self._render_line(stdscr, by + row, bx + len(indent) + 2, stripped[2:], bw - (len(indent) + 2), body_attr)
@@ -171,7 +185,7 @@ class MarkdownViewerWindow(Window):
 
             if part.startswith("`") and part.endswith("`") and len(part) > 1:
                 text = part[1:-1]
-                if curses.can_change_color() and _CODE_PAIR:
+                if _can_change_color() and _CODE_PAIR:
                     attr = curses.color_pair(_CODE_PAIR)
                 attr |= curses.A_BOLD
             elif part.startswith("**") and part.endswith("**") and len(part) > 3:

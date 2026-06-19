@@ -686,9 +686,34 @@ class CoreAppTests(unittest.TestCase):
 
         app._run_file_operation_with_progress.assert_has_calls(
             [
-                mock.call(source, operation="copy", destination="/right"),
-                mock.call(source, operation="move", destination="/custom"),
+                mock.call(source, operation="copy", destination="/right", source_path=None),
+                mock.call(source, operation="move", destination="/custom", source_path=None),
             ]
+        )
+
+    def test_dispatch_between_panes_forwards_explicit_source_path(self):
+        app = self._make_app()
+        source = types.SimpleNamespace(
+            dual_pane_enabled=False,
+            active_pane=0,
+            current_path="/left",
+            secondary_path="",
+        )
+        app._run_file_operation_with_progress = mock.Mock(return_value=None)
+
+        app._dispatch_window_result(
+            self.actions_mod.ActionResult(
+                self.actions_mod.ActionType.REQUEST_COPY_BETWEEN_PANES,
+                {"source": "/tmp/drop.bin", "destination": "/right"},
+            ),
+            source,
+        )
+
+        app._run_file_operation_with_progress.assert_called_once_with(
+            source,
+            operation="copy",
+            destination="/right",
+            source_path="/tmp/drop.bin",
         )
 
     def test_dispatch_request_between_panes_reports_missing_destination(self):
@@ -1039,6 +1064,7 @@ class CoreAppTests(unittest.TestCase):
         app = self._make_app()
         app.default_show_hidden = False
         app.default_word_wrap = False
+        app.show_welcome = True
 
         file_win = types.SimpleNamespace(
             show_hidden=False,
@@ -1055,11 +1081,13 @@ class CoreAppTests(unittest.TestCase):
         app.apply_preferences(
             show_hidden=True,
             word_wrap_default=True,
+            show_welcome=False,
             apply_to_open_windows=True,
         )
 
         self.assertTrue(app.default_show_hidden)
         self.assertTrue(app.default_word_wrap)
+        self.assertFalse(app.show_welcome)
         self.assertTrue(file_win.show_hidden)
         self.assertTrue(notepad_win.wrap_mode)
         self.assertEqual(notepad_win.view_left, 0)
@@ -1392,6 +1420,27 @@ class CoreAppTests(unittest.TestCase):
         self.assertIsNone(result)
         target.copy_selected.assert_called_once_with("/tmp/out")
 
+    def test_run_file_operation_with_progress_uses_explicit_source_path(self):
+        app = self._make_app()
+        target = types.SimpleNamespace(
+            selected_entry_for_operation=mock.Mock(return_value=None),
+            copy_path_to=mock.Mock(return_value=None),
+        )
+        file_ops_mod = importlib.import_module("retrotui.core.file_operations")
+
+        with mock.patch.object(file_ops_mod.os.path, "isdir", return_value=False), mock.patch.object(
+            file_ops_mod.os.path, "getsize", return_value=128
+        ):
+            result = app._run_file_operation_with_progress(
+                target,
+                operation="copy",
+                destination="/tmp/out",
+                source_path="/tmp/drop.bin",
+            )
+
+        self.assertIsNone(result)
+        target.copy_path_to.assert_called_once_with("/tmp/drop.bin", "/tmp/out")
+
     def test_run_file_operation_with_progress_starts_background_for_large_file(self):
         app = self._make_app()
         entry = types.SimpleNamespace(name="big.iso", is_dir=False, size=16 * 1024 * 1024, full_path="/tmp/big.iso")
@@ -1452,7 +1501,7 @@ class CoreAppTests(unittest.TestCase):
         self.assertIsNone(result)
         self.assertTrue(app.has_background_operation())
         self.assertIsInstance(app.dialog, self.app_mod.ProgressDialog)
-        self.assertFalse(app._background_operation["thread"].daemon)
+        self.assertTrue(app._background_operation["thread"].daemon)
 
         for _ in range(50):
             state = app._background_operation

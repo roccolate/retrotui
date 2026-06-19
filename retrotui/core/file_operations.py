@@ -3,6 +3,7 @@ import os
 import logging
 import threading
 import time
+from types import SimpleNamespace
 
 from ..ui.dialog import Dialog, InputDialog, ProgressDialog
 from .actions import ActionResult, ActionType
@@ -223,7 +224,7 @@ class FileOperationManager:
     def _resolve_between_panes_destination(win, payload):
         """Resolve destination path for copy/move between panes requests."""
         if isinstance(payload, dict):
-            destination = str(payload.get('destination') or '').strip()
+            destination = str(payload.get('destination') or payload.get('dest') or '').strip()
             if destination:
                 return destination
 
@@ -280,7 +281,7 @@ class FileOperationManager:
             finally:
                 op_state['done'] = True
 
-        thread = threading.Thread(target=_runner, name='retrotui-file-op')
+        thread = threading.Thread(target=_runner, name='retrotui-file-op', daemon=True)
         op_state['thread'] = thread
         op_state['dialog_title'] = title
         self._app._background_operation = op_state
@@ -328,12 +329,26 @@ class FileOperationManager:
         if result is not None:
             self._app._dispatch_window_result(result, state.get('source_win'))
 
-    def _run_file_operation_with_progress(self, win, *, operation, destination=None):
+    def _run_file_operation_with_progress(self, win, *, operation, destination=None, source_path=None):
         """Run file operation directly or via background worker with progress dialog."""
         entry = self._window_selected_entry(win)
         operation = str(operation).lower()
 
-        if operation == 'copy':
+        if operation == 'copy' and source_path:
+            copy_path_to = getattr(win, 'copy_path_to', None)
+            if not callable(copy_path_to):
+                return ActionResult(ActionType.ERROR, 'Window does not support source-path copy.')
+            name = os.path.basename(os.path.normpath(str(source_path))) or 'item'
+            entry = SimpleNamespace(
+                name=name,
+                full_path=source_path,
+                is_dir=os.path.isdir(source_path),
+                size=None,
+            )
+            worker = lambda target=win, src=source_path, dest=destination: target.copy_path_to(src, dest)
+            title = 'Copying'
+            details = f"Copying:\n{name}"
+        elif operation == 'copy':
             worker = lambda target=win, dest=destination: target.copy_selected(dest)
             title = 'Copying'
             details = f"Copying:\n{getattr(entry, 'name', 'item')}"

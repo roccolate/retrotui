@@ -75,6 +75,16 @@ class ClipboardCoreTests(unittest.TestCase):
         ):
             self.assertFalse(self.clip._system_copy("abc"))
 
+        with (
+            mock.patch.object(self.clip, "_detect_backend", return_value="wl"),
+            mock.patch.object(
+                self.clip.subprocess,
+                "run",
+                side_effect=subprocess.TimeoutExpired(["wl-copy"], timeout=2.0),
+            ),
+        ):
+            self.assertFalse(self.clip._system_copy("abc"))
+
         with mock.patch.object(self.clip, "_detect_backend", return_value=None):
             self.assertFalse(self.clip._system_copy("abc"))
 
@@ -112,6 +122,16 @@ class ClipboardCoreTests(unittest.TestCase):
         with (
             mock.patch.object(self.clip, "_detect_backend", return_value="xsel"),
             mock.patch.object(self.clip.subprocess, "run", side_effect=OSError("missing")),
+        ):
+            self.assertIsNone(self.clip._system_paste())
+
+        with (
+            mock.patch.object(self.clip, "_detect_backend", return_value="wl"),
+            mock.patch.object(
+                self.clip.subprocess,
+                "run",
+                side_effect=subprocess.TimeoutExpired(["wl-paste"], timeout=2.0),
+            ),
         ):
             self.assertIsNone(self.clip._system_paste())
 

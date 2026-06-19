@@ -101,6 +101,7 @@ class TrashComponentTests(unittest.TestCase):
             self.assertEqual(win.current_path, str(root.resolve()))
             self.assertTrue(win.title.startswith("Trash - root"))
             self.assertTrue(all(entry.name != ".." for entry in win.entries))
+            self.assertFalse(any(line.strip().endswith("..") for line in win.content))
             file_labels = [label for label, _ in win.window_menu.items["File"]]
             self.assertIn("Empty Trash    E", file_labels)
         finally:

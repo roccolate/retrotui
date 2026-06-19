@@ -11,6 +11,10 @@ from ..ui.window import Window
 from ..ui.dialog import InputDialog
 from ..utils import safe_addstr, theme_attr
 
+NMCLI_QUICK_TIMEOUT = 5.0
+NMCLI_SCAN_TIMEOUT = 15.0
+NMCLI_CONNECT_TIMEOUT = 45.0
+
 
 class WifiManagerWindow(Window):
     def __init__(self, x, y, w, h):
@@ -32,6 +36,7 @@ class WifiManagerWindow(Window):
         self._scan_thread = None
         self._scan_in_progress = False
         self._scan_error = None
+        self._scan_result_ready = False
         # Background-connect state.
         self._connect_lock = threading.Lock()
         self._connect_thread = None
@@ -44,22 +49,34 @@ class WifiManagerWindow(Window):
     def _check_radio_state(self):
         if not self.nmcli: return
         try:
-            res = subprocess.run([self.nmcli, "radio", "wifi"], capture_output=True, text=True)
+            res = subprocess.run(
+                [self.nmcli, "radio", "wifi"],
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=NMCLI_QUICK_TIMEOUT,
+            )
             self.radio_on = "enabled" in res.stdout.strip().lower()
-        except OSError:
+        except (OSError, subprocess.SubprocessError):
             pass
 
     def _toggle_radio(self):
         if not self.nmcli: return
         target = "off" if self.radio_on else "on"
         try:
-            subprocess.run([self.nmcli, "radio", "wifi", target], check=False)
+            subprocess.run(
+                [self.nmcli, "radio", "wifi", target],
+                check=False,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=NMCLI_QUICK_TIMEOUT,
+            )
             self.radio_on = (target == "on")
             if self.radio_on:
                 self.refresh()
             else:
                 self.networks.clear()
-        except OSError:
+        except (OSError, subprocess.SubprocessError):
             pass
 
     def refresh(self):
@@ -70,6 +87,7 @@ class WifiManagerWindow(Window):
                 return
             self._scan_in_progress = True
             self._scan_error = None
+            self._scan_result_ready = False
         self._status_msg = "Rescanning..."
         thread = threading.Thread(target=self._scan_worker, daemon=True)
         self._scan_thread = thread
@@ -108,12 +126,19 @@ class WifiManagerWindow(Window):
         new_networks = []
         error_message = None
         try:
-            subprocess.run([self.nmcli, "dev", "wifi", "rescan"], check=False)
+            subprocess.run(
+                [self.nmcli, "dev", "wifi", "rescan"],
+                check=False,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=NMCLI_SCAN_TIMEOUT,
+            )
             result = subprocess.run(
                 [self.nmcli, "-t", "-f", "SSID,SIGNAL,SECURITY,IN-USE,BSSID", "dev", "wifi"],
                 text=True,
                 capture_output=True,
                 check=False,
+                timeout=NMCLI_SCAN_TIMEOUT,
             )
             seen_ssids = set()
             for line in result.stdout.splitlines():
@@ -129,18 +154,22 @@ class WifiManagerWindow(Window):
                 sec = parts[2].strip()
                 inuse = parts[3].strip() == "*"
                 bssid = parts[4].strip() if len(parts) > 4 else ""
+                try:
+                    signal_strength = int(signal)
+                except ValueError:
+                    signal_strength = 0
 
                 if ssid in seen_ssids and not inuse:
                     continue
                 seen_ssids.add(ssid)
                 new_networks.append({
                     "ssid": ssid,
-                    "signal": int(signal),
+                    "signal": signal_strength,
                     "sec": sec,
                     "inuse": inuse,
                     "bssid": bssid,
                 })
-        except OSError as exc:
+        except (OSError, subprocess.SubprocessError) as exc:
             error_message = str(exc) or "Scan failed."
 
         with self._scan_lock:
@@ -153,6 +182,7 @@ class WifiManagerWindow(Window):
                 self._status_msg = "Scan complete."
                 if self.selected_idx >= len(self.networks):
                     self.selected_idx = max(0, len(self.networks) - 1)
+            self._scan_result_ready = True
 
     def _signal_bars(self, signal: int) -> str:
         if signal >= 80: return "[||||]"
@@ -265,43 +295,7 @@ class WifiManagerWindow(Window):
         self._connect_thread = thread
         thread.start()
 
-    def _connect_worker(self, ssid, password):
-        cmd = [self.nmcli, "dev", "wifi", "connect", ssid]
-        stdin_data = None
-        if password:
-            # Use stdin (--ask) when supported to keep the password out of
-            # `ps` listings. Fall back to the legacy argument form for older
-            # nmcli releases that lack the prompt flag.
-            if not any(opt in ("--ask", "-a") for opt in ()):
-                try:
-                    res = subprocess.run(
-                        [self.nmcli, "--ask", "dev", "wifi", "connect", ssid],
-                        input=password + "\n",
-                        capture_output=True,
-                        text=True,
-                    )
-                    success = res.returncode == 0
-                    if not success:
-                        error_message = (res.stderr or res.stdout or "").strip() or "Connection failed."
-                    with self._connect_lock:
-                        self._connect_in_progress = False
-                        self._connect_result = (success, error_message)
-                        self._connecting_ssid = None
-                    if success:
-                        self.refresh()
-                    return
-                except OSError:
-                    pass
-            cmd.extend(["password", password])
-        success = False
-        error_message = ""
-        try:
-            res = subprocess.run(cmd, capture_output=True, text=True, input=stdin_data)
-            success = res.returncode == 0
-            if not success:
-                error_message = (res.stderr or res.stdout or "").strip() or "Connection failed."
-        except OSError as exc:
-            error_message = str(exc) or "Execution failed."
+    def _finish_connect(self, success, error_message):
         with self._connect_lock:
             self._connect_in_progress = False
             self._connect_result = (success, error_message)
@@ -309,12 +303,59 @@ class WifiManagerWindow(Window):
         if success:
             self.refresh()
 
+    def _connect_worker(self, ssid, password):
+        cmd = [self.nmcli, "dev", "wifi", "connect", ssid]
+        if password:
+            # Prefer stdin (--ask) so the password does not appear in process listings.
+            error_message = ""
+            try:
+                res = subprocess.run(
+                    [self.nmcli, "--ask", "dev", "wifi", "connect", ssid],
+                    input=password + "\n",
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                    timeout=NMCLI_CONNECT_TIMEOUT,
+                )
+                success = res.returncode == 0
+                if not success:
+                    error_message = (res.stderr or res.stdout or "").strip() or "Connection failed."
+                self._finish_connect(success, error_message)
+                return
+            except subprocess.TimeoutExpired:
+                self._finish_connect(False, "Connection timed out.")
+                return
+            except OSError:
+                pass
+            cmd.extend(["password", password])
+        success = False
+        error_message = ""
+        try:
+            res = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=NMCLI_CONNECT_TIMEOUT,
+            )
+            success = res.returncode == 0
+            if not success:
+                error_message = (res.stderr or res.stdout or "").strip() or "Connection failed."
+        except subprocess.TimeoutExpired:
+            error_message = "Connection timed out."
+        except OSError as exc:
+            error_message = str(exc) or "Execution failed."
+        self._finish_connect(success, error_message)
+
     def tick(self):
         """Apply background scan/connect results outside the render path."""
         changed = False
         with self._scan_lock:
             if self._scan_error is not None:
                 self._scan_error = None
+                changed = True
+            if self._scan_result_ready:
+                self._scan_result_ready = False
                 changed = True
         with self._connect_lock:
             result = self._connect_result
@@ -381,4 +422,3 @@ class WifiManagerWindow(Window):
                 self._initiate_connection(self.networks[self.selected_idx])
 
         return None
-

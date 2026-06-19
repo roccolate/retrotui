@@ -1,4 +1,5 @@
 """System Monitor application for RetroTUI."""
+import curses
 import os
 import sys
 import time
@@ -32,7 +33,7 @@ class SystemMonitorWindow(Window):
         if not _PROC_AVAILABLE:
             return 0, 0
         try:
-            with open('/proc/stat', 'r') as f:
+            with open('/proc/stat', 'r', encoding='utf-8', errors='replace') as f:
                 line = f.readline()
                 if line.startswith('cpu '):
                     parts = [float(x) for x in line.split()[1:]]
@@ -49,7 +50,7 @@ class SystemMonitorWindow(Window):
         if not _PROC_AVAILABLE:
             return mem
         try:
-            with open('/proc/meminfo', 'r') as f:
+            with open('/proc/meminfo', 'r', encoding='utf-8', errors='replace') as f:
                 for line in f:
                     if line.startswith('MemTotal:'):
                         mem['total'] = int(line.split()[1])
@@ -64,7 +65,7 @@ class SystemMonitorWindow(Window):
         if not _PROC_AVAILABLE:
             return None
         try:
-            with open('/proc/uptime', 'r') as f:
+            with open('/proc/uptime', 'r', encoding='utf-8', errors='replace') as f:
                 return float(f.readline().split()[0])
         except (OSError, ValueError, IndexError):
             return None

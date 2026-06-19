@@ -84,6 +84,15 @@ class CalculatorComponentTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             evaluate("~1")
 
+    def test_evaluate_expression_rejects_excessive_inputs(self):
+        evaluate = self.calc_mod.evaluate_expression
+        with self.assertRaises(ValueError):
+            evaluate("2 ** 101")
+        with self.assertRaises(ValueError):
+            evaluate("9" * 300)
+        with self.assertRaises(ValueError):
+            evaluate("(-1) ** 0.5")
+
     def test_evaluate_expression_formats_floats_and_normalizes_negative_zero(self):
         evaluate = self.calc_mod.evaluate_expression
         self.assertEqual(evaluate("1/2"), "0.5")

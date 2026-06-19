@@ -8,6 +8,8 @@ import subprocess
 from retrotui.plugins.base import RetroApp
 from retrotui.utils import safe_addstr, theme_attr
 
+_GIT_TIMEOUT = 5.0
+
 
 class Plugin(RetroApp):
     def __init__(self, *args, repo_path='.', **kwargs):
@@ -21,13 +23,20 @@ class Plugin(RetroApp):
             self.info = ['git not available on PATH']
             return
         try:
-            # git rev-parse --abbrev-ref HEAD
-            branch = subprocess.check_output(['git', '-C', self.repo, 'rev-parse', '--abbrev-ref', 'HEAD'], stderr=subprocess.DEVNULL)
+            branch = subprocess.check_output(
+                ['git', '-C', self.repo, 'rev-parse', '--abbrev-ref', 'HEAD'],
+                stderr=subprocess.DEVNULL,
+                timeout=_GIT_TIMEOUT,
+            )
             branch = branch.decode('utf-8', 'ignore').strip()
-            commits = subprocess.check_output(['git', '-C', self.repo, 'log', '--oneline', '-n', '10'], stderr=subprocess.DEVNULL)
+            commits = subprocess.check_output(
+                ['git', '-C', self.repo, 'log', '--oneline', '-n', '10'],
+                stderr=subprocess.DEVNULL,
+                timeout=_GIT_TIMEOUT,
+            )
             commits = commits.decode('utf-8', 'ignore').splitlines()
             self.info = [f'Branch: {branch}'] + commits
-        except Exception:
+        except (OSError, subprocess.SubprocessError):
             self.info = ['Not a git repository or git command failed']
 
     def draw_content(self, stdscr, x, y, w, h):

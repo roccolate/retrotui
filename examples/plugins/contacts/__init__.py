@@ -20,20 +20,27 @@ class Plugin(RetroApp):
         if os.path.exists(path):
             try:
                 with open(path, 'r', encoding='utf-8') as f:
-                    self.contacts = json.load(f)
-            except Exception:
+                    contacts = json.load(f)
+                self.contacts = contacts if isinstance(contacts, list) else []
+            except (OSError, UnicodeError, json.JSONDecodeError):
                 self.contacts = []
 
     def _save(self):
         path = self._data_path()
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-        with open(path, 'w', encoding='utf-8') as f:
-            json.dump(self.contacts, f)
+        try:
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, 'w', encoding='utf-8') as f:
+                json.dump(self.contacts, f)
+        except (OSError, TypeError):
+            pass
 
     def draw_content(self, stdscr, x, y, w, h):
         attr = theme_attr('window_body')
         for i, c in enumerate(self.contacts[:h]):
-            line = f"{c.get('name','')} {c.get('phone','')} {c.get('email','')}"
+            if isinstance(c, dict):
+                line = f"{c.get('name','')} {c.get('phone','')} {c.get('email','')}"
+            else:
+                line = str(c)
             a = attr
             if i == self.selected:
                 a = theme_attr('menu_selected')
@@ -53,8 +60,9 @@ class Plugin(RetroApp):
             # lightweight edit: append marker to name
             if 0 <= self.selected < len(self.contacts):
                 c = self.contacts[self.selected]
-                c['name'] = (c.get('name','') + ' [edited]').strip()
-                self._save()
+                if isinstance(c, dict):
+                    c['name'] = (c.get('name','') + ' [edited]').strip()
+                    self._save()
         elif key == ord('j'):
             self.selected = min(self.selected + 1, len(self.contacts) - 1)
         elif key == ord('k'):

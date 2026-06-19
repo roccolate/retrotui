@@ -19,10 +19,13 @@ Todas las versiones notables de RetroTUI están documentadas aquí.
 - **Audit refactor**: `TerminalScreen.__init__` ahora acepta `normal_cls`/`alt_cls` para inyectar buffers custom (usado por el wiring).
 - **IMPROVEMENTS.md archivado**: la auditoría v0.9.4 + v0.9.5 queda cerrada; los items abiertos viven ahora en `ROADMAP.md` (v0.9.6 cert + v0.9.7 session restore).
 - **ROADMAP.md actualizado**: v0.9.5 marcado como cerrado.
+- **Release gates sincronizados**: `tools/qa.py` y `tools/check_release_tag.py` validan la versión en `pyproject.toml`, `retrotui/__init__.py`, `retrotui/core/app.py` y `setup.sh`.
 
 ### Fixed
 - **v0.9.4 hardening carry-overs**: 14 MED/LOW remanentes del pass anterior (File Manager trash override, Notepad title caching, Hex Viewer mixin, Snake difficulty lookup, Calculator `-0`/`0` normalize, Minesweeper chrome, Settings toggle count, etc.).
 - **Post-hardening cleanup**: módulo huérfano `core/win_termios.py` eliminado; `/proc/uptime` solo se lee desde `_update_stats` en System Monitor; tests de regresión para `_max_scroll()` del Markdown Viewer.
+- **Limpieza archivo por archivo**: pasada sistemática sobre 276 archivos versionados. Se cerraron rutas locales hardcodeadas en tests, parsing frágil de variables de entorno (`RETROTUI_PROFILE_INTERVAL`, `RETROTUI_MOUSE_TRACE_MIN_INTERVAL`), lecturas `/proc` sin `errors='replace'`, fixtures con versión vieja y validaciones de release incompletas.
+- **QA ampliado**: suite automatizada en 1084 tests; nuevos casos para plugins de ejemplo, QA/version sync, System Monitor, release tag, event loop y mouse router.
 
 ---
 

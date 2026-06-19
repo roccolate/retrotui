@@ -102,11 +102,59 @@ def _coerce_bool(value, default=False):
     return default
 
 
+def _strip_inline_comment(line: str) -> str:
+    """Remove TOML comments outside quoted strings."""
+    quote = None
+    escape = False
+    for idx, ch in enumerate(line):
+        if escape:
+            escape = False
+            continue
+        if quote == '"' and ch == "\\":
+            escape = True
+            continue
+        if ch in ('"', "'"):
+            if quote == ch:
+                quote = None
+            elif quote is None:
+                quote = ch
+            continue
+        if ch == "#" and quote is None:
+            return line[:idx]
+    return line
+
+
+def _decode_basic_string(value: str) -> str:
+    """Decode the small TOML escape subset RetroTUI writes."""
+    out = []
+    escape = False
+    escapes = {
+        "n": "\n",
+        "r": "\r",
+        "t": "\t",
+        '"': '"',
+        "\\": "\\",
+    }
+    for ch in value:
+        if escape:
+            out.append(escapes.get(ch, ch))
+            escape = False
+        elif ch == "\\":
+            escape = True
+        else:
+            out.append(ch)
+    if escape:
+        out.append("\\")
+    return "".join(out)
+
+
 def _parse_scalar(token):
     token = token.strip()
     if not token:
         return ""
-    if token.startswith('"') and token.endswith('"') and len(token) >= 2:
+    if len(token) >= 2 and token[0] == token[-1] == '"':
+        return _decode_basic_string(token[1:-1])
+    if len(token) >= 2 and token[0] == token[-1] == "'":
         return token[1:-1]
     lower = token.lower()
     if lower == "true":
@@ -124,7 +172,7 @@ def _fallback_parse_toml(text: str) -> dict:
     data = {}
     section = None
     for raw_line in text.splitlines():
-        line = raw_line.split("#", 1)[0].strip()
+        line = _strip_inline_comment(raw_line).strip()
         if not line:
             continue
         if line.startswith("[") and line.endswith("]"):

@@ -356,9 +356,22 @@ class ProcessManagerWindow(Window):
 
     def tick(self):
         """Refresh process table outside the render path."""
-        before = len(self.rows)
+        before = (
+            tuple(self.rows),
+            self.summary_uptime,
+            self.summary_load,
+            self.summary_mem,
+            self._error_message,
+        )
         self.refresh_processes(force=False)
-        return len(self.rows) != before
+        after = (
+            tuple(self.rows),
+            self.summary_uptime,
+            self.summary_load,
+            self.summary_mem,
+            self._error_message,
+        )
+        return after != before
 
     def draw(self, stdscr):
         """Draw process table and summary bar."""

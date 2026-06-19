@@ -261,10 +261,9 @@ class MultiSelectDialog(Dialog):
             if btn_hit != -1:
                 return btn_hit
                 
-        # Check list clicks
-        max_h, max_w = curses.initscr().getmaxyx()
-        x = (max_w - self.width) // 2
-        y = (max_h - self.height) // 2
+        # Check list clicks using the geometry captured during draw().
+        x = self._dialog_x
+        y = self._dialog_y
         list_y = y + len(self.lines) + 4
         list_x = x + 3
         list_w = self.width - 6
@@ -324,8 +323,6 @@ class MultiSelectDialog(Dialog):
             return super().handle_key(key)
             
         return -1
-
-        return [val for _, val, checked in self.choices if checked]
 
 
 class ProgressDialog:

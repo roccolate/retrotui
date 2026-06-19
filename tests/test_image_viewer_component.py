@@ -315,6 +315,16 @@ class ImageViewerComponentTests(unittest.TestCase):
         win.window_menu.active = False
         self.assertIsNone(win.handle_key(ord("x")))
 
+    def test_tick_consumes_completed_render_request_once(self):
+        win = self._make_window()
+        with win._render_lock:
+            win._render_pending = False
+            win._render_request = (40, 10, "image-key")
+            win._render_cache = {"key": (40, 10, "image-key"), "lines": ["ok"]}
+
+        self.assertTrue(win.tick())
+        self.assertFalse(win.tick())
+
 
 if __name__ == "__main__":
     unittest.main()

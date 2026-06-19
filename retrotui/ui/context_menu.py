@@ -23,12 +23,26 @@ class ContextMenu(Menu):
         self.active = False
         self._width = 20
 
+    def _selectable_indices(self):
+        return [idx for idx, item in enumerate(self.items) if not item.get('separator')]
+
+    def _move_selection(self, step):
+        selectable = self._selectable_indices()
+        if not selectable:
+            return
+        if self.selected_index not in selectable:
+            self.selected_index = selectable[0]
+            return
+        pos = selectable.index(self.selected_index)
+        self.selected_index = selectable[(pos + step) % len(selectable)]
+
     def show(self, x, y, items):
         """Open the context menu at x, y with the given items."""
         self.x = x
         self.y = y
-        self.items = items
-        self.selected_index = 0
+        self.items = list(items or [])
+        selectable = self._selectable_indices()
+        self.selected_index = selectable[0] if selectable else 0
         self.active = True
         
         # Calculate width based on longest item
@@ -39,7 +53,7 @@ class ContextMenu(Menu):
             label = item.get('label', '')
             if len(label) > max_len:
                 max_len = len(label)
-        self._width = max_len + 4  # padding
+        self._width = max(4, max_len + 4)  # padding
 
         # Ensure menu doesn't go off-screen (requires layout info, will handle in draw/app)
         
@@ -57,21 +71,19 @@ class ContextMenu(Menu):
             return None
 
         if key == curses.KEY_UP:
-            self.selected_index = (self.selected_index - 1) % len(self.items)
-            # Skip separators
-            while self.items[self.selected_index].get('separator'):
-                self.selected_index = (self.selected_index - 1) % len(self.items)
+            self._move_selection(-1)
             return None
 
         if key == curses.KEY_DOWN:
-            self.selected_index = (self.selected_index + 1) % len(self.items)
-            # Skip separators
-            while self.items[self.selected_index].get('separator'):
-                self.selected_index = (self.selected_index + 1) % len(self.items)
+            self._move_selection(1)
             return None
 
         if key in (curses.KEY_ENTER, 10, 13):
+            if not self.items or not (0 <= self.selected_index < len(self.items)):
+                return None
             item = self.items[self.selected_index]
+            if item.get('separator'):
+                return None
             self.hide()
             return item.get('action')
 
@@ -108,8 +120,8 @@ class ContextMenu(Menu):
 
         # Ensure we don't draw off-screen
         h, w = stdscr.getmaxyx()
-        draw_x = min(self.x, w - self._width)
-        draw_y = min(self.y, h - len(self.items) - 2)
+        draw_x = max(0, min(self.x, w - self._width))
+        draw_y = max(0, min(self.y, h - len(self.items) - 2))
 
         # Draw border and background
         try:

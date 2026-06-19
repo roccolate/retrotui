@@ -29,6 +29,7 @@ _CURSES_SETATTR_ERRORS = (
 )
 _THEME_ATTR_ERRORS = (
     AttributeError,
+    KeyError,
     LookupError,
     OSError,
     RuntimeError,
@@ -302,7 +303,7 @@ def get_system_info():
         info.append('OS: Linux')
 
     try:
-        with open('/proc/meminfo') as f:
+        with open('/proc/meminfo', 'r', encoding='utf-8', errors='replace') as f:
             for line in f:
                 if line.startswith('MemTotal'):
                     mem_kb = int(line.split()[1])

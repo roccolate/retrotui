@@ -63,15 +63,9 @@ class TrashWindow(FileManagerWindow):
         if not entries or entries[0].name != "..":
             return entries, content, error_message
         entries = entries[1:]
-        # Drop the row that represented the parent entry from the rendered
-        # content too. Locate the index by label rather than hardcoding a
-        # numeric slice so the layout stays correct if upstream formatting
-        # changes.
-        for idx, line in enumerate(content):
-            stripped = line.lstrip()
-            if stripped.startswith(".."):
-                content = content[:idx] + content[idx + 1:]
-                break
+        # FileManager renders two header rows before entry rows.
+        if len(content) > 2:
+            content = content[:2] + content[3:]
         return entries, content, error_message
 
     def _update_title(self):

@@ -6,7 +6,9 @@
 - Formato de tag: `vX.Y.Z` (ejemplo: `v0.6.0`).
 - Fuente de verdad de la versión runtime/paquete:
   - `pyproject.toml` → `[project].version`
+  - `retrotui/__init__.py` → `__version__`
   - `retrotui/core/app.py` → `APP_VERSION`
+  - `setup.sh` → banner de instalación
 
 ## Checklist pre-release
 
@@ -14,7 +16,7 @@
    - `pyproject.toml`
    - `retrotui/core/app.py`
    - `retrotui/__init__.py`
-   - `setup.sh` (si aplica)
+   - `setup.sh`
 2. Actualizar notas/docs:
    - `CHANGELOG.md`
    - `README.md` (si hay cambios visibles)
@@ -46,6 +48,10 @@
   3. `python tools/check_release_tag.py --tag vX.Y.Z`
   4. Build de distribuciones (`python -m pip install build` y luego `python -m build`)
   5. Publicación de artifacts y GitHub Release
+
+`tools/check_release_tag.py` falla si el tag no coincide con cualquiera de
+las cuatro fuentes de versión (`pyproject.toml`, `retrotui/__init__.py`,
+`retrotui/core/app.py`, `setup.sh`).
 
 ## Rollback (tags)
 
