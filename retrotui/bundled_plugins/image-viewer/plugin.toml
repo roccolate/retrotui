@@ -1,7 +1,7 @@
 [plugin]
 id = "image-viewer"
 name = "Image Viewer"
-version = "0.9.3"
+version = "0.9.5"
 description = "Terminal image viewer with external tool support"
 
 [plugin.window]

@@ -88,6 +88,7 @@ def make_fake_curses() -> types.ModuleType:
     fake.KEY_F8 = 272
     fake.KEY_F9 = 273
     fake.KEY_F10 = 274
+    fake.KEY_BTAB = 353
 
     # Mouse flags (bitmasks).
     fake.BUTTON1_PRESSED = 0x2

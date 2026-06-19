@@ -1,7 +1,7 @@
 [plugin]
 id = "minesweeper"
 name = "Minesweeper"
-version = "0.9.3"
+version = "0.9.5"
 description = "Classic minesweeper game"
 category = "game"
 

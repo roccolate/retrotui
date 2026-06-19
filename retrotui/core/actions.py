@@ -24,6 +24,8 @@ class ActionType(str, Enum):
     REQUEST_NEW_FILE = "request_new_file"
     REQUEST_URL = "request_url"
     REQUEST_KILL_CONFIRM = "request_kill_confirm"
+    REQUEST_BOOKMARKS = "request_bookmarks"
+    REQUEST_ADD_BOOKMARK = "request_add_bookmark"
     SAVE_ERROR = "save_error"
     ERROR = "error"
     UPDATE_CONFIG = "update_config"

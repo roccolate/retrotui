@@ -1,7 +1,7 @@
 [plugin]
 id = "wifi-manager"
 name = "WiFi Manager"
-version = "0.9.3"
+version = "0.9.5"
 description = "Network WiFi connection manager"
 
 [plugin.window]

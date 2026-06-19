@@ -49,7 +49,7 @@ class BIOS:
             if self._check_skip(): return False
         
         y += 1
-        safe_addstr(self.stdscr, y, x, f"RetroBIOS v0.9.3 (C) 2026 RetroTUI Corp.", attr)
+        safe_addstr(self.stdscr, y, x, f"RetroBIOS v0.9.5 (C) 2026 RetroTUI Corp.", attr)
         y += 2
         
         self.stdscr.refresh()

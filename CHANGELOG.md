@@ -4,6 +4,63 @@ Todas las versiones notables de RetroTUI están documentadas aquí.
 
 ---
 
+## [v0.9.5] - 2026-06-19
+
+### Added
+- **Terminal 2D buffer wiring**: `TerminalWindow` ahora delega en `TerminalScreen` (dos `TerminalScreenBuffer`, normal + alt). El state machine ANSI escribe vía `put_char` / `line_feed` / `clear_screen`; la posición del cursor y los atributos por celda los lee el renderer directamente del buffer. Scrollback capturado en cada newline vía un wrapper `_ScrollbackBuffer`. 13 tests nuevos en `tests/test_terminal_buffer_wiring.py`.
+- **Mouse pass-through en Terminal**: tracking de DEC private mouse modes (`?1000h` / `?1002h` / `?1003h` / `?1005h` / `?1006h` / `?1015h`). Cuando el hijo activa alguno, clicks/drags/scroll se codifican como secuencias SGR (`\e[<Cb;Cx;CyM`/`m`) y se reenvían al PTY. Motion-with-button sólo con `?1002h`/`?1003h`; motion-without-button sólo con `?1003h`. 14 tests nuevos en `tests/test_terminal_mouse_passthrough.py`.
+- **Compatibilidad GPM preservada**: cuando el hijo no activa mouse reporting, RetroTUI retiene el mouse para selección/scrollback/menus (sea GPM en Linux console o SGR en xterm). Cubierto por tests en `test_terminal_mouse_passthrough.py`.
+- **RetroNet HTML parser**: regex en cascada reemplazado por `_RetroNetHTMLParser` (basado en `html.parser.HTMLParser`). Tags anidados, entidades HTML, `<script>`/`<style>`, `<input type="hidden">` y `<!DOCTYPE>`/comentarios ahora se manejan correctamente. 9 tests nuevos en `tests/test_retronet.py`.
+- **RetroNet tabs por ventana**: `Ctrl+T` nueva tab, `Ctrl+W` cierra (cierra ventana si es la última), `Ctrl+I` siguiente, `Shift+Tab` anterior. Click en chip activa; click en `×` cierra. Tab bar visible solo con 2+ tabs.
+- **RetroNet bookmarks persistentes**: en `~/.config/retrotui/bookmarks.toml` (formato flat sections, compatible con el toml fallback de `core/config.py`). `Ctrl+B` abre la lista, `Ctrl+D` agrega la URL actual. Nueva `BookmarksWindow` con navegación ↑/↓/j/k, Enter navega y cierra, `d` borra, `r` recarga. 16 tests nuevos entre `test_bookmarks_core.py` y `test_bookmarks_window.py`.
+- **RetroNet view source**: `Ctrl+U` abre el HTML crudo en una NotepadWindow via temp file con path derivado del hash de la URL. 6 tests nuevos.
+
+### Changed
+- **Audit refactor**: `TerminalScreen.__init__` ahora acepta `normal_cls`/`alt_cls` para inyectar buffers custom (usado por el wiring).
+- **IMPROVEMENTS.md archivado**: la auditoría v0.9.4 + v0.9.5 queda cerrada; los items abiertos viven ahora en `ROADMAP.md` (v0.9.6 cert + v0.9.7 session restore).
+- **ROADMAP.md actualizado**: v0.9.5 marcado como cerrado.
+
+### Fixed
+- **v0.9.4 hardening carry-overs**: 14 MED/LOW remanentes del pass anterior (File Manager trash override, Notepad title caching, Hex Viewer mixin, Snake difficulty lookup, Calculator `-0`/`0` normalize, Minesweeper chrome, Settings toggle count, etc.).
+- **Post-hardening cleanup**: módulo huérfano `core/win_termios.py` eliminado; `/proc/uptime` solo se lee desde `_update_stats` en System Monitor; tests de regresión para `_max_scroll()` del Markdown Viewer.
+
+---
+
+## [v0.9.4] - 2026-03-15
+
+### Added
+- **Terminal hardening**: PTY start/read/resize fuera de `draw()` (movido a `tick()`); resize cacheado por tamaño del body de la terminal; errores de sesión visibles sin spam; tabs de 8 columnas; CSI `H`/`f`/`J` con clamping; wrap en alt-screen; PageUp/PageDown para apps full-screen; F1-F12 básico; fallback de interrupción simplificado.
+- **File Manager**: `Path.touch()` para archivos nuevos; copia de directorios a destino exacto (no se duplica); bloqueo de operaciones sobre `..`; preview de imagen async; cache de preview por stat del archivo; teclas normalizadas; tamaños GB/TB.
+- **Notepad**: wrap por ancho de celda (CJK/wide chars); cache de wrap visible; título cacheado por filepath/modified state; presupuesto de undo para archivos grandes; Ctrl+W persistente; context menu real.
+- **Base profile mínimo**: solo File Manager, Terminal y Notepad visibles por defecto. Apps secundarias y plugins quedan instalados pero deshabilitados por configuración.
+- **Game logic fuera de `draw()`**: Snake, Tetris, Process Manager, Hex Viewer, Clipboard Viewer, Image Viewer y WiFi Manager corren sus updates desde `tick()`. `step()` preservado para tests pero ya no invocado desde el renderer.
+- **I/O bloqueante a background threads**: WiFi Manager scan/connect, Image Viewer render, Hex Viewer cache warming. Indicadores de progreso (`_status_msg`, `[rendering...]`).
+- **Thread safety RetroNet**: lock en `url`, `back_stack`, `forward_stack`, `title`, `content`, `is_loading`. Read paths en draw/handle_click usan el mismo lock.
+- **Trash**: nuevo action type `REQUEST_EMPTY_TRASH_CONFIRM` con diálogo dedicado; `perform_delete` escribe `.trashinfo` sidecar; `perform_restore` lo consume; menú "Restore" + shortcut `R`.
+- **Bundled plugins**: los 9 wrappers aplican el `title` del manifest a la ventana en lugar de descartarlo silenciosamente.
+- **Input handling**: `normalize_key_code` usado por Minesweeper, Tetris, Solitaire, WiFi Manager y Clipboard Viewer. Reemplazo de `getattr(key, '__int__', None)` por `isinstance(key, int)` + `normalize_key_code` en Clipboard Viewer.
+- **Markdown viewer**: `*italic*`, `` `inline code` ``, `[label](url)` link rendering, preserva `in_code_block` a través de scroll, soporta mouse wheel.
+- **Control Panel**: expone `word_wrap_default` via cycle de 4 estados; selección de tema con Left/Right o click.
+- **App Manager**: `IconsWindow` reusa la clase base via `super()` y cachea el catálogo de iconos.
+- **Process Manager**: `cmd` sort implementado; `scroll_offset` inicializado; lee `/proc/meminfo` en una sola pasada; sin kill en doble-click.
+- **Solitaire**: bloquea foundation-to-column moves; ventana de doble-click 500 ms.
+- **Tetris**: restart usa `reset_game()`; pieza I con centro de rotación dinámico.
+- **Clock**: `TextCalendar` cacheado por `(year, month, first_weekday)`; toggle `always_on_top` deduplicado.
+- **System Monitor**: platform guard para no-Linux; CPU history reescalado al redimensionar.
+- **CharMap**: ancho de detail pane unificado en `DETAIL_PANE_WIDTH = 22`; `about_map` wired via `_set_status`.
+- **Calculator**: normaliza `-0` a `0`; trim dead `body_rect` locals.
+- **Minesweeper**: chrome de bomb/timer usa `menubar` theme tone.
+- **Settings**: `_controls_count` derivado de `_TOGGLE_COUNT`.
+- **Hex Viewer**: `SelectableTextMixin`; row spans como tuplas `(row, 0)`.
+- **Snake**: `_DIFFICULTY_NAMES` class mapping para lookup del action.
+- **WiFi Manager**: `nmcli -t` líneas split con `_split_nmcli_fields` para preservar `\:`; Ctrl+1 documentado como legacy shortcut; password vía `nmcli --ask` con fallback para versiones antiguas.
+- **RetroNet**: `_create_unverified_context()` SSL bypass eliminado; opt-in `check_hostname=False` solo tras `ssl.SSLError`. Scroll bound usa `body_rect()`. Fetch-error tuple restringido. `_load_url` deduplica entrada previa en back_stack.
+
+### Fixed
+- **Post-hardening cleanup**: módulo huérfano `core/win_termios.py` eliminado (no importers desde que el `try/except` termios import fue adoptado en `d519870`); `/proc/uptime` se lee solo desde `_update_stats`; Markdown `_max_scroll()` corregido.
+
+---
+
 ## [v0.9.3] - 2026-02-27
 
 ### Added

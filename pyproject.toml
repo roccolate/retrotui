@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "retrotui"
-version = "0.9.3"
+version = "0.9.5"
 description = "RetroTUI desktop environment for terminal"
 readme = "README.md"
 requires-python = ">=3.10"

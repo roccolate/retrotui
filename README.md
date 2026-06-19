@@ -20,7 +20,7 @@
 ║░░ 💻 ░░░░║  📄 config.json           512B      ║░░░░░░░░░░░░░║
 ║░Terminal░╚══════════════════════════════════════╝░░░░░░░░░░░░░║
 ║░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░║
-║ RetroTUI v0.9.4 │ Windows: 1/1 │ Mouse: Enabled │ Ctrl+Q: Exit║
+║ RetroTUI v0.9.5 │ Windows: 1/1 │ Mouse: Enabled │ Ctrl+Q: Exit║
 ╚══════════════════════════════════════════════════════════════╝
 ```
 
@@ -78,7 +78,8 @@ retrotui
 ### Apps
 *   **File Manager**: `Enter` to open, `F5` Copy, `F4`/`F6` Move, `F2` Rename, `F7` New folder, `F8` New file, `U` Undo delete, `D` dual-pane.
 *   **Notepad**: `Ctrl+S` Save, `Ctrl+O` Open, `Ctrl+W` Toggle word wrap.
-*   **Terminal**: `Ctrl+C` Copy/Interrupt, `Ctrl+V` Paste, `F6` Interrupt, `F7` Terminate.
+*   **Terminal**: `Ctrl+C` Copy/Interrupt, `Ctrl+V` Paste, `F6` Interrupt, `F7` Terminate. Mouse events forward to the child program when it has enabled DEC mouse reporting (`?1006h` / `?1003h` / etc.) — full-screen TUI apps (vim, htop) just work.
+*   **RetroNet** (bundled browser plugin): `Ctrl+T` new tab, `Ctrl+W` close tab, `Ctrl+I` next tab, `Shift+Tab` previous tab. `Ctrl+B` bookmarks list, `Ctrl+D` add bookmark, `Ctrl+U` view source, `/` in-page search. Bookmarks persist to `~/.config/retrotui/bookmarks.toml`.
 
 ## Documentation
 *   [ARCHITECTURE.md](ARCHITECTURE.md) - System design and internals.

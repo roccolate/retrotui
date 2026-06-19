@@ -1,7 +1,7 @@
 [plugin]
 id = "solitaire"
 name = "Solitaire"
-version = "0.9.3"
+version = "0.9.5"
 description = "Classic Klondike solitaire card game"
 category = "game"
 
