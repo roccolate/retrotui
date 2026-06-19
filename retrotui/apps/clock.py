@@ -27,6 +27,7 @@ class ClockCalendarWindow(Window):
         self.chime_enabled = False
         self.week_starts_sunday = False
         self._last_chime_hour = None
+        self._last_tick_second = None
         # Cache the month grid: it only changes when (year, month, first-weekday)
         # changes, so we can avoid rebuilding a `TextCalendar` on every draw.
         self._cached_month = None
@@ -92,6 +93,14 @@ class ClockCalendarWindow(Window):
         self._cached_month = cache_key
         self._cached_month_lines = lines
         return lines
+
+    def tick(self):
+        """Request redraw when the displayed second changes."""
+        now_key = datetime.now().replace(microsecond=0)
+        if self._last_tick_second == now_key:
+            return False
+        self._last_tick_second = now_key
+        return True
 
     def draw(self, stdscr):
         """Draw digital clock and month calendar."""

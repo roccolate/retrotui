@@ -263,7 +263,6 @@ class RetroNetWindow(Window):
         self.tabs: List[_TabState] = []
         self.active_tab_idx = 0
         self._new_tab(_DEFAULT_TAB_URL, activate=True, _push_history=False)
-        self._load_url(_DEFAULT_TAB_URL, _push_history=False)
 
     # ------------------------------------------------------------------
     # Tab management

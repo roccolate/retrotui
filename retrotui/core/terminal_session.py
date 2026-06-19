@@ -8,10 +8,13 @@ import importlib
 import os
 import signal
 import struct
+import time
 
 _BACKENDS_UNSET = object()
 _BACKENDS_CACHE = {"value": _BACKENDS_UNSET}
 _WIN_BACKEND_CACHE = {"value": _BACKENDS_UNSET}
+_CLOSE_WAIT_SECONDS = 0.2
+_CLOSE_POLL_INTERVAL = 0.01
 
 
 class TerminalScreenBuffer:
@@ -564,6 +567,36 @@ class TerminalSession:
         sig = getattr(signal, "SIGKILL", signal.SIGTERM)
         return self.send_signal(sig)
 
+    def _reap_posix_child(self, nohang=True):
+        """Reap the POSIX child if it has exited."""
+        if self.child_pid is None:
+            return False
+
+        try:
+            flags = getattr(os, "WNOHANG", 0) if nohang else 0
+            exited_pid, _status = os.waitpid(self.child_pid, flags)
+        except ChildProcessError:
+            self.running = False
+            self.child_pid = None
+            return True
+
+        if exited_pid == 0:
+            return False
+
+        self.running = False
+        self.child_pid = None
+        return True
+
+    def _wait_for_posix_exit(self, timeout):
+        """Wait briefly for the child to exit without hanging close()."""
+        deadline = time.monotonic() + max(0.0, float(timeout))
+        while True:
+            if self._reap_posix_child(nohang=True):
+                return True
+            if time.monotonic() >= deadline:
+                return False
+            time.sleep(min(_CLOSE_POLL_INTERVAL, max(0.0, deadline - time.monotonic())))
+
     def resize(self, cols, rows):
         """Update terminal window size and notify child PTY."""
         self.cols = max(1, int(cols))
@@ -603,19 +636,7 @@ class TerminalSession:
 
         if self.child_pid is None:
             return False
-
-        try:
-            nohang_flag = getattr(os, "WNOHANG", 0)
-            exited_pid, _status = os.waitpid(self.child_pid, nohang_flag)
-        except ChildProcessError:
-            self.running = False
-            return True
-
-        if exited_pid == 0:
-            return False
-
-        self.running = False
-        return True
+        return self._reap_posix_child(nohang=True)
 
     def close(self):
         """Close PTY fd and mark session stopped."""
@@ -628,13 +649,15 @@ class TerminalSession:
             self.running = False
             return
 
-        if self.master_fd is not None:
-            if self.running:
-                self.terminate()
-                self.poll_exit()
-                if self.running:
-                    self.kill()
+        if self.running:
+            self.terminate()
+            if not self._wait_for_posix_exit(_CLOSE_WAIT_SECONDS):
+                self.kill()
+                self._wait_for_posix_exit(_CLOSE_WAIT_SECONDS)
+        elif self.child_pid is not None:
+            self._wait_for_posix_exit(0.0)
 
+        if self.master_fd is not None:
             try:
                 os.close(self.master_fd)
             except OSError:

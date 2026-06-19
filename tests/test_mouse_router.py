@@ -1,5 +1,6 @@
 import importlib
 import inspect as py_inspect
+import os
 import sys
 import types
 import unittest
@@ -142,6 +143,18 @@ class MouseRouterTests(unittest.TestCase):
         self.assertTrue(second)
         self.assertEqual(signature.call_count, 1)
         self.assertEqual(len(self.mouse_router._HANDLER_ARITY_CACHE), 1)
+
+    def test_import_uses_default_for_invalid_trace_interval(self):
+        original = sys.modules.pop("retrotui.core.mouse_router", None)
+        try:
+            with mock.patch.dict(os.environ, {"RETROTUI_MOUSE_TRACE_MIN_INTERVAL": "bad"}):
+                module = importlib.import_module("retrotui.core.mouse_router")
+
+            self.assertEqual(module._TRACE_MOUSE_MIN_INTERVAL, 0.05)
+        finally:
+            sys.modules.pop("retrotui.core.mouse_router", None)
+            if original is not None:
+                sys.modules["retrotui.core.mouse_router"] = original
 
     def test_find_drop_target_window_and_dispatch_drop_edge_cases(self):
         app = self._make_app()

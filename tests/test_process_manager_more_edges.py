@@ -63,6 +63,17 @@ class ProcessManagerMoreEdgesTests(unittest.TestCase):
         self.assertIsNotNone(res)
         self.assertEqual(res.type, ActionType.EXECUTE)
 
+    def test_tick_redraws_when_row_values_change_without_count_change(self):
+        win = ProcessManagerWindow(0, 0, 80, 12)
+        win.rows = [ProcessRow(pid=1, cpu_percent=1.0, mem_percent=2.0, command="one", total_ticks=10)]
+
+        def refresh_processes(force=False):
+            win.rows = [ProcessRow(pid=1, cpu_percent=5.0, mem_percent=2.0, command="one", total_ticks=20)]
+
+        win.refresh_processes = refresh_processes
+
+        self.assertTrue(win.tick())
+
 
 if __name__ == '__main__':
     unittest.main()

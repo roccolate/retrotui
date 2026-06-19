@@ -64,3 +64,62 @@ class WifiManagerTests(unittest.TestCase):
         self.assertEqual(result[3], "")
         # BSSID keeps its colons.
         self.assertEqual(result[4], "00:11:22:33:44:55:66")
+
+    def test_scan_success_marks_tick_dirty_once(self):
+        with mock.patch.object(self.mod.shutil, "which", return_value=None):
+            win = self.mod.WifiManagerWindow(0, 0, 60, 20)
+        win.nmcli = "nmcli"
+        win._scan_in_progress = True
+        rescan = types.SimpleNamespace(returncode=0, stdout="", stderr="")
+        listing = types.SimpleNamespace(returncode=0, stdout="Net:80:WPA2:*:aa\\:bb\n", stderr="")
+
+        with mock.patch.object(self.mod.subprocess, "run", side_effect=[rescan, listing]):
+            win._scan_worker()
+
+        self.assertEqual(win.networks[0]["ssid"], "Net")
+        self.assertTrue(win.tick())
+        self.assertFalse(win.tick())
+
+    def test_scan_treats_nonnumeric_signal_as_zero(self):
+        with mock.patch.object(self.mod.shutil, "which", return_value=None):
+            win = self.mod.WifiManagerWindow(0, 0, 60, 20)
+        win.nmcli = "nmcli"
+        win._scan_in_progress = True
+        rescan = types.SimpleNamespace(returncode=0, stdout="", stderr="")
+        listing = types.SimpleNamespace(returncode=0, stdout="Cafe:--:WPA2::aa\\:bb\n", stderr="")
+
+        with mock.patch.object(self.mod.subprocess, "run", side_effect=[rescan, listing]):
+            win._scan_worker()
+
+        self.assertEqual(win.networks[0]["signal"], 0)
+        self.assertEqual(win._status_msg, "Scan complete.")
+
+    def test_scan_timeout_finishes_worker_state(self):
+        with mock.patch.object(self.mod.shutil, "which", return_value=None):
+            win = self.mod.WifiManagerWindow(0, 0, 60, 20)
+        win.nmcli = "nmcli"
+        win._scan_in_progress = True
+
+        with mock.patch.object(
+            self.mod.subprocess,
+            "run",
+            side_effect=self.mod.subprocess.TimeoutExpired("nmcli", 15),
+        ):
+            win._scan_worker()
+
+        self.assertFalse(win._scan_in_progress)
+        self.assertEqual(win._status_msg, "Scan failed.")
+        self.assertTrue(win.tick())
+
+    def test_connect_worker_success_sets_empty_error_message(self):
+        with mock.patch.object(self.mod.shutil, "which", return_value=None):
+            win = self.mod.WifiManagerWindow(0, 0, 60, 20)
+        win.nmcli = "nmcli"
+        win._connect_in_progress = True
+        result = types.SimpleNamespace(returncode=0, stdout="", stderr="")
+
+        with mock.patch.object(self.mod.subprocess, "run", return_value=result), mock.patch.object(win, "refresh"):
+            win._connect_worker("Net", "secret")
+
+        self.assertEqual(win._connect_result, (True, ""))
+        self.assertFalse(win._connect_in_progress)

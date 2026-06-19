@@ -62,6 +62,25 @@ class SnakeTests(unittest.TestCase):
         
         win.step()
         self.assertEqual(win.snake[head := 0], (0, 0))
+
+    def test_tick_respects_base_speed(self):
+        win = self.mod.SnakeWindow(0, 0, 60, 20)
+        win.rows = 10
+        win.cols = 10
+        win.snake = self.mod.deque([(5, 5)])
+        win.direction = (0, 1)
+        win.food = (0, 0)
+        win.base_speed = 1.0
+        win._last_move = 100.0
+        win._last_special_spawn = 100.0
+
+        with mock.patch.object(self.mod.time, "time", return_value=100.2):
+            self.assertFalse(win.tick())
+            self.assertEqual(win.snake[0], (5, 5))
+
+        with mock.patch.object(self.mod.time, "time", return_value=101.2):
+            self.assertTrue(win.tick())
+            self.assertEqual(win.snake[0], (5, 6))
         
     def test_collision_and_game_over(self):
         win = self.mod.SnakeWindow(0, 0, 60, 20)

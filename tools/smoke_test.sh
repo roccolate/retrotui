@@ -168,7 +168,7 @@ EOF
     cat > "$DATA_DIR/configs/sample.json" << 'EOF'
 {
   "name": "RetroTUI",
-  "version": "0.9.0",
+  "version": "0.9.5",
   "features": ["filemanager", "notepad", "terminal"],
   "settings": {
     "theme": "win31",
@@ -180,7 +180,7 @@ EOF
     cat > "$DATA_DIR/configs/sample.yaml" << 'EOF'
 application:
   name: RetroTUI
-  version: 0.9.0
+  version: 0.9.5
   components:
     - filemanager
     - notepad

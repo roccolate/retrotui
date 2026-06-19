@@ -93,3 +93,15 @@ class MinesweeperTests(unittest.TestCase):
         # Total bombs should match requested
         bomb_count = sum(1 for r in range(win.rows) for c in range(win.cols) if win._grid[r][c] == -1)
         self.assertEqual(bomb_count, win.bombs)
+
+    def test_tick_updates_running_timer_once_per_second(self):
+        win = self.mod.MinesweeperWindow(0, 0, 36, 14)
+        win.start_time = 100.0
+        win.elapsed = 0
+
+        with mock.patch.object(self.mod.time, "time", side_effect=[100.2, 100.8, 101.2]):
+            self.assertFalse(win.tick())
+            self.assertFalse(win.tick())
+            self.assertTrue(win.tick())
+
+        self.assertEqual(win.elapsed, 1)

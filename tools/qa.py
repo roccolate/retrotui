@@ -161,28 +161,48 @@ def check_module_coverage(top: int, fail_under: float | None) -> int:
 def check_version_sync() -> int:
     """Verify package/version constants stay aligned across release-critical files."""
     pyproject = Path("pyproject.toml")
+    package_init = Path("retrotui/__init__.py")
     app_file = Path("retrotui/core/app.py")
+    setup_file = Path("setup.sh")
 
-    if not pyproject.exists() or not app_file.exists():
+    if not pyproject.exists() or not package_init.exists() or not app_file.exists() or not setup_file.exists():
         print("[FAIL] version sync check: required files missing.")
         return 1
 
     project_text = pyproject.read_text(encoding="utf-8")
+    package_text = package_init.read_text(encoding="utf-8")
     app_text = app_file.read_text(encoding="utf-8")
+    setup_text = setup_file.read_text(encoding="utf-8")
 
     project_match = re.search(r'^\s*version\s*=\s*"([^"]+)"', project_text, flags=re.MULTILINE)
+    package_match = re.search(r"^__version__\s*=\s*['\"]([^'\"]+)['\"]", package_text, flags=re.MULTILINE)
     app_match = re.search(r"^APP_VERSION\s*=\s*['\"]([^'\"]+)['\"]", app_text, flags=re.MULTILINE)
+    setup_match = re.search(r"RetroTUI v([^ ]+) .* Setup", setup_text)
 
-    if not project_match or not app_match:
+    if not project_match or not package_match or not app_match or not setup_match:
         print("[FAIL] version sync check: unable to parse version fields.")
         return 1
 
     project_version = project_match.group(1)
+    package_version = package_match.group(1)
     app_version = app_match.group(1)
+    if project_version != package_version:
+        print(
+            "[FAIL] version sync mismatch: "
+            f"pyproject.toml={project_version} vs retrotui/__init__.py={package_version}"
+        )
+        return 1
     if project_version != app_version:
         print(
             "[FAIL] version sync mismatch: "
             f"pyproject.toml={project_version} vs retrotui/core/app.py={app_version}"
+        )
+        return 1
+    setup_version = setup_match.group(1)
+    if project_version != setup_version:
+        print(
+            "[FAIL] version sync mismatch: "
+            f"pyproject.toml={project_version} vs setup.sh={setup_version}"
         )
         return 1
 

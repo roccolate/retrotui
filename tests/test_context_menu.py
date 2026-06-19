@@ -71,5 +71,16 @@ class TestContextMenu(unittest.TestCase):
         self.assertEqual(action, 'ACT1')
         self.assertFalse(self.menu.is_open())
 
+    def test_keyboard_navigation_handles_empty_and_separator_only_menus(self):
+        self.menu.show(0, 0, None)
+        self.assertIsNone(self.menu.handle_input(258))
+        self.assertIsNone(self.menu.handle_input(10))
+        self.assertTrue(self.menu.is_open())
+
+        self.menu.show(0, 0, [{'separator': True}])
+        self.assertIsNone(self.menu.handle_input(258))
+        self.assertIsNone(self.menu.handle_input(10))
+        self.assertTrue(self.menu.is_open())
+
 if __name__ == '__main__':
     unittest.main()

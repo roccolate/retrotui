@@ -72,6 +72,7 @@ class ThemeAndConfigTests(unittest.TestCase):
         self.assertFalse(self.config._parse_scalar("false"))
         self.assertEqual(self.config._parse_scalar("42"), 42)
         self.assertEqual(self.config._parse_scalar("x"), "x")
+        self.assertEqual(self.config._parse_scalar(r'"a\nb"'), "a\nb")
 
     def test_fallback_parse_toml_and_parse_toml_paths(self):
         parsed = self.config._fallback_parse_toml(
@@ -85,6 +86,7 @@ class ThemeAndConfigTests(unittest.TestCase):
             [misc]
             value = 5
             plain = "root"
+            url = "https://example.com/#frag" # trailing comment
             """
         )
         self.assertEqual(parsed["global_key"], "yes")
@@ -92,6 +94,7 @@ class ThemeAndConfigTests(unittest.TestCase):
         self.assertTrue(parsed["ui"]["show_hidden"])
         self.assertEqual(parsed["misc"]["value"], 5)
         self.assertEqual(parsed["misc"]["plain"], "root")
+        self.assertEqual(parsed["misc"]["url"], "https://example.com/#frag")
 
         with mock.patch.object(self.config, "tomllib", types.SimpleNamespace(loads=lambda _: {"ui": {"theme": "amiga"}})):
             parsed_fast = self.config._parse_toml("[ui]\ntheme='x'")

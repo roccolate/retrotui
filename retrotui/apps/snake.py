@@ -292,7 +292,7 @@ class SnakeWindow(Window):
     def tick(self):
         """Run game update outside the render path."""
         before = (self.snake[0] if self.snake else None, self.score)
-        self.step()
+        self.step(time.time())
         return (self.snake[0] if self.snake else None, self.score) != before
 
     def draw(self, stdscr):

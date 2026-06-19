@@ -13,6 +13,20 @@ cross-terminal) y v0.9.7 (session restore), que viven en `ROADMAP.md`.
 
 ## Cerrados en este ciclo de auditoría
 
+### Limpieza final — 2026-06-19
+
+- **Pasada archivo por archivo**: inventario de 276 archivos versionados,
+  scans mecánicos de rutas locales, versiones viejas, parsing inseguro de
+  entorno, subprocess, excepciones amplias y lecturas de sistema; revisión
+  manual de los focos señalados.
+- **Complejidad accidental reducida**: se corrigieron fallos concretos sin
+  refactors masivos: version sync en QA/release, rutas absolutas en tests,
+  variables de entorno inválidas que podían romper imports/runtime, lecturas
+  `/proc` con encoding tolerante y fixtures de smoke desfasadas.
+- **QA de cierre**: `python3 tools/qa.py` pasa con 1084 tests, `git diff
+  --check` queda limpio y `python3 tools/check_release_tag.py --tag v0.9.5`
+  valida todas las fuentes de versión.
+
 ### Terminal — v0.9.5 cerrado
 
 - **2D buffer wiring (HIGH)**: `TerminalWindow` ahora delega en

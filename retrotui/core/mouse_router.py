@@ -43,9 +43,20 @@ import time
 
 LOGGER = logging.getLogger(__name__)
 
+
+def _coerce_float(value, default):
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
 # Tracing state — kept here (not in mouse_utils) for test mocking compatibility.
 _TRACE_MOUSE = bool(os.environ.get("RETROTUI_DEBUG"))
-_TRACE_MOUSE_MIN_INTERVAL = float(os.environ.get("RETROTUI_MOUSE_TRACE_MIN_INTERVAL", "0.05"))
+_TRACE_MOUSE_MIN_INTERVAL = _coerce_float(
+    os.environ.get("RETROTUI_MOUSE_TRACE_MIN_INTERVAL"),
+    0.05,
+)
 _TRACE_MOUSE_LAST_TS = {"value": 0.0}
 
 

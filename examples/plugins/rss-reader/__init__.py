@@ -1,4 +1,8 @@
 """RSS Reader plugin (example)."""
+import urllib.error
+import urllib.request
+import xml.etree.ElementTree as ET
+
 from retrotui.plugins.base import RetroApp
 from retrotui.utils import safe_addstr, theme_attr
 
@@ -26,7 +30,6 @@ class Plugin(RetroApp):
         elif key == ord('r'):
             # try to fetch a sample feed (best-effort)
             try:
-                import urllib.request, xml.etree.ElementTree as ET
                 with urllib.request.urlopen('https://xkcd.com/atom.xml', timeout=5) as resp:
                     data = resp.read()
                 root = ET.fromstring(data)
@@ -45,6 +48,6 @@ class Plugin(RetroApp):
                 if items:
                     self.items = items
                     self.selected = 0
-            except Exception:
+            except (OSError, TimeoutError, urllib.error.URLError, ET.ParseError):
                 # ignore network or parse errors
                 pass

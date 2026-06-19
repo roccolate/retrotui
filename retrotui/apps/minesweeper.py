@@ -95,6 +95,16 @@ class MinesweeperWindow(Window):
         self.game_over = False
         self.victory = False
 
+    def tick(self):
+        """Update the running timer outside draw and redraw on second changes."""
+        if not self.start_time or self.game_over:
+            return False
+        elapsed = int(time.time() - self.start_time)
+        if elapsed == self.elapsed:
+            return False
+        self.elapsed = elapsed
+        return True
+
     def execute_action(self, action: str | AppAction) -> ActionResult | None:
         if action == "minesweeper_beginner":
             self._reset_game("Beginner")

@@ -21,7 +21,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from .config import _parse_toml
+from .config import _decode_basic_string, _parse_toml
 
 
 @dataclass(frozen=True)
@@ -43,9 +43,23 @@ _BOOKMARK_SECTION_ERRORS = (AttributeError, TypeError, ValueError)
 def _strip_section_quotes(name: str) -> str:
     """TOML section names may be quoted if they contain spaces or dots."""
     name = name.strip()
-    if len(name) >= 2 and name[0] == name[-1] and name[0] in ('"', "'"):
+    if len(name) >= 2 and name[0] == name[-1] == '"':
+        return _decode_basic_string(name[1:-1])
+    if len(name) >= 2 and name[0] == name[-1] == "'":
         return name[1:-1]
     return name
+
+
+def _toml_basic_string(value: str) -> str:
+    """Return a TOML basic string body for values RetroTUI persists."""
+    return (
+        str(value)
+        .replace("\\", "\\\\")
+        .replace("\n", "\\n")
+        .replace("\r", "\\r")
+        .replace("\t", "\\t")
+        .replace('"', '\\"')
+    )
 
 
 def load_bookmarks(path: str | Path | None = None) -> list[Bookmark]:
@@ -82,8 +96,8 @@ def save_bookmarks(
     cfg_path = Path(path) if path is not None else default_bookmarks_path()
     lines = ["# RetroTUI bookmarks for RetroNet Explorer Ultra", ""]
     for bm in bookmarks:
-        title = (bm.title or "Untitled").replace("\\", "\\\\").replace('"', '\\"')
-        url = (bm.url or "").replace("\\", "\\\\").replace('"', '\\"')
+        title = _toml_basic_string(bm.title or "Untitled")
+        url = _toml_basic_string(bm.url or "")
         lines.append(f'["{title}"]')
         lines.append(f'url = "{url}"')
         lines.append("")

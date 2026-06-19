@@ -24,7 +24,29 @@ def _extract_app_version(app_path: Path) -> str:
     return match.group(1)
 
 
-def validate_release_tag(tag: str, pyproject_path: Path, app_path: Path) -> int:
+def _extract_package_version(package_path: Path) -> str:
+    text = package_path.read_text(encoding="utf-8")
+    match = re.search(r"^__version__\s*=\s*['\"]([^'\"]+)['\"]", text, flags=re.MULTILINE)
+    if not match:
+        raise ValueError("Unable to parse __version__ from retrotui/__init__.py")
+    return match.group(1)
+
+
+def _extract_setup_version(setup_path: Path) -> str:
+    text = setup_path.read_text(encoding="utf-8")
+    match = re.search(r"RetroTUI v([^ ]+) .* Setup", text)
+    if not match:
+        raise ValueError("Unable to parse setup banner version from setup.sh")
+    return match.group(1)
+
+
+def validate_release_tag(
+    tag: str,
+    pyproject_path: Path,
+    app_path: Path,
+    package_path: Path | None = None,
+    setup_path: Path | None = None,
+) -> int:
     if not tag.startswith("v"):
         print(f"[FAIL] Tag must start with 'v': {tag}")
         return 1
@@ -32,7 +54,9 @@ def validate_release_tag(tag: str, pyproject_path: Path, app_path: Path) -> int:
     try:
         project_version = _extract_project_version(pyproject_path)
         app_version = _extract_app_version(app_path)
-    except ValueError as exc:
+        package_version = _extract_package_version(package_path) if package_path else None
+        setup_version = _extract_setup_version(setup_path) if setup_path else None
+    except (OSError, ValueError) as exc:
         print(f"[FAIL] {exc}")
         return 1
 
@@ -51,7 +75,21 @@ def validate_release_tag(tag: str, pyproject_path: Path, app_path: Path) -> int:
         )
         return 1
 
-    print(f"[OK] release tag matches project/app version ({tag}).")
+    if package_version is not None and tag_version != package_version:
+        print(
+            "[FAIL] Tag/version mismatch: "
+            f"tag={tag_version} vs retrotui/__init__.py={package_version}"
+        )
+        return 1
+
+    if setup_version is not None and tag_version != setup_version:
+        print(
+            "[FAIL] Tag/version mismatch: "
+            f"tag={tag_version} vs setup.sh={setup_version}"
+        )
+        return 1
+
+    print(f"[OK] release tag matches project/runtime versions ({tag}).")
     return 0
 
 
@@ -68,9 +106,25 @@ def main() -> int:
         default="retrotui/core/app.py",
         help="Path to app module with APP_VERSION (default: retrotui/core/app.py)",
     )
+    parser.add_argument(
+        "--package-file",
+        default="retrotui/__init__.py",
+        help="Path to package module with __version__ (default: retrotui/__init__.py)",
+    )
+    parser.add_argument(
+        "--setup-file",
+        default="setup.sh",
+        help="Path to setup script with banner version (default: setup.sh)",
+    )
     args = parser.parse_args()
 
-    return validate_release_tag(args.tag, Path(args.pyproject), Path(args.app_file))
+    return validate_release_tag(
+        args.tag,
+        Path(args.pyproject),
+        Path(args.app_file),
+        Path(args.package_file),
+        Path(args.setup_file),
+    )
 
 
 if __name__ == "__main__":

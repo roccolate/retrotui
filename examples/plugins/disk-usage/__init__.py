@@ -35,18 +35,18 @@ class Plugin(RetroApp):
                                     try:
                                         p = os.path.join(root, f)
                                         size += os.path.getsize(p)
-                                    except Exception:
+                                    except OSError:
                                         pass
                                 # limit deep recursion to avoid long runs
                                 break
                         else:
                             size = 0
-                    except Exception:
+                    except OSError:
                         size = 0
                     items.append((e.name, size))
             items.sort(key=lambda x: x[1], reverse=True)
             self.entries = items
-        except Exception:
+        except OSError:
             self.entries = []
 
     def draw_content(self, stdscr, x, y, w, h):

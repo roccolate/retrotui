@@ -2,6 +2,7 @@
 
 import ast
 import curses
+import math
 import operator
 
 from ..core.actions import ActionResult, ActionType, AppAction
@@ -33,23 +34,52 @@ _CALCULATOR_EVAL_ERRORS = (
     ValueError,
 )
 
+MAX_EXPRESSION_CHARS = 256
+MAX_AST_NODES = 128
+MAX_POWER_EXPONENT = 100
+MAX_ABS_RESULT = 10 ** 120
+
+
+def _check_ast_size(node):
+    if sum(1 for _ in ast.walk(node)) > MAX_AST_NODES:
+        raise ValueError("Expression is too complex.")
+
+
+def _check_result_size(value):
+    if isinstance(value, bool):
+        raise ValueError("Unsupported expression.")
+    if isinstance(value, int):
+        if abs(value) > MAX_ABS_RESULT:
+            raise ValueError("Result is too large.")
+    elif isinstance(value, float):
+        if not math.isfinite(value):
+            raise ValueError("Result is not finite.")
+    else:
+        raise ValueError("Unsupported result.")
+    return value
+
 
 def _eval_ast_node(node):
     """Evaluate a parsed AST node with a restricted math-only grammar."""
-    if isinstance(node, ast.Constant) and isinstance(node.value, (int, float)):
-        return node.value
+    if isinstance(node, ast.Constant) and isinstance(node.value, (int, float)) and not isinstance(node.value, bool):
+        return _check_result_size(node.value)
 
     if isinstance(node, ast.BinOp):
         op = _ALLOWED_BINARY_OPS.get(type(node.op))
         if op is None:
             raise ValueError("Operator not allowed.")
-        return op(_eval_ast_node(node.left), _eval_ast_node(node.right))
+        left = _eval_ast_node(node.left)
+        right = _eval_ast_node(node.right)
+        if isinstance(node.op, ast.Pow):
+            if not isinstance(right, (int, float)) or abs(right) > MAX_POWER_EXPONENT:
+                raise ValueError("Exponent is too large.")
+        return _check_result_size(op(left, right))
 
     if isinstance(node, ast.UnaryOp):
         op = _ALLOWED_UNARY_OPS.get(type(node.op))
         if op is None:
             raise ValueError("Unary operator not allowed.")
-        return op(_eval_ast_node(node.operand))
+        return _check_result_size(op(_eval_ast_node(node.operand)))
 
     raise ValueError("Unsupported expression.")
 
@@ -59,8 +89,11 @@ def evaluate_expression(expression):
     expr = (expression or "").strip()
     if not expr:
         raise ValueError("Expression is empty.")
+    if len(expr) > MAX_EXPRESSION_CHARS:
+        raise ValueError("Expression is too long.")
 
     parsed = ast.parse(expr, mode="eval")
+    _check_ast_size(parsed)
     value = _eval_ast_node(parsed.body)
     if isinstance(value, float):
         # Compact float formatting and normalize negative zero so the

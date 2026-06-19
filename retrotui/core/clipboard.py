@@ -11,6 +11,7 @@ _STATE = {"text": ""}
 
 # Cache detected backend (never changes mid-session).
 _BACKEND_CACHE: dict = {"value": None, "resolved": False}
+CLIPBOARD_COMMAND_TIMEOUT = 2.0
 
 
 def _reset_backend_cache() -> None:
@@ -65,6 +66,7 @@ def _system_copy(text: str) -> bool:
                 text=True,
                 capture_output=True,
                 check=False,
+                timeout=CLIPBOARD_COMMAND_TIMEOUT,
             )
         elif backend == "wl":
             result = subprocess.run(
@@ -73,6 +75,7 @@ def _system_copy(text: str) -> bool:
                 text=True,
                 capture_output=True,
                 check=False,
+                timeout=CLIPBOARD_COMMAND_TIMEOUT,
             )
         elif backend == "xclip":
             result = subprocess.run(
@@ -81,6 +84,7 @@ def _system_copy(text: str) -> bool:
                 text=True,
                 capture_output=True,
                 check=False,
+                timeout=CLIPBOARD_COMMAND_TIMEOUT,
             )
         else:
             result = subprocess.run(
@@ -89,8 +93,9 @@ def _system_copy(text: str) -> bool:
                 text=True,
                 capture_output=True,
                 check=False,
+                timeout=CLIPBOARD_COMMAND_TIMEOUT,
             )
-    except OSError:
+    except (OSError, subprocess.SubprocessError):
         return False
     return result.returncode == 0
 
@@ -107,6 +112,7 @@ def _system_paste() -> str | None:
                 text=True,
                 capture_output=True,
                 check=False,
+                timeout=CLIPBOARD_COMMAND_TIMEOUT,
             )
         elif backend == "wl":
             result = subprocess.run(
@@ -114,6 +120,7 @@ def _system_paste() -> str | None:
                 text=True,
                 capture_output=True,
                 check=False,
+                timeout=CLIPBOARD_COMMAND_TIMEOUT,
             )
         elif backend == "xclip":
             result = subprocess.run(
@@ -121,6 +128,7 @@ def _system_paste() -> str | None:
                 text=True,
                 capture_output=True,
                 check=False,
+                timeout=CLIPBOARD_COMMAND_TIMEOUT,
             )
         else:
             result = subprocess.run(
@@ -128,8 +136,9 @@ def _system_paste() -> str | None:
                 text=True,
                 capture_output=True,
                 check=False,
+                timeout=CLIPBOARD_COMMAND_TIMEOUT,
             )
-    except OSError:
+    except (OSError, subprocess.SubprocessError):
         return None
     if result.returncode != 0:
         return None

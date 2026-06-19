@@ -10,6 +10,8 @@ import subprocess
 from retrotui.plugins.base import RetroApp
 from retrotui.utils import safe_addstr, theme_attr
 
+_CRONTAB_TIMEOUT = 5.0
+
 
 class Plugin(RetroApp):
     def __init__(self, *args, **kwargs):
@@ -24,14 +26,18 @@ class Plugin(RetroApp):
         # prefer crontab -l
         if shutil.which('crontab'):
             try:
-                out = subprocess.check_output(['crontab', '-l'], stderr=subprocess.DEVNULL)
+                out = subprocess.check_output(
+                    ['crontab', '-l'],
+                    stderr=subprocess.DEVNULL,
+                    timeout=_CRONTAB_TIMEOUT,
+                )
                 self.lines = out.decode('utf-8', 'ignore').splitlines()
                 return
             except subprocess.CalledProcessError:
                 # no crontab or empty
                 self.lines = []
                 return
-            except Exception:
+            except (OSError, subprocess.SubprocessError):
                 self.lines = []
                 return
 
@@ -41,23 +47,30 @@ class Plugin(RetroApp):
             if os.path.exists(p):
                 with open(p, 'r', encoding='utf-8') as f:
                     self.lines = f.read().splitlines()
-        except Exception:
+        except (OSError, UnicodeError):
             self.lines = []
 
     def _save(self):
         if shutil.which('crontab'):
             try:
                 data = '\n'.join(self.lines) + '\n'
-                subprocess.run(['crontab', '-'], input=data.encode('utf-8'), check=True)
+                subprocess.run(
+                    ['crontab', '-'],
+                    input=data.encode('utf-8'),
+                    check=True,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    timeout=_CRONTAB_TIMEOUT,
+                )
                 return
-            except Exception:
+            except (OSError, subprocess.SubprocessError):
                 pass
         try:
             p = self._data_path()
             os.makedirs(os.path.dirname(p), exist_ok=True)
             with open(p, 'w', encoding='utf-8') as f:
                 f.write('\n'.join(self.lines) + '\n')
-        except Exception:
+        except OSError:
             pass
 
     def draw_content(self, stdscr, x, y, w, h):

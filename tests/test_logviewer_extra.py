@@ -120,6 +120,21 @@ class LogViewerExtraTests(unittest.TestCase):
         self.win._poll_for_updates(force=True)
         self.assertGreaterEqual(self.win.file_position, 0)
 
+    def test_tick_polls_followed_file_only_when_changed(self):
+        tmpdir = make_repo_tmpdir()
+        self.addCleanup(tmpdir.cleanup)
+        path = os.path.join(tmpdir.name, "tick.log")
+        with open(path, "w", encoding="utf-8") as f:
+            f.write("start\n")
+
+        self.assertIsNone(self.win.open_path(path))
+        with open(path, "a", encoding="utf-8") as f:
+            f.write("next\n")
+        self.win._last_poll = 0
+
+        self.assertTrue(self.win.tick())
+        self.assertFalse(self.win.tick())
+
     def test_init_with_filepath_calls_open_path(self):
         tmpdir = make_repo_tmpdir()
         self.addCleanup(tmpdir.cleanup)

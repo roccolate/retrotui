@@ -130,6 +130,28 @@ class PluginLoaderUnitTests(unittest.TestCase):
         self.assertEqual(len(manifests), 1)
         self.assertEqual(manifests[0].get("plugin", {}).get("id"), "cwd-bundled")
 
+    def test_user_plugin_overrides_bundled_plugin_with_same_id(self):
+        tmpdir = make_repo_tmpdir(prefix="_tmp_plugin_loader_")
+        self.addCleanup(tmpdir.cleanup)
+        root = Path(tmpdir.name)
+        user_plugins = root / "user"
+        bundled_plugins = root / "bundled"
+        user_plugins.mkdir()
+        bundled_plugins.mkdir()
+        user_plugin = self._create_plugin(user_plugins, "duplicate")
+        self._create_plugin(bundled_plugins, "duplicate")
+        self.loader.PLUGIN_DIR = str(user_plugins)
+
+        with mock.patch.object(self.loader, "_bundled_plugin_dir", return_value=str(bundled_plugins)):
+            manifests = self.loader.discover_plugins()
+
+        duplicate_manifests = [
+            manifest for manifest in manifests
+            if manifest.get("plugin", {}).get("id") == "duplicate"
+        ]
+        self.assertEqual(len(duplicate_manifests), 1)
+        self.assertEqual(Path(duplicate_manifests[0]["_path"]), user_plugin)
+
 
 if __name__ == "__main__":
     unittest.main()

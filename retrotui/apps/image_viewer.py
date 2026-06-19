@@ -244,10 +244,9 @@ class ImageViewerWindow(Window):
         with self._render_lock:
             pending = self._render_pending
             request = self._render_request
-        if not pending and request is not None:
-            with self._render_lock:
-                current = self._render_cache.get("key")
-            if current == request:
+            current = self._render_cache.get("key")
+            if not pending and request is not None and current == request:
+                self._render_request = None
                 dirty = True
         if self._status_ttl > 0:
             self._status_ttl -= 1

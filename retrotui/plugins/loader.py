@@ -79,14 +79,6 @@ def _iter_plugin_dirs():
             seen.add(norm)
             yield candidate
 
-    # Bundled plugins shipped with the package (always included).
-    bundled = _bundled_plugin_dir()
-    if bundled:
-        norm = os.path.normcase(os.path.normpath(bundled))
-        if norm not in seen:
-            seen.add(norm)
-            yield bundled
-
     # Primary user plugin directory.
     primary = str(PLUGIN_DIR or "").strip()
     if primary:
@@ -95,9 +87,18 @@ def _iter_plugin_dirs():
             seen.add(norm)
             yield primary
 
+    # Bundled plugins shipped with the package (always included after user
+    # plugins so user plugin ids can intentionally override bundled ones).
+    bundled = _bundled_plugin_dir()
+    if bundled:
+        norm = os.path.normcase(os.path.normpath(bundled))
+        if norm not in seen:
+            seen.add(norm)
+            yield bundled
+
     # Bundled examples: include when using default plugin dir to keep
-    # built-in plugins visible out of the box. User plugins still win on
-    # duplicate ids because primary is yielded first.
+    # built-in plugins visible out of the box. Earlier directories win on
+    # duplicate ids because discovery skips ids it has already seen.
     if primary and os.path.normcase(os.path.normpath(primary)) == os.path.normcase(os.path.normpath(_DEFAULT_PLUGIN_DIR)):
         for candidate in (_repo_examples_plugin_dir(), _cwd_examples_plugin_dir()):
             norm = os.path.normcase(os.path.normpath(candidate))

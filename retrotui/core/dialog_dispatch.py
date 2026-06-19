@@ -111,10 +111,14 @@ class DialogDispatcher:
                     width=62,
                 )
                 return True
+            source_path = None
+            if isinstance(result_payload, dict):
+                source_path = result_payload.get('source')
             op_result = self._app._run_file_operation_with_progress(
                 source_win,
                 operation=operation,
                 destination=destination,
+                source_path=source_path,
             )
             if op_result is not None:
                 self.dispatch_window_result(op_result, source_win)

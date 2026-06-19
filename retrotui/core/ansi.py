@@ -161,11 +161,11 @@ class AnsiStateMachine:
                 self.reverse = False
             elif 30 <= p <= 37:
                 self.fg = p - 30 # Standard colors 0-7
-            elif 39:
+            elif p == 39:
                 self.fg = -1
             elif 40 <= p <= 47:
                 self.bg = p - 40
-            elif 49:
+            elif p == 49:
                 self.bg = -1
             # 90-97 Bright FG
             elif 90 <= p <= 97:

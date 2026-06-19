@@ -229,9 +229,10 @@ class UtilsCoreTests(unittest.TestCase):
             machine="x86_64",
         )
         meminfo = io.StringIO("MemTotal:       2097152 kB\nMemFree: 100 kB\n")
+        open_mock = mock.Mock(return_value=meminfo)
         with (
             mock.patch("retrotui.utils.os.uname", return_value=fake_uname, create=True),
-            mock.patch("builtins.open", return_value=meminfo),
+            mock.patch("builtins.open", open_mock),
             mock.patch.dict("retrotui.utils.os.environ", {"TERM": "xterm", "SHELL": "/bin/bash"}, clear=False),
         ):
             info = self.utils.get_system_info()
@@ -244,6 +245,7 @@ class UtilsCoreTests(unittest.TestCase):
         self.assertIn("Terminal: xterm", joined)
         self.assertIn("Shell: bash", joined)
         self.assertIn("Python:", joined)
+        open_mock.assert_called_once_with('/proc/meminfo', 'r', encoding='utf-8', errors='replace')
 
     def test_get_system_info_fallback_when_uname_or_meminfo_fail(self):
         with (
@@ -354,4 +356,3 @@ class UtilsCoreTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

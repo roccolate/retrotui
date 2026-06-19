@@ -35,6 +35,16 @@ class AnsiBasicTests(unittest.TestCase):
         # After reset, B should not have bold
         self.assertEqual(text_entries[1][2] & curses.A_BOLD, 0)
 
+    def test_sgr_background_and_default_resets(self):
+        s = AnsiStateMachine()
+        list(s.parse_chunk('\x1b[31;44mX'))
+        self.assertEqual(s.fg, 1)
+        self.assertEqual(s.bg, 4)
+
+        list(s.parse_chunk('\x1b[39;49mY'))
+        self.assertEqual(s.fg, -1)
+        self.assertEqual(s.bg, -1)
+
     def test_csi_dispatch_and_params(self):
         s = AnsiStateMachine()
         # CSI sequence that is not SGR should yield a CSI event

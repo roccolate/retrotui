@@ -78,6 +78,21 @@ class BookmarksCoreTests(unittest.TestCase):
         self.assertEqual(loaded[0].title, "My Site")
         self.assertEqual(loaded[0].url, "http://mine.com")
 
+    def test_escaped_title_and_url_roundtrip(self):
+        save_bookmarks(
+            [
+                Bookmark(
+                    title='Line "One"\nTwo',
+                    url="https://example.com/#frag\nnext",
+                )
+            ],
+            self.path,
+        )
+
+        loaded = load_bookmarks(self.path)
+
+        self.assertEqual(loaded, [Bookmark('Line "One"\nTwo', "https://example.com/#frag\nnext")])
+
     def test_default_path_under_retrotui_config(self):
         p = default_bookmarks_path()
         self.assertEqual(p.parent.name, "retrotui")

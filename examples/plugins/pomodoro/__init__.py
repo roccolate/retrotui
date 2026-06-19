@@ -1,4 +1,5 @@
 """Pomodoro Timer plugin (example)."""
+import json
 import time
 import os
 from retrotui.plugins.base import RetroApp
@@ -45,21 +46,20 @@ class Plugin(RetroApp):
         path = self._data_path()
         try:
             if os.path.exists(path):
-                import json
                 with open(path, 'r', encoding='utf-8') as f:
                     data = json.load(f)
+                if isinstance(data, dict):
                     self.completed = int(data.get('completed', 0))
-        except Exception:
+        except (OSError, UnicodeError, json.JSONDecodeError, TypeError, ValueError):
             self.completed = 0
 
     def _save(self):
         path = self._data_path()
         try:
-            import json
             os.makedirs(os.path.dirname(path), exist_ok=True)
             with open(path, 'w', encoding='utf-8') as f:
                 json.dump({'completed': self.completed}, f)
-        except Exception:
+        except (OSError, TypeError):
             pass
 
     def _check_complete(self):
@@ -72,8 +72,11 @@ class Plugin(RetroApp):
                 self.completed += 1
                 try:
                     import curses
-                    curses.beep()
-                except Exception:
+                except ImportError:
                     pass
+                else:
+                    try:
+                        curses.beep()
+                    except curses.error:
+                        pass
                 self._save()
-

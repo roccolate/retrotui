@@ -4,6 +4,7 @@ Fetches a one-line weather summary from wttr.in (best-effort, non-blocking
 on draw). Press 'r' to refresh.
 """
 import urllib.request
+import urllib.error
 import time
 from retrotui.plugins.base import RetroApp
 from retrotui.utils import safe_addstr, theme_attr
@@ -24,7 +25,7 @@ class Plugin(RetroApp):
                 if data:
                     self.summary = data
                     self.last = time.time()
-        except Exception:
+        except (OSError, TimeoutError, UnicodeError, urllib.error.URLError):
             pass
 
     def draw_content(self, stdscr, x, y, w, h):

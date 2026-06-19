@@ -334,7 +334,10 @@ class FileManagerWindow(Window):
         entry_stub = FileEntry(basename, entry_is_dir, path, size)
 
         if _is_long_file_operation(entry_stub, 10 * 1024 * 1024):
-            return ActionResult(ActionType.REQUEST_COPY_BETWEEN_PANES, {'source': path, 'dest': dest_dir})
+            return ActionResult(ActionType.REQUEST_COPY_BETWEEN_PANES, {
+                'source': path,
+                'destination': dest_dir,
+            })
             
         res = perform_copy(path, dest_path)
         if res.type == ActionType.ERROR:
@@ -590,12 +593,18 @@ class FileManagerWindow(Window):
         return self._active_pane_state().path
 
     def create_directory(self, name):
-        res = create_directory(self._active_base_path(), name)
+        clean, error = self._normalize_new_name(name)
+        if error:
+            return error
+        res = create_directory(self._active_base_path(), clean)
         self._rebuild_content()
         return res
 
     def create_file(self, name):
-        res = create_file(self._active_base_path(), name)
+        clean, error = self._normalize_new_name(name)
+        if error:
+            return error
+        res = create_file(self._active_base_path(), clean)
         self._rebuild_content()
         return res
 
@@ -764,6 +773,27 @@ class FileManagerWindow(Window):
         self._rebuild_content()
         return res
 
+    def copy_path_to(self, source_path, dest_path):
+        """Copy an explicit source path into a destination path or directory."""
+        if not source_path or not isinstance(source_path, str):
+            return ActionResult(ActionType.ERROR, 'No source path provided.')
+        name = os.path.basename(os.path.normpath(source_path))
+        if not name:
+            return ActionResult(ActionType.ERROR, 'Invalid source path.')
+        entry = FileEntry(
+            name,
+            os.path.isdir(source_path),
+            source_path,
+            0,
+        )
+        target, error = self._resolve_destination_path(entry, dest_path)
+        if error:
+            return error
+
+        res = perform_copy(source_path, target)
+        self._rebuild_content()
+        return res
+
     def move_selected(self, dest_path):
         entry = self._selected_entry()
         if not entry:
@@ -799,7 +829,10 @@ class FileManagerWindow(Window):
             return ActionResult(ActionType.REFRESH, f'Moved {source.name}')
         else:
             if _is_long_file_operation(source, 10 * 1024 * 1024):
-                return ActionResult(ActionType.REQUEST_COPY_BETWEEN_PANES, {'source': source.full_path, 'dest': dest_dir})
+                return ActionResult(ActionType.REQUEST_COPY_BETWEEN_PANES, {
+                    'source': source.full_path,
+                    'destination': dest_dir,
+                })
             
             dest_path = os.path.join(dest_dir, source.name)
             if os.path.exists(dest_path):

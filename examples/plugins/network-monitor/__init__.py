@@ -8,7 +8,7 @@ from retrotui.utils import safe_addstr, theme_attr
 def _parse_proc_net_dev():
     data = {}
     try:
-        with open('/proc/net/dev', 'r', encoding='utf-8') as f:
+        with open('/proc/net/dev', 'r', encoding='utf-8', errors='replace') as f:
             lines = f.readlines()[2:]
         for line in lines:
             if ':' not in line:
@@ -18,7 +18,7 @@ def _parse_proc_net_dev():
             rx = int(parts[0])
             tx = int(parts[8])
             data[iface.strip()] = (rx, tx)
-    except Exception:
+    except (OSError, ValueError, IndexError):
         pass
     return data
 

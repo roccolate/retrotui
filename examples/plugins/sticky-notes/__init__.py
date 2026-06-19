@@ -20,13 +20,15 @@ class Plugin(RetroApp):
             try:
                 with open(path, 'r', encoding='utf-8') as f:
                     data = json.load(f)
-                    if 'lines' in data and isinstance(data['lines'], list):
-                        self.lines = data['lines']
+                    if not isinstance(data, dict):
+                        self.lines = ['']
+                    elif 'lines' in data and isinstance(data['lines'], list):
+                        self.lines = [str(line) for line in data['lines']] or ['']
                     else:
                         # backward compatibility with 'note' string
-                        note = data.get('note', '')
+                        note = str(data.get('note', ''))
                         self.lines = note.split('\n') if note else ['']
-            except Exception:
+            except (OSError, UnicodeError, json.JSONDecodeError):
                 self.lines = ['']
 
     def _save(self):
@@ -35,7 +37,7 @@ class Plugin(RetroApp):
             os.makedirs(os.path.dirname(path), exist_ok=True)
             with open(path, 'w', encoding='utf-8') as f:
                 json.dump({'lines': self.lines}, f)
-        except Exception:
+        except (OSError, TypeError):
             pass
 
     def draw_content(self, stdscr, x, y, w, h):

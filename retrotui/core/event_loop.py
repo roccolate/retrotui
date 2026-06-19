@@ -230,6 +230,17 @@ def _profile_enabled():
     return value in {"1", "true", "yes", "on"}
 
 
+def _coerce_float(value, default):
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _env_float(name, default):
+    return _coerce_float(os.environ.get(name), default)
+
+
 def _ensure_runtime_metrics(app):
     metrics = getattr(app, "_runtime_metrics", None)
     if isinstance(metrics, dict):
@@ -239,7 +250,7 @@ def _ensure_runtime_metrics(app):
         "enabled": _profile_enabled(),
         "started_at": now,
         "last_report_at": now,
-        "report_interval_s": float(os.environ.get("RETROTUI_PROFILE_INTERVAL", "5.0")),
+        "report_interval_s": _env_float("RETROTUI_PROFILE_INTERVAL", 5.0),
         "loops": 0,
         "redraws": 0,
         "dispatched_events": 0,
@@ -273,7 +284,7 @@ def _emit_runtime_metrics(metrics, final=False):
         return
     now = time.perf_counter()
     if not final:
-        interval = max(0.1, float(metrics.get("report_interval_s", 5.0)))
+        interval = max(0.1, _coerce_float(metrics.get("report_interval_s"), 5.0))
         if now - metrics.get("last_report_at", now) < interval:
             return
         metrics["last_report_at"] = now

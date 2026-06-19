@@ -392,7 +392,7 @@ Falls back to internal-only if no system tool is found. Backend detection is cac
 
 ## Testing
 
-The repo currently has 102 `tests/test_*.py` files. The current suite runs ~1040 collected tests (v0.9.5). Most tests use `unittest.TestCase` + `unittest.mock`, and can run without a real terminal.
+The repo currently has 105 `tests/test_*.py` files. The current suite runs 1084 collected tests (v0.9.5). Most tests use `unittest.TestCase` + `unittest.mock`, and can run without a real terminal.
 
 ### Fake Curses
 

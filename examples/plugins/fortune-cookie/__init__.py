@@ -32,7 +32,7 @@ class Plugin(RetroApp):
                             lines = [l.strip() for l in fh if l.strip()]
                         if lines:
                             return random.choice(lines)
-                except Exception:
+                except OSError:
                     pass
         return random.choice(DEFAULT_FORTUNES)
 

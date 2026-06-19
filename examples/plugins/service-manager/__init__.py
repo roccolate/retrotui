@@ -8,6 +8,9 @@ import subprocess
 from retrotui.plugins.base import RetroApp
 from retrotui.utils import safe_addstr, theme_attr
 
+_LOAD_TIMEOUT = 5.0
+_ACTION_TIMEOUT = 20.0
+
 
 class Plugin(RetroApp):
     def __init__(self, *args, **kwargs):
@@ -21,11 +24,15 @@ class Plugin(RetroApp):
             self.services = []
             return
         try:
-            out = subprocess.check_output(['systemctl', 'list-units', '--type=service', '--all', '--no-legend'], stderr=subprocess.DEVNULL)
+            out = subprocess.check_output(
+                ['systemctl', 'list-units', '--type=service', '--all', '--no-legend'],
+                stderr=subprocess.DEVNULL,
+                timeout=_LOAD_TIMEOUT,
+            )
             lines = out.decode('utf-8', 'ignore').splitlines()
             services = []
-            for L in lines:
-                parts = L.split(None, 4)
+            for line in lines:
+                parts = line.split(None, 4)
                 if len(parts) >= 4:
                     name = parts[0]
                     load = parts[1]
@@ -33,7 +40,7 @@ class Plugin(RetroApp):
                     sub = parts[3]
                     services.append((name, load, active, sub))
             self.services = services
-        except Exception:
+        except (OSError, subprocess.SubprocessError):
             self.services = []
 
     def draw_content(self, stdscr, x, y, w, h):
@@ -65,10 +72,22 @@ class Plugin(RetroApp):
                 return
             try:
                 if active == 'active':
-                    subprocess.check_call(['systemctl', 'stop', name])
+                    subprocess.run(
+                        ['systemctl', 'stop', name],
+                        check=False,
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                        timeout=_ACTION_TIMEOUT,
+                    )
                 else:
-                    subprocess.check_call(['systemctl', 'start', name])
-            except Exception:
+                    subprocess.run(
+                        ['systemctl', 'start', name],
+                        check=False,
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                        timeout=_ACTION_TIMEOUT,
+                    )
+            except (OSError, subprocess.SubprocessError):
                 pass
             finally:
                 self._load()

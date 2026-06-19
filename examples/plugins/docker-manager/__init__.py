@@ -8,6 +8,9 @@ import subprocess
 from retrotui.plugins.base import RetroApp
 from retrotui.utils import safe_addstr, theme_attr
 
+_LOAD_TIMEOUT = 5.0
+_ACTION_TIMEOUT = 20.0
+
 
 class Plugin(RetroApp):
     def __init__(self, *args, **kwargs):
@@ -21,10 +24,19 @@ class Plugin(RetroApp):
             self.containers = []
             return
         try:
-            out = subprocess.check_output(['docker', 'ps', '-a', '--format', '{{.ID}}\t{{.Names}}\t{{.Status}}'], stderr=subprocess.DEVNULL)
+            out = subprocess.check_output(
+                ['docker', 'ps', '-a', '--format', '{{.ID}}\t{{.Names}}\t{{.Status}}'],
+                stderr=subprocess.DEVNULL,
+                timeout=_LOAD_TIMEOUT,
+            )
             lines = out.decode('utf-8', 'ignore').splitlines()
-            self.containers = [tuple(l.split('\t', 2)) for l in lines]
-        except Exception:
+            containers = []
+            for line in lines:
+                parts = line.split('\t', 2)
+                if len(parts) == 3:
+                    containers.append(tuple(parts))
+            self.containers = containers
+        except (OSError, subprocess.SubprocessError):
             self.containers = []
 
     def draw_content(self, stdscr, x, y, w, h):
@@ -53,10 +65,22 @@ class Plugin(RetroApp):
             cid, name, status = self.containers[self.selected]
             try:
                 if status.lower().startswith('up'):
-                    subprocess.check_call(['docker', 'stop', cid])
+                    subprocess.run(
+                        ['docker', 'stop', cid],
+                        check=False,
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                        timeout=_ACTION_TIMEOUT,
+                    )
                 else:
-                    subprocess.check_call(['docker', 'start', cid])
-            except Exception:
+                    subprocess.run(
+                        ['docker', 'start', cid],
+                        check=False,
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                        timeout=_ACTION_TIMEOUT,
+                    )
+            except (OSError, subprocess.SubprocessError):
                 pass
             finally:
                 self._load()

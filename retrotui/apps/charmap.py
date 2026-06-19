@@ -53,6 +53,8 @@ class CharacterMapWindow(Window):
         
         self.sel_idx = 0
         self.selected_char = self.chars[0] if self.chars else None
+        self._status_message = ""
+        self._status_ttl = 0
         
         # Menu setup
         range_items = []
@@ -160,7 +162,7 @@ class CharacterMapWindow(Window):
             safe_addstr(stdscr, by + bh - 2, detail_x + 1, "Press 'C' to Copy", theme_attr("status"))
 
         # Footer
-        footer = f" {UNICODE_BLOCKS[self.block_idx][0]} | Page {page+1} "
+        footer = self._status_message or f" {UNICODE_BLOCKS[self.block_idx][0]} | Page {page+1} "
         safe_addstr(stdscr, by + bh - 1, bx, footer[:bw].ljust(bw), theme_attr("status"))
 
         if self.window_menu:

@@ -2,12 +2,14 @@ import os
 import sys
 import tempfile
 import unittest
+from unittest import mock
 from _support import make_fake_curses
 
 sys.modules['curses'] = make_fake_curses()
 fake_curses = sys.modules['curses']
 
 from retrotui.apps.filemanager import FileManagerWindow, FileEntry
+import retrotui.apps.filemanager.window as fm_window
 from retrotui.core.actions import ActionType
 
 
@@ -70,6 +72,28 @@ class FileManagerMoreEdgeTests(unittest.TestCase):
         self.win.selected_index = 0
         res = self.win.copy_selected('')
         self.assertIsNotNone(res)
+
+    def test_accept_dropped_long_file_uses_explicit_source_and_destination(self):
+        other = tempfile.TemporaryDirectory(dir=os.getcwd())
+        self.addCleanup(other.cleanup)
+        source_path = os.path.join(other.name, "big.bin")
+        with open(source_path, "w", encoding="utf-8") as f:
+            f.write("x")
+
+        with mock.patch.object(fm_window, "_is_long_file_operation", return_value=True):
+            res = self.win.accept_dropped_path(source_path)
+
+        self.assertEqual(res.type, ActionType.REQUEST_COPY_BETWEEN_PANES)
+        self.assertEqual(res.payload["source"], source_path)
+        self.assertEqual(res.payload["destination"], self.base)
+
+    def test_create_file_and_directory_reject_path_separators(self):
+        file_res = self.win.create_file("../outside.txt")
+        dir_res = self.win.create_directory("nested/name")
+
+        self.assertEqual(file_res.type, ActionType.ERROR)
+        self.assertEqual(dir_res.type, ActionType.ERROR)
+        self.assertFalse(os.path.exists(os.path.join(self.base, "..", "outside.txt")))
 
 
 if __name__ == '__main__':
