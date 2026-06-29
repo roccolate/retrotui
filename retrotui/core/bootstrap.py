@@ -10,6 +10,14 @@ try:
     import termios
 except ImportError:
     termios = None
+
+
+def _stdout_is_tty():
+    """Return True when stdout is attached to a real terminal."""
+    try:
+        return bool(sys.stdout.isatty())
+    except (AttributeError, ValueError, OSError):
+        return False
 _TERMINAL_SETUP_ERRORS = (
     AttributeError,
     OSError,
@@ -158,14 +166,21 @@ def enable_mouse_support():
     scroll_down_mask = getattr(curses, 'BUTTON5_PRESSED', MOUSE_SCROLL_DOWN_FALLBACK)
 
     if detect_mouse_backend() != "gpm":
-        # Use 1002 (button-event tracking) + 1006 (SGR coordinates)
-        print('\033[?1002h', end='', flush=True)
-        print('\033[?1006h', end='', flush=True)
+        # Use 1002 (button-event tracking) + 1006 (SGR coordinates).
+        # ``sys.stdout`` may be redirected (test captured output, log
+        # capture) — only emit to a real TTY to avoid littering logs
+        # with raw escape sequences.
+        if _stdout_is_tty():
+            sys.stdout.write('\033[?1002h')
+            sys.stdout.write('\033[?1006h')
+            sys.stdout.flush()
     return click_flags, stop_drag_flags, scroll_down_mask
 
 
 def disable_mouse_support():
     """Restore terminal mouse tracking modes."""
     if detect_mouse_backend() != "gpm":
-        print('\033[?1002l', end='', flush=True)
-        print('\033[?1006l', end='', flush=True)
+        if _stdout_is_tty():
+            sys.stdout.write('\033[?1002l')
+            sys.stdout.write('\033[?1006l')
+            sys.stdout.flush()

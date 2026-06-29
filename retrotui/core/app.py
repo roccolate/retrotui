@@ -33,6 +33,7 @@ from .mouse_router import (
     handle_desktop_mouse,
     handle_mouse_event,
 )
+from .mouse_utils import _is_button1_click_event
 from .key_router import (
     normalize_app_key,
     handle_menu_hotkeys,
@@ -596,12 +597,14 @@ class RetroTUI:
             hidden_icons=getattr(self.config, 'hidden_icons', ""),
             hidden_menu_items=getattr(self.config, 'hidden_menu_items', ""),
         )
-        path = save_config(self.config)
+        # Bundle the icon positions into the same write so the file is
+        # only persisted once per change (was two writes: one for the
+        # ``[ui]`` block, one to splice in ``[icons]`` afterwards).
         try:
-            self._save_icon_positions(path)
+            icon_positions = dict(getattr(self._icon_mgr, "positions", {}) or {})
         except _CONFIG_PERSIST_ERRORS:
-            LOGGER.debug('failed to save icon positions', exc_info=True)
-        return path
+            icon_positions = None
+        return save_config(self.config, icon_positions=icon_positions)
 
     def _load_icon_positions(self):
         from .config import default_config_path
@@ -646,6 +649,19 @@ class RetroTUI:
                 f'Terminal too small ({w}x{h}). '
                 f'Minimum supported size is {self.MIN_TERM_WIDTH}x{self.MIN_TERM_HEIGHT}.'
             )
+
+    def _check_terminal_size_post_resize(self):
+        """Re-check terminal size after SIGWINCH without raising.
+
+        Returns True when the new size is too small for the base desktop.
+        Callers can clamp their drawing to the validated size or surface a
+        transient status message.
+        """
+        try:
+            h, w = self.stdscr.getmaxyx()
+        except (AttributeError, OSError, ValueError):
+            return True
+        return h < self.MIN_TERM_HEIGHT or w < self.MIN_TERM_WIDTH
 
     def cleanup(self):
         """Restore terminal state."""
@@ -729,13 +745,13 @@ class RetroTUI:
     # Icon position & window management
     # ------------------------------------------------------------------
 
-    def get_icon_screen_pos(self, index):
+    def get_icon_screen_pos(self, index, *, frame_size=None):
         """Return (x, y) for icon at index, checking persisted positions then default grid."""
-        return self._icon_mgr.get_screen_pos(index)
+        return self._icon_mgr.get_screen_pos(index, frame_size=frame_size)
 
-    def get_icon_at(self, mx, my):
+    def get_icon_at(self, mx, my, *, frame_size=None):
         """Return icon index at mouse position, or -1."""
-        return self._icon_mgr.get_icon_at(mx, my)
+        return self._icon_mgr.get_icon_at(mx, my, frame_size=frame_size)
 
     def set_active_window(self, win):
         """Set a window as active (bring to front)."""
@@ -894,7 +910,10 @@ class RetroTUI:
         """Handle mouse events when a modal dialog is open."""
         if not self.dialog:
             return False
-        if not (bstate & self.click_flags):
+        # ``click_flags`` also matches BUTTON1_PRESSED, so dragging the
+        # mouse over a button would fire ``handle_click`` repeatedly on
+        # motion-with-button-down. Restrict to genuine click-like events.
+        if not _is_button1_click_event(bstate):
             return True
         result = self.dialog.handle_click(mx, my)
         self._resolve_dialog_result(result)

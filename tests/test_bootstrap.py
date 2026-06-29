@@ -124,7 +124,8 @@ class BootstrapTests(unittest.TestCase):
 
     def test_enable_mouse_support_returns_masks(self):
         with mock.patch.dict(self.bootstrap.os.environ, {"TERM": "xterm-256color"}, clear=False):
-            with mock.patch("builtins.print") as print_mock:
+            fake_stdout = mock.Mock(isatty=lambda: True)
+            with mock.patch.object(self.bootstrap.sys, "stdout", fake_stdout):
                 click_flags, stop_drag_flags, scroll_down_mask = self.bootstrap.enable_mouse_support()
 
         self.fake_curses.mousemask.assert_called_once_with(
@@ -143,26 +144,43 @@ class BootstrapTests(unittest.TestCase):
             | self.fake_curses.BUTTON1_DOUBLE_CLICKED,
         )
         self.assertEqual(scroll_down_mask, self.fake_curses.BUTTON5_PRESSED)
-        self.assertEqual(print_mock.call_count, 2)
+        self.assertEqual(fake_stdout.write.call_count, 2)
 
     def test_disable_mouse_support_prints_restore_sequences(self):
         with mock.patch.dict(self.bootstrap.os.environ, {"TERM": "xterm-256color"}, clear=False):
-            with mock.patch("builtins.print") as print_mock:
+            fake_stdout = mock.Mock(isatty=lambda: True)
+            with mock.patch.object(self.bootstrap.sys, "stdout", fake_stdout):
                 self.bootstrap.disable_mouse_support()
 
-        self.assertEqual(print_mock.call_count, 2)
+        self.assertEqual(fake_stdout.write.call_count, 2)
 
     def test_enable_mouse_support_linux_backend_skips_sgr_sequences(self):
         with mock.patch.dict(self.bootstrap.os.environ, {"TERM": "linux"}, clear=False):
-            with mock.patch("builtins.print") as print_mock:
+            fake_stdout = mock.Mock(isatty=lambda: True)
+            with mock.patch.object(self.bootstrap.sys, "stdout", fake_stdout):
                 self.bootstrap.enable_mouse_support()
-        self.assertEqual(print_mock.call_count, 0)
+        self.assertEqual(fake_stdout.write.call_count, 0)
 
     def test_disable_mouse_support_linux_backend_skips_sgr_sequences(self):
         with mock.patch.dict(self.bootstrap.os.environ, {"TERM": "linux"}, clear=False):
-            with mock.patch("builtins.print") as print_mock:
+            fake_stdout = mock.Mock(isatty=lambda: True)
+            with mock.patch.object(self.bootstrap.sys, "stdout", fake_stdout):
                 self.bootstrap.disable_mouse_support()
-        self.assertEqual(print_mock.call_count, 0)
+        self.assertEqual(fake_stdout.write.call_count, 0)
+
+    def test_enable_mouse_support_skips_sgr_sequences_when_stdout_is_not_a_tty(self):
+        with mock.patch.dict(self.bootstrap.os.environ, {"TERM": "xterm-256color"}, clear=False):
+            fake_stdout = mock.Mock(isatty=lambda: False)
+            with mock.patch.object(self.bootstrap.sys, "stdout", fake_stdout):
+                self.bootstrap.enable_mouse_support()
+        self.assertEqual(fake_stdout.write.call_count, 0)
+
+    def test_disable_mouse_support_skips_sgr_sequences_when_stdout_is_not_a_tty(self):
+        with mock.patch.dict(self.bootstrap.os.environ, {"TERM": "xterm-256color"}, clear=False):
+            fake_stdout = mock.Mock(isatty=lambda: False)
+            with mock.patch.object(self.bootstrap.sys, "stdout", fake_stdout):
+                self.bootstrap.disable_mouse_support()
+        self.assertEqual(fake_stdout.write.call_count, 0)
 
     def test_detect_mouse_backend_prefers_explicit_override(self):
         with mock.patch.dict(self.bootstrap.os.environ, {"TERM": "linux", "RETROTUI_MOUSE_BACKEND": "sgr"}, clear=False):

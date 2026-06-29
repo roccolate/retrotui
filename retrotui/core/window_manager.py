@@ -72,19 +72,25 @@ class WindowManager:
         self._layers_dirty = False
 
     def close_window(self, win):
-        """Close a window."""
+        """Close a window. Idempotent: safe to call more than once."""
+        # Clear menu owner if it points at the window being closed, even on
+        # re-entry. This must run before the membership check below so a
+        # stale reference is recovered.
         if getattr(self._app, "_active_window_menu_owner", None) is win:
             menu = getattr(win, "window_menu", None)
             if menu is not None:
                 menu.active = False
             self._app._active_window_menu_owner = None
+        if win not in self.windows:
+            return
         closer = getattr(win, 'close', None)
         if callable(closer):
             try:
                 closer()
             except _WINDOW_CLOSE_HOOK_ERRORS:  # pragma: no cover - defensive window cleanup path
                 LOGGER.debug('Window close hook failed for %r', win, exc_info=True)
-        self.windows.remove(win)
+        if win in self.windows:
+            self.windows.remove(win)
         self._layers_dirty = True
         self._emit_event("window.closed", win)
         self._activate_last_visible_window()

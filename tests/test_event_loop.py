@@ -95,9 +95,9 @@ class EventLoopTests(unittest.TestCase):
         app.stdscr.erase.assert_called_once_with()
         app.draw_desktop.assert_called_once_with(frame_size=(25, 80))
         app.draw_icons.assert_called_once_with(frame_size=(25, 80))
-        app.windows[0].draw.assert_called_once_with(app.stdscr)
-        app.menu.draw_bar.assert_called_once_with(app.stdscr, 80)
-        app.menu.draw_dropdown.assert_called_once_with(app.stdscr)
+        app.windows[0].draw.assert_called_once_with(app.stdscr, frame_size=(25, 80))
+        app.menu.draw_bar.assert_called_once_with(app.stdscr, 80, frame_size=(25, 80))
+        app.menu.draw_dropdown.assert_called_once_with(app.stdscr, frame_size=(25, 80))
         app.draw_taskbar.assert_called_once_with(frame_size=(25, 80))
         app.draw_statusbar.assert_called_once_with(frame_size=(25, 80))
         app.stdscr.noutrefresh.assert_called_once_with()
@@ -109,7 +109,7 @@ class EventLoopTests(unittest.TestCase):
 
         self.event_loop.draw_frame(app)
 
-        app.dialog.draw.assert_called_once_with(app.stdscr)
+        app.dialog.draw.assert_called_once_with(app.stdscr, frame_size=(25, 80))
 
     def test_draw_frame_skips_window_render_when_background_operation_active(self):
         app = self._make_app()
@@ -119,7 +119,7 @@ class EventLoopTests(unittest.TestCase):
 
         app.stdscr.getmaxyx.assert_called_once_with()
         app.windows[0].draw.assert_not_called()
-        app.menu.draw_bar.assert_called_once_with(app.stdscr, 80)
+        app.menu.draw_bar.assert_called_once_with(app.stdscr, 80, frame_size=(25, 80))
 
     def test_read_input_key_returns_none_on_curses_error(self):
         stdscr = types.SimpleNamespace(get_wch=mock.Mock(side_effect=self.fake_curses.error()))

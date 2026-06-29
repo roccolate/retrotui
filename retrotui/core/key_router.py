@@ -149,16 +149,36 @@ def handle_global_menu_key(app, key_code):
     return True
 
 
-def cycle_focus(app):
-    """Cycle focus through visible windows."""
+def cycle_focus(app, *, reverse=False):
+    """Cycle focus through visible windows.
+
+    Delegates to ``set_active_window`` so the chosen window is also brought
+    to the front of the z-order. Without reordering the renderer would draw
+    the new active window behind the others (only its title bar attribute
+    would change), confusing the user about which window is focused.
+    """
     visible_windows = [w for w in app.windows if w.visible]
     if not visible_windows:
         return
     current = next((i for i, w in enumerate(visible_windows) if w.active), -1)
+    step = -1 if reverse else 1
+    next_idx = (current + step) % len(visible_windows)
+    target = visible_windows[next_idx]
     if current >= 0:
         visible_windows[current].active = False
-    next_idx = (current + 1) % len(visible_windows)
-    visible_windows[next_idx].active = True
+    target.active = True
+    # Only promote to the z-order via the WindowManager when the live app
+    # has one wired up AND the target window knows about ``always_on_top``
+    # (a test stub that lacks it would crash inside the z-order logic).
+    wm = getattr(app, "window_mgr", None)
+    if wm is None or not hasattr(target, "always_on_top"):
+        return
+    try:
+        wm.set_active_window(target)
+    except (AttributeError, ValueError, TypeError):
+        # Leave the target focused even if the z-order promotion failed
+        # so a buggy WindowManager can't strip focus from the user.
+        LOGGER.debug("cycle_focus failed to reorder z-order", exc_info=True)
 
 
 def handle_active_window_key(app, key):
@@ -207,5 +227,24 @@ def handle_key_event(app, key):
             return
         app._cycle_focus()
         return
+
+    key_btab = getattr(curses, "KEY_BTAB", 353)
+    if key_code == key_btab:  # Shift+Tab — cycle focus backward
+        active_win = app.get_active_window()
+        local_tab = getattr(active_win, 'handle_tab_key', None) if active_win else None
+        if callable(local_tab):
+            try:
+                consumed = local_tab(reverse=True)
+            except TypeError:
+                consumed = local_tab()
+            if consumed:
+                return
+        cycle = getattr(app, "_cycle_focus", None)
+        if callable(cycle):
+            try:
+                cycle(reverse=True)
+            except TypeError:
+                cycle()
+            return
 
     app._handle_active_window_key(key)

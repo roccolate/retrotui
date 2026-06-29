@@ -31,7 +31,8 @@ def normalize_mouse_payload(app, event):
     Returns a dict with normalized fields or None when payload is invalid.
     """
     try:
-        _, mx, my, _, bstate = event
+        _, mx, my, *_rest = event
+        bstate = _rest[-1] if _rest else 0
     except (TypeError, ValueError):
         return None
 

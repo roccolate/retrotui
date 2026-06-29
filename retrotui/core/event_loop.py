@@ -46,15 +46,15 @@ def draw_frame(app):
     if not app.has_background_operation():
         for win in app.windows:
             if getattr(win, "visible", True):
-                win.draw(app.stdscr)
+                win.draw(app.stdscr, frame_size=frame_size)
 
-    app.menu.draw_bar(app.stdscr, frame_w)
-    app.menu.draw_dropdown(app.stdscr)
+    app.menu.draw_bar(app.stdscr, frame_w, frame_size=frame_size)
+    app.menu.draw_dropdown(app.stdscr, frame_size=frame_size)
     app.draw_taskbar(frame_size=frame_size)
     app.draw_statusbar(frame_size=frame_size)
 
     if app.dialog:
-        app.dialog.draw(app.stdscr)
+        app.dialog.draw(app.stdscr, frame_size=frame_size)
 
     # Context menu drawn on top of menus but under modal dialogs.
     ctx = app.context_menu
@@ -95,16 +95,21 @@ def dispatch_input(app, key):
         if isinstance(key, int) and key == curses.KEY_MOUSE:
             try:
                 event = curses.getmouse()
-                _, mx, my, _, _bstate = event
-                action = ctx.handle_click(mx, my)
-                if action:
-                    app.execute_action(action)
-                    return True
-                # Click outside may close the menu; either way this was UI input.
-                if ctx.is_open():
-                    return True
-            except curses.error:
+            except (curses.error, ValueError, TypeError):
                 return False
+            try:
+                _, mx, my, *_rest = event
+                _bstate = _rest[-1] if _rest else 0
+            except (TypeError, ValueError):
+                return False
+            action = ctx.handle_click(mx, my)
+            if action:
+                app.execute_action(action)
+                return True
+            # Click outside may close the menu; either way this was UI input.
+            if ctx.is_open():
+                return True
+            return False
         else:
             action = ctx.handle_input(key)
             if action:
@@ -115,12 +120,22 @@ def dispatch_input(app, key):
         try:
             event = curses.getmouse()
             return bool(app.handle_mouse(event))
-        except curses.error:
+        except (curses.error, ValueError, TypeError):
             return False
 
     if isinstance(key, int) and key == curses.KEY_RESIZE:
         curses.update_lines_cols()
         clamp_windows_to_terminal(app)
+        # Re-validate size non-fatally so a shrink doesn't silently leave
+        # rows/cols out of range (``_validate_terminal_size`` raises, which
+        # is right at startup but disruptive on resize).
+        check = getattr(app, "_check_terminal_size_post_resize", None)
+        too_small = bool(check()) if callable(check) else False
+        if too_small:
+            app._terminal_too_small = True
+        else:
+            app._terminal_too_small = False
+        app._dirty = True
         return True
 
     app.handle_key(key)
@@ -168,12 +183,23 @@ def _tick_visible_windows(app):
     return changed
 
 
-def _select_input_timeout_ms(app):
-    """Return the target input timeout for the current runtime state."""
+def _select_input_timeout_ms(app, *, has_live=None, has_animated=None):
+    """Return the target input timeout for the current runtime state.
+
+    ``has_live``/``has_animated`` may be supplied by the caller when it
+    has already computed them for the redraw decision; otherwise the
+    helpers are invoked on demand. Reusing the cached values avoids two
+    extra ``app.windows`` walks per loop iteration.
+    """
     idle = int(getattr(app, "input_timeout_idle_ms", TERMINAL_INPUT_TIMEOUT_MS))
     timeout_ms = max(1, idle)
 
-    if _has_live_terminals(app):
+    if has_live is None:
+        has_live = _has_live_terminals(app)
+    if has_animated is None:
+        has_animated = _has_animated_windows(app)
+
+    if has_live:
         live = int(
             getattr(
                 app,
@@ -183,7 +209,7 @@ def _select_input_timeout_ms(app):
         )
         return max(1, live)
 
-    if _has_animated_windows(app):
+    if has_animated:
         anim = int(
             getattr(
                 app,
@@ -365,8 +391,12 @@ def run_app_loop(app):
                         app._dirty = True
                 if _tick_visible_windows(app):
                     app._dirty = True
-                # Always redraw when live terminals or animated windows are active.
-                if _has_live_terminals(app) or _has_animated_windows(app):
+                # Live terminals / animated windows drive both the redraw
+                # cadence AND the input-timeout selection. Compute them
+                # once and reuse to avoid walking ``app.windows`` twice.
+                has_live = _has_live_terminals(app)
+                has_animated = _has_animated_windows(app)
+                if has_live or has_animated:
                     app._dirty = True
                 if getattr(app, '_dirty', True):
                     draw_start = time.perf_counter()
@@ -374,7 +404,7 @@ def run_app_loop(app):
                     metrics["draw_time_s"] += time.perf_counter() - draw_start
                     metrics["redraws"] += 1
                     app._dirty = False
-                _apply_input_timeout(app, _select_input_timeout_ms(app))
+                _apply_input_timeout(app, _select_input_timeout_ms(app, has_live=has_live, has_animated=has_animated))
                 input_start = time.perf_counter()
                 key = read_input_key(app.stdscr)
                 metrics["input_wait_time_s"] += time.perf_counter() - input_start
@@ -400,6 +430,15 @@ def run_app_loop(app):
                 app.handle_key("\x03")
                 app._dirty = True
                 metrics["dispatched_events"] += 1
+                continue
+            except Exception:
+                # A buggy ``tick``/``handle_key``/``dispatch_input`` chain
+                # used to escape the inner ``try`` and propagate into the
+                # outer ``finally``, where ``app.cleanup()`` would mask the
+                # original traceback if it also raised. Log and continue
+                # instead so the user keeps the app running.
+                LOGGER.exception("Unhandled exception in main loop iteration")
+                app._dirty = True
                 continue
     finally:
         _emit_runtime_metrics(metrics, final=True)

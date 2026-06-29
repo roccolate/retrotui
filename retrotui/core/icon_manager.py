@@ -33,25 +33,20 @@ class IconPositionManager:
 
     @staticmethod
     def _quote_toml_key(key):
-        return '"' + str(key).replace('\\', '\\\\').replace('"', '\\"') + '"'
+        # Route through the shared helper so icon names with newlines or
+        # tabs are encoded the same way as the rest of the config. The
+        # inline implementation here previously skipped ``\n``/``\r``/``\t``
+        # which corrupted configs whenever an icon label happened to
+        # contain them.
+        from ..utils import toml_basic_string
+        return '"' + toml_basic_string(key) + '"'
 
     @staticmethod
     def _unquote_toml_key(key):
+        from ..utils import decode_toml_basic_string
         if len(key) < 2 or key[0] != '"' or key[-1] != '"':
             return key
-        out = []
-        escape = False
-        for ch in key[1:-1]:
-            if escape:
-                out.append(ch)
-                escape = False
-            elif ch == '\\':
-                escape = True
-            else:
-                out.append(ch)
-        if escape:
-            out.append('\\')
-        return ''.join(out)
+        return decode_toml_basic_string(key[1:-1])
 
     # ------------------------------------------------------------------
     # Icon drag helpers
@@ -71,10 +66,18 @@ class IconPositionManager:
         label = icon.get("label")
         return str(label).strip()
 
-    def start_drag(self, icon_idx, mx, my):
-        """Begin dragging icon at *icon_idx* from mouse position (mx, my)."""
+    def start_drag(self, icon_idx, mx, my, *, frame_size=None):
+        """Begin dragging icon at *icon_idx* from mouse position (mx, my).
+
+        If a previous drag was never released (terminals that emit PRESS +
+        CLICK without RELEASE), finalize it first so positions persist and
+        ``is_dragging`` reflects the new drag only.
+        """
+        if self.is_dragging and self.dragging_icon != icon_idx:
+            self.end_drag()
         self.dragging_icon = icon_idx
-        ix, iy = self.get_screen_pos(icon_idx)
+        self._drag_dirty = False
+        ix, iy = self.get_screen_pos(icon_idx, frame_size=frame_size)
         self.drag_offset_x = mx - ix
         self.drag_offset_y = my - iy
 
@@ -91,24 +94,36 @@ class IconPositionManager:
             return
         new_x = max(0, mx - self.drag_offset_x)
         new_y = max(0, my - self.drag_offset_y)
-        self.positions[icon_key] = (new_x, new_y)
+        previous = self.positions.get(icon_key)
+        if previous != (new_x, new_y):
+            self.positions[icon_key] = (new_x, new_y)
+            self._drag_dirty = True
 
     def end_drag(self):
-        """Finish the drag and persist the new icon position."""
+        """Finish the drag and persist when the icon actually moved."""
         self.dragging_icon = -1
         self.drag_offset_x = 0
         self.drag_offset_y = 0
-        try:
-            self._app.persist_config()
-        except _ICON_PERSIST_ERRORS:
-            pass
+        # Avoid persisting config on every release (clicks that don't
+        # actually move the icon should not rewrite ``config.toml``).
+        if getattr(self, "_drag_dirty", False):
+            self._drag_dirty = False
+            try:
+                self._app.persist_config()
+            except _ICON_PERSIST_ERRORS:
+                pass
 
     def load(self, cfg_path):
         """Load icon positions from config TOML under [icons] section."""
         path = Path(cfg_path)
-        if not path.exists():
+        # Use ``read_text`` directly: ``path.exists()`` followed by
+        # ``read_text`` is a TOCTOU race and the file may be deleted
+        # between the two calls. ``FileNotFoundError`` is the legitimate
+        # "no saved positions yet" case.
+        try:
+            text = path.read_text(encoding='utf-8')
+        except FileNotFoundError:
             return {}
-        text = path.read_text(encoding='utf-8')
         section = None
         icons = {}
         for raw in text.splitlines():
@@ -135,6 +150,8 @@ class IconPositionManager:
 
     def save(self, cfg_path):
         """Save icon positions into the config TOML under [icons], preserving other sections."""
+        from ..utils import atomic_write_text
+
         cfg_path = Path(cfg_path)
         existing = ''
         if cfg_path.exists():
@@ -163,11 +180,12 @@ class IconPositionManager:
         for name, (x, y) in sorted(self.positions.items()):
             out_lines.append(f'{self._quote_toml_key(name)} = "{x},{y}"')
 
-        cfg_path.parent.mkdir(parents=True, exist_ok=True)
-        cfg_path.write_text('\n'.join(out_lines) + '\n', encoding='utf-8', newline='\n')
+        atomic_write_text(cfg_path, '\n'.join(out_lines) + '\n')
 
-    def _read_terminal_height(self):
+    def _read_terminal_height(self, frame_size=None):
         """Return current terminal height with a safe fallback."""
+        if isinstance(frame_size, tuple) and len(frame_size) == 2:
+            return frame_size[0]
         try:
             h, _ = self._app.stdscr.getmaxyx()
         except _ICON_TERMINAL_SIZE_ERRORS:
@@ -187,14 +205,14 @@ class IconPositionManager:
         row = index % icons_per_col
         return (start_x + col * spacing_x, start_y + row * spacing_y)
 
-    def sort_positions(self):
+    def sort_positions(self, *, frame_size=None):
         """Sort icons by label and rewrite persisted positions using default grid slots."""
         icons = list(getattr(self._app, "icons", ()) or ())
         ordered = sorted(
             enumerate(icons),
             key=lambda pair: (str(pair[1].get("label", "")).strip().lower(), pair[0]),
         )
-        terminal_height = self._read_terminal_height()
+        terminal_height = self._read_terminal_height(frame_size=frame_size)
 
         positions = {}
         for slot, (_index, icon) in enumerate(ordered):
@@ -210,7 +228,7 @@ class IconPositionManager:
             pass
         return positions
 
-    def get_screen_pos(self, index):
+    def get_screen_pos(self, index, *, frame_size=None):
         """Return (x, y) for icon at index, checking persisted positions then default grid."""
         icons = self._app.icons
         if not (0 <= index < len(icons)):
@@ -219,13 +237,16 @@ class IconPositionManager:
         key_label = self._position_key_for(icons[index])
         if key_label in self.positions:
             return self.positions[key_label]
-        return self._grid_slot_position(index, terminal_height=self._read_terminal_height())
+        return self._grid_slot_position(
+            index,
+            terminal_height=self._read_terminal_height(frame_size=frame_size),
+        )
 
-    def get_icon_at(self, mx, my):
+    def get_icon_at(self, mx, my, *, frame_size=None):
         """Return icon index at mouse position, or -1."""
         icons = self._app.icons
         for i, icon in enumerate(icons):
-            x, y = self.get_screen_pos(i)
+            x, y = self.get_screen_pos(i, frame_size=frame_size)
             symbol = icon.get("symbol")
             if isinstance(symbol, str) and symbol:
                 w = max(3, len(symbol))

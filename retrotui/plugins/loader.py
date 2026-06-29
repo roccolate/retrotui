@@ -126,10 +126,21 @@ def discover_plugins():
 
             try:
                 if tomllib is None:
-                    # Graceful fallback: parse minimal TOML manually (only basic key=values)
+                    # Fallback path — only basic ``key = value`` lines.
+                    # ``tomllib`` is stdlib on Python 3.11+; on older
+                    # interpreters the fallback is intentionally naive and
+                    # only supports the slice of TOML RetroTUI plugins
+                    # actually use. We emit a loud warning so plugin
+                    # authors know the cost: arrays, inline tables and
+                    # multi-line strings silently come back as raw text.
+                    LOGGER.warning(
+                        "Falling back to minimal TOML parser for plugin "
+                        "manifest %s (Python < 3.11 without tomli). "
+                        "Use Python 3.11+ or install tomli to support "
+                        "rich manifests.", manifest_path,
+                    )
                     with open(manifest_path, "r", encoding="utf-8") as f:
                         content = f.read()
-                    # Fallback: try to extract the [plugin] table using a naive approach
                     manifest = {"plugin": {}}
                     current = None
                     for line in content.splitlines():

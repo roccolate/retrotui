@@ -30,7 +30,18 @@ def detect_viewer_type(filepath, default_word_wrap=False):
     lower_path = filepath.lower()
     ext = os.path.splitext(lower_path)[1]
 
-    if ext in _LOG_EXTENSIONS or '/log/' in lower_path or '\\log\\' in lower_path:
+    # ``/log/`` substring match misclassifies paths like
+    # ``/home/user/blog/file.txt``; compare against the path components
+    # instead so only real ``log`` directory segments trigger the log
+    # viewer.
+    if ext in _LOG_EXTENSIONS:
+        return (LogViewerWindow, 16, 4, 74, 22, {})
+    normalised = lower_path.replace("\\", "/")
+    try:
+        parts = [p for p in normalised.split("/") if p]
+    except AttributeError:
+        parts = []
+    if "log" in parts:
         return (LogViewerWindow, 16, 4, 74, 22, {})
 
     if ext in ImageViewerWindow.IMAGE_EXTENSIONS:

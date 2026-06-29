@@ -1,5 +1,9 @@
 """Drag-and-drop manager for file operations between windows."""
 import curses
+import logging
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 class DragDropManager:
@@ -73,15 +77,72 @@ class DragDropManager:
         result = None
         open_path = getattr(target, 'open_path', None)
         accept_path = getattr(target, 'accept_dropped_path', None)
-        if callable(open_path):
-            result = open_path(path)
-        elif callable(accept_path):
-            result = accept_path(path)
+        # Isolate drop-target handlers so a buggy target can't kill the
+        # mouse-event loop. ``FileNotFoundError`` and ``PermissionError``
+        # are common when the user drops a path the target cannot open
+        # (per the audit); we log them as info rather than tracebacks.
+        try:
+            if callable(open_path):
+                result = open_path(path)
+            elif callable(accept_path):
+                result = accept_path(path)
+        except (FileNotFoundError, PermissionError, IsADirectoryError) as exc:
+            LOGGER.info(
+                "Drop target %r could not open %r: %s",
+                target, path, exc,
+            )
+            return
+        except Exception:
+            LOGGER.debug(
+                "Unhandled exception in drop target %r for %r",
+                target, path, exc_info=True,
+            )
+            return
 
         if result is not None:
             dispatcher = getattr(self._app, '_dispatch_window_result', None)
             if callable(dispatcher):
-                dispatcher(result, target)
+                try:
+                    dispatcher(result, target)
+                except Exception:
+                    LOGGER.debug(
+                        "Drop target %r produced an unhandled ActionResult",
+                        target, exc_info=True,
+                    )
+
+    def _notify_outside_drop(self, payload):
+        """Surface a short toast when a file drop lands on no target."""
+        if not isinstance(payload, dict):
+            return
+        path = payload.get('path')
+        if not path:
+            return
+        notify = getattr(self._app, 'notify', None)
+        if callable(notify):
+            try:
+                notify(
+                    f'Dropped "{path}" outside any window.',
+                    title="Drag & Drop",
+                    level="info",
+                )
+                return
+            except Exception:
+                LOGGER.debug("notify() failed for outside drop", exc_info=True)
+        # Fall back to the bus if direct notify is not available.
+        bus = getattr(self._app, '_event_bus', None)
+        publish = getattr(bus, 'publish', None) if bus is not None else None
+        if callable(publish):
+            try:
+                publish('notification', data={
+                    'title': 'Drag & Drop',
+                    'message': f'Dropped "{path}" outside any window.',
+                    'level': 'info',
+                })
+            except Exception:
+                LOGGER.debug(
+                    "bus.publish('notification') failed for outside drop",
+                    exc_info=True,
+                )
 
     def handle_mouse(self, mx, my, bstate, norm=None):
         """Handle file drag-and-drop between windows. Returns True if event was consumed."""
@@ -109,6 +170,8 @@ class DragDropManager:
             if stop_drag:
                 target = self.find_drop_target_window(mx, my)
                 self.dispatch_drop(target, self.payload)
+                if target is None:
+                    self._notify_outside_drop(self.payload)
                 self.clear_state()
                 self.clear_pending_file_drags()
                 return True

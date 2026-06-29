@@ -166,11 +166,13 @@ class ThemeAndConfigTests(unittest.TestCase):
         with (
             mock.patch.object(Path, "mkdir") as mkdir,
             mock.patch.object(Path, "write_text") as write_text,
+            mock.patch("os.replace") as replace,
         ):
             written = self.config.save_config(config, cfg_file)
         self.assertEqual(written, cfg_file)
         mkdir.assert_called_once_with(parents=True, exist_ok=True)
         write_text.assert_called_once()
+        replace.assert_called_once()
 
     def test_config_module_handles_missing_tomllib_import(self):
         real_import = __import__

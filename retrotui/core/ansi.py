@@ -89,6 +89,18 @@ class AnsiStateMachine:
                     yield ('TEXT', ch, self.attr)
             
             elif self.state == 'ESC':
+                if getattr(self, '_osc_in_esc', False):
+                    # We arrived here from inside OSC. ``\\`` closes the OSC
+                    # cleanly via ST; any other byte just closes OSC and is
+                    # reprocessed normally. A stray non-backslash after ESC
+                    # is unusual (the OSC spec mandates ST = ``ESC \\`` or
+                    # ``BEL``); we drop the stray ESC but keep the byte.
+                    self._osc_in_esc = False
+                    if ch == '\\':
+                        self.state = 'TEXT'
+                        continue
+                    self.state = 'TEXT'
+                    # Fall through to normal ESC handling for this byte.
                 if ch == '[':
                     self.state = 'CSI'
                     self.params = []
@@ -118,14 +130,16 @@ class AnsiStateMachine:
                             self.params.append(int(self.current_param_str))
                         except ValueError:
                             pass
-                    elif not self.params:
-                         self.params = [0] # Default param often 0 or 1 depending on command
-                    
+
                     if ch == 'm':
                         self._handle_sgr(self.params)
                     else:
+                        # Consumers supply per-command defaults via _num(idx, default),
+                        # so we do not synthesize a fake `[0]` here. Filling it would
+                        # shadow the consumer's defaults (e.g. CUP without params is
+                        # documented to default to row=1, col=1, not row=0/col=0).
                         yield ('CSI', ch, list(self.params))
-                    
+
                     self.state = 'TEXT'
                 else:
                     # Intermediate bytes (like ? in ?25h)
@@ -134,6 +148,16 @@ class AnsiStateMachine:
             elif self.state == 'OSC':
                 if ch == '\x07' or (ch == '\\'): # Simplified termination check
                     self.state = 'TEXT'
+                elif ch == '\x1b':
+                    # ESC inside the OSC body opens the String Terminator
+                    # (``ESC \\``). Move into ESC state so the next byte can
+                    # decide: a ``\\`` close cleans up; anything else routes
+                    # through the regular escape handler instead of looping
+                    # forever inside OSC. Without this the parser would
+                    # consume every following byte whenever an OSC was
+                    # terminated by raw ESC + non-``\\``.
+                    self._osc_in_esc = True
+                    self.state = 'ESC'
             
             elif self.state == 'CHARSET':
                 self.state = 'TEXT'

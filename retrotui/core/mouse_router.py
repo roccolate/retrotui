@@ -196,6 +196,31 @@ def handle_window_mouse(app, mx, my, bstate, norm=None):
         owner_contains = getattr(active_menu_owner, "contains", None)
         if callable(owner_contains) and not owner_contains(mx, my):
             active_menu = getattr(active_menu_owner, "window_menu", None)
+            # Dropdowns can extend below the window body, so a click that
+            # falls outside ``win.contains`` may still be inside the live
+            # dropdown rectangle. Defer the close until we confirm the
+            # click is genuinely outside the dropdown too.
+            on_dropdown = False
+            if active_menu is not None:
+                hit = getattr(active_menu, "hit_test_dropdown", None)
+                if callable(hit):
+                    on_dropdown = bool(hit(
+                        mx, my,
+                        win_x=active_menu_owner.x,
+                        win_y=active_menu_owner.y,
+                        win_w=active_menu_owner.w,
+                    ))
+            if active_menu is not None and on_dropdown:
+                # Click landed inside the dropdown: route to the owner's
+                # click handler so the highlighted item fires (handlers
+                # already guard via ``win.contains``).
+                handler = getattr(active_menu_owner, "handle_click", None)
+                if callable(handler):
+                    result = handler(mx, my)
+                    if result is not None:
+                        app.execute_action(result)
+                        return True
+                return True
             if active_menu is not None:
                 active_menu.active = False
             if getattr(app, "_active_window_menu_owner", None) is active_menu_owner:
@@ -205,13 +230,20 @@ def handle_window_mouse(app, mx, my, bstate, norm=None):
         if not win.visible:
             continue
 
-        if is_click_like and win.on_close_button(mx, my):
+        # Title-bar buttons (close/minimize/maximize) must only fire on a
+        # discrete click release so the user can cancel by dragging away
+        # after pressing down. ``is_click_like`` includes PRESS, which
+        # closes/resizes/maximizes a window the moment the user touches the
+        # button, even when they were just aiming for a drag.
+        is_button_click = _is_button1_click_event(bstate)
+
+        if is_button_click and win.on_close_button(mx, my):
             if getattr(app, "_active_window_menu_owner", None) is win:
                 app._active_window_menu_owner = None
             app.close_window(win)
             return True
 
-        if is_click_like and win.on_minimize_button(mx, my):
+        if is_button_click and win.on_minimize_button(mx, my):
             app.set_active_window(win)
             if getattr(app, "_active_window_menu_owner", None) is win:
                 menu = getattr(win, "window_menu", None)
@@ -224,7 +256,7 @@ def handle_window_mouse(app, mx, my, bstate, norm=None):
                 app.set_active_window(visible[-1])
             return True
 
-        if is_click_like and win.on_maximize_button(mx, my):
+        if is_button_click and win.on_maximize_button(mx, my):
             app.set_active_window(win)
             h, w = app.stdscr.getmaxyx()
             win.toggle_maximize(w, h)
