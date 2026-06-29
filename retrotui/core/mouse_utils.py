@@ -79,6 +79,19 @@ def _get_active_window_menu_owner(app):
     if not menu or not getattr(menu, "active", False):
         app._active_window_menu_owner = None
         return None
+    # A closed window may still be referenced here if its ``close()``
+    # raised: ``WindowManager.close_window`` clears the owner when the
+    # close succeeds, but we want a defensive sweep on every consumer
+    # access so a stale reference is recovered without waiting for the
+    # next mouse event that happens to mention ``win.close()``.
+    try:
+        in_windows = owner in getattr(app, "windows", ())
+    except TypeError:
+        in_windows = True
+    if not in_windows:
+        menu.active = False
+        app._active_window_menu_owner = None
+        return None
     if not getattr(owner, "visible", False):
         menu.active = False
         app._active_window_menu_owner = None

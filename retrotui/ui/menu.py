@@ -184,20 +184,24 @@ class MenuBar:
             return None
         return clock_x, clock
 
-    def refresh_clock(self, stdscr, *, width=None, win_x=0, force=False):
+    def refresh_clock(self, stdscr, *, width=None, win_x=0, force=False, frame_size=None):
         """Refresh only the global clock segment when it changed."""
         if self.mode != 'global' or not self.show_clock:
             return False
 
-        size = self._read_stdscr_size(stdscr)
-        if width is None:
-            if size is not None:
-                viewport_h, width = size
-            else:
-                viewport_h = self._viewport_h
-                width = self._viewport_w
+        if frame_size is not None:
+            viewport_h, width = frame_size
+            size = None
         else:
-            viewport_h = size[0] if size is not None else self._viewport_h
+            size = self._read_stdscr_size(stdscr)
+            if width is None:
+                if size is not None:
+                    viewport_h, width = size
+                else:
+                    viewport_h = self._viewport_h
+                    width = self._viewport_w
+            else:
+                viewport_h = size[0] if size is not None else self._viewport_h
         self._set_viewport(width=width, height=viewport_h)
 
         layout = self._clock_layout(width, win_x=win_x)
@@ -210,16 +214,33 @@ class MenuBar:
         if not force and render_key == self._last_clock_render:
             return False
 
-        safe_addstr(stdscr, self._bar_row(), clock_x, clock, theme_attr("menubar"))
+        safe_addstr(
+            stdscr,
+            self._bar_row(),
+            clock_x,
+            clock,
+            theme_attr("menubar"),
+            _bounds=frame_size,
+        )
         self._last_clock_render = render_key
         return True
 
-    def draw_bar(self, stdscr, *, width=None, win_x=0, win_y=0, win_w=None, is_active=True):
+    def draw_bar(
+        self,
+        stdscr,
+        *,
+        width=None,
+        win_x=0,
+        win_y=0,
+        win_w=None,
+        is_active=True,
+        frame_size=None,
+    ):
         """Draw the bar row for either global or window mode."""
         bar_y = self._bar_row(win_y)
         bar_attr = theme_attr("menubar")
         self._last_layout_args = (win_x, win_y, win_w)
-        size = self._read_stdscr_size(stdscr)
+        size = frame_size if frame_size is not None else self._read_stdscr_size(stdscr)
 
         if self.mode == 'global':
             if width is None:
@@ -231,33 +252,56 @@ class MenuBar:
             else:
                 viewport_h = size[0] if size is not None else self._viewport_h
             self._set_viewport(width=width, height=viewport_h)
-            safe_addstr(stdscr, bar_y, 0, ' ' * width, bar_attr)
+            safe_addstr(stdscr, bar_y, 0, ' ' * width, bar_attr, _bounds=frame_size)
             if self.show_logo:
-                safe_addstr(stdscr, bar_y, 0, ' =', bar_attr | curses.A_BOLD)
+                safe_addstr(
+                    stdscr,
+                    bar_y,
+                    0,
+                    ' =',
+                    bar_attr | curses.A_BOLD,
+                    _bounds=frame_size,
+                )
         else:
             if win_w is None:
                 return
             if size is not None:
                 viewport_h, viewport_w = size
                 self._set_viewport(width=viewport_w, height=viewport_h)
-            safe_addstr(stdscr, bar_y, win_x + 1, ' ' * max(0, win_w - 2), bar_attr)
+            safe_addstr(
+                stdscr,
+                bar_y,
+                win_x + 1,
+                ' ' * max(0, win_w - 2),
+                bar_attr,
+                _bounds=frame_size,
+            )
 
         positions = self.get_menu_x_positions(win_x)
         for i, name in enumerate(self.menu_names):
             attr = bar_attr
             if self.active and i == self.selected_menu and is_active:
                 attr = theme_attr("menu_selected")
-            safe_addstr(stdscr, bar_y, positions[i], f' {name} ', attr)
+            safe_addstr(
+                stdscr,
+                bar_y,
+                positions[i],
+                f' {name} ',
+                attr,
+                _bounds=frame_size,
+            )
 
         if self.mode == 'global':
-            self.refresh_clock(stdscr, width=width, win_x=win_x, force=True)
+            self.refresh_clock(
+                stdscr, width=width, win_x=win_x, force=True, frame_size=frame_size,
+            )
 
-    def draw_dropdown(self, stdscr, *, win_x=0, win_y=0, win_w=None):
+    def draw_dropdown(self, stdscr, *, win_x=0, win_y=0, win_w=None, frame_size=None):
         """Draw dropdown for currently selected menu."""
         if not self.active:
             return
 
-        size = self._read_stdscr_size(stdscr)
+        size = frame_size if frame_size is not None else self._read_stdscr_size(stdscr)
         if size is not None:
             viewport_h, viewport_w = size
             self._set_viewport(width=viewport_w, height=viewport_h)
@@ -272,17 +316,45 @@ class MenuBar:
             abs_idx = self.dropdown_scroll + i
             attr = theme_attr("menu_selected") if abs_idx == self.selected_item else item_attr
             if action is None:
-                safe_addstr(stdscr, y + 1 + i, x, SB_H * dropdown_w, item_attr)
+                safe_addstr(
+                    stdscr,
+                    y + 1 + i,
+                    x,
+                    SB_H * dropdown_w,
+                    item_attr,
+                    _bounds=frame_size,
+                )
             else:
-                safe_addstr(stdscr, y + 1 + i, x, f' {label.ljust(dropdown_w - 2)} ', attr)
+                safe_addstr(
+                    stdscr,
+                    y + 1 + i,
+                    x,
+                    f' {label.ljust(dropdown_w - 2)} ',
+                    attr,
+                    _bounds=frame_size,
+                )
 
         # Draw compact scroll markers when the dropdown is paginated.
         full_items = self._current_items()
         if len(items) < len(full_items):
             if self.dropdown_scroll > 0 and items:
-                safe_addstr(stdscr, y + 1, x + dropdown_w - 2, '^', item_attr | curses.A_BOLD)
+                safe_addstr(
+                    stdscr,
+                    y + 1,
+                    x + dropdown_w - 2,
+                    '^',
+                    item_attr | curses.A_BOLD,
+                    _bounds=frame_size,
+                )
             if (self.dropdown_scroll + len(items)) < len(full_items) and items:
-                safe_addstr(stdscr, y + len(items), x + dropdown_w - 2, 'v', item_attr | curses.A_BOLD)
+                safe_addstr(
+                    stdscr,
+                    y + len(items),
+                    x + dropdown_w - 2,
+                    'v',
+                    item_attr | curses.A_BOLD,
+                    _bounds=frame_size,
+                )
 
     def get_dropdown_rect(self, *, win_x=0, win_y=0, win_w=None):
         """Return (x, y, w, h) of active dropdown area, or None."""
@@ -436,11 +508,11 @@ class Menu(MenuBar):
         items = items if items is not None else DEFAULT_GLOBAL_ITEMS
         super().__init__(items, mode='global', show_clock=True, show_logo=True)
 
-    def draw_bar(self, stdscr, width):
-        super().draw_bar(stdscr, width=width)
+    def draw_bar(self, stdscr, width, *, frame_size=None):
+        super().draw_bar(stdscr, width=width, frame_size=frame_size)
 
-    def draw_dropdown(self, stdscr):
-        super().draw_dropdown(stdscr)
+    def draw_dropdown(self, stdscr, *, frame_size=None):
+        super().draw_dropdown(stdscr, frame_size=frame_size)
 
     def get_dropdown_rect(self, *, win_x=0, win_y=0, win_w=None):
         return super().get_dropdown_rect(win_x=win_x, win_y=win_y, win_w=win_w)
@@ -467,17 +539,20 @@ class WindowMenu(MenuBar):
     def get_menu_x_positions(self, win_x):
         return super().get_menu_x_positions(win_x=win_x)
 
-    def draw_bar(self, stdscr, win_x, win_y, win_w, is_active):
+    def draw_bar(self, stdscr, win_x, win_y, win_w, is_active, *, frame_size=None):
         super().draw_bar(
             stdscr,
             win_x=win_x,
             win_y=win_y,
             win_w=win_w,
             is_active=is_active,
+            frame_size=frame_size,
         )
 
-    def draw_dropdown(self, stdscr, win_x, win_y, win_w):
-        super().draw_dropdown(stdscr, win_x=win_x, win_y=win_y, win_w=win_w)
+    def draw_dropdown(self, stdscr, win_x, win_y, win_w, *, frame_size=None):
+        super().draw_dropdown(
+            stdscr, win_x=win_x, win_y=win_y, win_w=win_w, frame_size=frame_size,
+        )
 
     def on_menu_bar(self, mx, my, win_x, win_y, win_w):
         return super().on_menu_bar(mx, my, win_x=win_x, win_y=win_y, win_w=win_w)

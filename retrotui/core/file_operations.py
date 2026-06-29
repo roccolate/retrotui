@@ -264,6 +264,7 @@ class FileOperationManager:
             return ActionResult(ActionType.ERROR, 'Another operation is already running.')
 
         progress_dialog = ProgressDialog(title, message, width=62)
+        op_lock = threading.Lock()
         op_state = {
             'dialog': progress_dialog,
             'source_win': source_win,
@@ -275,14 +276,18 @@ class FileOperationManager:
 
         def _runner():
             try:
-                op_state['worker_result'] = worker()
+                result = worker()
             except _BACKGROUND_WORKER_ERRORS as exc:  # pragma: no cover - defensive worker path
-                op_state['worker_result'] = ActionResult(ActionType.ERROR, str(exc))
-            finally:
+                result = ActionResult(ActionType.ERROR, str(exc))
+            # Publish the result together with the ``done`` flag under a
+            # single lock so the main loop never observes a partial state.
+            with op_lock:
+                op_state['worker_result'] = result
                 op_state['done'] = True
 
         thread = threading.Thread(target=_runner, name='retrotui-file-op', daemon=True)
         op_state['thread'] = thread
+        op_state['lock'] = op_lock
         op_state['dialog_title'] = title
         self._app._background_operation = op_state
         self._app.dialog = progress_dialog
@@ -310,14 +315,24 @@ class FileOperationManager:
         if dialog and hasattr(dialog, 'set_elapsed'):
             dialog.set_elapsed(elapsed)
 
-        if not state.get('done'):
+        # Read the ``done`` flag and the worker result atomically. Without
+        # the lock the main loop could observe ``done=True`` with a stale
+        # ``worker_result`` if the worker had not yet finished assigning.
+        lock = state.get('lock')
+        if lock is not None:
+            with lock:
+                done = state.get('done')
+                result = state.get('worker_result')
+        else:  # pragma: no cover - legacy paths
+            done = state.get('done')
+            result = state.get('worker_result')
+        if not done:
             return
 
         if self._app.dialog is dialog:
             self._app.dialog = None
 
         self._app._background_operation = None
-        result = state.get('worker_result')
 
         # Publish completion event on the bus (main thread, safe).
         bus = getattr(self._app, '_event_bus', None)

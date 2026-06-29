@@ -169,7 +169,7 @@ class Window:
         if self.window_menu:
             self.window_menu.active = False
 
-    def draw_frame(self, stdscr):
+    def draw_frame(self, stdscr, frame_size=None):
         """Draw window frame: border, title bar, and buttons. Returns body_attr."""
         if not self.visible:
             return 0
@@ -195,14 +195,14 @@ class Window:
         display_title = self.title
         if len(display_title) > max_title_len:
             display_title = display_title[:max_title_len-1] + "…"
-            
+
         title = f' {display_title} '
         # If active and has menu, show menu indicator
         if self.active and self.window_menu:
             title = ' ≡ ' + title.strip() + ' '
-        
-        safe_addstr(stdscr, self.y, self.x + 2, title, title_attr)
-        
+
+        safe_addstr(stdscr, self.y, self.x + 2, title, title_attr, _bounds=frame_size)
+
         # Buttons
         if self.active:
             # Right-aligned title controls: [─][□][×]
@@ -212,33 +212,43 @@ class Window:
                 self.x + self.w - self.MIN_BTN_OFFSET,
                 self.TITLE_CONTROLS,
                 theme_attr('window_title_invert'),
+                _bounds=frame_size,
             )
 
         # Window Menu Bar
         if self.window_menu:
-            self.window_menu.draw_bar(stdscr, self.x, self.y, self.w, self.active)
+            self.window_menu.draw_bar(
+                stdscr, self.x, self.y, self.w, self.active, frame_size=frame_size,
+            )
             # Separator line below menu
             sep_y = self.y + 2
-            safe_addstr(stdscr, sep_y, self.x, '╟' + '─' * (self.w - 2) + '╢', border_attr)
+            safe_addstr(
+                stdscr,
+                sep_y,
+                self.x,
+                '╟' + '─' * (self.w - 2) + '╢',
+                border_attr,
+                _bounds=frame_size,
+            )
 
         # Fill body background (reuse single blank string across rows).
         bx, by, bw, bh = self.body_rect()
         blank = ' ' * bw
         for i in range(bh):
-            safe_addstr(stdscr, by + i, bx, blank, body_attr)
+            safe_addstr(stdscr, by + i, bx, blank, body_attr, _bounds=frame_size)
 
         return body_attr
 
-    def draw_body(self, stdscr, body_attr):
+    def draw_body(self, stdscr, body_attr, frame_size=None):
         """Draw window body: content lines, scrollbar."""
         bx, by, bw, bh = self.body_rect()
-        
+
         # Draw content
         for i in range(bh):
             idx = self.scroll_offset + i
             if idx < len(self.content):
                 line = self.content[idx][:bw]
-                safe_addstr(stdscr, by + i, bx, line, body_attr)
+                safe_addstr(stdscr, by + i, bx, line, body_attr, _bounds=frame_size)
 
         # Scrollbar
         if len(self.content) > bh:
@@ -247,18 +257,27 @@ class Window:
             thumb_pos = int(self.scroll_offset / max(1, len(self.content) - bh) * (bh - 1))
             for i in range(bh):
                 ch = '█' if i == thumb_pos else '░'
-                safe_addstr(stdscr, by + i, sb_x, ch, theme_attr('scrollbar'))
+                safe_addstr(
+                    stdscr,
+                    by + i,
+                    sb_x,
+                    ch,
+                    theme_attr('scrollbar'),
+                    _bounds=frame_size,
+                )
 
-    def draw(self, stdscr):
+    def draw(self, stdscr, frame_size=None):
         """Draw the window."""
         if not self.visible:
             return
-        body_attr = self.draw_frame(stdscr)
-        self.draw_body(stdscr, body_attr)
-        
+        body_attr = self.draw_frame(stdscr, frame_size=frame_size)
+        self.draw_body(stdscr, body_attr, frame_size=frame_size)
+
         # Draw window menu dropdown on top
         if self.window_menu:
-            self.window_menu.draw_dropdown(stdscr, self.x, self.y, self.w)
+            self.window_menu.draw_dropdown(
+                stdscr, self.x, self.y, self.w, frame_size=frame_size,
+            )
 
     def handle_click(self, mx, my):
         """Default click handler for basic windows."""

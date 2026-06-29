@@ -1129,7 +1129,11 @@ class CoreAppTests(unittest.TestCase):
             result = app.persist_config()
 
         self.assertEqual(result, "/tmp/config.toml")
-        save_config.assert_called_once_with(app.config)
+        save_config.assert_called_once()
+        # The new call signature is ``save_config(config, icon_positions=...)``.
+        args, kwargs = save_config.call_args
+        self.assertEqual(args[0], app.config)
+        self.assertIn("icon_positions", kwargs)
         self.assertEqual(app.config.theme, "amiga")
         self.assertTrue(app.config.show_hidden)
         self.assertFalse(app.config.word_wrap_default)
@@ -1155,20 +1159,27 @@ class CoreAppTests(unittest.TestCase):
         self.assertNotIn("symbol", styled)
         self.assertEqual(styled.get("art"), icon["art"])
 
-    def test_persist_config_ignores_icon_save_parse_errors(self):
+    def test_persist_config_passes_icon_positions_inline(self):
         app = self._make_app()
         app.theme_name = "win31"
         app.default_show_hidden = False
         app.default_word_wrap = False
         app.default_sunday_first = False
         app.config = types.SimpleNamespace(hidden_icons="", hidden_menu_items="")
-        app._save_icon_positions = mock.Mock(side_effect=ValueError("bad icons"))
+        app._icon_mgr = mock.Mock(positions={"files": (4, 2)})
 
-        with mock.patch.object(self.app_mod, "save_config", return_value="/tmp/config.toml"):
+        with mock.patch.object(self.app_mod, "save_config", return_value="/tmp/config.toml") as save_config:
             result = app.persist_config()
 
         self.assertEqual(result, "/tmp/config.toml")
-        app._save_icon_positions.assert_called_once_with("/tmp/config.toml")
+        save_config.assert_called_once()
+        kwargs = save_config.call_args.kwargs
+        self.assertEqual(kwargs.get("icon_positions"), {"files": (4, 2)})
+        # ``_save_icon_positions`` is no longer called separately — the
+        # icon block is appended to the main config write.
+        self.assertFalse(
+            isinstance(getattr(app, "_save_icon_positions", None), mock.Mock)
+        )
 
     def test_open_file_viewer_video_error_opens_dialog(self):
         app = self._make_app()

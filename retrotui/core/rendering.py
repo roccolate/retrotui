@@ -113,9 +113,19 @@ def draw_icons(app, frame_size=None):
     """Draw desktop icons (3x4 art + label)."""
     h, w = _resolve_frame_size(app, frame_size)
     bounds = (h, w)
+    get_pos = app.get_icon_screen_pos
+    # Backwards compat with mock/test stubs that don't accept frame_size kwarg.
+    try:
+        import inspect
+        accepts_frame_size = "frame_size" in inspect.signature(get_pos).parameters
+    except (TypeError, ValueError):
+        accepts_frame_size = False
     for idx, icon in enumerate(app.icons):
         # Use dynamic position helper
-        x, y = app.get_icon_screen_pos(idx)
+        if accepts_frame_size:
+            x, y = get_pos(idx, frame_size=frame_size)
+        else:
+            x, y = get_pos(idx)
 
         symbol = icon.get("symbol")
         if isinstance(symbol, str) and symbol:

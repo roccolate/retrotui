@@ -50,11 +50,22 @@ class IPCRouter:
                 handler = getattr(win, "on_ipc_message", None)
                 if not callable(handler):
                     return False
+                # Catch the broadest set of exceptions so a buggy plugin
+                # can't kill the main app: a previous narrow tuple
+                # (``_IPC_ERRORS``) excluded ``KeyError``/``IndexError``/
+                # ``RuntimeError``/``NotImplementedError``/etc., which then
+                # bubbled all the way out of ``execute_action``.
                 try:
                     handler(msg)
                     return True
                 except _IPC_ERRORS:
                     LOGGER.debug("IPC delivery error to window %d", target_id, exc_info=True)
+                    return False
+                except Exception:
+                    LOGGER.debug(
+                        "Unhandled exception in IPC handler for window %d",
+                        target_id, exc_info=True,
+                    )
                     return False
         return False
 
@@ -79,6 +90,12 @@ class IPCRouter:
             except _IPC_ERRORS:
                 LOGGER.debug(
                     "IPC broadcast error to window %d",
+                    getattr(win, "id", "?"),
+                    exc_info=True,
+                )
+            except Exception:
+                LOGGER.debug(
+                    "Unhandled exception in IPC broadcast handler for window %d",
                     getattr(win, "id", "?"),
                     exc_info=True,
                 )

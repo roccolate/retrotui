@@ -125,27 +125,14 @@ def _strip_inline_comment(line: str) -> str:
 
 
 def _decode_basic_string(value: str) -> str:
-    """Decode the small TOML escape subset RetroTUI writes."""
-    out = []
-    escape = False
-    escapes = {
-        "n": "\n",
-        "r": "\r",
-        "t": "\t",
-        '"': '"',
-        "\\": "\\",
-    }
-    for ch in value:
-        if escape:
-            out.append(escapes.get(ch, ch))
-            escape = False
-        elif ch == "\\":
-            escape = True
-        else:
-            out.append(ch)
-    if escape:
-        out.append("\\")
-    return "".join(out)
+    """Decode the small TOML escape subset RetroTUI writes.
+
+    Thin wrapper around ``utils.decode_toml_basic_string`` kept for
+    backwards compatibility (tests import this name).
+    """
+    from ..utils import decode_toml_basic_string as _utils_decode
+
+    return _utils_decode(value)
 
 
 def _parse_scalar(token):
@@ -243,25 +230,44 @@ def load_config(path: str | Path | None = None) -> AppConfig:
     return _normalize_config(_parse_toml(text))
 
 
-def serialize_config(config: AppConfig) -> str:
-    """Serialize AppConfig as TOML text."""
-    return (
+def serialize_config(config: AppConfig, *, icon_positions=None) -> str:
+    """Serialize AppConfig as TOML text.
+
+    ``icon_positions`` is an optional ``{key: (x, y)}`` mapping rendered as
+    an extra ``[icons]`` section. Including it in the same string avoids
+    the previous double-write (one for the main config, one to splice in
+    the icons block afterwards).
+    """
+    from ..utils import toml_basic_string
+    body = (
         "# RetroTUI user configuration\n"
         "[ui]\n"
-        f'theme = "{config.theme}"\n'
+        f'theme = "{toml_basic_string(config.theme)}"\n'
         f"show_hidden = {'true' if config.show_hidden else 'false'}\n"
         f"word_wrap_default = {'true' if config.word_wrap_default else 'false'}\n"
         f"sunday_first = {'true' if config.sunday_first else 'false'}\n"
         f"show_welcome = {'true' if config.show_welcome else 'false'}\n"
-        f'icon_style = "{config.icon_style}"\n'
-        f'hidden_icons = "{config.hidden_icons}"\n'
-        f'hidden_menu_items = "{config.hidden_menu_items}"\n'
+        f'icon_style = "{toml_basic_string(config.icon_style)}"\n'
+        f'hidden_icons = "{toml_basic_string(config.hidden_icons)}"\n'
+        f'hidden_menu_items = "{toml_basic_string(config.hidden_menu_items)}"\n'
     )
+    if icon_positions:
+        lines = [body.rstrip("\n"), "", "[icons]"]
+        for name, (x, y) in sorted(icon_positions.items()):
+            lines.append(f'"{toml_basic_string(name)}" = "{int(x)},{int(y)}"')
+        return "\n".join(lines) + "\n"
+    return body
 
 
-def save_config(config: AppConfig, path: str | Path | None = None) -> Path:
+def save_config(
+    config: AppConfig,
+    path: str | Path | None = None,
+    *,
+    icon_positions=None,
+) -> Path:
     """Persist config and return written path."""
+    from ..utils import atomic_write_text
     cfg_path = Path(path) if path is not None else default_config_path()
-    cfg_path.parent.mkdir(parents=True, exist_ok=True)
-    cfg_path.write_text(serialize_config(config), encoding="utf-8", newline="\n")
-    return cfg_path
+    return atomic_write_text(
+        cfg_path, serialize_config(config, icon_positions=icon_positions),
+    )

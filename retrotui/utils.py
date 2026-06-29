@@ -228,6 +228,67 @@ def safe_addstr(win, y, x, text, attr=0, *, _bounds=None):
         except curses.error:
             pass
 
+
+def toml_basic_string(value: str) -> str:
+    """Escape *value* for safe inclusion in a TOML basic string literal.
+
+    Covers the characters most likely to appear in user-edited settings
+    (config theme names, icon-style keys, bookmark titles/URLs). This is
+    intentionally a minimal subset — full TOML also handles unicode escapes
+    and multi-line basic strings, but RetroTUI data never needs them.
+    """
+    return (
+        str(value)
+        .replace("\\", "\\\\")
+        .replace("\n", "\\n")
+        .replace("\r", "\\r")
+        .replace("\t", "\\t")
+        .replace('"', '\\"')
+    )
+
+
+def decode_toml_basic_string(value: str) -> str:
+    """Decode the small TOML escape subset that ``toml_basic_string`` emits.
+
+    Inverse of :func:`toml_basic_string`. Unknown escape sequences are kept
+    verbatim — this matches the lenient behaviour of the previous inline
+    parsers in ``icon_manager`` and ``config``.
+    """
+    out = []
+    escape = False
+    for ch in value:
+        if escape:
+            out.append({"n": "\n", "r": "\r", "t": "\t", '"': '"', "\\": "\\"}.get(ch, ch))
+            escape = False
+            continue
+        if ch == "\\":
+            escape = True
+            continue
+        out.append(ch)
+    if escape:
+        # Trailing backslash with nothing after it; keep the literal char.
+        out.append("\\")
+    return "".join(out)
+
+
+def atomic_write_text(path, text: str, *, encoding: str = "utf-8"):
+    """Write *text* atomically to *path*.
+
+    Writes to ``<name>.tmp`` next to *path* and then ``os.replace``s the
+    temp file over *path*. If the process is killed mid-write the user
+    keeps the previous valid file instead of a truncated one. Returns the
+    resolved *path*.
+    """
+    from pathlib import Path  # local import keeps top-level namespace clean
+
+    target = Path(path)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    tmp = target.with_name(target.name + ".tmp")
+    tmp.write_text(text, encoding=encoding, newline="\n")
+    os.replace(tmp, target)
+    return target
+
+
 def normalize_key_code(key):
     """Normalize keys from get_wch()/getch() into comparable integer codes."""
     if isinstance(key, int):

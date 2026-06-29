@@ -589,28 +589,37 @@ def normalize_icon_style(style):
     return ICON_STYLE_DEFAULT
 
 
+# Cached at module import; the variants table is static so it should not
+# be rebuilt on every ``icon_style_variants()`` call (which the icon
+# preview panel and ``style_symbol_for_icon`` invoke per row).
+_ICON_STYLE_VARIANTS = None
+
+
 def icon_style_variants():
     """Return per-icon style variants keyed by action/value key."""
-    return {
-        AppAction.FILE_MANAGER.value: {"mini": ":D"},
-        AppAction.NOTEPAD.value: {"mini": ":|"},
-        AppAction.ASCII_VIDEO.value: {"mini": "AV"},
-        AppAction.TERMINAL.value: {"mini": ">:"},
-        AppAction.CALCULATOR.value: {"mini": "+)"},
-        AppAction.LOG_VIEWER.value: {"mini": "LG"},
-        AppAction.PROCESS_MANAGER.value: {"mini": "PS"},
-        AppAction.TRASH_BIN.value: {"mini": "TR"},
-        AppAction.SETTINGS.value: {"mini": "8)"},
-        AppAction.ABOUT.value: {"mini": "i)"},
-        AppAction.CLIPBOARD.value: {"mini": "CB"},
-        AppAction.HEX_VIEWER.value: {"mini": "0x"},
-        AppAction.DESKTOP_ICON_MANAGER.value: {"mini": "DT"},
-        AppAction.ICONS.value: {"mini": ":)"},
-        AppAction.MENU_EDITOR.value: {"mini": "MN"},
-        AppAction.MARKDOWN_VIEWER.value: {"mini": "MD"},
-        AppAction.SYSTEM_MONITOR.value: {"mini": "SM"},
-        AppAction.CONTROL_PANEL.value: {"mini": "CT"},
-    }
+    global _ICON_STYLE_VARIANTS
+    if _ICON_STYLE_VARIANTS is None:
+        _ICON_STYLE_VARIANTS = {
+            AppAction.FILE_MANAGER.value: {"mini": ":D"},
+            AppAction.NOTEPAD.value: {"mini": ":|"},
+            AppAction.ASCII_VIDEO.value: {"mini": "AV"},
+            AppAction.TERMINAL.value: {"mini": ">:"},
+            AppAction.CALCULATOR.value: {"mini": "+)"},
+            AppAction.LOG_VIEWER.value: {"mini": "LG"},
+            AppAction.PROCESS_MANAGER.value: {"mini": "PS"},
+            AppAction.TRASH_BIN.value: {"mini": "TR"},
+            AppAction.SETTINGS.value: {"mini": "8)"},
+            AppAction.ABOUT.value: {"mini": "i)"},
+            AppAction.CLIPBOARD.value: {"mini": "CB"},
+            AppAction.HEX_VIEWER.value: {"mini": "0x"},
+            AppAction.DESKTOP_ICON_MANAGER.value: {"mini": "DT"},
+            AppAction.ICONS.value: {"mini": ":)"},
+            AppAction.MENU_EDITOR.value: {"mini": "MN"},
+            AppAction.MARKDOWN_VIEWER.value: {"mini": "MD"},
+            AppAction.SYSTEM_MONITOR.value: {"mini": "SM"},
+            AppAction.CONTROL_PANEL.value: {"mini": "CT"},
+        }
+    return _ICON_STYLE_VARIANTS
 
 
 def style_symbol_for_icon(icon, style):
@@ -664,26 +673,44 @@ def styled_icon_entry(icon, style, use_unicode):
     return styled
 
 
+_PREVIEW_SYMBOL_CACHE = {}
+
+
+def _preview_symbol_lookup(use_unicode):
+    """Return a ``{action_key: token}`` dict for fast preview lookups."""
+    cache_key = bool(use_unicode)
+    cached = _PREVIEW_SYMBOL_CACHE.get(cache_key)
+    if cached is not None:
+        return cached
+    base_icons = ICONS if use_unicode else ICONS_ASCII
+    lookup = {}
+    for icon in base_icons:
+        action = icon.get("action")
+        action_key = getattr(action, "value", action)
+        if action_key in lookup:
+            continue
+        token = None
+        art = icon.get("art") or []
+        if len(art) >= 2 and isinstance(art[1], str):
+            mid = art[1].strip("| ").strip()
+            if mid:
+                token = mid
+        if token is None:
+            symbol = icon.get("symbol")
+            if isinstance(symbol, str) and symbol:
+                token = symbol
+        if token is not None:
+            lookup[str(action_key or "").lower()] = token
+    _PREVIEW_SYMBOL_CACHE[cache_key] = lookup
+    return lookup
+
+
 def icon_style_preview_symbol(style, icon_key, use_unicode):
     """Return one preview symbol token for *style* and *icon_key*."""
     normalized = normalize_icon_style(style)
     if normalized == ICON_STYLE_DEFAULT:
-        base_icons = ICONS if use_unicode else ICONS_ASCII
         target_key = str(icon_key or "").lower()
-        for icon in base_icons:
-            action = icon.get("action")
-            action_key = getattr(action, "value", action)
-            if str(action_key or "").lower() != target_key:
-                continue
-            art = icon.get("art") or []
-            if len(art) >= 2 and isinstance(art[1], str):
-                mid = art[1].strip("| ").strip()
-                if mid:
-                    return mid
-            symbol = icon.get("symbol")
-            if isinstance(symbol, str) and symbol:
-                return symbol
-        return "[]"
+        return _preview_symbol_lookup(use_unicode).get(target_key, "[]")
     if normalized == ICON_STYLE_BRAILLE:
         art = braille_art_for_action(icon_key)
         if art and len(art) >= 2:

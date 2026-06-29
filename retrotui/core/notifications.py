@@ -1,10 +1,24 @@
 """Toast notification system for RetroTUI."""
 
+import curses
 import logging
 import time
 from dataclasses import dataclass, field
 
+from ..constants import _CURSES_ERROR
+
 LOGGER = logging.getLogger(__name__)
+
+_NOTIFY_DRAW_ERRORS = (
+    AttributeError,
+    KeyError,
+    LookupError,
+    OSError,
+    RuntimeError,
+    TypeError,
+    ValueError,
+    _CURSES_ERROR,
+)
 
 TOAST_WIDTH = 40
 TOAST_DISPLAY_SECONDS = 4.0
@@ -99,10 +113,12 @@ class NotificationManager:
             return
 
         try:
-            import curses
             border_attr = curses.color_pair(C_WIN_BORDER)
             title_attr = curses.color_pair(C_WIN_TITLE) | curses.A_BOLD
-        except Exception:
+        except _NOTIFY_DRAW_ERRORS:
+            # Curses may not be initialized in some test environments; fall
+            # back to plain attributes so a stray draw() in a unit test
+            # doesn't crash the whole process.
             border_attr = 0
             title_attr = 0
 

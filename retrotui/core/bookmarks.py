@@ -51,15 +51,14 @@ def _strip_section_quotes(name: str) -> str:
 
 
 def _toml_basic_string(value: str) -> str:
-    """Return a TOML basic string body for values RetroTUI persists."""
-    return (
-        str(value)
-        .replace("\\", "\\\\")
-        .replace("\n", "\\n")
-        .replace("\r", "\\r")
-        .replace("\t", "\\t")
-        .replace('"', '\\"')
-    )
+    """Return a TOML basic string body for values RetroTUI persists.
+
+    Thin wrapper around ``utils.toml_basic_string`` retained for backwards
+    compatibility (existing tests import this name).
+    """
+    from ..utils import toml_basic_string as _utils_toml_basic_string
+
+    return _utils_toml_basic_string(value)
 
 
 def load_bookmarks(path: str | Path | None = None) -> list[Bookmark]:
@@ -93,6 +92,7 @@ def save_bookmarks(
     bookmarks: list[Bookmark], path: str | Path | None = None
 ) -> Path:
     """Persist the bookmark list. Returns the path written to."""
+    from ..utils import atomic_write_text
     cfg_path = Path(path) if path is not None else default_bookmarks_path()
     lines = ["# RetroTUI bookmarks for RetroNet Explorer Ultra", ""]
     for bm in bookmarks:
@@ -101,9 +101,7 @@ def save_bookmarks(
         lines.append(f'["{title}"]')
         lines.append(f'url = "{url}"')
         lines.append("")
-    cfg_path.parent.mkdir(parents=True, exist_ok=True)
-    cfg_path.write_text("\n".join(lines), encoding="utf-8", newline="\n")
-    return cfg_path
+    return atomic_write_text(cfg_path, "\n".join(lines))
 
 
 def add_bookmark(

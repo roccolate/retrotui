@@ -47,8 +47,11 @@ class Dialog:
         self._dialog_x = 0
         self._dialog_y = 0
 
-    def draw(self, stdscr):
-        max_h, max_w = stdscr.getmaxyx()
+    def draw(self, stdscr, frame_size=None):
+        if frame_size is not None:
+            max_h, max_w = frame_size
+        else:
+            max_h, max_w = stdscr.getmaxyx()
         x = (max_w - self.width) // 2
         y = (max_h - self.height) // 2
 
@@ -58,22 +61,36 @@ class Dialog:
         # Shadow
         shadow_attr = curses.A_DIM
         for row in range(self.height):
-            safe_addstr(stdscr, y + row + 1, x + 2, ' ' * self.width, shadow_attr)
+            safe_addstr(
+                stdscr,
+                y + row + 1,
+                x + 2,
+                ' ' * self.width,
+                shadow_attr,
+                _bounds=frame_size,
+            )
 
         # Dialog background
         for row in range(self.height):
-            safe_addstr(stdscr, y + row, x, ' ' * self.width, attr)
+            safe_addstr(stdscr, y + row, x, ' ' * self.width, attr, _bounds=frame_size)
 
         # Border
         draw_box(stdscr, y, x, self.height, self.width, attr, double=True)
 
         # Title
         title_text = f' {self.title} '
-        safe_addstr(stdscr, y, x + 1, title_text.ljust(self.width - 2), title_attr)
+        safe_addstr(
+            stdscr,
+            y,
+            x + 1,
+            title_text.ljust(self.width - 2),
+            title_attr,
+            _bounds=frame_size,
+        )
 
         # Message lines
         for i, line in enumerate(self.lines):
-            safe_addstr(stdscr, y + 2 + i, x + 3, line, attr)
+            safe_addstr(stdscr, y + 2 + i, x + 3, line, attr, _bounds=frame_size)
 
         # Buttons
         btn_y = y + self.height - 3
@@ -88,7 +105,7 @@ class Dialog:
             else:
                 btn_attr = theme_attr('button')
                 label = f'[ {btn_text} ]'
-            safe_addstr(stdscr, btn_y, btn_x, label, btn_attr)
+            safe_addstr(stdscr, btn_y, btn_x, label, btn_attr, _bounds=frame_size)
             btn_x += btn_w + 2
 
         # Store button positions for click handling
@@ -134,39 +151,49 @@ class InputDialog(Dialog):
         # Cursor pos
         self.cursor_pos = len(initial_value)
 
-    def draw(self, stdscr):
-        super().draw(stdscr)
-        
+    def draw(self, stdscr, frame_size=None):
+        super().draw(stdscr, frame_size=frame_size)
+
         # Input box area
-        max_h, max_w = stdscr.getmaxyx()
+        if frame_size is not None:
+            max_h, max_w = frame_size
+        else:
+            max_h, max_w = stdscr.getmaxyx()
         x = (max_w - self.width) // 2
         y = (max_h - self.height) // 2
-        
+
         # Input box is below message, above buttons
         # Dialog.draw puts buttons at y + height - 3
         # We need to shift buttons down effectively implies we need to draw input box
         # at y + height - 5 (since we added 3 to height)
-        
+
         input_y = y + self.height - 5
         input_x = x + 4
         input_w = self.width - 8
-        
+
         # Draw input box background
         attr = theme_attr('window_body')
-        safe_addstr(stdscr, input_y, input_x, ' ' * input_w, attr)
-        
+        safe_addstr(stdscr, input_y, input_x, ' ' * input_w, attr, _bounds=frame_size)
+
         # Draw value
         display_val = self.value[-(input_w - 1):] if len(self.value) >= input_w else self.value
-        safe_addstr(stdscr, input_y, input_x, display_val, attr)
-        
+        safe_addstr(stdscr, input_y, input_x, display_val, attr, _bounds=frame_size)
+
         # Cursor
         cursor_screen_x = input_x + len(display_val)
         if len(self.value) < input_w:
              cursor_screen_x = input_x + self.cursor_pos
         else:
              cursor_screen_x = input_x + input_w - 1 # End of box
-             
-        safe_addstr(stdscr, input_y, cursor_screen_x, ' ', attr | curses.A_REVERSE)
+
+        safe_addstr(
+            stdscr,
+            input_y,
+            cursor_screen_x,
+            ' ',
+            attr | curses.A_REVERSE,
+            _bounds=frame_size,
+        )
 
     def handle_click(self, mx, my):
         # Delegate to super for buttons
@@ -217,42 +244,59 @@ class MultiSelectDialog(Dialog):
         self.visible_rows = 6
         self.height += self.visible_rows + 2
 
-    def draw(self, stdscr):
-        super().draw(stdscr)
-        
-        max_h, max_w = stdscr.getmaxyx()
+    def draw(self, stdscr, frame_size=None):
+        super().draw(stdscr, frame_size=frame_size)
+
+        if frame_size is not None:
+            max_h, max_w = frame_size
+        else:
+            max_h, max_w = stdscr.getmaxyx()
         x = (max_w - self.width) // 2
         y = (max_h - self.height) // 2
-        
+
         list_y = y + len(self.lines) + 4
         list_x = x + 3
         list_w = self.width - 6
-        
+
         attr = theme_attr('window_body')
         sel_attr = attr | curses.A_REVERSE
-        
+
         # Draw list background and border
         draw_box(stdscr, list_y - 1, list_x - 1, self.visible_rows + 2, list_w + 2, attr, double=False)
-        
+
         for i in range(self.visible_rows):
             idx = self.list_offset + i
             if idx < len(self.choices):
                 label, _, checked = self.choices[idx]
                 mark = '[x]' if checked else '[ ]'
                 text = f" {mark} {label}"
-                
+
                 row_attr = sel_attr if (self.in_list and idx == self.list_selected) else attr
-                safe_addstr(stdscr, list_y + i, list_x, text.ljust(list_w)[:list_w], row_attr)
+                safe_addstr(
+                    stdscr,
+                    list_y + i,
+                    list_x,
+                    text.ljust(list_w)[:list_w],
+                    row_attr,
+                    _bounds=frame_size,
+                )
             else:
-                safe_addstr(stdscr, list_y + i, list_x, ' ' * list_w, attr)
-                
+                safe_addstr(stdscr, list_y + i, list_x, ' ' * list_w, attr, _bounds=frame_size)
+
         # Draw scrollbar if needed
         if len(self.choices) > self.visible_rows:
             sb_x = list_x + list_w
             thumb_pos = int(self.list_offset / max(1, len(self.choices) - self.visible_rows) * (self.visible_rows - 1))
             for i in range(self.visible_rows):
                 ch = '█' if i == thumb_pos else '░'
-                safe_addstr(stdscr, list_y + i, sb_x, ch, theme_attr('scrollbar'))
+                safe_addstr(
+                    stdscr,
+                    list_y + i,
+                    sb_x,
+                    ch,
+                    theme_attr('scrollbar'),
+                    _bounds=frame_size,
+                )
 
     def handle_click(self, mx, my):
         # Delegate down to buttons
@@ -343,8 +387,11 @@ class ProgressDialog:
         """Update elapsed runtime shown by the spinner row."""
         self.elapsed_seconds = max(0.0, float(seconds))
 
-    def draw(self, stdscr):
-        max_h, max_w = stdscr.getmaxyx()
+    def draw(self, stdscr, frame_size=None):
+        if frame_size is not None:
+            max_h, max_w = frame_size
+        else:
+            max_h, max_w = stdscr.getmaxyx()
         x = (max_w - self.width) // 2
         y = (max_h - self.height) // 2
 
@@ -354,23 +401,51 @@ class ProgressDialog:
 
         shadow_attr = curses.A_DIM
         for row in range(self.height):
-            safe_addstr(stdscr, y + row + 1, x + 2, ' ' * self.width, shadow_attr)
+            safe_addstr(
+                stdscr,
+                y + row + 1,
+                x + 2,
+                ' ' * self.width,
+                shadow_attr,
+                _bounds=frame_size,
+            )
 
         for row in range(self.height):
-            safe_addstr(stdscr, y + row, x, ' ' * self.width, attr)
+            safe_addstr(stdscr, y + row, x, ' ' * self.width, attr, _bounds=frame_size)
 
         draw_box(stdscr, y, x, self.height, self.width, attr, double=True)
 
         title_text = f' {self.title} '
-        safe_addstr(stdscr, y, x + 1, title_text.ljust(self.width - 2), title_attr)
+        safe_addstr(
+            stdscr,
+            y,
+            x + 1,
+            title_text.ljust(self.width - 2),
+            title_attr,
+            _bounds=frame_size,
+        )
 
         for i, line in enumerate(self.lines):
-            safe_addstr(stdscr, y + 2 + i, x + 3, line[: self.width - 6], attr)
+            safe_addstr(
+                stdscr,
+                y + 2 + i,
+                x + 3,
+                line[: self.width - 6],
+                attr,
+                _bounds=frame_size,
+            )
 
         spinner_idx = int(self.elapsed_seconds * 8) % len(self.SPINNER_FRAMES)
         spinner = self.SPINNER_FRAMES[spinner_idx]
         status = f'Working {spinner}  {self.elapsed_seconds:5.1f}s'
-        safe_addstr(stdscr, y + self.height - 3, x + 3, status.ljust(self.width - 6), info_attr)
+        safe_addstr(
+            stdscr,
+            y + self.height - 3,
+            x + 3,
+            status.ljust(self.width - 6),
+            info_attr,
+            _bounds=frame_size,
+        )
 
     def handle_click(self, mx, my):
         """Progress dialogs do not process click actions."""
