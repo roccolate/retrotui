@@ -335,8 +335,10 @@ class ImageViewerWindow(Window):
         if bw <= 0 or bh <= 0:
             return
 
+        blank = " " * bw
+
         for row in range(bh):
-            safe_addstr(stdscr, by + row, bx, " " * bw, body_attr)
+            safe_addstr(stdscr, by + row, bx, blank, body_attr)
 
         image_rows = max(0, bh - 1)
         if image_rows > 0:

@@ -414,8 +414,10 @@ class HexViewerWindow(SelectableTextMixin, Window):
         if bw <= 0 or bh <= 0:
             return
 
+        blank = " " * bw
+
         for row in range(bh):
-            safe_addstr(stdscr, by + row, bx, " " * bw, body_attr)
+            safe_addstr(stdscr, by + row, bx, blank, body_attr)
 
         # Header (1 row) + data + status (1 row) so subtract 2 from the body
         # height to get the data area, matching ``_rows_visible``.

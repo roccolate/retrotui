@@ -196,8 +196,9 @@ class MinesweeperWindow(Window):
     def draw(self, stdscr, frame_size=None):
         if not self.visible: return
 
-        if self.start_time and not self.game_over:
-            self.elapsed = int(time.time() - self.start_time)
+        # ``tick()`` already updates ``self.elapsed`` once per integer
+        # second change (and via the per-second ``_update_stats`` path);
+        # recomputing it on every redraw was duplicate work.
 
         bt = self.best_times.get(self.difficulty, 9999)
         bt_str = "---" if bt == 9999 else str(bt)
@@ -206,8 +207,9 @@ class MinesweeperWindow(Window):
         bx, by, bw, bh = self.body_rect()
 
         # Clear body
+        blank = " " * bw
         for row in range(bh):
-            safe_addstr(stdscr, by + row, bx, " " * bw, body_attr, _bounds=frame_size)
+            safe_addstr(stdscr, by + row, bx, blank, body_attr, _bounds=frame_size)
             
         # Draw Classic Header
         flags_used = sum(1 for r in range(self.rows) for c in range(self.cols) if self.flagged[r][c])

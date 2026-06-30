@@ -374,6 +374,12 @@ class RetroTUI:
         self._dirty = True  # Render flag: redraw only when True
         self._dragging_win = None   # O(1) drag tracking
         self._resizing_win = None   # O(1) resize tracking
+        # O(1) selection-drag owner pointer — set by
+        # ``mouse_utils._set_mouse_selecting`` whenever a window starts
+        # a text selection drag. ``_pointer_capture_owner`` and
+        # ``_route_selection_drag_owner`` read this instead of walking
+        # ``app.windows`` on every mouse event.
+        self._mouse_selecting_window = None
         self._last_icon_click_idx = None
         self._last_icon_click_ts = 0.0
         self.double_click_interval = None

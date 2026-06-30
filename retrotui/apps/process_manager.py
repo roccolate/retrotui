@@ -387,8 +387,10 @@ class ProcessManagerWindow(Window):
         if bh <= 0 or bw <= 0:
             return
 
+        blank = " " * bw
+
         for row in range(bh):
-            safe_addstr(stdscr, by + row, bx, " " * bw, body_attr)
+            safe_addstr(stdscr, by + row, bx, blank, body_attr)
 
         arrow = '▼' if self.sort_reverse else '▲'
         pid_h = f"{'PID':>{self.PID_COL_WIDTH}}"

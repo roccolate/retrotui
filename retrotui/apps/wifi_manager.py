@@ -209,9 +209,10 @@ class WifiManagerWindow(Window):
         body_attr = self.draw_frame(stdscr)
         bx, by, bw, bh = self.body_rect()
 
-        # Clear body
+        # Clear body (reused blank string across rows).
+        blank = " " * bw
         for row in range(bh):
-            safe_addstr(stdscr, by + row, bx, " " * bw, body_attr)
+            safe_addstr(stdscr, by + row, bx, blank, body_attr)
 
         if not self.nmcli:
             safe_addstr(stdscr, by + 2, bx + 2, "Error: 'nmcli' could not be found.", theme_attr('window_body') | curses.A_BOLD)
