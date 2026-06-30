@@ -111,9 +111,14 @@ class NotepadWindow(SelectableTextMixin, Window):
         self._search_mode = False
         self._search_query = ''
         self._force_close = False
-        self._wrap_cache = []
+        # Per-line wrap cache: ``self._wrap_line_cache[i]`` holds the
+        # wrapped chunks for ``self.buffer[i]`` (or ``None`` when
+        # stale). The list always has the same length as
+        # ``self.buffer`` so insert/delete keeps the indices in sync.
+        # ``self._wrap_cache_w`` tracks the wrap width; any width
+        # change invalidates the whole cache.
+        self._wrap_line_cache = []
         self._wrap_cache_w = None
-        self._wrap_stale = True
         self._init_selection()
         self.window_menu = WindowMenu({
             'File': [
@@ -152,7 +157,9 @@ class NotepadWindow(SelectableTextMixin, Window):
         self._undo_stack.clear()
         self._redo_stack.clear()
         self._force_close = False
-        self._invalidate_wrap()
+        # Whole buffer was replaced; reset the per-line cache list.
+        self._wrap_line_cache = [None] * len(self.buffer)
+        self._wrap_cache_w = None
         self._update_title()
 
     def _save_file(self):
@@ -226,25 +233,81 @@ class NotepadWindow(SelectableTextMixin, Window):
             self._do_open_path(pending)
 
 
-    def _invalidate_wrap(self):
-        """Invalidate cached wrapped line data."""
-        self._wrap_stale = True
+    def _invalidate_wrap(self, line_idx=None):
+        """Invalidate cached wrapped line data.
+
+        ``line_idx`` marks a single line dirty (cheap; only that line
+        is recomputed on the next draw). Without ``line_idx`` the entire
+        cache is marked dirty — used for width changes.
+        """
+        if (
+            line_idx is not None
+            and 0 <= line_idx < len(self._wrap_line_cache)
+        ):
+            self._wrap_line_cache[line_idx] = None
+        else:
+            for i in range(len(self._wrap_line_cache)):
+                self._wrap_line_cache[i] = None
+
+    def _sync_wrap_cache_to_buffer(self):
+        """Reconcile the per-line wrap cache with ``self.buffer`` length.
+
+        Called after ``insert``/``pop`` on the buffer. The cache list
+        is grown with ``None`` entries for new lines and shrunk to
+        match the shorter buffer. Lines whose index changed (because
+        of an insert/delete) are marked dirty so their ``line_idx``
+        field is re-baked on the next compute pass.
+        """
+        n = len(self.buffer)
+        cur = len(self._wrap_line_cache)
+        if cur == n:
+            return
+        if cur < n:
+            # Lines were added; the new range is dirty.
+            self._wrap_line_cache.extend([None] * (n - cur))
+        else:
+            # Lines were removed. Drop the tail entries; for any line
+            # at index ``>= n`` that previously stored chunks, the
+            # ``line_idx`` baked into each chunk now disagrees with its
+            # real buffer position. Mark all surviving entries dirty
+            # because the per-line cache list is now shorter and any
+            # previously-valid ``line_idx`` past the deletion point has
+            # shifted; recomputing is the safe path.
+            del self._wrap_line_cache[n:]
+            for i in range(len(self._wrap_line_cache)):
+                self._wrap_line_cache[i] = None
 
     def _compute_wrap(self, body_w):
-        """Build wrapped-line cache for compatibility and tests."""
+        """Build wrapped-line cache for compatibility and tests.
+
+        Iterates the buffer once and uses the per-line cache. Only
+        the lines marked ``None`` (stale) are recomputed; the rest are
+        O(1) lookups. The result is a flat list of chunks preserving
+        the line index, suitable for the existing cursor/scroll math.
+        """
         wrap_w = max(1, int(body_w) - 1)
-        if (
-            not self._wrap_stale
-            and self._wrap_cache_w == body_w
-            and self._wrap_cache
-        ):
-            return self._wrap_cache
+        # The cache is anchored to a wrap width. A width change requires
+        # invalidating every line (the per-line chunks depend on width).
+        if self._wrap_cache_w != body_w:
+            self._invalidate_wrap()
+            self._wrap_cache_w = body_w
         chunks = []
         for idx, line in enumerate(self.buffer):
-            chunks.extend(_wrap_line_to_cells(idx, line, wrap_w))
-        self._wrap_cache = chunks
-        self._wrap_cache_w = body_w
-        self._wrap_stale = False
+            cached = (
+                self._wrap_line_cache[idx]
+                if idx < len(self._wrap_line_cache)
+                else None
+            )
+            if cached is None:
+                cached = _wrap_line_to_cells(idx, line, wrap_w)
+                if idx < len(self._wrap_line_cache):
+                    self._wrap_line_cache[idx] = cached
+                else:
+                    # ``buffer`` was grown without a sync call (defensive).
+                    while len(self._wrap_line_cache) <= idx:
+                        self._wrap_line_cache.append(None)
+                    self._wrap_line_cache[idx] = cached
+            chunks.extend(cached)
         return chunks
 
     def _cursor_to_wrap_row(self, body_w):
@@ -325,7 +388,10 @@ class NotepadWindow(SelectableTextMixin, Window):
         self.cursor_line = state['cursor_line']
         self.cursor_col = state['cursor_col']
         self.modified = state['modified']
-        self._invalidate_wrap()
+        # ``buffer`` is a fresh list; rebuild the per-line cache list
+        # so the indices match the new content. (Mark all dirty so
+        # the next draw recomputes from scratch.)
+        self._wrap_line_cache = [None] * len(self.buffer)
         self._ensure_cursor_visible()
         return None
 
@@ -340,7 +406,9 @@ class NotepadWindow(SelectableTextMixin, Window):
         self.cursor_line = state['cursor_line']
         self.cursor_col = state['cursor_col']
         self.modified = state['modified']
-        self._invalidate_wrap()
+        # ``buffer`` is a fresh list; rebuild the per-line cache list
+        # so the indices match the new content.
+        self._wrap_line_cache = [None] * len(self.buffer)
         self._ensure_cursor_visible()
         return None
 
@@ -375,7 +443,16 @@ class NotepadWindow(SelectableTextMixin, Window):
         self._clamp_cursor()
 
         self.modified = True
-        self._invalidate_wrap()
+        # Selection delete can shrink the buffer by many lines. Sync
+        # the per-line cache list to the new length; the surviving
+        # line at ``s_line`` now has different content, so it's marked
+        # dirty explicitly. Other surviving lines keep their cached
+        # chunks (chunk counts shift by the deleted line count, but
+        # the line_idx we cached is correct relative to the truncated
+        # list — recomputation on the next draw handles the renumbering
+        # when the wrapper inserts the live index).
+        self._invalidate_wrap(s_line)
+        self._sync_wrap_cache_to_buffer()
         self.clear_selection()
         self._ensure_cursor_visible()
         return True
@@ -398,7 +475,10 @@ class NotepadWindow(SelectableTextMixin, Window):
             self.cursor_col = min(self.cursor_col, len(self.buffer[self.cursor_line]))
 
         self.modified = True
-        self._invalidate_wrap()
+        # ``cursor_line`` points to the line that lost content; the
+        # truncated list is reconciled by ``_sync_wrap_cache_to_buffer``.
+        self._invalidate_wrap(self.cursor_line)
+        self._sync_wrap_cache_to_buffer()
         self.clear_selection()
         self._ensure_cursor_visible()
 
@@ -479,7 +559,12 @@ class NotepadWindow(SelectableTextMixin, Window):
             self.cursor_col = len(parts[-1])
 
         self.modified = True
+        # Multi-line insert: invalidate everything and sync. Re-baking
+        # the per-line chunks for subsequent lines would otherwise be
+        # needed because their ``line_idx`` field would now disagree
+        # with the new buffer index.
         self._invalidate_wrap()
+        self._sync_wrap_cache_to_buffer()
         self._ensure_cursor_visible()
 
     def _set_cursor_from_screen(self, mx, my):
@@ -770,7 +855,10 @@ class NotepadWindow(SelectableTextMixin, Window):
         self.cursor_line += 1
         self.cursor_col = 0
         self.modified = True
+        # Enter splits a line: the head and the new line are both
+        # dirty, and the buffer length changed.
         self._invalidate_wrap()
+        self._sync_wrap_cache_to_buffer()
         self._ensure_cursor_visible()
         return None
 
@@ -783,7 +871,8 @@ class NotepadWindow(SelectableTextMixin, Window):
             self.buffer[self.cursor_line] = line[:self.cursor_col - 1] + line[self.cursor_col:]
             self.cursor_col -= 1
             self.modified = True
-            self._invalidate_wrap()
+            # Single-line text edit: only the current line is dirty.
+            self._invalidate_wrap(self.cursor_line)
         elif self.cursor_line > 0:
             # Merge with previous line
             prev_line = self.buffer[self.cursor_line - 1]
@@ -791,8 +880,10 @@ class NotepadWindow(SelectableTextMixin, Window):
             self.buffer[self.cursor_line - 1] = prev_line + self.buffer[self.cursor_line]
             self.buffer.pop(self.cursor_line)
             self.cursor_line -= 1
-            self.modified = True
-            self._invalidate_wrap()
+        self.modified = True
+        # Either path: sync the cache list (merge changed the length;
+        # backspace-within-line didn't but the call is cheap).
+        self._sync_wrap_cache_to_buffer()
         self._ensure_cursor_visible()
         return None
 
@@ -806,13 +897,16 @@ class NotepadWindow(SelectableTextMixin, Window):
             if self.cursor_col < len(line):
                 self.buffer[self.cursor_line] = line[:self.cursor_col] + line[self.cursor_col + 1:]
                 self.modified = True
-                self._invalidate_wrap()
+                # Single-line text edit: only the current line is dirty.
+                self._invalidate_wrap(self.cursor_line)
             elif self.cursor_line < len(self.buffer) - 1:
                 # Merge with next line
                 self.buffer[self.cursor_line] = line + self.buffer[self.cursor_line + 1]
                 self.buffer.pop(self.cursor_line + 1)
                 self.modified = True
-                self._invalidate_wrap()
+        # Either path: sync the cache list (merge changed the length;
+        # delete-within-line didn't but the call is cheap).
+        self._sync_wrap_cache_to_buffer()
         return None
 
     def _key_open(self):
@@ -852,7 +946,8 @@ class NotepadWindow(SelectableTextMixin, Window):
         self.buffer[self.cursor_line] = line[:self.cursor_col] + ch + line[self.cursor_col:]
         self.cursor_col += 1
         self.modified = True
-        self._invalidate_wrap()
+        # Single-character insert: only the current line is dirty.
+        self._invalidate_wrap(self.cursor_line)
         self._ensure_cursor_visible()
         return None
 

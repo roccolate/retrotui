@@ -17,9 +17,12 @@ def menu_item_visibility_key(label, action):
 
 def get_hidden_menu_keys(config):
     """Return set of lowercased hidden global menu item keys from config."""
-    from .icon_styles import split_config_csv
+    # Reuse the cached parser in ``icon_styles``; the raw CSV is the
+    # cache key so repeated calls with the same config return the
+    # same set in O(1) instead of re-tokenizing.
+    from .icon_styles import _split_config_csv_cached
     raw = getattr(config, 'hidden_menu_items', "")
-    return split_config_csv(raw)
+    return _split_config_csv_cached(raw)
 
 
 def is_menu_key_hidden(item_key, hidden_menu_items):

@@ -110,8 +110,13 @@ class NotepadMoreTests(unittest.TestCase):
         self.win.wrap_mode = True
         self.win._invalidate_wrap()
 
-        self.win._compute_wrap(body_w=10)
-        self.assertGreater(len(self.win._wrap_cache), 1)
+        # The cache is now per-line; ``_compute_wrap`` returns the
+        # flat chunk list used by the cursor/scroll math.
+        result = self.win._compute_wrap(body_w=10)
+        self.assertGreater(len(result), 1)
+        # Per-line cache list should be populated for the single line.
+        self.assertEqual(len(self.win._wrap_line_cache), 1)
+        self.assertIsNotNone(self.win._wrap_line_cache[0])
 
         self.win.cursor_line = 0
         self.win.cursor_col = 25
