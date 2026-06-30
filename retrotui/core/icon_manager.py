@@ -127,7 +127,13 @@ class IconPositionManager:
         section = None
         icons = {}
         for raw in text.splitlines():
-            line = raw.split('#', 1)[0].strip()
+            # Use the shared TOML-aware comment stripper so keys that
+            # legitimately contain ``#`` (e.g. plugin ids like ``RPG#1``)
+            # survive a round-trip. The previous naive ``split('#', 1)``
+            # silently dropped any key whose value contained ``#`` even
+            # when it was inside quotes.
+            from .config import _strip_inline_comment
+            line = _strip_inline_comment(raw).strip()
             if not line:
                 continue
             if line.startswith('[') and line.endswith(']'):

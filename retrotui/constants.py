@@ -162,6 +162,7 @@ C_TASKBAR = 19
 C_TERM_BODY = 20
 C_ERROR = 21
 C_ANSI_START = 50
+C_ANSI_FGBG_START = 58  # 8x8 combos for (fg, bg) both explicit; pair = 58 + fg*8 + bg
 
 # Layout constants
 MENU_BAR_HEIGHT = 1          # Row 0 is the global menu bar

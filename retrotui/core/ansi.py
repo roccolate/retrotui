@@ -4,7 +4,7 @@ ANSI Escape Sequence Parser for RetroTUI.
 import curses
 
 
-from ..constants import C_ANSI_START, _CURSES_ERROR
+from ..constants import C_ANSI_START, C_ANSI_FGBG_START, _CURSES_ERROR
 _ANSI_COLOR_ERRORS = (
     AttributeError,
     OSError,
@@ -62,11 +62,21 @@ class AnsiStateMachine:
 
         if has_colors:
             # FG 0-7 map to standard curses colors. Use color pairs if available.
+            # When both fg and bg are explicit we pick an fg*bg combo pair so
+            # the background color is actually rendered (see B2 in core audit).
             if self.fg >= 0 and self.fg <= 7:
-                try:
-                    attr |= curses.color_pair(C_ANSI_START + self.fg)
-                except _ANSI_COLOR_ERRORS:
-                    pass
+                if self.bg >= 0 and self.bg <= 7:
+                    try:
+                        attr |= curses.color_pair(
+                            C_ANSI_FGBG_START + self.fg * 8 + self.bg
+                        )
+                    except _ANSI_COLOR_ERRORS:
+                        pass
+                else:
+                    try:
+                        attr |= curses.color_pair(C_ANSI_START + self.fg)
+                    except _ANSI_COLOR_ERRORS:
+                        pass
         
         self.attr = attr
 

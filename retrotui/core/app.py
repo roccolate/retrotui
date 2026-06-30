@@ -12,6 +12,7 @@ from ..constants import (
     TERMINAL_LIVE_INPUT_TIMEOUT_MS,
     TERMINAL_BACKGROUND_INPUT_TIMEOUT_MS,
     WELCOME_WIN_WIDTH, WELCOME_WIN_HEIGHT,
+    WIN_MIN_WIDTH, WIN_MIN_HEIGHT,
     _CURSES_ERROR,
 )
 from ..utils import check_unicode_support, init_colors
@@ -154,12 +155,12 @@ class RetroTUI:
     def show_open_dialog(self, win):
         return self.file_ops.show_open_dialog(win)
 
-    def _show_save_confirm_dialog(self, win):
+    def _show_save_confirm_dialog(self, win, payload=None):
         """Prompt the user before discarding unsaved work in *win*."""
-        # Defer the show to the file_ops dispatcher (it owns the
-        # dialog-handling code paths for these flows). The window's
-        # ``_do_open_path_force`` callback is attached via the
-        # ActionResult payload at the call site.
+        # The ``on_discard`` callback is attached via the ActionResult payload
+        # at the call site (notepad.py emits it when open_path hits a dirty
+        # buffer). Prefer the payload; fall back to a window method for tests
+        # or direct callers.
         from ..ui.dialog import Dialog
         try:
             title = getattr(win, "title", "Notepad")
@@ -170,8 +171,14 @@ class RetroTUI:
             "Discard them and open the new file?"
         )
         on_discard = None
-        if isinstance(getattr(win, "_do_open_path_force", None), type(lambda: 0)):
-            on_discard = win._do_open_path_force
+        if isinstance(payload, dict):
+            candidate = payload.get("on_discard")
+            if callable(candidate):
+                on_discard = candidate
+        if on_discard is None:
+            fallback = getattr(win, "_do_open_path_force", None)
+            if callable(fallback):
+                on_discard = fallback
 
         def _on_discard():
             if on_discard is not None:
@@ -890,8 +897,8 @@ class RetroTUI:
         ox, oy = self._next_window_offset(20, 4)
         win: Window = BookmarksWindow(
             ox, oy,
-            min(64, w - 4),
-            min(20, h - 4),
+            min(64, max(WIN_MIN_WIDTH, w - 4)),
+            min(20, max(WIN_MIN_HEIGHT, h - 4)),
             source_win=source_win,
         )
         self._spawn_window(win)

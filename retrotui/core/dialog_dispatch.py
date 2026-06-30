@@ -19,7 +19,9 @@ class DialogDispatcher:
     methods/attributes when accessing application state.
     """
 
-    # Dispatch table: ActionType -> method name on the app (methods that require source_win)
+    # Dispatch table: ActionType -> method name on the app (methods that require source_win).
+    # REQUEST_SAVE_CONFIRM is intentionally NOT here: the dialog needs the
+    # payload's ``on_discard`` callback, so it is handled inline below.
     _RESULT_DISPATCH = {
         ActionType.REQUEST_SAVE_AS: 'show_save_as_dialog',
         ActionType.REQUEST_OPEN_PATH: 'show_open_dialog',
@@ -30,7 +32,6 @@ class DialogDispatcher:
         ActionType.REQUEST_MOVE_ENTRY: 'show_move_dialog',
         ActionType.REQUEST_NEW_DIR: 'show_new_dir_dialog',
         ActionType.REQUEST_NEW_FILE: 'show_new_file_dialog',
-        ActionType.REQUEST_SAVE_CONFIRM: '_show_save_confirm_dialog',
     }
 
     def __init__(self, app):
@@ -135,9 +136,13 @@ class DialogDispatcher:
             return True
 
         if result_type == ActionType.REQUEST_SAVE_CONFIRM and source_win:
-            # The save-confirm flow is dispatched inline; the dialog
-            # itself is created by ``_show_save_confirm_dialog`` and
-            # handled via the standard ``_resolve_dialog_result`` path.
+            # Hand the payload's ``on_discard`` callback through so Discard
+            # actually discards. The simple dispatch loop above would drop
+            # the payload (it only forwards ``source_win``), so we dispatch
+            # this ActionType inline. Without this pass-through the Discard
+            # button silently does nothing and the next open_path bypasses
+            # the confirmation (silent data loss).
+            self._app._show_save_confirm_dialog(source_win, result_payload)
             return True
 
         if result_type == ActionType.ERROR:

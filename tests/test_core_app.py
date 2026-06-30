@@ -832,6 +832,57 @@ class CoreAppTests(unittest.TestCase):
         app._resolve_dialog_result(0)
 
         self.assertFalse(app.running)
+
+    def test_show_save_confirm_dialog_uses_payload_on_discard(self):
+        """B3 regression: when the payload carries an on_discard callable,
+        the Discard button must invoke it (not silently no-op because the
+        callable is a bound method rather than a lambda)."""
+        app = self._make_app()
+        discard_calls = []
+
+        class _FakeNotepad:
+            title = "Notepad *"
+
+            def _do_open_path_force(self):
+                discard_calls.append(self)
+
+        win = _FakeNotepad()
+        app._show_save_confirm_dialog(win, payload={'on_discard': win._do_open_path_force})
+        # Dialog must be set.
+        self.assertIsNotNone(app.dialog)
+        self.assertEqual(app.dialog.title, "Discard unsaved changes?")
+        # The pending callback must be wired to the payload's on_discard.
+        self.assertIsNotNone(getattr(app, "_pending_discard_callback", None))
+        # Trigger Discard via resolve_dialog_result(0).
+        app._resolve_dialog_result(0)
+        self.assertEqual(len(discard_calls), 1)
+
+    def test_show_bookmarks_window_clamps_dimensions_to_min(self):
+        """B6 regression: show_bookmarks_window must not spawn a window
+        with negative or zero width/height when the terminal is tiny."""
+        app = self._make_app()
+        from retrotui.constants import WIN_MIN_WIDTH, WIN_MIN_HEIGHT
+        # Tiny terminal: 3x3.
+        app.stdscr = types.SimpleNamespace(getmaxyx=lambda: (3, 3))
+
+        captured = {}
+
+        class _FakeBookmarksWindow:
+            always_on_top = False
+
+            def __init__(self, x, y, w, h, source_win):
+                captured['x'] = x
+                captured['y'] = y
+                captured['w'] = w
+                captured['h'] = h
+                captured['source'] = source_win
+
+        import retrotui.apps.retronet as retronet_mod
+        with mock.patch.object(retronet_mod, "BookmarksWindow", _FakeBookmarksWindow):
+            src = types.SimpleNamespace(name="browser")
+            app.show_bookmarks_window(src)
+        self.assertGreaterEqual(captured['w'], WIN_MIN_WIDTH)
+        self.assertGreaterEqual(captured['h'], WIN_MIN_HEIGHT)
         self.assertIsNone(app.dialog)
 
     def test_resolve_dialog_result_dispatches_input_callback_result(self):
@@ -1312,6 +1363,36 @@ class CoreAppTests(unittest.TestCase):
 
         notepad_cls.assert_called_once()
         app._spawn_window.assert_called_once_with(notepad_cls.return_value)
+
+    def test_open_file_viewer_clamps_dimensions_to_min_on_tiny_terminal(self):
+        """B10 regression: open_file_viewer must not spawn a window
+        with negative or zero width/height when the terminal is tiny."""
+        app = self._make_app()
+        # 3x3 terminal — small enough that w-4 would be negative.
+        app.stdscr = types.SimpleNamespace(getmaxyx=lambda: (3, 3))
+        app.windows = []
+        app._spawn_window = mock.Mock()
+
+        captured = {}
+
+        class _FakeNotepad:
+            always_on_top = False
+            def __init__(self, x, y, w, h, filepath, **kwargs):
+                captured['x'] = x
+                captured['y'] = y
+                captured['w'] = w
+                captured['h'] = h
+                captured['filepath'] = filepath
+
+        from retrotui.constants import WIN_MIN_WIDTH, WIN_MIN_HEIGHT
+        with (
+            mock.patch.object(self.viewer_mod, "is_video_file", return_value=False),
+            mock.patch("builtins.open", mock.mock_open(read_data=b"plain text")),
+            mock.patch.object(self.viewer_mod, "NotepadWindow", _FakeNotepad),
+        ):
+            app.open_file_viewer("/tmp/readme.txt")
+        self.assertGreaterEqual(captured['w'], WIN_MIN_WIDTH)
+        self.assertGreaterEqual(captured['h'], WIN_MIN_HEIGHT)
 
     def test_open_file_viewer_log_extension_spawns_log_viewer(self):
         app = self._make_app()

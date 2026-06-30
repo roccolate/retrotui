@@ -88,7 +88,7 @@ retrotui
 *   [CHANGELOG.md](CHANGELOG.md) - Release notes.
 *   [docs/plugin-guide.md](docs/plugin-guide.md) - Plugin development guide.
 *   [tools/TESTING.md](tools/TESTING.md) - Manual testing checklist.
-*   [IMPROVEMENTS.md](IMPROVEMENTS.md) - Technical audit and improvement backlog.
+*   [docs/IMPROVEMENTS.md](docs/IMPROVEMENTS.md) - Technical audit and improvement backlog.
 
 ---
 

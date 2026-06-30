@@ -13,6 +13,12 @@ import retrotui.core.ansi as _ansi_mod
 if not hasattr(_ansi_mod.curses, 'has_colors'):
     _ansi_mod.curses.has_colors = lambda: False
 
+# Provide a no-op color_pair when curses isn't initialized; without this the
+# fg*bg combo path in _update_attr raises _curses.error under test runners
+# that don't call initscr().
+if not hasattr(curses, 'color_pair') or curses.color_pair.__class__.__name__ != 'function':
+    curses.color_pair = lambda n: int(n)
+
 
 class AnsiBasicTests(unittest.TestCase):
     def test_parse_text_and_control(self):
@@ -44,6 +50,35 @@ class AnsiBasicTests(unittest.TestCase):
         list(s.parse_chunk('\x1b[39;49mY'))
         self.assertEqual(s.fg, -1)
         self.assertEqual(s.bg, -1)
+
+    def test_sgr_fg_bg_combined_uses_fgbg_pair(self):
+        """When both fg and bg are explicit, the attr must encode both via
+        a fg*bg combo pair (not just the fg-only pair). This guards B2."""
+        from retrotui.core.ansi import C_ANSI_FGBG_START, C_ANSI_START
+        # Real curses encodes pair N in the A_COLOR bits (0xff00 on ncurses).
+        # Mock with the same encoding so pair numbers can be read back out.
+        _A_COLOR = 0xff00
+
+        def _mock_pair(n):
+            return (int(n) << 8) & _A_COLOR
+
+        with mock.patch.object(curses, 'has_colors', return_value=True), \
+             mock.patch.object(curses, 'color_pair', side_effect=_mock_pair):
+            s = AnsiStateMachine()
+            list(s.parse_chunk('\x1b[31;44m'))  # fg=1, bg=4
+            events = list(s.parse_chunk('Z'))
+            z_entry = next(t for t in events if t[0] == 'TEXT' and t[1] == 'Z')
+            pair_num = (z_entry[2] & _A_COLOR) >> 8
+            expected_combo_num = C_ANSI_FGBG_START + 1 * 8 + 4  # 70
+            fg_only_num = C_ANSI_START + 1  # 51
+            self.assertEqual(
+                pair_num, expected_combo_num,
+                "attr must select fg*bg combo pair (B2)",
+            )
+            self.assertNotEqual(
+                pair_num, fg_only_num,
+                "attr must not be the fg-only pair when bg is explicit (B2)",
+            )
 
     def test_csi_dispatch_and_params(self):
         s = AnsiStateMachine()
