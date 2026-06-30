@@ -147,25 +147,25 @@ class TetrisWindow(Window):
         self.last_drop_time = now
         return True
 
-    def draw(self, stdscr):
+    def draw(self, stdscr, frame_size=None):
         if not self.visible: return
 
-        body_attr = self.draw_frame(stdscr)
+        body_attr = self.draw_frame(stdscr, frame_size=frame_size)
         bx, by, bw, bh = self.body_rect()
-        
+
         # Clear background
         for i in range(bh):
-            safe_addstr(stdscr, by + i, bx, ' ' * bw, body_attr)
+            safe_addstr(stdscr, by + i, bx, ' ' * bw, body_attr, _bounds=frame_size)
 
         # Draw Grid Board (10x20 blocks, each 2 chars wide = 20 chars)
         board_x = bx + 1
         board_y = by + 1
-        
+
         # Frame for board
         for i in range(21):
-            safe_addstr(stdscr, board_y + i, board_x - 1, '│', body_attr)
-            safe_addstr(stdscr, board_y + i, board_x + 20, '│', body_attr)
-        safe_addstr(stdscr, board_y + 20, board_x - 1, '└' + '─'*20 + '┘', body_attr)
+            safe_addstr(stdscr, board_y + i, board_x - 1, '│', body_attr, _bounds=frame_size)
+            safe_addstr(stdscr, board_y + i, board_x + 20, '│', body_attr, _bounds=frame_size)
+        safe_addstr(stdscr, board_y + 20, board_x - 1, '└' + '─'*20 + '┘', body_attr, _bounds=frame_size)
 
         for y, row in enumerate(self.grid):
             for x, cell in enumerate(row):
@@ -173,30 +173,30 @@ class TetrisWindow(Window):
                     # Use ANSI pairs 50+cell (e.g. 51=Red, 52=Green...)
                     # We use [] for blocks
                     attr = curses.color_pair(C_ANSI_START + cell)
-                    safe_addstr(stdscr, board_y + y, board_x + x*2, "[]", attr)
-        
+                    safe_addstr(stdscr, board_y + y, board_x + x*2, "[]", attr, _bounds=frame_size)
+
         # Draw current piece
         if self.curr_piece and not self.game_over:
             attr = curses.color_pair(C_ANSI_START + self.curr_color)
             for px, py in self.curr_piece:
                 gx, gy = self.curr_pos[0] + px, self.curr_pos[1] + py
                 if 0 <= gy < 20:
-                    safe_addstr(stdscr, board_y + gy, board_x + gx*2, "[]", attr)
+                    safe_addstr(stdscr, board_y + gy, board_x + gx*2, "[]", attr, _bounds=frame_size)
 
         # Draw HUD
         hud_x = board_x + 23
-        safe_addstr(stdscr, board_y, hud_x, f"SCORE: {self.score}", body_attr | curses.A_BOLD)
-        safe_addstr(stdscr, board_y + 1, hud_x, f"LINES: {self.lines}", body_attr)
-        safe_addstr(stdscr, board_y + 2, hud_x, f"LEVEL: {self.level}", body_attr)
-        
-        safe_addstr(stdscr, board_y + 4, hud_x, "NEXT:", body_attr)
+        safe_addstr(stdscr, board_y, hud_x, f"SCORE: {self.score}", body_attr | curses.A_BOLD, _bounds=frame_size)
+        safe_addstr(stdscr, board_y + 1, hud_x, f"LINES: {self.lines}", body_attr, _bounds=frame_size)
+        safe_addstr(stdscr, board_y + 2, hud_x, f"LEVEL: {self.level}", body_attr, _bounds=frame_size)
+
+        safe_addstr(stdscr, board_y + 4, hud_x, "NEXT:", body_attr, _bounds=frame_size)
         next_coords, next_color = self.PIECES[self.next_piece_type]
         attr = curses.color_pair(C_ANSI_START + next_color)
         for px, py in next_coords:
-            safe_addstr(stdscr, board_y + 5 + py, hud_x + px*2, "[]", attr)
+            safe_addstr(stdscr, board_y + 5 + py, hud_x + px*2, "[]", attr, _bounds=frame_size)
 
         if self.game_over:
-            safe_addstr(stdscr, board_y + 10, board_x + 3, " GAME OVER ", theme_attr('window_title') | curses.A_BOLD)
+            safe_addstr(stdscr, board_y + 10, board_x + 3, " GAME OVER ", theme_attr('window_title') | curses.A_BOLD, _bounds=frame_size)
             safe_addstr(stdscr, board_y + 11, board_x + 2, " (R) Restart ", body_attr)
         elif self.paused:
             safe_addstr(stdscr, board_y + 10, board_x + 5, " PAUSED ", theme_attr('window_title') | curses.A_BOLD)

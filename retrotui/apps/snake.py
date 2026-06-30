@@ -44,6 +44,10 @@ class SnakeWindow(Window):
         self.direction = (0, 1)
         self.food = None
         self.score = 0
+        # Counter of normal food eaten — drives the speed curve. The
+        # ``self.score`` total is shown to the user but does not
+        # accelerate the game when a special food (worth 5) is eaten.
+        self.food_eaten = 0
         self.high_scores = {"Easy": 0, "Normal": 0, "Hard": 0}
         self.game_over = False
         
@@ -275,11 +279,14 @@ class SnakeWindow(Window):
         self.snake.appendleft(target)
         if target == self.food:
             self.score += 1
+            self.food_eaten += 1
             if self.score > self.high_scores[self.difficulty]:
                 self.high_scores[self.difficulty] = self.score
             self._place_food()
-            # Increase speed slightly
-            self.base_speed = max(0.05, 0.2 - (self.score * 0.005))
+            # Speed scales with normal food eaten (per the in-source
+            # comment), not the user's score total — otherwise the
+            # special food disproportionately accelerates the game.
+            self.base_speed = max(0.05, 0.2 - (self.food_eaten * 0.005))
         elif target == self.special_food:
             self.score += 5
             if self.score > self.high_scores[self.difficulty]:
@@ -295,7 +302,7 @@ class SnakeWindow(Window):
         self.step(time.time())
         return (self.snake[0] if self.snake else None, self.score) != before
 
-    def draw(self, stdscr):
+    def draw(self, stdscr, frame_size=None):
         if not self.visible:
             return
 
@@ -319,33 +326,33 @@ class SnakeWindow(Window):
                 self._scores_saved = True
         elif self.paused:
             state = "[PAUSED] "
-            
+
         hi_score = self.high_scores.get(self.difficulty, 0)
         self.title = f"{state}Snake  ♟ {self.score} (HI: {hi_score})"
-        
-        body_attr = self.draw_frame(stdscr)
-        
+
+        body_attr = self.draw_frame(stdscr, frame_size=frame_size)
+
         # Clear body with background
         for r in range(bh):
-            safe_addstr(stdscr, by + r, bx, " " * bw, body_attr)
-            
+            safe_addstr(stdscr, by + r, bx, " " * bw, body_attr, _bounds=frame_size)
+
         # Draw obstacles
         obs_attr = theme_attr("window_inactive")
         for r, c in self.obstacles:
-            safe_addstr(stdscr, by + r, bx + c, "▒", obs_attr)
+            safe_addstr(stdscr, by + r, bx + c, "▒", obs_attr, _bounds=frame_size)
 
         # Draw food (Red)
         if self.food:
             fr, fc = self.food
             food_attr = curses.color_pair(C_ANSI_START + curses.COLOR_RED) | curses.A_BOLD
-            safe_addstr(stdscr, by + fr, bx + fc, "●", food_attr)
+            safe_addstr(stdscr, by + fr, bx + fc, "●", food_attr, _bounds=frame_size)
 
         # Draw special food (Yellow)
         if self.special_food:
             sr, sc = self.special_food
             s_attr = curses.color_pair(C_ANSI_START + curses.COLOR_YELLOW) | curses.A_BOLD
-            safe_addstr(stdscr, by + sr, bx + sc, "★", s_attr)
-            
+            safe_addstr(stdscr, by + sr, bx + sc, "★", s_attr, _bounds=frame_size)
+
         # Draw snake (Green, or Red if Game Over)
         color = curses.COLOR_RED if self.game_over else curses.COLOR_GREEN
         snake_attr = curses.color_pair(C_ANSI_START + color) | curses.A_BOLD
@@ -353,8 +360,8 @@ class SnakeWindow(Window):
             char = "O" if i == 0 else "o"
             if self.game_over:
                 char = "X"
-            safe_addstr(stdscr, by + r, bx + c, char, snake_attr)
-            
+            safe_addstr(stdscr, by + r, bx + c, char, snake_attr, _bounds=frame_size)
+
         # Draw window menu dropdown on top
         if self.window_menu:
             self.window_menu.draw_dropdown(stdscr, self.x, self.y, self.w)

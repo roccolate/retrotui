@@ -138,10 +138,16 @@ class ControlPanelWindow(Window):
                 )
             elif self.selected_cat == 2:
                 self.sunday_first = not self.sunday_first
-                self.app.apply_preferences(sunday_first=self.sunday_first)
+                self.app.apply_preferences(
+                    sunday_first=self.sunday_first,
+                    apply_to_open_windows=True,
+                )
             elif self.selected_cat == 3:
                 self.show_welcome = not self.show_welcome
-                self.app.apply_preferences(show_welcome=self.show_welcome)
+                self.app.apply_preferences(
+                    show_welcome=self.show_welcome,
+                    apply_to_open_windows=True,
+                )
 
             # Auto-save when changing
             self.app.persist_config()

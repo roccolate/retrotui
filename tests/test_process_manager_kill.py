@@ -28,12 +28,16 @@ class ProcessManagerKillTests(unittest.TestCase):
         win = ProcessManagerWindow(0, 0, 80, 24)
         orig_kill = os.kill
         try:
-            # ProcessLookupError -> treated as exited (returns None)
+            # ProcessLookupError -> the process is already gone; surface
+            # a REFRESH with a human-readable message so the user is
+            # not left wondering why the kill button silently did
+            # nothing.
             def raise_lookup(pid, sig):
                 raise ProcessLookupError()
             os.kill = raise_lookup
             res = win.kill_process({'pid': 99999, 'signal': 15})
-            self.assertIsNone(res)
+            self.assertIsNotNone(res)
+            self.assertEqual(res.type, ActionType.REFRESH)
 
             # PermissionError -> returns ActionResult error
             def raise_perm(pid, sig):

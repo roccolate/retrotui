@@ -109,7 +109,11 @@ class ProcessManagerExtraTests(unittest.TestCase):
 
         with mock.patch.object(os, "kill", side_effect=ProcessLookupError()):
             out = self.win.kill_process({"pid": 999, "signal": 15})
-        self.assertIsNone(out)
+        # ProcessLookupError now surfaces a REFRESH with a message
+        # instead of a silent ``None`` so the user is informed.
+        self.assertIsNotNone(out)
+        self.assertEqual(out.type, self.ActionType.REFRESH)
+        self.assertIn("999", out.payload)
         self.assertTrue(called["refreshed"])
 
         with mock.patch.object(os, "kill", side_effect=PermissionError()):

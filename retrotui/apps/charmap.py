@@ -75,7 +75,10 @@ class CharacterMapWindow(Window):
     def _load_block(self):
         name, start, end = UNICODE_BLOCKS[self.block_idx]
         self.chars = [chr(i) for i in range(start, end + 1)]
-        self.status_message = f"Block: {name}"
+        # The footer reads ``self._status_message``; assigning to the
+        # unguarded ``status_message`` silently dropped the previous
+        # block name (typo carried over from the typo'd attribute).
+        self._status_message = f"Block: {name}"
 
     # Width reserved for the detail pane on the right side of the body.
     # Must match `detail_x = bx + bw - 20` below and the block-rendering

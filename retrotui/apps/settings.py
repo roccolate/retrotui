@@ -74,13 +74,17 @@ class SettingsWindow(Window):
 
     def _apply_runtime(self):
         self.app.apply_theme(self.theme_name)
+        # Pass ``show_welcome`` to ``apply_preferences`` so the
+        # ``config.changed`` event listeners see the up-to-date value
+        # (the previous version mutated ``self.app.show_welcome``
+        # *after* the publish, so listeners got the previous value).
         self.app.apply_preferences(
             show_hidden=self.show_hidden,
             word_wrap_default=self.word_wrap_default,
             sunday_first=self.sunday_first,
+            show_welcome=self.show_welcome,
             apply_to_open_windows=True,
         )
-        self.app.show_welcome = self.show_welcome
 
     def _revert_runtime(self):
         initial_theme, initial_hidden, initial_wrap, initial_sunday, initial_welcome = self._initial_state

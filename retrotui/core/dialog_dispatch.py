@@ -30,6 +30,7 @@ class DialogDispatcher:
         ActionType.REQUEST_MOVE_ENTRY: 'show_move_dialog',
         ActionType.REQUEST_NEW_DIR: 'show_new_dir_dialog',
         ActionType.REQUEST_NEW_FILE: 'show_new_file_dialog',
+        ActionType.REQUEST_SAVE_CONFIRM: '_show_save_confirm_dialog',
     }
 
     def __init__(self, app):
@@ -133,6 +134,12 @@ class DialogDispatcher:
             self._app.dialog = Dialog('Save Error', str(message), ['OK'], width=50)
             return True
 
+        if result_type == ActionType.REQUEST_SAVE_CONFIRM and source_win:
+            # The save-confirm flow is dispatched inline; the dialog
+            # itself is created by ``_show_save_confirm_dialog`` and
+            # handled via the standard ``_resolve_dialog_result`` path.
+            return True
+
         if result_type == ActionType.ERROR:
             message = result_payload or 'Unknown error.'
             self._app.dialog = Dialog('Error', str(message), ['OK'], width=50)
@@ -158,6 +165,13 @@ class DialogDispatcher:
 
         if dialog.title == 'Exit RetroTUI' and btn_text == 'Yes':
             self._app.running = False
+        elif dialog.title == 'Discard unsaved changes?':
+            # Save-confirm prompt: ``Discard`` (idx 0) runs the pending
+            # discard callback; ``Cancel`` (idx 1) is a no-op.
+            callback = getattr(self._app, '_pending_discard_callback', None)
+            self._app._pending_discard_callback = None
+            if result_idx == 0 and callable(callback):
+                callback()
         elif result_idx == 0:
             callback = getattr(dialog, 'callback', None)
             if callable(callback):

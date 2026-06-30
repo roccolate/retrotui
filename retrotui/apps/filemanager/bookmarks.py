@@ -68,17 +68,17 @@ def load_bookmarks(path=None):
 
 def save_bookmarks(bookmarks, path=None):
     """Persist bookmark slots and return the written path."""
+    from ...utils import atomic_write_text
     store_path = Path(path) if path is not None else default_bookmarks_path()
     payload = {
         str(slot): os.path.realpath(os.path.expanduser(bookmarks[slot]))
         for slot in BOOKMARK_SLOTS
         if slot in bookmarks and isinstance(bookmarks[slot], str)
     }
-    store_path.parent.mkdir(parents=True, exist_ok=True)
-    store_path.write_text(
+    atomic_write_text(
+        store_path,
         json.dumps({'bookmarks': payload}, indent=2, sort_keys=True) + '\n',
         encoding='utf-8',
-        newline='\n',
     )
     return store_path
 

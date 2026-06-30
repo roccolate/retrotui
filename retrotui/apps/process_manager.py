@@ -317,9 +317,10 @@ class ProcessManagerWindow(Window):
         try:
             os.kill(pid, sig)
         except ProcessLookupError:
-            # Process already exited.
+            # Process already exited. Refresh the listing and tell the
+            # user so the action doesn't look like a silent no-op.
             self.refresh_processes(force=True)
-            return None
+            return ActionResult(ActionType.REFRESH, f"Process {pid} was already gone.")
         except PermissionError:
             return ActionResult(ActionType.ERROR, f"Permission denied for PID {pid}.")
         except OSError as exc:

@@ -162,14 +162,14 @@ class SolitaireWindow(Window):
                 self.best_moves = self.moves
                 self._save_high_scores()
 
-    def _draw_card(self, stdscr, y, x, card: str|None, face_up: bool, selected: bool, body_attr: int, min_y: int = 0):
+    def _draw_card(self, stdscr, y, x, card: str|None, face_up: bool, selected: bool, body_attr: int, min_y: int = 0, frame_size=None):
         _, by, _, bh = self.body_rect()
         max_y = by + bh
 
         def safe_add(dy, dx, text, attr_val):
             target_y = y + dy
             if min_y <= target_y < max_y:
-                safe_addstr(stdscr, target_y, x + dx, text, attr_val)
+                safe_addstr(stdscr, target_y, x + dx, text, attr_val, _bounds=frame_size)
 
         if card is None:
             safe_add(0, 0, "╭───╮", body_attr)
@@ -200,44 +200,44 @@ class SolitaireWindow(Window):
             safe_add(1, 4, "│", attr)
             safe_add(2, 0, "╰───╯", attr)
 
-    def draw(self, stdscr):
+    def draw(self, stdscr, frame_size=None):
         if not self.visible: return
-        
+
         bm_str = "---" if self.best_moves == 9999 else str(self.best_moves)
-        
+
         if self.victory:
             self.title = f"Solitaire - YOU WON! 🎉 (Best: {bm_str})"
         else:
             self.title = f"Solitaire  ♟ {self.moves} (Best: {bm_str})"
 
-        body_attr = self.draw_frame(stdscr)
+        body_attr = self.draw_frame(stdscr, frame_size=frame_size)
         bx, by, bw, bh = self.body_rect()
-        
+
         # Clear body to prevent ghosting from deep columns
         for row in range(bh):
-            safe_addstr(stdscr, by + row, bx, " " * bw, body_attr)
-        
+            safe_addstr(stdscr, by + row, bx, " " * bw, body_attr, _bounds=frame_size)
+
         self.card_rects = {}
-        
+
         # 1. Stock
         sx, sy = bx + 2, by + 1
         self.card_rects[("stock", 0, 0)] = (sx, sy, 5, 3)
         if not self.stock:
-            safe_addstr(stdscr, sy,   sx, "╭───╮", body_attr)
-            safe_addstr(stdscr, sy+1, sx, "│ ⟳ │", body_attr)
-            safe_addstr(stdscr, sy+2, sx, "╰───╯", body_attr)
+            safe_addstr(stdscr, sy,   sx, "╭───╮", body_attr, _bounds=frame_size)
+            safe_addstr(stdscr, sy+1, sx, "│ ⟳ │", body_attr, _bounds=frame_size)
+            safe_addstr(stdscr, sy+2, sx, "╰───╯", body_attr, _bounds=frame_size)
         else:
             is_sel = self.selected == ("stock", 0, 0)
-            self._draw_card(stdscr, sy, sx, self.stock[-1], False, is_sel, body_attr)
+            self._draw_card(stdscr, sy, sx, self.stock[-1], False, is_sel, body_attr, frame_size=frame_size)
 
         # 2. Waste
         wx, wy = bx + 8, by + 1
         self.card_rects[("waste", 0, 0)] = (wx, wy, 5, 3)
         if not self.waste:
-            self._draw_card(stdscr, wy, wx, None, True, False, body_attr)
+            self._draw_card(stdscr, wy, wx, None, True, False, body_attr, frame_size=frame_size)
         else:
             is_sel = self.selected == ("waste", 0, 0)
-            self._draw_card(stdscr, wy, wx, self.waste[-1], True, is_sel, body_attr)
+            self._draw_card(stdscr, wy, wx, self.waste[-1], True, is_sel, body_attr, frame_size=frame_size)
 
         # 3. Foundations
         for i in range(4):
@@ -245,43 +245,47 @@ class SolitaireWindow(Window):
             self.card_rects[("found", i, 0)] = (fx, fy, 5, 3)
             f = self.foundations[i]
             if not f:
-                self._draw_card(stdscr, fy, fx, None, True, False, body_attr)
+                self._draw_card(stdscr, fy, fx, None, True, False, body_attr, frame_size=frame_size)
             else:
                 is_sel = self.selected == ("found", i, 0)
-                self._draw_card(stdscr, fy, fx, f[-1], True, is_sel, body_attr)
+                self._draw_card(stdscr, fy, fx, f[-1], True, is_sel, body_attr, frame_size=frame_size)
 
         # 4. Columns
         max_col_h = 0
         for i, col in enumerate(self.columns):
             cx = bx + 2 + i * 6
             cy = by + 5 - getattr(self, 'scroll_y', 0)
-            
+
             if not col:
                 self.card_rects[("col", i, 0)] = (cx, cy, 5, 3)
-                self._draw_card(stdscr, cy, cx, None, True, False, body_attr, min_y=by+4)
+                self._draw_card(stdscr, cy, cx, None, True, False, body_attr, min_y=by+4, frame_size=frame_size)
                 max_col_h = max(max_col_h, 3)
                 continue
-                
+
             col_y_start = cy
             for j, (card, up) in enumerate(col):
                 is_sel = False
                 if self.selected and self.selected[0] == "col" and self.selected[1] == i and j >= self.selected[2]:
                     is_sel = True
-                self._draw_card(stdscr, cy, cx, card, up, is_sel, body_attr, min_y=by+4)
+                self._draw_card(stdscr, cy, cx, card, up, is_sel, body_attr, min_y=by+4, frame_size=frame_size)
                 h = 3 if j == len(col) - 1 else (2 if up else 1)
                 self.card_rects[("col", i, j)] = (cx, cy, 5, h)
                 cy += 2 if up else 1
-            max_col_h = max(max_col_h, cy + 2 - col_y_start)
+            # Track the column bottom in absolute rows so the scroll
+            # window matches the visible cards exactly. ``cy`` already
+            # advanced past the last card; subtract the start to get
+            # the height.
+            max_col_h = max(max_col_h, cy - col_y_start)
 
         usable_h = bh - 5
         self.max_scroll = max(0, max_col_h - usable_h)
         self.scroll_y = max(0, min(getattr(self, 'scroll_y', 0), self.max_scroll))
-        
+
         if self.max_scroll > 0:
             scroll_pct = self.scroll_y / self.max_scroll
             scroll_indicator_y = by + 5 + int(scroll_pct * (usable_h - 1))
             if scroll_indicator_y < by + bh:
-                safe_addstr(stdscr, scroll_indicator_y, bx + bw - 1, "█", body_attr | curses.A_BOLD)
+                safe_addstr(stdscr, scroll_indicator_y, bx + bw - 1, "█", body_attr | curses.A_BOLD, _bounds=frame_size)
 
         if self.window_menu:
             self.window_menu.draw_dropdown(stdscr, self.x, self.y, self.w)

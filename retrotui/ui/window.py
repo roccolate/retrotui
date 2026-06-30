@@ -188,7 +188,7 @@ class Window:
             border_attr |= curses.A_BOLD | curses.A_REVERSE
             title_attr |= curses.A_BOLD | curses.A_REVERSE
 
-        draw_box(stdscr, self.y, self.x, self.h, self.w, border_attr, double=True)
+        draw_box(stdscr, self.y, self.x, self.h, self.w, border_attr, double=True, _bounds=frame_size)
 
         # Title Bar
         max_title_len = max(0, self.w - self.MIN_BTN_OFFSET - 4)

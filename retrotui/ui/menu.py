@@ -310,7 +310,16 @@ class MenuBar:
             return
         x, y, dropdown_w, items = layout
         item_attr = theme_attr("menu_item")
-        draw_box(stdscr, y, x - 1, len(items) + 2, dropdown_w + 2, item_attr, double=False)
+        draw_box(
+            stdscr,
+            y,
+            x - 1,
+            len(items) + 2,
+            dropdown_w + 2,
+            item_attr,
+            double=False,
+            _bounds=frame_size,
+        )
 
         for i, (label, action) in enumerate(items):
             abs_idx = self.dropdown_scroll + i

@@ -307,18 +307,22 @@ def normalize_key_code(key):
         return 8
     return ord(key)
 
-def draw_box(win, y, x, h, w, attr=0, double=True):
-    """Draw a box with double or single line borders."""
+def draw_box(win, y, x, h, w, attr=0, double=True, *, _bounds=None):
+    """Draw a box with double or single line borders.
+
+    Pass ``_bounds`` to skip the ``getmaxyx()`` probe the underlying
+    ``safe_addstr`` would otherwise run for every border segment.
+    """
     if double:
         tl, tr, bl, br, hz, vt = BOX_TL, BOX_TR, BOX_BL, BOX_BR, BOX_H, BOX_V
     else:
         tl, tr, bl, br, hz, vt = SB_TL, SB_TR, SB_BL, SB_BR, SB_H, SB_V
 
-    safe_addstr(win, y, x, tl + hz * (w - 2) + tr, attr)
+    safe_addstr(win, y, x, tl + hz * (w - 2) + tr, attr, _bounds=_bounds)
     for i in range(1, h - 1):
-        safe_addstr(win, y + i, x, vt, attr)
-        safe_addstr(win, y + i, x + w - 1, vt, attr)
-    safe_addstr(win, y + h - 1, x, bl + hz * (w - 2) + br, attr)
+        safe_addstr(win, y + i, x, vt, attr, _bounds=_bounds)
+        safe_addstr(win, y + i, x + w - 1, vt, attr, _bounds=_bounds)
+    safe_addstr(win, y + h - 1, x, bl + hz * (w - 2) + br, attr, _bounds=_bounds)
 
 def check_unicode_support():
     """Check if terminal supports Unicode."""

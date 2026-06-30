@@ -129,7 +129,9 @@ class ClipboardViewerWindow(Window):
         if not (by <= my < by + bh):
             return None
         idx = my - by
-        if 0 <= idx < len(self.history):
+        # Only the first ``bh`` rows are visible; clamping here keeps the
+        # user's click on an off-screen row from copying the wrong entry.
+        if 0 <= idx < min(bh, len(self.history)):
             copy_text(self.history[idx])
             if pyperclip:
                 try:
