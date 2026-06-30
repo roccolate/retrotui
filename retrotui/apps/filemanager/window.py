@@ -83,7 +83,7 @@ class FileManagerWindow(Window):
         self._primary = PaneState(
             os.path.realpath(start_path or os.path.expanduser('~'))
         )
-        super().__init__('File Manager', x, y, w, h, content=[])
+        super().__init__('File Manager', x, y, max(WIN_MIN_WIDTH, w), max(WIN_MIN_HEIGHT, h), content=[])
         self.use_unicode = check_unicode_support()
         self.show_hidden = bool(show_hidden_default)
         self.window_menu = WindowMenu({

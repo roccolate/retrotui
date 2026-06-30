@@ -15,7 +15,10 @@ class SystemMonitorWindow(Window):
     """Real-time system resource monitor with ASCII graphs."""
 
     def __init__(self, x, y, w, h):
-        super().__init__('System Monitor', x, y, w, h)
+        # Defensive clamp so callers (tests, programmatic use) that
+        # bypass viewer's spawn clamp can't shrink the window below the
+        # safe render minimum (title + CPU graph + RAM bar + status).
+        super().__init__('System Monitor', x, y, max(40, w), max(14, h))
         self.cpu_history = deque([0] * 30, maxlen=30)
         self.last_cpu_times = self._get_cpu_times()
         self.mem_info = {'total': 0, 'available': 0}
