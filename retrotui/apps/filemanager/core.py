@@ -34,7 +34,10 @@ def _fit_text_to_cells(text, max_cells):
 
 class FileEntry:
     """Represents a file or directory entry in the file manager."""
-    __slots__ = ('name', 'is_dir', 'full_path', 'size', 'display_text', 'use_unicode')
+    __slots__ = (
+        'name', 'is_dir', 'full_path', 'size', 'display_text',
+        'use_unicode', 'executable',
+    )
 
     def __init__(self, name, is_dir, full_path, size=0, use_unicode=True):
         self.name = name
@@ -42,6 +45,14 @@ class FileEntry:
         self.full_path = full_path
         self.size = size
         self.use_unicode = use_unicode
+        # Cache the executable bit so the per-row renderer doesn't issue
+        # an ``os.access`` syscall on every redraw (N rows * N frames).
+        # We probe once at listing time; if the bit changes mid-session
+        # a refresh is enough to pick it up.
+        self.executable = (
+            not is_dir
+            and self._probe_executable(full_path)
+        )
 
         dir_icon = '📁' if use_unicode else '[D]'
         file_icon = '📄' if use_unicode else '[F]'
@@ -51,6 +62,14 @@ class FileEntry:
             self.display_text = f'  {dir_icon} {name}/'
         else:
             self.display_text = f'  {file_icon} {name:<30} {self._format_size():>8}'
+
+    @staticmethod
+    def _probe_executable(path):
+        """Return True if *path* has the executable bit set for the user."""
+        try:
+            return bool(path) and os.access(path, os.X_OK)
+        except (OSError, ValueError):
+            return False
 
     def _format_size(self):
         units = ('B', 'K', 'M', 'G', 'T')

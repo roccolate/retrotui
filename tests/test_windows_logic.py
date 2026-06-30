@@ -104,10 +104,13 @@ class WindowLogicTests(unittest.TestCase):
                 target.unlink()
 
     def test_notepad_save_error_returns_typed_error(self):
+        import tempfile
+        from pathlib import Path
         win = self.notepad_mod.NotepadWindow(0, 0, 40, 12)
-        win.filepath = '/unwritable/path/note.txt'
-        with mock.patch('builtins.open', side_effect=OSError('disk full')):
-            result = win._save_file()
+        with tempfile.TemporaryDirectory() as tmp:
+            win.filepath = f'{tmp}/note.txt'
+            with mock.patch.object(Path, "write_text", side_effect=OSError("disk full")):
+                result = win._save_file()
 
         # Relaxed check for reload safety
         self.assertEqual(result.__class__.__name__, 'ActionResult')

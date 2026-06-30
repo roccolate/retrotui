@@ -68,6 +68,10 @@ class ImageViewerWindow(Window):
         self._render_thread = None
         self._render_request = None  # (cols, rows, cache_key)
         self._render_pending = False
+        # Cancellation flag: when a newer render supersedes an older
+        # one, the older worker checks this Event and bails out without
+        # overwriting the cache. Reset for every new render.
+        self._cancel_event = threading.Event()
 
         # Transient status message countdown so the bar updates without
         # clearing inside `draw()`.
@@ -86,6 +90,10 @@ class ImageViewerWindow(Window):
 
     def _invalidate_cache(self):
         self._render_cache = {"key": None, "lines": []}
+        # Force the next draw to re-probe the host for ``chafa``/``timg``
+        # so a backend installed after the viewer's first open is picked
+        # up without restarting RetroTUI.
+        self.backend = None
         with self._render_lock:
             self._render_request = None
             self._render_pending = False
@@ -189,6 +197,12 @@ class ImageViewerWindow(Window):
         """Return rendered lines with cache keyed by file/size/zoom/backend."""
         if not self.filepath:
             return ["No media opened. Press O to open."]
+        backend = self._detect_backend()
+        # Fast path: if nothing but the file content has changed since the
+        # last call, the cache is still valid — no ``os.stat`` needed.
+        last_key = self._render_cache.get("key")
+        if last_key is not None and last_key[0] == self.filepath and last_key[4] == cols and last_key[5] == rows and last_key[6] == self.zoom_index and last_key[7] == backend and last_key[8] == self.is_video:
+            return list(self._render_cache["lines"])
         try:
             st = os.stat(self.filepath)
             cache_key = (
@@ -198,11 +212,11 @@ class ImageViewerWindow(Window):
                 cols,
                 rows,
                 self.zoom_index,
-                self._detect_backend(),
+                backend,
                 self.is_video
             )
         except OSError:
-            cache_key = (self.filepath, None, None, cols, rows, self.zoom_index, self._detect_backend(), self.is_video)
+            cache_key = (self.filepath, None, None, cols, rows, self.zoom_index, backend, self.is_video)
 
         if self._render_cache["key"] == cache_key:
             return list(self._render_cache["lines"])
@@ -212,11 +226,17 @@ class ImageViewerWindow(Window):
         with self._render_lock:
             already_pending = self._render_pending and self._render_request == cache_key
             if not already_pending:
+                # Replace the cancel event so a previously scheduled
+                # worker (with a different cache key) sees the new event
+                # set and bails out. Only one render is in flight at a
+                # time; new zoom/resize requests supersede the old.
+                self._cancel_event.set()
+                self._cancel_event = threading.Event()
                 self._render_request = cache_key
                 self._render_pending = True
                 thread = threading.Thread(
                     target=self._render_worker,
-                    args=(cols, rows, cache_key),
+                    args=(cols, rows, cache_key, self._cancel_event),
                     daemon=True,
                 )
                 self._render_thread = thread
@@ -225,14 +245,20 @@ class ImageViewerWindow(Window):
             return self._render_image(cols, rows)
         return ["[rendering...]"]
 
-    def _render_worker(self, cols, rows, cache_key):
+    def _render_worker(self, cols, rows, cache_key, cancel_event):
+        # If a newer render was scheduled before we even started, bail.
+        if cancel_event.is_set():
+            return
         try:
             lines = self._render_image(cols, rows)
         finally:
             with self._render_lock:
                 if self._render_request == cache_key:
                     self._render_pending = False
-        # Only store the result if it is still the current request.
+        # Only store the result if it is still the current request and
+        # we were not cancelled mid-render by a newer zoom/resize.
+        if cancel_event.is_set():
+            return
         with self._render_lock:
             if self._render_request != cache_key:
                 return

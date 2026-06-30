@@ -67,10 +67,18 @@ class LogViewerExtraTests(unittest.TestCase):
         expected_warn = self.curses.color_pair(self.win.COLOR_WARN_PAIR) | self.curses.A_BOLD
         expected_info = self.curses.color_pair(self.win.COLOR_INFO_PAIR) | self.curses.A_BOLD
 
-        self.assertEqual(self.win._severity_attr("some ERROR occurred", base), expected_err)
-        self.assertEqual(self.win._severity_attr("a warn message", base), expected_warn)
-        self.assertEqual(self.win._severity_attr("info here", base), expected_info)
+        # Severity detection only matches leading bracketed / common
+        # log formats to avoid false positives on substring matches.
+        self.assertEqual(self.win._severity_attr("[ERROR] something broke", base), expected_err)
+        self.assertEqual(self.win._severity_attr("ERROR: connection refused", base), expected_err)
+        self.assertEqual(self.win._severity_attr("[WARN] deprecated API", base), expected_warn)
+        self.assertEqual(self.win._severity_attr("WARN: cache miss", base), expected_warn)
+        self.assertEqual(self.win._severity_attr("[INFO] started", base), expected_info)
+        self.assertEqual(self.win._severity_attr("INFO: ready", base), expected_info)
         self.assertEqual(self.win._severity_attr("plain", base), base)
+        # Substring matches inside a path/word don't trigger.
+        self.assertEqual(self.win._severity_attr("/var/log/errors.log", base), base)
+        self.assertEqual(self.win._severity_attr("errortype mismatch", base), base)
 
     def test_selection_and_copy(self):
         self.win.lines = ["one", "two", "three"]
@@ -200,13 +208,13 @@ class LogViewerExtraTests(unittest.TestCase):
 
             lv.curses.color_pair = boom_pair
             self.assertEqual(
-                self.win._severity_attr("ERROR!", base),
+                self.win._severity_attr("ERROR: boom", base),
                 base | self.curses.A_BOLD,
             )
 
             lv.curses.color_pair = None
             self.assertEqual(
-                self.win._severity_attr("ERROR!", base),
+                self.win._severity_attr("ERROR: boom", base),
                 base | self.curses.A_BOLD,
             )
         finally:
@@ -304,6 +312,11 @@ class LogViewerExtraTests(unittest.TestCase):
         self.assertEqual(self.win.search_index, -1)
 
         self.win.lines = ["error one", "error two"]
+        # Keep the lowercase mirror in sync — tests that poke ``lines``
+        # directly must update the mirror so ``_rebuild_search_matches``
+        # can rely on it. Production paths maintain the mirror via
+        # ``_append_lines``/``_trim_lines_if_needed``/the loader.
+        self.win.lines_lc = [line.lower() for line in self.win.lines]
         self.win.search_query = "error"
         self.win.search_index = 999
         self.win._rebuild_search_matches()

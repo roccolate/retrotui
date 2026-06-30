@@ -59,7 +59,7 @@ def draw_frame(app):
     # Context menu drawn on top of menus but under modal dialogs.
     ctx = app.context_menu
     if ctx and ctx.is_open():
-        ctx.draw(app.stdscr)
+        ctx.draw(app.stdscr, frame_size=frame_size)
 
     # Toast notifications overlay (top-right corner).
     _notifications = getattr(app, '_notifications', None)

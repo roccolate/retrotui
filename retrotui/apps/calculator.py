@@ -211,22 +211,26 @@ class CalculatorWindow(Window):
             self._set_expression(entries[self.history_index])
     
     def _button_rect(self, row_idx, col_idx):
-        """Get (x, y, w, h) for a button based on grid position."""
+        """Get (x, y, w, h) for a button based on grid position.
+
+        Returns ``None`` when the available body height is too small to
+        fit the button grid without overlapping the input row; the caller
+        is expected to skip drawing the button in that case.
+        """
         bx, by, bw, bh = self.body_rect()
-        # Input takes 1 row, History takes remaining top space
-        # Buttons take bottom 5 rows * 2 (height) ?
-        # Let's say buttons are at the bottom.
-        
         btn_rows = len(self.BUTTONS)
-        btn_height = 1 # Single line height
+        btn_height = 1  # Single line height
         padding_y = 1
-        
-        start_y = by + bh - (btn_rows * (btn_height + padding_y)) - 2 # 2 for status bar and margin
+        required_h = btn_rows * (btn_height + padding_y) + 2
+        if bh < required_h:
+            return None
+
+        start_y = by + bh - (btn_rows * (btn_height + padding_y)) - 2
         start_x = bx + 1
-        
+
         btn_width = 5
         spacing_x = 1
-        
+
         y = start_y + row_idx * (btn_height + padding_y)
         x = start_x + col_idx * (btn_width + spacing_x)
         return x, y, btn_width, btn_height
@@ -273,9 +277,12 @@ class CalculatorWindow(Window):
         btn_attr = theme_attr("button")
         for r, row_keys in enumerate(self.BUTTONS):
             for c, key in enumerate(row_keys):
-                x, y, w, h = self._button_rect(r, c)
+                rect = self._button_rect(r, c)
+                if rect is None:
+                    continue
+                x, y, w, h = rect
                 if y < by or y >= by + bh: continue
-                
+
                 # Draw button box
                 safe_addstr(stdscr, y, x, f"[{key:^3}]", btn_attr)
 

@@ -17,14 +17,15 @@ from ..utils import normalize_key_code, safe_addstr, theme_attr
 
 
 class _ScrollbackBuffer(TerminalScreenBuffer):
-    """TerminalScreenBuffer variant kept around for compatibility.
+    """TerminalScreenBuffer variant that captures rows into a shared deque.
 
     In v0.9.5 the terminal captures the cursor row into scrollback from
     :meth:`TerminalWindow._append_newline` (so every newline lands in the
-    scrollback regardless of buffer overflow). The buffer's own
-    ``scroll_up`` therefore no longer needs to capture — but the class
-    is still wired into ``TerminalScreen`` so external callers can reach
-    the same ``_scrollback`` reference via the buffer instance.
+    scrollback regardless of buffer overflow). In addition, this subclass
+    hooks the buffer's own ``scroll_up`` so rows that scroll off during
+    word-wrap (i.e. without a newline) also land in scrollback. Without
+    this hook long un-newlined output would lose the wrapped rows that
+    any normal terminal would scroll into history.
     """
 
     __slots__ = ("_scrollback",)
@@ -32,6 +33,7 @@ class _ScrollbackBuffer(TerminalScreenBuffer):
     def __init__(self, rows, cols, scrollback, default_attr=0):
         super().__init__(rows, cols, default_attr=default_attr)
         self._scrollback = scrollback
+        self.set_scroll_sink(scrollback.append)
 
 
 # DEC private mouse modes that the child program can enable to receive
@@ -354,13 +356,9 @@ class TerminalWindow(SelectableTextMixin, Window):
         self._sync_screen_size()
         self._screen.put_char(ch, attr=attr)
 
-    def _advance_alt_cursor(self, cols, rows):
-        """Advance alt-screen cursor with terminal-style right-edge wrapping."""
-        # The buffer's put_char already wraps with a scroll if needed; this
-        # helper is only kept so legacy call sites that call it directly still
-        # compile. New code should rely on the buffer's put_char.
-        active = self._screen._active
-        active.set_cursor(active.cursor_row, active.cursor_col + 1)
+    # _advance_alt_cursor used to be a vestigial helper kept for legacy
+    # call sites; nothing references it any more, and the buffer's
+    # ``put_char`` already wraps with a scroll if needed.
 
     def _append_newline(self):
         """Commit the current row to scrollback and move the cursor down.
@@ -464,8 +462,12 @@ class TerminalWindow(SelectableTextMixin, Window):
             col = active.cursor_col
             line = active._grid[row]
             if col < len(line):
-                del line[col:col + count]
-                line.extend([(" ", active._default_attr)] * count)
+                # Only consume characters that exist inside the row; pad
+                # the rest so the row never grows past ``cols`` and the
+                # ``TerminalScreenBuffer`` invariant stays intact.
+                removable = min(count, max(0, len(line) - col))
+                del line[col:col + removable]
+                line.extend([(" ", active._default_attr)] * removable)
             return
         if final == 'J':
             self._erase_display(_num(0, 0))
@@ -519,13 +521,11 @@ class TerminalWindow(SelectableTextMixin, Window):
 
     def _visible_slice(self, text_rows):
         text_rows = max(1, text_rows)
+        # Caller is expected to have already clamped ``scrollback_offset``
+        # (typically via the caller that triggered this read). Keeping
+        # the clamp here would re-write state from a pure read path.
         lines = self._all_lines()
         total = len(lines)
-        max_offset = max(0, total - text_rows)
-
-        if self.scrollback_offset > max_offset:
-            self.scrollback_offset = max_offset
-
         start = max(0, total - text_rows - self.scrollback_offset)
         return lines[start:start + text_rows], start, total
 

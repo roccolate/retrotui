@@ -154,6 +154,44 @@ class RetroTUI:
     def show_open_dialog(self, win):
         return self.file_ops.show_open_dialog(win)
 
+    def _show_save_confirm_dialog(self, win):
+        """Prompt the user before discarding unsaved work in *win*."""
+        # Defer the show to the file_ops dispatcher (it owns the
+        # dialog-handling code paths for these flows). The window's
+        # ``_do_open_path_force`` callback is attached via the
+        # ActionResult payload at the call site.
+        from ..ui.dialog import Dialog
+        try:
+            title = getattr(win, "title", "Notepad")
+        except Exception:
+            title = "Notepad"
+        message = (
+            f"{title} has unsaved changes.\n"
+            "Discard them and open the new file?"
+        )
+        on_discard = None
+        if isinstance(getattr(win, "_do_open_path_force", None), type(lambda: 0)):
+            on_discard = win._do_open_path_force
+
+        def _on_discard():
+            if on_discard is not None:
+                on_discard()
+
+        self.dialog = Dialog(
+            title="Discard unsaved changes?",
+            message=message,
+            buttons=["Discard", "Cancel"],
+            width=58,
+        )
+        self._pending_discard_callback = _on_discard
+
+    def _resolve_save_confirm_result(self, result_idx):
+        """Apply the user's choice from the save-confirm dialog."""
+        callback = getattr(self, "_pending_discard_callback", None)
+        self._pending_discard_callback = None
+        if result_idx == 0 and callback is not None:
+            callback()
+
     def show_rename_dialog(self, win):
         return self.file_ops.show_rename_dialog(win)
 

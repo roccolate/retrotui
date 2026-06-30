@@ -84,6 +84,11 @@ class WifiManagerWindow(Window):
             return
         with self._scan_lock:
             if self._scan_in_progress:
+                # Don't silently swallow the request — the user is
+                # expecting a rescan, so tell them one is already in
+                # flight. The in-flight scan will refresh the listing
+                # when it completes.
+                self._status_msg = "Rescan queued (scan in progress)."
                 return
             self._scan_in_progress = True
             self._scan_error = None
@@ -119,6 +124,14 @@ class WifiManagerWindow(Window):
                 continue
             current.append(ch)
             i += 1
+        # After the loop, the last field holds everything remaining.
+        # If nmcli ever adds a column the splitter will silently merge it
+        # into BSSID — log a warning so the regression is visible.
+        if len(fields) >= expected:
+            LOGGER.warning(
+                "nmcli line had more fields than expected (%d >= %d): %r",
+                len(fields) + 1, expected, line,
+            )
         fields.append("".join(current))
         return fields
 
@@ -306,7 +319,11 @@ class WifiManagerWindow(Window):
     def _connect_worker(self, ssid, password):
         cmd = [self.nmcli, "dev", "wifi", "connect", ssid]
         if password:
-            # Prefer stdin (--ask) so the password does not appear in process listings.
+            # Prefer stdin (--ask) so the password does not appear in
+            # process listings. If the --ask invocation fails for any
+            # reason, fall back to the explicit ``password`` argument —
+            # but if it does, surface the failure to the user rather
+            # than silently downgrading security.
             error_message = ""
             try:
                 res = subprocess.run(
@@ -325,8 +342,17 @@ class WifiManagerWindow(Window):
             except subprocess.TimeoutExpired:
                 self._finish_connect(False, "Connection timed out.")
                 return
-            except OSError:
-                pass
+            except OSError as exc:
+                # The --ask path is unavailable (e.g. ``nmcli`` not on
+                # PATH for that subprocess call, or the option
+                # rejected). Don't silently retry with the password on
+                # argv — tell the user the secure path failed.
+                self._finish_connect(
+                    False,
+                    f"Could not run nmcli --ask: {exc}. "
+                    "Password was not sent insecurely; please report the error.",
+                )
+                return
             cmd.extend(["password", password])
         success = False
         error_message = ""
@@ -362,7 +388,14 @@ class WifiManagerWindow(Window):
             if result is not None:
                 self._connect_result = None
                 success, error_message = result
-                self._status_msg = f"Connected to {self._status_msg[12:]}." if success and self._status_msg.startswith("Connecting to ") else ("Connection failed." if not success else self._status_msg)
+                if success:
+                    # Use the stored SSID (captured at connect time) so
+                    # the message doesn't depend on the prefix of the
+                    # previous status string.
+                    ssid = self._connecting_ssid or self._status_msg
+                    self._status_msg = f"Connected to {ssid}."
+                else:
+                    self._status_msg = "Connection failed."
                 if not success and error_message:
                     self._status_msg = f"Connection failed: {error_message[:60]}"
                 changed = True

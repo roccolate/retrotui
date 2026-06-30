@@ -299,19 +299,18 @@ class FileManagerWindow(Window):
         return payload
 
     def handle_mouse_drag(self, mx, my, bstate, norm=None):
-        if getattr(self, '_drag_mode', 0) == 0:
-            if not (bstate & curses.BUTTON1_PRESSED):
-                self.clear_pending_drag()
-                self._drag_rejected_entry = None
-            elif self._pending_drag_payload is None:
-                entry = self._selected_entry()
-                if entry and entry.name != '..':
-                    payload = self._drag_payload_for_entry(entry)
-                    if payload:
-                        self._set_pending_drag(payload, mx, my)
-                    elif entry.is_dir and getattr(self, '_drag_rejected_entry', None) != entry.full_path:
-                        self._drag_rejected_entry = entry.full_path
-                        return ActionResult(ActionType.ERROR, 'Directory drag is not supported.')
+        if not (bstate & curses.BUTTON1_PRESSED):
+            self.clear_pending_drag()
+            self._drag_rejected_entry = None
+        elif self._pending_drag_payload is None:
+            entry = self._selected_entry()
+            if entry and entry.name != '..':
+                payload = self._drag_payload_for_entry(entry)
+                if payload:
+                    self._set_pending_drag(payload, mx, my)
+                elif entry.is_dir and getattr(self, '_drag_rejected_entry', None) != entry.full_path:
+                    self._drag_rejected_entry = entry.full_path
+                    return ActionResult(ActionType.ERROR, 'Directory drag is not supported.')
         return None
 
     def accept_dropped_path(self, path):
@@ -465,16 +464,19 @@ class FileManagerWindow(Window):
         if self.dual_pane_enabled:
             self._rebuild_secondary_content()
 
-    def _select_entry_by_name(self, name):
-        for i, entry in enumerate(self.entries):
-             if entry.name == name:
-                 self.selected_index = i
-                 display_h = self.h - self._header_lines()
-                 if self.selected_index >= display_h:
-                      self.scroll_offset = max(0, self.selected_index - display_h + 1)
-                 else:
-                      self.scroll_offset = 0
-                 return True
+    def _select_entry_by_name(self, name, pane=None):
+        """Move selection in *pane* (defaults to active pane) to the entry with *name*."""
+        if pane is None:
+            pane = self._active_pane_state()
+        for i, entry in enumerate(pane.entries):
+            if entry.name == name:
+                pane.selected_index = i
+                display_h = self.h - self._header_lines()
+                if pane.selected_index >= display_h:
+                    pane.scroll_offset = max(0, pane.selected_index - display_h + 1)
+                else:
+                    pane.scroll_offset = 0
+                return True
         return False
 
     def _ensure_visible(self):
@@ -562,10 +564,7 @@ class FileManagerWindow(Window):
 
     def perform_delete_entry(self, path):
         trash_dir = self._trash_base_dir()
-        if trash_dir == _trash_base_dir():
-            result_path = perform_delete(path)
-        else:
-            result_path = perform_delete(path, trash_dir=trash_dir)
+        result_path = perform_delete(path, trash_dir=trash_dir)
         if result_path:
             self._last_trash_move = {'source': path, 'trash': result_path}
             self._rebuild_content()
@@ -757,7 +756,8 @@ class FileManagerWindow(Window):
         res = perform_move(entry.full_path, dest)
         self._rebuild_content()
         if res.type == ActionType.REFRESH:
-             self._select_entry_by_name(clean)
+             self._rebuild_secondary_content()
+             self._select_entry_by_name(clean, pane=self._active_pane_state())
         return res
 
     def copy_selected(self, dest_path):
@@ -949,12 +949,8 @@ class FileManagerWindow(Window):
             return theme_attr('window_body')
         if entry_obj.is_dir:
             return theme_attr('file_directory')
-        if not entry_obj.is_dir:
-            try:
-                if os.access(entry_obj.full_path, os.X_OK):
-                    return theme_attr('window_body') | curses.A_BOLD
-            except _ENTRY_ATTR_PATH_ERRORS:
-                pass
+        if getattr(entry_obj, 'executable', False):
+            return theme_attr('window_body') | curses.A_BOLD
         return theme_attr('window_body')
 
     def _draw_pane_contents(self, stdscr, pane_id, x, y, w, h, content, scroll, selected, error_msg, is_active=True):
@@ -1049,6 +1045,16 @@ class FileManagerWindow(Window):
                  self.last_click_index = click_id
 
                  self.secondary_selected_index = new_sel
+
+                 # Wire up the same drag-start payload as the primary
+                 # pane so files can be dragged from the secondary tree
+                 # into the primary one (or out of the window).
+                 if bstate is not None and (bstate & curses.BUTTON1_PRESSED):
+                     entry = self.secondary_entries[new_sel]
+                     payload = self._drag_payload_for_entry(entry)
+                     if payload:
+                         self._set_pending_drag(payload, mx, my)
+
                  if is_double:
                      return self.activate_selected()
                  return ActionResult(ActionType.REFRESH)
@@ -1083,8 +1089,10 @@ class FileManagerWindow(Window):
 
         clicked_pane = 0
         if self.dual_pane_enabled:
-            left_w = max(1, (bw - 1) // 2)
-            if mx > bx + left_w:
+            # Match the left-click handler and the dual-pane draw
+            # layout: pane 1 is anything strictly to the right of the
+            # divider at ``bx + bw // 2``.
+            if mx > bx + (bw // 2):
                 clicked_pane = 1
 
         row = my - by
@@ -1146,14 +1154,18 @@ class FileManagerWindow(Window):
             new_selected = max(0, selected - self.PAGE_SCROLL_STEP)
             new_scroll = max(0, scroll - self.PAGE_SCROLL_STEP)
         elif key == curses.KEY_NPAGE:
+            display_h = self.h - self._header_lines() - 1
+            max_scroll = max(0, count - display_h)
             new_selected = min(count - 1, selected + self.PAGE_SCROLL_STEP)
-            new_scroll = min(max(0, count - 1), scroll + self.PAGE_SCROLL_STEP)
+            new_scroll = min(max_scroll, scroll + self.PAGE_SCROLL_STEP)
         elif key == curses.KEY_HOME:
             new_selected = 0
             new_scroll = 0
         elif key == curses.KEY_END:
+            display_h = self.h - self._header_lines() - 1
+            max_scroll = max(0, count - display_h)
             new_selected = count - 1
-            new_scroll = max(0, count - self.PAGE_SCROLL_STEP)
+            new_scroll = max_scroll
         else:
             return None  # Not a navigation key
 

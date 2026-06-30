@@ -160,13 +160,17 @@ class NotepadWindow(SelectableTextMixin, Window):
         if not self.filepath:
             return ActionResult(ActionType.REQUEST_SAVE_AS)
         try:
-            with open(self.filepath, 'w', encoding='utf-8', newline='\n') as f:
-                f.write('\n'.join(self.buffer))
-            self.modified = False
-            self._update_title()
-            return True
+            from ..utils import atomic_write_text
+            atomic_write_text(
+                self.filepath,
+                '\n'.join(self.buffer),
+                encoding='utf-8',
+            )
         except (PermissionError, OSError) as e:
             return ActionResult(ActionType.SAVE_ERROR, str(e))
+        self.modified = False
+        self._update_title()
+        return True
 
     def save_as(self, filepath):
         """Set filepath and save."""
@@ -195,9 +199,31 @@ class NotepadWindow(SelectableTextMixin, Window):
         path = (filepath or '').strip()
         if not path:
             return None
-        self._load_file(os.path.abspath(os.path.expanduser(path)))
-        self.clear_selection()
+        # Guard against silently destroying unsaved work when another
+        # window or dialog calls ``open_path`` on us. Force-close (during
+        # app shutdown, terminal reset, etc.) bypasses the prompt.
+        if self.modified and not self._force_close and not self._open_path_confirm_pending:
+            self._open_path_confirm_pending = (
+                os.path.abspath(os.path.expanduser(path))
+            )
+            return ActionResult(
+                ActionType.REQUEST_SAVE_CONFIRM,
+                payload={"on_discard": self._do_open_path_force},
+            )
+        self._do_open_path(os.path.abspath(os.path.expanduser(path)))
         return None
+
+    def _do_open_path(self, path):
+        self._open_path_confirm_pending = None
+        self._load_file(path)
+        self.clear_selection()
+
+    def _do_open_path_force(self):
+        """Discard current buffer and open the pending path."""
+        pending = self._open_path_confirm_pending
+        self._open_path_confirm_pending = None
+        if pending:
+            self._do_open_path(pending)
 
 
     def _invalidate_wrap(self):
@@ -319,11 +345,17 @@ class NotepadWindow(SelectableTextMixin, Window):
         return None
 
     def _delete_selection(self):
-        """Delete current selection and place cursor at selection start."""
+        """Delete current selection and place cursor at selection start.
+
+        Callers are responsible for ``_push_undo()`` *before* invoking
+        this so a selection-replace operation produces a single undo
+        entry. The methods that need that behaviour are
+        ``_key_backspace``/``_key_delete``/``_key_enter``/
+        ``_key_printable``/``_key_paste``/``_handle_cut_selection``.
+        """
         bounds = self._selection_bounds()
         if bounds is None:
             return False
-        self._push_undo()
 
         (s_line, s_col), (e_line, e_col) = bounds
         s_col = max(0, min(s_col, len(self.buffer[s_line])))
@@ -997,8 +1029,11 @@ class NotepadWindow(SelectableTextMixin, Window):
             {'label': 'Close', 'action': AppAction.NP_CLOSE},
         ]
         if self.has_selection():
-             # Update Copy/Cut to work on selection if it exists
-             items[0] = {'label': 'Cut Selection', 'action': lambda: (copy_text(self._selected_text()), self._delete_selection())}
+             # Update Copy/Cut to work on selection if it exists.
+             # Push undo *before* the cut so a single Undo restores the
+             # selection (otherwise ``_delete_selection`` no longer
+             # pushes and a single cut would be silently un-undoable).
+             items[0] = {'label': 'Cut Selection', 'action': lambda: (copy_text(self._selected_text()), self._push_undo() or self._delete_selection())}
              items[1] = {'label': 'Copy Selection', 'action': lambda: copy_text(self._selected_text())}
 
         return items

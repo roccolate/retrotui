@@ -1,6 +1,7 @@
 """RetroNet Explorer Ultra: The state-of-the-art text browser."""
 import curses
 import hashlib
+import logging
 import os
 import tempfile
 import urllib.request
@@ -18,6 +19,8 @@ from ..ui.window import Window
 from ..utils import safe_addstr, theme_attr, normalize_key_code
 from ..core.actions import ActionResult, ActionType, AppAction
 from ..constants import _CURSES_ERROR
+
+LOGGER = logging.getLogger(__name__)
 
 _URL_SANITIZE_ERRORS = (
     AttributeError,
@@ -166,6 +169,12 @@ class _RetroNetHTMLParser(html.parser.HTMLParser):
             return
         if self.link_href is not None:
             self.link_label.append(data)
+            # Mirror the data into the visible text stream so a
+            # malformed page that never emits a matching ``</a>``
+            # doesn't silently drop everything from the unclosed
+            # anchor onward. The link is still lost (no closing
+            # href) but the content is preserved for display.
+            self.parts.append(data)
             return
         self.parts.append(data)
 
@@ -298,11 +307,16 @@ class RetroNetWindow(Window):
         with self._lock:
             if idx < 0 or idx >= len(self.tabs):
                 return False
+            was_active = idx == self.active_tab_idx
             del self.tabs[idx]
             if not self.tabs:
                 return True
-            if self.active_tab_idx >= len(self.tabs):
-                self.active_tab_idx = len(self.tabs) - 1
+            if was_active:
+                # Closing the active tab: pick the neighbour at the
+                # same index (i.e. the tab that "slides into" the slot),
+                # clamped to the new length. Jumping to the last tab
+                # when the user closed the middle one was jarring.
+                self.active_tab_idx = min(idx, len(self.tabs) - 1)
             elif self.active_tab_idx > idx:
                 self.active_tab_idx -= 1
         self._refresh_window_title()
@@ -445,9 +459,17 @@ class RetroNetWindow(Window):
     # URL handling
     # ------------------------------------------------------------------
 
+    _ALLOWED_URL_SCHEMES = ("http", "https")
+
     def _sanitize_url(self, url):
         """Encode spaces and special characters for network, but keep it readable."""
         if not url: return ""
+
+        # Reject non-http(s) schemes — clicking a ``file://`` link would
+        # let a remote page read local files through ``urlopen``.
+        scheme = urllib.parse.urlsplit(url).scheme.lower()
+        if scheme and scheme not in self._ALLOWED_URL_SCHEMES:
+            return ""
 
         # DuckDuckGo Bridge: Clean and simple
         if "google.com/search?q=" in url or "duckduckgo.com/?q=" in url:
@@ -542,12 +564,21 @@ class RetroNetWindow(Window):
             req = urllib.request.Request(url, headers=headers)
             try:
                 response = urllib.request.urlopen(req, timeout=10, context=context)
-            except ssl.SSLError:
+            except ssl.SSLError as ssl_exc:
+                # The first TLS error falls back to an unverified context.
+                # That's a meaningful security downgrade (phishing / MITM
+                # exposure) and the user deserves to know that *every
+                # future request in this session* will share the relaxed
+                # trust — so surface a strong warning instead of the
+                # previous single-line banner.
                 context = ssl.create_default_context()
                 context.check_hostname = False
                 context.verify_mode = ssl.CERT_NONE
                 response = urllib.request.urlopen(req, timeout=10, context=context)
-                ssl_warning = True
+                ssl_warning = (
+                    f"[SSL: certificate verification failed ({ssl_exc.reason or ssl_exc}). "
+                    f"Subsequent requests in this session are also unverified.]"
+                )
             try:
                 charset = response.info().get_content_charset() or 'utf-8'
                 raw_html = response.read().decode(charset, errors='ignore')
@@ -570,6 +601,7 @@ class RetroNetWindow(Window):
                         self._refresh_window_title()
         except _RETRONET_FETCH_ERRORS as e:
             msg = str(e) if str(e) else "Unknown network error or crash."
+            LOGGER.warning("Failed to load %s: %s", url, msg)
             with self._lock:
                 if tab_idx < len(self.tabs):
                     self.tabs[tab_idx].content = [
@@ -578,6 +610,9 @@ class RetroNetWindow(Window):
                     ]
                     self.tabs[tab_idx].is_loading = False
         except Exception:
+            # Catch-all for the parser / decode path; log so future
+            # regressions are diagnosable from the user's terminal log.
+            LOGGER.exception("Unhandled exception while loading %s", url)
             with self._lock:
                 if tab_idx < len(self.tabs):
                     self.tabs[tab_idx].is_loading = False
@@ -690,8 +725,8 @@ class RetroNetWindow(Window):
         tmp_dir = tempfile.gettempdir()
         path = os.path.join(tmp_dir, f"retrotui_retronet_viewsource_{digest}.html")
         try:
-            with open(path, "w", encoding="utf-8", errors="replace") as f:
-                f.write(raw)
+            from ..utils import atomic_write_text
+            atomic_write_text(path, raw, encoding="utf-8")
         except OSError:
             return None
         return path
@@ -809,13 +844,12 @@ class RetroNetWindow(Window):
             for idx, tab in tabs_snapshot:
                 if tab_x >= content_x + content_w - 4:
                     break
-                label_source = tab.title or tab.url or "New Tab"
-                label = label_source.replace('\n', ' ').replace('\t', ' ')
-                if len(label) > 14:
-                    label = label[:13] + "…"
+                label = self._tab_chip_label(tab)
                 marker = "▶" if idx == active_idx else " "
                 chip = f"{marker}{label}×"
-                chip_w = min(len(chip) + 1, content_x + content_w - tab_x)
+                chip_w = self._tab_chip_width(
+                    label, content_x=content_x, tab_x=tab_x, content_w=content_w,
+                )
                 if chip_w <= 1:
                     break
                 attr = (self.attr_bold | curses.A_REVERSE) if idx == active_idx else self.attr_inactive
@@ -899,7 +933,12 @@ class RetroNetWindow(Window):
         # Tab bar click: switch or close tabs. Only when 2+ tabs are open
         # (the bar isn't drawn for a single tab — see ``draw``).
         if my == by and len(self.tabs) > 1 and content_x <= mx:
-            return self._handle_tab_bar_click(mx - content_x - 1, bw) or ActionResult(ActionType.REFRESH)
+            return self._handle_tab_bar_click(
+                mx - content_x - 1,
+                bw,
+                content_x=content_x,
+                content_w=content_w,
+            ) or ActionResult(ActionType.REFRESH)
 
         # Sidebar click — navigate to history entry
         if self.show_sidebar and bx <= mx < bx + sidebar_w - 1:
@@ -951,7 +990,20 @@ class RetroNetWindow(Window):
 
         return super().handle_click(mx, my)
 
-    def _handle_tab_bar_click(self, rel_x: int, body_w: int):
+    def _tab_chip_label(self, tab):
+        """Return the rendered label for *tab* (matches ``draw``)."""
+        label_source = tab.title or tab.url or "New Tab"
+        label = label_source.replace('\n', ' ').replace('\t', ' ')
+        if len(label) > 14:
+            label = label[:13] + "…"
+        return label
+
+    def _tab_chip_width(self, label, *, content_x, tab_x, content_w):
+        """Width of a tab chip, matching the cap applied by ``draw``."""
+        full_w = len(label) + 2  # marker + label + "×" + space
+        return min(full_w, content_x + content_w - tab_x)
+
+    def _handle_tab_bar_click(self, rel_x: int, body_w: int, *, content_x: int, content_w: int):
         """Translate a click on the tab bar into a switch/close action."""
         if rel_x < 0:
             return None
@@ -959,12 +1011,14 @@ class RetroNetWindow(Window):
             tabs_snapshot = list(enumerate(self.tabs))
             active_idx = self.active_tab_idx
         cursor = 0
+        tab_x = content_x + 1
         for idx, tab in tabs_snapshot:
-            label_source = tab.title or tab.url or "New Tab"
-            label = label_source.replace('\n', ' ').replace('\t', ' ')
-            if len(label) > 14:
-                label = label[:13] + "…"
-            chip_w = len(label) + 2  # marker + label + "×" + space
+            label = self._tab_chip_label(tab)
+            chip_w = self._tab_chip_width(
+                label, content_x=content_x, tab_x=tab_x, content_w=content_w,
+            )
+            if chip_w <= 1:
+                break
             if rel_x < cursor + chip_w:
                 # Last char of the chip is the close marker.
                 if rel_x == cursor + chip_w - 1 and len(tabs_snapshot) > 1:
@@ -974,6 +1028,7 @@ class RetroNetWindow(Window):
                     self._switch_tab(idx)
                 return None
             cursor += chip_w
+            tab_x += chip_w - 1
         # Click on the trailing "+" affordance: new tab.
         if 0 <= rel_x - cursor <= 2 and len(tabs_snapshot) < 12:
             self._new_tab(_DEFAULT_TAB_URL, activate=True)

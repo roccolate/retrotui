@@ -36,6 +36,10 @@ class LogViewerWindow(SelectableTextMixin, Window):
         super().__init__("Log Viewer", x, y, w, h, content=[])
         self.filepath = None
         self.lines = []
+        # Pre-computed lowercase mirror of ``self.lines`` for the search
+        # hot path. Built once per append/trim; avoids allocating a
+        # new ``str.lower()`` for every visible row on every redraw.
+        self.lines_lc = []
         self.file_position = 0
         self._tail_remainder = ""
         self._error_message = None
@@ -143,15 +147,45 @@ class LogViewerWindow(SelectableTextMixin, Window):
         return value.replace("\r\n", "\n").replace("\r", "\n")
 
     def _severity_attr(self, line, base_attr):
-        """Return colorized attribute for one log line."""
-        text = line.upper()
+        """Return colorized attribute for one log line.
+
+        Matches only the most common log formats to avoid false positives
+        from substring matches in paths (``/var/log/errors.log``), words
+        containing the keyword (``errortype``), or normal text. Leading
+        bracketed tags (``[ERROR]``, ``<ERROR>``) and prefix-style tags
+        (``ERROR:``) are recognised.
+        """
+        # Cheap fast-path: skip the regex dance when no relevant token
+        # can possibly be present in the line.
+        upper = line.upper()
         pair_id = None
-        if "ERROR" in text:
-            pair_id = self.COLOR_ERROR_PAIR
-        elif "WARN" in text:
-            pair_id = self.COLOR_WARN_PAIR
-        elif "INFO" in text:
-            pair_id = self.COLOR_INFO_PAIR
+        if "ERROR" in upper:
+            if (
+                "[ERROR]" in upper
+                or "<ERROR>" in upper
+                or upper.startswith("ERROR ")
+                or upper.startswith("ERROR:")
+                or upper.startswith("ERROR\t")
+            ):
+                pair_id = self.COLOR_ERROR_PAIR
+        if pair_id is None and "WARN" in upper:
+            if (
+                "[WARN" in upper
+                or "<WARN>" in upper
+                or upper.startswith("WARN ")
+                or upper.startswith("WARN:")
+                or upper.startswith("WARN\t")
+            ):
+                pair_id = self.COLOR_WARN_PAIR
+        if pair_id is None and "INFO" in upper:
+            if (
+                "[INFO" in upper
+                or "<INFO>" in upper
+                or upper.startswith("INFO ")
+                or upper.startswith("INFO:")
+                or upper.startswith("INFO\t")
+            ):
+                pair_id = self.COLOR_INFO_PAIR
 
         if pair_id is None:
             return base_attr
@@ -187,6 +221,7 @@ class LogViewerWindow(SelectableTextMixin, Window):
             return
         trim = len(self.lines) - self.MAX_LINES
         self.lines = self.lines[trim:]
+        self.lines_lc = self.lines_lc[trim:]
         self.scroll_offset = max(0, self.scroll_offset - trim)
         if self.search_query:
             self._rebuild_search_matches()
@@ -196,6 +231,7 @@ class LogViewerWindow(SelectableTextMixin, Window):
             return
         start_index = len(self.lines)
         self.lines.extend(new_lines)
+        self.lines_lc.extend(line.lower() for line in new_lines)
         self._trim_lines_if_needed()
         if self.search_query:
             self._extend_search_matches(start_index)
@@ -227,6 +263,7 @@ class LogViewerWindow(SelectableTextMixin, Window):
             text = self._normalize_text(raw.decode("utf-8", errors="replace"))
         except OSError as exc:
             self.lines = []
+            self.lines_lc = []
             self.file_position = 0
             self._tail_remainder = ""
             self._error_message = str(exc)
@@ -237,6 +274,7 @@ class LogViewerWindow(SelectableTextMixin, Window):
         if rows and rows[-1] == "":
             rows = rows[:-1]
         self.lines = rows[-self.MAX_LINES :]
+        self.lines_lc = [row.lower() for row in self.lines]
         self._tail_remainder = ""
         self._error_message = None
         self._rebuild_search_matches()
@@ -296,8 +334,16 @@ class LogViewerWindow(SelectableTextMixin, Window):
             self.search_matches = []
             self.search_index = -1
             return
+        # Use the precomputed lowercase mirror to avoid allocating a
+        # new ``str.lower()`` for every line in the buffer. If the
+        # mirror is out of sync (e.g. a test set ``self.lines``
+        # directly), rebuild it on the fly.
+        lines_lc = self.lines_lc
+        if len(lines_lc) != len(self.lines):
+            lines_lc = [line.lower() for line in self.lines]
+            self.lines_lc = lines_lc
         self.search_matches = [
-            idx for idx, line in enumerate(self.lines) if query in line.lower()
+            idx for idx, line_lc in enumerate(lines_lc) if query in line_lc
         ]
         if not self.search_matches:
             self.search_index = -1
@@ -414,7 +460,11 @@ class LogViewerWindow(SelectableTextMixin, Window):
         for row, line_index in enumerate(range(start, end), start=1):
             line = self.lines[line_index]
             line_attr = self._severity_attr(line, body_attr)
-            line_is_match = bool(query_lc and query_lc in line.lower())
+            # Reuse the precomputed lowercase mirror; only fall back to a
+            # fresh ``lower()`` if the line arrived after the cache was
+            # last rebuilt (defensive).
+            line_lc = self.lines_lc[line_index] if line_index < len(self.lines_lc) else line.lower()
+            line_is_match = bool(query_lc and query_lc in line_lc)
             # Severity color pairs and A_REVERSE interact poorly on some
             # terminals. Use A_BOLD for the line-level search match and
             # reserve A_REVERSE for the current match (highest priority).

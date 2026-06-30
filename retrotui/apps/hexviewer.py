@@ -54,9 +54,7 @@ class HexViewerWindow(SelectableTextMixin, Window):
         # Row-oriented selection: anchor and cursor are (row, 0) tuples
         # so the mixin's bounds/span helpers work without rewriting them.
         self._init_selection()
-        self._cached_slice = None
-        self._cached_offset = None
-        self._cached_total = None
+        self._slice_cache = []
 
         if filepath:
             self.open_path(filepath)
@@ -120,27 +118,37 @@ class HexViewerWindow(SelectableTextMixin, Window):
         self._set_top_offset(self.top_offset + delta_rows * self.BYTES_PER_ROW)
 
     def _invalidate_cache(self):
-        self._cached_slice = None
-        self._cached_offset = None
-        self._cached_total = None
+        self._slice_cache = []
 
     def _read_slice(self, offset, length):
-        """Read one chunk from current file."""
+        """Read one chunk from current file.
+
+        Uses a 2-slot LRU so ``tick`` (which warms with a ``data_rows-3``
+        length) and ``draw`` (which reads with ``data_rows-2``) both hit
+        the cache for the same scroll position. Without the LRU every
+        draw would open/close the file because the lengths differ by
+        one row.
+        """
         if not self.filepath or length <= 0:
             return b""
-        if self._cached_slice is not None and self._cached_offset == offset and self._cached_total == length:
-            return self._cached_slice
+        cache = getattr(self, "_slice_cache", None)
+        if cache is None:
+            cache = []
+            self._slice_cache = cache
+        for entry in cache:
+            if entry[0] == offset and entry[1] == length:
+                return entry[2]
         try:
             with open(self.filepath, "rb") as stream:
                 stream.seek(max(0, int(offset)))
                 data = stream.read(max(0, int(length)))
-            self._cached_slice = data
-            self._cached_offset = offset
-            self._cached_total = length
-            return data
         except OSError as exc:
             self.status_message = f"Read error: {exc}"
             return b""
+        cache.append((offset, length, data))
+        if len(cache) > 2:
+            cache.pop(0)
+        return data
 
     @staticmethod
     def _format_header():

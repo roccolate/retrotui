@@ -98,10 +98,17 @@ class ContextMenu(Menu):
         if not self.active:
             return None
 
+        # Use the clamped render coordinates cached by ``draw`` when
+        # available, so the hit test matches the visible rectangle
+        # (the original ``self.x``/``self.y`` may be off-screen if the
+        # menu was opened near an edge).
+        x0 = getattr(self, "_draw_x", self.x)
+        y0 = getattr(self, "_draw_y", self.y)
+
         # Check if click is inside menu bounds
-        if self.x <= mx < self.x + self._width and self.y <= my < self.y + len(self.items) + 2:
+        if x0 <= mx < x0 + self._width and y0 <= my < y0 + len(self.items) + 2:
             # Calculate clicked item index (account for border)
-            idx = my - self.y - 1
+            idx = my - y0 - 1
             if 0 <= idx < len(self.items):
                 item = self.items[idx]
                 if not item.get('separator'):
@@ -110,32 +117,34 @@ class ContextMenu(Menu):
         else:
             # Click outside closes menu
             self.hide()
-        
+
         return None
 
-    def draw(self, stdscr):
+    def draw(self, stdscr, frame_size=None):
         """Render the context menu."""
         if not self.active:
             return
 
-        # Ensure we don't draw off-screen
-        h, w = stdscr.getmaxyx()
+        # Ensure we don't draw off-screen. Cache the clamped coordinates
+        # so ``handle_click`` can do hit testing against the actual
+        # visible rectangle instead of the (possibly off-screen) ones
+        # passed to ``show``.
+        if frame_size is not None:
+            h, w = frame_size
+        else:
+            h, w = stdscr.getmaxyx()
         draw_x = max(0, min(self.x, w - self._width))
         draw_y = max(0, min(self.y, h - len(self.items) - 2))
+        self._draw_x = draw_x
+        self._draw_y = draw_y
 
         # Draw border and background
         try:
-            # Shadow
-            # stdscr.attron(self.theme.shadow_attr)
-            # for i in range(len(self.items) + 2):
-            #    stdscr.addstr(draw_y + 1 + i, draw_x + 2, " " * self._width)
-            # stdscr.attroff(self.theme.shadow_attr)
-
             stdscr.attron(theme_attr('menu_item'))
-            
+
             # Top border
             stdscr.addstr(draw_y, draw_x, "┌" + "─" * (self._width - 2) + "┐")
-            
+
             for i, item in enumerate(self.items):
                 row_y = draw_y + 1 + i
                 if item.get('separator'):
@@ -155,7 +164,13 @@ class ContextMenu(Menu):
 
             # Bottom border
             stdscr.addstr(draw_y + len(self.items) + 1, draw_x, "└" + "─" * (self._width - 2) + "┘")
-
-            stdscr.attroff(theme_attr('menu_item'))
         except curses.error:
             pass
+        finally:
+            # Always release the attribute stack, even if a draw call
+            # raised mid-block. Otherwise subsequent draws inherit the
+            # wrong attributes (visible as color bleed).
+            try:
+                stdscr.attroff(theme_attr('menu_item'))
+            except (curses.error, KeyError):
+                pass

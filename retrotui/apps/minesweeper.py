@@ -70,7 +70,7 @@ class MinesweeperWindow(Window):
             pass
 
     def _reset_game(self, new_diff=None):
-        if new_diff:
+        if new_diff is not None:
             self.difficulty = new_diff
             
         if self.difficulty == "Beginner":
@@ -123,9 +123,18 @@ class MinesweeperWindow(Window):
         return None
 
     def _place_bombs_safe(self, click_r: int, click_c: int):
-        exclude = {(click_r + dr, click_c + dc) for dr in (-1, 0, 1) for dc in (-1, 0, 1)}
+        # Restrict the exclusion set to valid grid cells so we don't pay
+        # for membership tests against out-of-bounds tuples at every
+        # grid cell. The "not in" filter would still be correct without
+        # this, but the dead entries are pure waste in the hot path.
+        exclude = {
+            (click_r + dr, click_c + dc)
+            for dr in (-1, 0, 1)
+            for dc in (-1, 0, 1)
+            if 0 <= click_r + dr < self.rows and 0 <= click_c + dc < self.cols
+        }
         cells = [(r, c) for r in range(self.rows) for c in range(self.cols) if (r, c) not in exclude]
-        
+
         k = min(self.bombs, len(cells))
         bombs = random.sample(cells, k) if cells else []
         for r, c in bombs:
@@ -182,21 +191,21 @@ class MinesweeperWindow(Window):
                 self.best_times[self.difficulty] = self.elapsed
                 self._save_high_scores()
 
-    def draw(self, stdscr):
+    def draw(self, stdscr, frame_size=None):
         if not self.visible: return
-        
+
         if self.start_time and not self.game_over:
             self.elapsed = int(time.time() - self.start_time)
-            
+
         bt = self.best_times.get(self.difficulty, 9999)
         bt_str = "---" if bt == 9999 else str(bt)
         self.title = f"Minesweeper - {self.difficulty} (Best: {bt_str})"
-        body_attr = self.draw_frame(stdscr)
+        body_attr = self.draw_frame(stdscr, frame_size=frame_size)
         bx, by, bw, bh = self.body_rect()
-        
+
         # Clear body
         for row in range(bh):
-            safe_addstr(stdscr, by + row, bx, " " * bw, body_attr)
+            safe_addstr(stdscr, by + row, bx, " " * bw, body_attr, _bounds=frame_size)
             
         # Draw Classic Header
         flags_used = sum(1 for r in range(self.rows) for c in range(self.cols) if self.flagged[r][c])
@@ -213,12 +222,12 @@ class MinesweeperWindow(Window):
         # Use the menubar/status color for the bomb counter and timer so
         # the chrome reads as informational rather than error-tone.
         header_attr = theme_attr("menubar") | curses.A_BOLD
-        safe_addstr(stdscr, header_y, bx + 2, bombs_str, header_attr)
+        safe_addstr(stdscr, header_y, bx + 2, bombs_str, header_attr, _bounds=frame_size)
 
         center_x = bx + (bw // 2) - 1
-        safe_addstr(stdscr, header_y, center_x, smiley, body_attr)
+        safe_addstr(stdscr, header_y, center_x, smiley, body_attr, _bounds=frame_size)
 
-        safe_addstr(stdscr, header_y, bx + bw - 5, timer_str, header_attr)
+        safe_addstr(stdscr, header_y, bx + bw - 5, timer_str, header_attr, _bounds=frame_size)
         
         # Draw Grid horizontally centered
         grid_start_y = by + 3
@@ -263,7 +272,7 @@ class MinesweeperWindow(Window):
                         c_val = color_map.get(v, curses.COLOR_WHITE)
                         attr = curses.color_pair(C_ANSI_START + c_val) | curses.A_BOLD
                         
-                safe_addstr(stdscr, y, x, ch, attr)
+                safe_addstr(stdscr, y, x, ch, attr, _bounds=frame_size)
 
         if self.window_menu:
             self.window_menu.draw_dropdown(stdscr, self.x, self.y, self.w)

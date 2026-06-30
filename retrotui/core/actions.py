@@ -12,6 +12,7 @@ class ActionType(str, Enum):
     OPEN_FILE = "open_file"
     EXECUTE = "execute"
     REQUEST_SAVE_AS = "request_save_as"
+    REQUEST_SAVE_CONFIRM = "request_save_confirm"
     REQUEST_OPEN_PATH = "request_open_path"
     REQUEST_RENAME_ENTRY = "request_rename_entry"
     REQUEST_DELETE_CONFIRM = "request_delete_confirm"

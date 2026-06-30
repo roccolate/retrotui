@@ -144,17 +144,17 @@ class _BaseSelectionEditorWindow(Window):
             return ActionResult(ActionType.SAVE_ERROR, str(exc))
         return ActionResult(ActionType.EXECUTE, AppAction.CLOSE_WINDOW)
 
-    def draw(self, stdscr):
+    def draw(self, stdscr, frame_size=None):
         if not self.visible:
             return
 
-        super().draw(stdscr)
+        super().draw(stdscr, frame_size=frame_size)
         body_attr = theme_attr("window_body")
         selected_attr = body_attr | curses.A_REVERSE
         bold_attr = body_attr | curses.A_BOLD
 
-        safe_addstr(stdscr, self.y + 1, self.x + 2, self._help_text.ljust(self.w - 4)[: self.w - 4], body_attr)
-        safe_addstr(stdscr, self.y + 2, self.x + 2, self._status_text.ljust(self.w - 4)[: self.w - 4], body_attr)
+        safe_addstr(stdscr, self.y + 1, self.x + 2, self._help_text.ljust(self.w - 4)[: self.w - 4], body_attr, _bounds=frame_size)
+        safe_addstr(stdscr, self.y + 2, self.x + 2, self._status_text.ljust(self.w - 4)[: self.w - 4], body_attr, _bounds=frame_size)
 
         # Tabs
         tab_y = self.y + 4
@@ -163,12 +163,12 @@ class _BaseSelectionEditorWindow(Window):
         for idx, cat in enumerate(self.categories):
             tab = f" {cat} "
             attr = selected_attr if (self.active and self.in_list and idx == self.active_cat_idx) else bold_attr
-            safe_addstr(stdscr, tab_y, tab_x, tab, attr)
+            safe_addstr(stdscr, tab_y, tab_x, tab, attr, _bounds=frame_size)
             self._tab_ranges.append((tab_x, tab_x + len(tab), idx))
             tab_x += len(tab) + 1
 
         list_x, list_y, list_w, list_h = self._list_rect()
-        draw_box(stdscr, list_y - 1, list_x - 1, list_h + 2, list_w + 2, body_attr, double=False)
+        draw_box(stdscr, list_y - 1, list_x - 1, list_h + 2, list_w + 2, body_attr, double=False, _bounds=frame_size)
 
         category = self._current_category()
         items = self.choices.get(category, []) if category else []
@@ -391,11 +391,11 @@ class IconsWindow(DesktopIconManagerWindow):
     def _invalidate_catalog_cache(self):
         self._catalog_cache = None
 
-    def draw(self, stdscr):
+    def draw(self, stdscr, frame_size=None):
         if not self.visible:
             return
 
-        super().draw(stdscr)
+        super().draw(stdscr, frame_size=frame_size)
         body_attr = theme_attr("window_body")
         selected_attr = body_attr | curses.A_REVERSE
         _key, style_label = self.STYLE_OPTIONS[self._style_index]
@@ -406,13 +406,14 @@ class IconsWindow(DesktopIconManagerWindow):
             self.x + 2,
             style_text.ljust(self.w - 4)[: self.w - 4],
             body_attr,
+            _bounds=frame_size,
         )
 
         box_x = self.x + 2
         box_y = self.y + 4
         box_w = max(20, self.w - 4)
         box_h = 5
-        draw_box(stdscr, box_y, box_x, box_h, box_w, body_attr, double=False)
+        draw_box(stdscr, box_y, box_x, box_h, box_w, body_attr, double=False, _bounds=frame_size)
         safe_addstr(stdscr, box_y, box_x + 2, "Preview", body_attr | curses.A_BOLD)
 
         preview_styles = ("default", "mini", self.STYLE_OPTIONS[self._style_index][0])
@@ -423,13 +424,13 @@ class IconsWindow(DesktopIconManagerWindow):
             label = preview_labels[idx]
             token = self._preview_symbol(style_key)
             attr = selected_attr if style_key == self.STYLE_OPTIONS[self._style_index][0] else body_attr
-            safe_addstr(stdscr, box_y + 1, px, label.ljust(col_w - 1)[: col_w - 1], attr | curses.A_BOLD)
-            safe_addstr(stdscr, box_y + 2, px, token.ljust(col_w - 1)[: col_w - 1], attr)
-            safe_addstr(stdscr, box_y + 3, px, f"[{style_key}]".ljust(col_w - 1)[: col_w - 1], attr)
+            safe_addstr(stdscr, box_y + 1, px, label.ljust(col_w - 1)[: col_w - 1], attr | curses.A_BOLD, _bounds=frame_size)
+            safe_addstr(stdscr, box_y + 2, px, token.ljust(col_w - 1)[: col_w - 1], attr, _bounds=frame_size)
+            safe_addstr(stdscr, box_y + 3, px, f"[{style_key}]".ljust(col_w - 1)[: col_w - 1], attr, _bounds=frame_size)
 
         # Icon list (no checkboxes)
         list_x, list_y, list_w, list_h = self._list_rect()
-        draw_box(stdscr, list_y - 1, list_x - 1, list_h + 2, list_w + 2, body_attr, double=False)
+        draw_box(stdscr, list_y - 1, list_x - 1, list_h + 2, list_w + 2, body_attr, double=False, _bounds=frame_size)
         category = self._current_category()
         items = self.choices.get(category, []) if category else []
         offset = self.offsets.get(category, 0) if category else 0
@@ -491,6 +492,14 @@ class IconsWindow(DesktopIconManagerWindow):
     def _activate_button(self):
         if self.selected_button != 0:
             return ActionResult(ActionType.EXECUTE, AppAction.CLOSE_WINDOW)
+        # Persist any visibility toggles first so the hidden-choices the
+        # user made in this window aren't lost when we apply the new style
+        # and persist again. Wrap in try/except to surface config-write
+        # failures as ``SAVE_ERROR`` instead of crashing the loop.
+        try:
+            self._save_hidden_values(self._selected_hidden_values())
+        except OSError as exc:
+            return ActionResult(ActionType.SAVE_ERROR, str(exc))
         self._apply_selected_style()
         self.app.persist_config()
         self.app.refresh_icons()

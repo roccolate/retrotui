@@ -29,7 +29,7 @@ class TerminalScreenBuffer:
     """
 
     __slots__ = ("rows", "cols", "_grid", "_cursor_row", "_cursor_col",
-                 "_default_attr")
+                 "_default_attr", "_scroll_sink")
 
     def __init__(self, rows, cols, default_attr=0):
         rows = max(1, int(rows))
@@ -42,6 +42,11 @@ class TerminalScreenBuffer:
         ]
         self._cursor_row = 0
         self._cursor_col = 0
+        # Optional sink invoked with each row that scrolls off the top of
+        # the buffer (most often the case during word-wrap). ``None``
+        # means the buffer does not capture scrollback itself — the
+        # owning window is responsible for hooking the stream of rows.
+        self._scroll_sink = None
 
     # ------------------------------------------------------------------
     # Cursor management
@@ -164,8 +169,23 @@ class TerminalScreenBuffer:
             return
         blank = [(" ", self._default_attr) for _ in range(self.cols)]
         for _ in range(min(count, self.rows)):
-            self._grid.pop(0)
+            scrolled_off = self._grid.pop(0)
             self._grid.append(list(blank))
+            sink = self._scroll_sink
+            if sink is not None:
+                try:
+                    sink(scrolled_off)
+                except Exception:
+                    # A faulty sink must not corrupt the buffer.
+                    pass
+
+    def set_scroll_sink(self, sink):
+        """Register a callback receiving each row that scrolls off the top.
+
+        Pass ``None`` to detach. Use this to capture full history when
+        long un-newlined output scrolls the buffer via word-wrap.
+        """
+        self._scroll_sink = sink
 
     def scroll_down(self, count=1):
         """Scroll the whole buffer down by ``count`` rows."""

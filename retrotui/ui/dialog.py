@@ -75,7 +75,7 @@ class Dialog:
             safe_addstr(stdscr, y + row, x, ' ' * self.width, attr, _bounds=frame_size)
 
         # Border
-        draw_box(stdscr, y, x, self.height, self.width, attr, double=True)
+        draw_box(stdscr, y, x, self.height, self.width, attr, double=True, _bounds=frame_size)
 
         # Title
         title_text = f' {self.title} '
@@ -179,12 +179,13 @@ class InputDialog(Dialog):
         display_val = self.value[-(input_w - 1):] if len(self.value) >= input_w else self.value
         safe_addstr(stdscr, input_y, input_x, display_val, attr, _bounds=frame_size)
 
-        # Cursor
-        cursor_screen_x = input_x + len(display_val)
+        # Cursor position: when the value fits, draw the caret at the
+        # user's logical position; when the value is too long, park the
+        # caret at the right edge of the visible window.
         if len(self.value) < input_w:
-             cursor_screen_x = input_x + self.cursor_pos
+            cursor_screen_x = input_x + self.cursor_pos
         else:
-             cursor_screen_x = input_x + input_w - 1 # End of box
+            cursor_screen_x = input_x + input_w - 1  # End of box
 
         safe_addstr(
             stdscr,
@@ -221,7 +222,12 @@ class InputDialog(Dialog):
         elif key_code == curses.KEY_RIGHT:
             if self.cursor_pos < len(self.value):
                 self.cursor_pos += 1
-        elif isinstance(key, str) and key.isprintable() and key not in ('\n', '\r', '\t'):
+        elif (
+            isinstance(key, str)
+            and len(key) == 1
+            and key.isprintable()
+            and key not in ('\n', '\r', '\t')
+        ):
             self.value = self.value[:self.cursor_pos] + key + self.value[self.cursor_pos:]
             self.cursor_pos += 1
         elif isinstance(key, int) and 32 <= key <= 126:
@@ -262,7 +268,16 @@ class MultiSelectDialog(Dialog):
         sel_attr = attr | curses.A_REVERSE
 
         # Draw list background and border
-        draw_box(stdscr, list_y - 1, list_x - 1, self.visible_rows + 2, list_w + 2, attr, double=False)
+        draw_box(
+            stdscr,
+            list_y - 1,
+            list_x - 1,
+            self.visible_rows + 2,
+            list_w + 2,
+            attr,
+            double=False,
+            _bounds=frame_size,
+        )
 
         for i in range(self.visible_rows):
             idx = self.list_offset + i
@@ -413,7 +428,7 @@ class ProgressDialog:
         for row in range(self.height):
             safe_addstr(stdscr, y + row, x, ' ' * self.width, attr, _bounds=frame_size)
 
-        draw_box(stdscr, y, x, self.height, self.width, attr, double=True)
+        draw_box(stdscr, y, x, self.height, self.width, attr, double=True, _bounds=frame_size)
 
         title_text = f' {self.title} '
         safe_addstr(

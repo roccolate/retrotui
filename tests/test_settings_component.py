@@ -77,13 +77,15 @@ class SettingsComponentTests(unittest.TestCase):
         )
         app.apply_theme = mock.Mock(side_effect=lambda name: setattr(app, "theme_name", name))
 
-        def _apply_preferences(*, show_hidden=None, word_wrap_default=None, sunday_first=None, apply_to_open_windows=False):
+        def _apply_preferences(*, show_hidden=None, word_wrap_default=None, sunday_first=None, show_welcome=None, apply_to_open_windows=False):
             if show_hidden is not None:
                 app.default_show_hidden = bool(show_hidden)
             if word_wrap_default is not None:
                 app.default_word_wrap = bool(word_wrap_default)
             if sunday_first is not None:
                 app.config.sunday_first = bool(sunday_first)
+            if show_welcome is not None:
+                app.show_welcome = bool(show_welcome)
             app._last_apply_to_open = apply_to_open_windows
 
         app.apply_preferences = mock.Mock(side_effect=_apply_preferences)

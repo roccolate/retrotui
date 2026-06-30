@@ -50,9 +50,27 @@ class MarkdownViewerWindow(Window):
         self.raw_content = []
         self.scroll_offset = 0
         self.status_message = ""
+        # Precomputed cumulative parity for fenced code blocks:
+        # ``self._fence_parity[i]`` is the parity of code-block toggles
+        # observed strictly *before* line ``i`` (so the renderer can look
+        # up whether the line at ``scroll_offset`` is inside a fenced
+        # block in O(1) instead of re-scanning the prefix every frame).
+        self._fence_parity = []
 
         if filepath:
             self.open_path(filepath)
+
+    def _recompute_fence_parity(self):
+        """Recompute ``_fence_parity`` after a content change."""
+        parity = [False] * (len(self.raw_content) + 1)
+        current = False
+        for idx, raw in enumerate(self.raw_content):
+            parity[idx] = current
+            stripped = raw.rstrip("\r\n").strip()
+            if stripped.startswith("```"):
+                current = not current
+        parity[len(self.raw_content)] = current
+        self._fence_parity = parity
 
     def open_path(self, filepath):
         """Load and parse markdown file."""
@@ -69,6 +87,7 @@ class MarkdownViewerWindow(Window):
         self.filepath = path
         self.scroll_offset = 0
         self.status_message = f"Opened {os.path.basename(path)}"
+        self._recompute_fence_parity()
         self._update_title()
         return None
 
@@ -101,13 +120,13 @@ class MarkdownViewerWindow(Window):
         self.scroll_offset = max(0, min(self.scroll_offset, self._max_scroll()))
 
         # Determine whether we start inside an open code block based on the
-        # content above the viewport. This keeps formatting consistent when
-        # the user scrolls into the middle of a fenced code block.
-        in_code_block = False
-        for prev_idx in range(min(self.scroll_offset, len(self.raw_content))):
-            prev_line = self.raw_content[prev_idx].rstrip("\r\n").strip()
-            if prev_line.startswith("```"):
-                in_code_block = not in_code_block
+        # precomputed fence parity for the scroll offset. The cumulative
+        # parity is built once per ``open_path`` in ``_fence_parity``;
+        # looking it up is O(1) instead of the O(scroll_offset) scan
+        # that previously ran on every redraw.
+        parity = self._fence_parity or [False] * (len(self.raw_content) + 1)
+        offset_idx = max(0, min(self.scroll_offset, len(parity) - 1))
+        in_code_block = parity[offset_idx]
 
         for row in range(visible_rows):
             idx = self.scroll_offset + row
@@ -191,7 +210,13 @@ class MarkdownViewerWindow(Window):
             elif part.startswith("**") and part.endswith("**") and len(part) > 3:
                 attr |= curses.A_BOLD
                 text = part[2:-2]
-            elif part.startswith("*") and part.endswith("*") and len(part) > 1:
+            elif (
+                part.startswith("*")
+                and part.endswith("*")
+                and len(part) > 1
+                and not part.startswith("**")
+                and not part.endswith("**")
+            ):
                 # Italic approximated as dim/underline because curses lacks
                 # a real italic attribute.
                 attr |= curses.A_DIM

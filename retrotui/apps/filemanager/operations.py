@@ -25,9 +25,13 @@ def _trash_metadata_path(trash_path):
 
 def write_trash_metadata(trash_path, original_path):
     """Persist ``original_path`` next to ``trash_path`` so we can restore later."""
+    from ...utils import atomic_write_text
     try:
-        with open(_trash_metadata_path(trash_path), "w", encoding="utf-8") as stream:
-            json.dump({"original_path": str(original_path)}, stream)
+        atomic_write_text(
+            _trash_metadata_path(trash_path),
+            json.dumps({"original_path": str(original_path)}),
+            encoding="utf-8",
+        )
     except _TRASH_METADATA_ERRORS:
         # Metadata is best-effort; restore will fall back to the trash root
         # when sidecars are missing.
@@ -119,6 +123,10 @@ def perform_copy(source_path, dest_path):
 def perform_move(source_path, dest_path):
     """Move file or directory."""
     try:
+        # ``shutil.move`` is only atomic on the same filesystem; across
+        # filesystems it falls back to copy+delete, which can leave the
+        # source partially deleted on a crash. Acceptable for a desktop
+        # file manager; documented here so future improvements are aware.
         shutil.move(source_path, dest_path)
         return ActionResult(ActionType.REFRESH)
     except (OSError, shutil.Error) as exc:
@@ -127,8 +135,21 @@ def perform_delete(source_path, trash_dir=None):
     """Move file or directory to trash."""
     try:
         trash_path = next_trash_path(source_path, trash_dir=trash_dir)
-        shutil.move(source_path, trash_path)
+        # Write the metadata sidecar *before* moving so a SIGKILL between
+        # the move and the metadata write can't leave the file in trash
+        # with no way to restore. The trash path is already determined
+        # by ``next_trash_path`` so this is safe to do up front.
         write_trash_metadata(trash_path, source_path)
+        try:
+            shutil.move(source_path, trash_path)
+        except (OSError, shutil.Error):
+            # Clean up the sidecar so an undo doesn't try to restore
+            # something that was never moved.
+            try:
+                Path(_trash_metadata_path(trash_path)).unlink()
+            except OSError:
+                pass
+            raise
         return trash_path
     except (OSError, shutil.Error):
         return None
@@ -189,11 +210,13 @@ def create_directory(base_path, name):
     if not name:
         return ActionResult(ActionType.ERROR, 'Folder name cannot be empty.')
     path = os.path.join(base_path, name)
-    if os.path.exists(path):
-        return ActionResult(ActionType.ERROR, 'A file or folder with that name already exists.')
+    # Use ``exist_ok=False`` semantics — let the OS do the check via the
+    # raise, no pre-flight ``os.path.exists`` (TOCTOU race).
     try:
-        os.makedirs(path)
+        os.makedirs(path, exist_ok=False)
         return ActionResult(ActionType.REFRESH)
+    except FileExistsError:
+        return ActionResult(ActionType.ERROR, 'A file or folder with that name already exists.')
     except OSError as exc:
         return ActionResult(ActionType.ERROR, str(exc))
 
@@ -203,10 +226,12 @@ def create_file(base_path, name):
     if not name:
         return ActionResult(ActionType.ERROR, 'File name cannot be empty.')
     path = os.path.join(base_path, name)
-    if os.path.exists(path):
-        return ActionResult(ActionType.ERROR, 'A file or folder with that name already exists.')
+    # ``Path.touch(exist_ok=False)`` already raises FileExistsError on
+    # conflict; no pre-flight ``os.path.exists`` (TOCTOU race).
     try:
         Path(path).touch(exist_ok=False)
         return ActionResult(ActionType.REFRESH)
+    except FileExistsError:
+        return ActionResult(ActionType.ERROR, 'A file or folder with that name already exists.')
     except OSError as exc:
         return ActionResult(ActionType.ERROR, str(exc))

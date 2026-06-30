@@ -116,11 +116,15 @@ class ProcessManagerMoreTests(unittest.TestCase):
         err = self.win.kill_process({'pid': 0})
         self.assertEqual(err.type, ActionType.ERROR)
 
-        # ProcessLookupError -> refresh and return None
+        # ProcessLookupError -> refresh and a user-visible REFRESH
+        # result with a message so the action is no longer a silent
+        # no-op.
         with mock.patch('os.kill', side_effect=ProcessLookupError):
             with mock.patch.object(self.win, 'refresh_processes') as fake_refresh:
                 out = self.win.kill_process({'pid': 12345})
-                self.assertIsNone(out)
+                self.assertIsNotNone(out)
+                self.assertEqual(out.type, ActionType.REFRESH)
+                self.assertIn("12345", out.payload)
                 fake_refresh.assert_called()
 
         # PermissionError -> error result

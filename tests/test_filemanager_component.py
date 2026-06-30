@@ -111,7 +111,9 @@ class FileManagerComponentTests(unittest.TestCase):
         with mock.patch("retrotui.apps.filemanager.window.perform_delete", return_value="/trash/a.txt") as mock_delete:
             result = win.delete_selected()
 
-        mock_delete.assert_called_once_with("/tmp/a.txt")
+        mock_delete.assert_called_once()
+        args, kwargs = mock_delete.call_args
+        self.assertEqual(args[0], "/tmp/a.txt")
         self.assertEqual(result.type, self.actions_mod.ActionType.REFRESH)
         self.assertEqual(win._last_trash_move, {'source': '/tmp/a.txt', 'trash': '/trash/a.txt'})
 
