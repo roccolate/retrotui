@@ -76,21 +76,25 @@ class NotepadComponentTests(unittest.TestCase):
         win = self._make_window()
         win.buffer = ["abcdef", ""]
         win.wrap_mode = True
-
-        win._compute_wrap(5)  # wrap width = 4
+        # ``_compute_wrap`` no longer exposes a flat ``_wrap_cache``;
+        # verify the per-line cache is populated instead.
+        result = win._compute_wrap(5)  # wrap width = 4
         self.assertEqual(
-            win._wrap_cache,
+            result,
             [
                 (0, 0, "abcd"),
                 (0, 4, "ef"),
                 (1, 0, ""),
             ],
         )
-        self.assertFalse(win._wrap_stale)
-        cached = list(win._wrap_cache)
+        # The two lines were cached after the first compute.
+        self.assertEqual(len(win._wrap_line_cache), 2)
+        for entry in win._wrap_line_cache:
+            self.assertIsNotNone(entry)
+        cached = [list(entry) for entry in win._wrap_line_cache]
 
         win._compute_wrap(5)
-        self.assertEqual(win._wrap_cache, cached)
+        self.assertEqual([list(e) for e in win._wrap_line_cache], cached)
 
         win._compute_wrap(6)
         self.assertEqual(win._wrap_cache_w, 6)
@@ -328,7 +332,11 @@ class NotepadComponentTests(unittest.TestCase):
         for _ in range(200):
             win.scroll_down()
 
-        max_top = max(0, len(win._wrap_cache) - body_h)
+        # ``scroll_down`` consults ``_compute_wrap`` to cap the offset;
+        # the cache is now per-line so we run the same call to
+        # recompute the max for the assertion.
+        flat = win._compute_wrap(bw)
+        max_top = max(0, len(flat) - body_h)
         self.assertEqual(win.view_top, max_top)
 
     def test_load_file_keeps_trailing_empty_line(self):

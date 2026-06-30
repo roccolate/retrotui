@@ -2,6 +2,8 @@
 Desktop icon styling, catalog building, and visibility filtering.
 """
 
+import functools
+
 from ..constants import ICONS, ICONS_ASCII
 from .actions import AppAction
 
@@ -572,6 +574,20 @@ def braille_art_for_action(action_key):
 # Public helpers
 # ---------------------------------------------------------------------------
 
+@functools.lru_cache(maxsize=32)
+def _split_config_csv_cached(raw):
+    """Cached variant of :func:`split_config_csv` keyed on the raw string.
+
+    The same raw CSV (e.g. ``"files,calc"``) is parsed many times per
+    session — every right-click rebuilds the context menu, every menu
+    build re-reads the hidden-list. The result is invalidated
+    implicitly when the raw string changes (``functools.lru_cache`` keys
+    on the string value, not on the config instance), so editing the
+    preferences through the Settings window produces a fresh parse.
+    """
+    return split_config_csv(raw)
+
+
 def split_config_csv(raw):
     """Return lowercased non-empty comma-separated tokens from *raw* string."""
     if not isinstance(raw, str):
@@ -731,7 +747,7 @@ def icon_visibility_key(icon):
 def get_hidden_icon_labels(config):
     """Return set of lowercased hidden desktop icon keys from config."""
     raw = getattr(config, 'hidden_icons', "")
-    return split_config_csv(raw)
+    return _split_config_csv_cached(raw)
 
 
 def is_icon_key_hidden(icon_key, hidden_keys):
