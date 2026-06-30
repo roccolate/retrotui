@@ -58,8 +58,11 @@ class SolitaireWindow(Window):
         try:
             path = self._score_file_path()
             path.parent.mkdir(parents=True, exist_ok=True)
-            with open(path, "w", encoding="utf-8") as f:
-                json.dump({"best_moves": self.best_moves}, f)
+            from ..utils import atomic_write_text
+            atomic_write_text(
+                path, json.dumps({"best_moves": self.best_moves}),
+                encoding="utf-8",
+            )
         except _SOLITAIRE_SCORE_SAVE_ERRORS:
             pass
 

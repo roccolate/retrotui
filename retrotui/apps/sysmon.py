@@ -140,17 +140,24 @@ class SystemMonitorWindow(Window):
         # CPU Graph (Bar chart using history)
         graph_h = 6
         graph_w = min(len(self.cpu_history), bw - 4)
+        # Snapshot the visible slice once so we don't re-``list`` the
+        # deque on every row of the graph (was 6x per draw).
+        history_slice = list(self.cpu_history)[-graph_w:]
+        step = 100 / graph_h
         for i in range(graph_h):
-            threshold = (graph_h - i) * (100 / graph_h)
-            line = ""
-            for val in list(self.cpu_history)[-graph_w:]:
+            threshold = (graph_h - i) * step
+            half = step / 2
+            # Build the row with a list+join to avoid O(graph_w) string
+            # concatenations per row.
+            cells = []
+            for val in history_slice:
                 if val >= threshold:
-                    line += "█"
-                elif val >= threshold - (100/graph_h/2):
-                    line += "▄"
+                    cells.append("█")
+                elif val >= threshold - half:
+                    cells.append("▄")
                 else:
-                    line += " "
-            safe_addstr(stdscr, y + i, bx + 2, line, body_attr)
+                    cells.append(" ")
+            safe_addstr(stdscr, y + i, bx + 2, "".join(cells), body_attr)
         
         y += graph_h + 1
         

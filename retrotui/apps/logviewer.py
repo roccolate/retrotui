@@ -44,6 +44,12 @@ class LogViewerWindow(SelectableTextMixin, Window):
         self._tail_remainder = ""
         self._error_message = None
         self._last_poll = 0.0
+        # Cached low-cost derivations of state that doesn't change
+        # between draws unless the underlying value does.
+        self._cached_query_lc = ""
+        self._cached_query_for = None
+        self._cached_basename = "(no file)"
+        self._cached_basename_for = None
 
         self.follow_mode = True
         self.freeze_scroll = False
@@ -357,8 +363,15 @@ class LogViewerWindow(SelectableTextMixin, Window):
         query = self.search_query.strip().lower()
         if not query:
             return
+        # Use the precomputed lowercase mirror — every index ``>= start_index``
+        # is in sync because the very call that triggered this method
+        # (``_append_lines``) just appended to ``lines_lc`` in lockstep.
+        lines_lc = self.lines_lc
         for idx in range(start_index, len(self.lines)):
-            if query in self.lines[idx].lower():
+            if idx < len(lines_lc) and query in lines_lc[idx]:
+                self.search_matches.append(idx)
+            elif idx >= len(lines_lc) and query in self.lines[idx].lower():
+                # Defensive fallback if the mirror somehow fell behind.
                 self.search_matches.append(idx)
 
     def _is_current_search_match(self, line_index):
@@ -435,7 +448,10 @@ class LogViewerWindow(SelectableTextMixin, Window):
         if not self.visible:
             return
 
-        self._poll_for_updates(force=False)
+        # Polling is now driven by ``tick()`` (called from the event
+        # loop), which reads at most every ``POLL_INTERVAL_SECONDS``.
+        # Calling it from ``draw`` here caused the file to be reopened
+        # and re-parsed on every redraw when the ticker was overdue.
         body_attr = self.draw_frame(stdscr)
         bx, by, bw, bh = self.body_rect()
         if bh <= 0 or bw <= 0:
@@ -449,14 +465,28 @@ class LogViewerWindow(SelectableTextMixin, Window):
         start = self.scroll_offset
         end = min(len(self.lines), start + view_rows)
 
-        basename = os.path.basename(self.filepath) if self.filepath else "(no file)"
+        # ``basename`` is constant between file opens; cache it.
+        if self.filepath != self._cached_basename_for:
+            self._cached_basename = (
+                os.path.basename(self.filepath) if self.filepath else "(no file)"
+            )
+            self._cached_basename_for = self.filepath
+        basename = self._cached_basename
         mode = "TAIL" if self.follow_mode else "VIEW"
         freeze = "FROZEN" if self.freeze_scroll else "LIVE"
+        # ``query`` (and its lowercased twin) only change on a new
+        # ``/``-then-Enter. Cache the lowercase form so the per-row
+        # ``query_lc in line_lc`` test doesn't re-allocate every draw.
+        if self.search_query != self._cached_query_for:
+            self._cached_query_lc = self.search_query.lower()
+            self._cached_query_for = self.search_query
+        query_lc = self._cached_query_lc
         query = f" /{self.search_query}" if self.search_query else ""
         header = f"{mode} {freeze} | {basename}{query}"
         safe_addstr(stdscr, by, bx, header[:bw].ljust(bw), theme_attr("menubar"))
 
-        query_lc = self.search_query.lower()
+        # ``query_lc`` is already cached above (re-derived only when
+        # ``self.search_query`` changes).
         for row, line_index in enumerate(range(start, end), start=1):
             line = self.lines[line_index]
             line_attr = self._severity_attr(line, body_attr)

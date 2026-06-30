@@ -27,6 +27,11 @@ class WindowManager:
         self._layers_dirty = True
         self._taskbar_cache = {"key": None, "buttons": ()}
         self._window_stats_cache = {"cycle": None, "stats": None}
+        # Single active-window pointer. ``get_active_window`` is on
+        # the per-event hot path (mouse + key dispatch), and a linear
+        # ``next((w for w in self.windows if w.active), None)`` scan
+        # costs O(n) per call.
+        self._active_window = None
 
     def _emit_event(self, topic, win):
         """Publish a window lifecycle event on the app's bus (if available)."""
@@ -43,9 +48,19 @@ class WindowManager:
 
     def set_active_window(self, win):
         """Set a window as active (bring to front)."""
-        for w in self.windows:
-            w.active = False
+        # Deactivate only the previous active window (O(1) via the
+        # cached pointer) instead of walking every window in the list.
+        # Also pick up a stale active flag in case the pointer is
+        # out-of-sync (e.g. tests poke ``active`` directly).
+        previous = self._active_window
+        if previous is None:
+            for w in self.windows:
+                if getattr(w, "active", False):
+                    w.active = False
+        elif previous is not win:
+            previous.active = False
         win.active = True
+        self._active_window = win
         # Move to top of its layer.
         self.windows.remove(win)
         self._layers_dirty = True
@@ -91,23 +106,47 @@ class WindowManager:
                 LOGGER.debug('Window close hook failed for %r', win, exc_info=True)
         if win in self.windows:
             self.windows.remove(win)
+        if self._active_window is win:
+            self._active_window = None
         self._layers_dirty = True
         self._emit_event("window.closed", win)
         self._activate_last_visible_window()
 
     def _activate_last_visible_window(self):
         """Activate topmost visible window after z-order/window-list changes."""
-        for candidate in self.windows:
-            candidate.active = False
+        previous = self._active_window
+        if previous is not None:
+            previous.active = False
+            self._active_window = None
         for candidate in reversed(self.windows):
             if getattr(candidate, 'visible', True):
                 candidate.active = True
+                self._active_window = candidate
                 return candidate
         return None
 
     def get_active_window(self):
-        """Return the active window, if any."""
-        return next((w for w in self.windows if w.active), None)
+        """Return the active window, if any.
+
+        Returns the cached ``_active_window`` pointer; falls back to a
+        linear scan only when the pointer is out of sync (e.g. a test
+        that poked ``active`` or ``windows`` directly).
+        """
+        cached = self._active_window
+        # Reject the cache if the window is no longer in the list, or
+        # its ``active`` flag was cleared externally.
+        if (
+            cached is not None
+            and getattr(cached, "active", False)
+            and cached in self.windows
+        ):
+            return cached
+        self._active_window = None
+        for w in self.windows:
+            if getattr(w, "active", False):
+                self._active_window = w
+                return w
+        return None
 
     # ------------------------------------------------------------------
     # Window spawning

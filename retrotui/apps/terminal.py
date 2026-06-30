@@ -509,6 +509,12 @@ class TerminalWindow(SelectableTextMixin, Window):
                 max_offset = self._max_scrollback_offset(text_rows)
                 self.scrollback_offset = min(max_offset, prev_offset + appended)
 
+    def _all_lines_count(self):
+        """Return just the number of lines (avoids building the full list)."""
+        if self._alt_screen:
+            return self._screen._alt.rows
+        return len(self._scrollback) + self._normal_buf.rows
+
     def _all_lines(self):
         """Return all lines including current editable line (as lists of cells)."""
         if self._alt_screen:
@@ -517,7 +523,7 @@ class TerminalWindow(SelectableTextMixin, Window):
         return list(self._scrollback) + normal_rows
 
     def _max_scrollback_offset(self, text_rows):
-        return max(0, len(self._all_lines()) - max(1, text_rows))
+        return max(0, self._all_lines_count() - max(1, text_rows))
 
     def _visible_slice(self, text_rows):
         text_rows = max(1, text_rows)
@@ -645,10 +651,18 @@ class TerminalWindow(SelectableTextMixin, Window):
             safe_addstr(stdscr, by + row, bx, blank, body_attr)
 
         if getattr(self, '_alt_screen', False):
-            while len(self._alt_lines) < text_rows:
-                self._alt_lines.append([(' ', 0) for _ in range(text_cols)])
-            if len(self._alt_lines) > text_rows:
-                self._alt_lines = self._alt_lines[:text_rows]
+            # The alt-screen buffer owns its own row count. Resize once
+            # when the viewport dimensions change; the previous
+            # property-set/loop (O(rows²) per frame) walked every row
+            # copying identical content every iteration.
+            alt = self._screen._alt
+            if alt.rows != text_rows or alt.cols != text_cols:
+                alt.resize(text_rows, text_cols)
+                # Re-initialise the resized grid with blank cells so
+                # the alt screen is empty after a viewport change.
+                blank_cell = (' ', alt._default_attr)
+                for r in range(alt.rows):
+                    alt._grid[r] = [blank_cell] * alt.cols
 
         # Throttle: process at most MAX_OUTPUT_PER_FRAME per render tick.
         if self._pending_output:

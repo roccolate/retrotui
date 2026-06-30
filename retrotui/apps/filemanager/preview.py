@@ -28,13 +28,24 @@ def _owner_name(uid):
         return str(uid)
 
 def get_entry_info_lines(entry):
-    """Return short metadata lines for selected entry."""
+    """Return short metadata lines for selected entry.
+
+    Cached on the entry (via ``entry._info_cache``) keyed by the
+    ``(mtime_ns, size)`` stat tuple so repeated draws don't re-stat the
+    file on every redraw.
+    """
     if entry is None:
         return ['Type: -', 'Name: -']
     try:
         st = os.stat(entry.full_path)
     except OSError:
         return [f'Name: {entry.name}', 'Type: unreadable']
+
+    cache_key = (getattr(st, 'st_mtime_ns', int(st.st_mtime * 1_000_000_000)),
+                 st.st_size)
+    cached = getattr(entry, '_info_cache', None)
+    if cached is not None and cached[0] == cache_key:
+        return cached[1]
 
     type_label = 'Directory' if entry.is_dir else 'File'
     if entry.name == '..':
@@ -43,7 +54,7 @@ def get_entry_info_lines(entry):
     owner = _owner_name(getattr(st, 'st_uid', 0))
     mtime = datetime.fromtimestamp(st.st_mtime).strftime('%Y-%m-%d %H:%M')
     size = '-' if entry.is_dir else FileEntry(entry.name, False, entry.full_path, st.st_size)._format_size()
-    return [
+    lines = [
         f'Name: {entry.name}',
         f'Type: {type_label}',
         f'Size: {size}',
@@ -51,6 +62,12 @@ def get_entry_info_lines(entry):
         f'Owner: {owner}',
         f'Mod: {mtime}',
     ]
+    try:
+        entry._info_cache = (cache_key, lines)
+    except (AttributeError, TypeError):
+        # Some test doubles (SimpleNamespace) don't allow attr set.
+        pass
+    return lines
 
 def _read_text_preview(path, max_lines):
     """Read preview lines from text file, safely handling binary data."""

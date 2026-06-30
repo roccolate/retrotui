@@ -435,6 +435,7 @@ class FileManagerWindow(Window):
         pane.entries = entries
         pane.content = content
         pane.error_message = error
+        pane.rebuild_index()
         pane.clamp()
 
     def _rebuild_secondary_content(self):

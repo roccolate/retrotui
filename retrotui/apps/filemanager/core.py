@@ -93,7 +93,7 @@ class PaneState:
 
     __slots__ = (
         'path', 'entries', 'content', 'selected_index',
-        'scroll_offset', 'error_message',
+        'scroll_offset', 'error_message', '_index_by_name',
     )
 
     def __init__(self, path):
@@ -103,6 +103,10 @@ class PaneState:
         self.selected_index = 0
         self.scroll_offset = 0
         self.error_message = None
+        # O(1) name→index for ``select_by_name``. Rebuilt by
+        # ``_rebuild_pane``; not present on test stubs that bypass
+        # ``__init__`` (handled in ``select_by_name`` via fallback).
+        self._index_by_name = {}
 
     def navigate_to(self, path):
         real = os.path.realpath(path)
@@ -127,14 +131,34 @@ class PaneState:
 
     def select_by_name(self, name, display_h):
         """Move selection to entry with *name*.  Returns True if found."""
-        for i, entry in enumerate(self.entries):
-            if entry.name == name:
-                self.selected_index = i
-                if self.selected_index >= display_h:
-                    self.scroll_offset = max(
-                        0, self.selected_index - display_h + 1,
-                    )
-                else:
-                    self.scroll_offset = 0
-                return True
-        return False
+        # ``_index_by_name`` is rebuilt alongside ``entries`` so the
+        # common O(1) lookup path is preferred. Fall back to linear scan
+        # when the index is out of sync (e.g. tests that poke entries
+        # directly).
+        index_by_name = getattr(self, "_index_by_name", None)
+        i = None
+        if index_by_name is not None and name in index_by_name:
+            i = index_by_name[name]
+        else:
+            for idx, entry in enumerate(self.entries):
+                if entry.name == name:
+                    i = idx
+                    break
+        if i is None:
+            return False
+        self.selected_index = i
+        if self.selected_index >= display_h:
+            self.scroll_offset = max(0, self.selected_index - display_h + 1)
+        else:
+            self.scroll_offset = 0
+        return True
+
+    def rebuild_index(self):
+        """Rebuild the O(1) name→index dict for ``select_by_name``."""
+        # Tolerate stubs that bypass ``__init__``.
+        try:
+            self._index_by_name = {
+                entry.name: idx for idx, entry in enumerate(self.entries)
+            }
+        except (AttributeError, TypeError):
+            self._index_by_name = {}
