@@ -4,6 +4,65 @@ Todas las versiones notables de RetroTUI están documentadas aquí.
 
 ---
 
+## [v0.9.5.1] - 2026-06-30 (unreleased hardening)
+
+Pre-v0.9.6 pass: full audit + perf sweep over `core/`, `apps/` and `ui/`
+that landed as 4 commits between v0.9.5 and this entry. No public API
+changes. 116 fixes in total.
+
+### Fixed (audit — core/, 36 fixes)
+- **Event loop hardening**: inner `try` catches `Exception` (log + continue) so a buggy per-window hook can no longer bypass `app.cleanup()`. Non-fatal resize re-validation. Single combined `tick + live + animated` walk instead of three separate `app.windows` passes per loop iteration.
+- **IPC**: `IPCRouter.send` / `broadcast` now catch the broadest `Exception` family (not just `_IPC_ERRORS`) so a buggy plugin handler can no longer crash the main thread. The `app.notify`-style `socket`-protocol callbacks are no longer leaked.
+- **Lifecycle**: `WindowManager.close_window` is idempotent (guards the `self.windows.remove` on re-entry / duplicate calls). `WindowManager.get_active_window` is O(1) via a cached `_active_window` pointer instead of an O(n) `next()` scan. `set_active_window` only deactivates the previous active window. `_active_window_menu_owner` is defensively cleared when the window has gone away.
+- **ANSI state machine**: `parse_chunk` no longer fabricates `[0]` defaults — the parser leaves `self.params` empty and consumers apply per-command defaults (e.g. CUP defaults to row=1, col=1).
+- **Mouse**: `is_click_like` for the title-bar buttons (close / min / max) now gates on `_is_button1_click_event` (release) so press-then-drag-away cancels cleanly instead of closing the window.
+- **ANSI**: `getmouse()` is unpacked with `*_rest` (length-tolerant) and `ValueError` / `TypeError` are caught alongside `curses.error` so a malformed tuple can no longer bypass `app.cleanup()` and leave SGR mouse modes stuck.
+- **OSC state machine**: handles `ESC` inside the OSC body (opens the ST terminator) instead of looping forever inside OSC state when a stray `ESC` arrives.
+- **Config / persistence**: `app.shutdown_signal` is captured in `__main__.main` and mapped to `128+signum` exit codes for SIGTERM/SIGHUP. `parse_preferences` no longer publishes a stale `show_welcome` value (the new value is now passed through `apply_preferences`).
+- **Config TOML strings** now go through `toml_basic_string`; `icon_manager._quote_toml_key` uses the shared helper (was missing `\n`/`\r`/`\t` handling, which corrupted configs when an icon label contained a newline).
+- **Rendering**: `get_screen_pos` accepts `frame_size`; `draw_icons` threads it through so the desktop icon path no longer calls `getmaxyx()` per uncached icon.
+- **draw() / draw_frame() / draw_body() / draw_bar() / draw_dropdown()** now accept `frame_size=None` and pass `_bounds=frame_size` to every `safe_addstr` in the hot path. `draw_box()` got the same treatment.
+- **Window rect invalidation**: `WindowManager.set_active_window` only emits the `window.focused` event after the layer reorder; `get_active_window` and `cycle_focus` validate the cached pointer.
+- **Imports / startup**: pre-v0.9.6 round of `utils.toml_basic_string` / `utils.atomic_write_text` / `utils.decode_toml_basic_string` / `draw_box` helper, used everywhere downstream.
+- **24 LOW items** in `core/`: per-row blank hoists, micro-cache for `_preview_symbol`, `_render_image` cancel-event, etc.
+
+### Fixed (audit — apps/ + ui/, 65 fixes)
+- **Notepad**: `open_path` now asks before discarding unsaved work (`REQUEST_SAVE_CONFIRM` dialog). `_save_file`, FM bookmarks, FM trash metadata, view-source temp files, and game score files (minesweeper, snake, solitaire) all use `atomic_write_text` so a SIGKILL mid-write can no longer truncate user data.
+- **Trash metadata** is written *before* the move (and removed on move failure) so a crash between the two can no longer leave undo broken.
+- **App manager**: `IconsWindow._activate_button` persists visibility checkboxes before applying the new style (the override was dropping the base-class contract).
+- **Charmap**: typo `status_message` → `_status_message`; the block name now actually shows in the footer.
+- **Markdown viewer**: precomputed `_fence_parity` table replaces the per-frame `O(scroll_offset)` re-scan.
+- **Filemanager**: `FileEntry` caches the executable bit at listing time (no `os.access` syscall per visible row per draw). Drag is now wired on the secondary pane. Split boundary uses a single formula in both click handlers. `NPAGE` / `End` scroll math uses the real display height. Rename preserves the cursor in the active pane. `perform_delete_entry` no longer drops the per-trash override. `create_file` / `create_directory` use `FileExistsError` instead of TOCTOU `os.path.exists`.
+- **Terminal**: CSI `P` (DCH) caps row growth so the buffer invariant holds. Word-wrap scrolls feed the shared scrollback via the new `TerminalScreenBuffer.set_scroll_sink` hook (was lost). `_alt_lines` property-based resize loop replaced with a single `alt.resize` when the size changes (was `O(rows²)` per frame). `_max_scrollback_offset` uses `_all_lines_count()` (no list allocation).
+- **Notepad undo**: selection-replace operations no longer double-push onto the undo stack.
+- **RetroNet**: SSL warning now includes the underlying reason and only fires on the actual fallback path. Tab-bar click uses the same chip layout as draw via a shared `_tab_chip_label` / `_tab_chip_width` helper. Malformed HTML that never emits `</a>` no longer swallows the rest of the page.
+- **App manager / Settings / Control Panel**: `IconsWindow` save wraps in `try/except OSError`. `show_welcome` is now passed to `apply_preferences` instead of being mutated after the publish. Live toggles use `apply_to_open_windows=True`.
+- **Wifi manager**: `_finish_connect` uses the stored SSID instead of substring-slicing the previous status. `--ask` OSError no longer falls back to the insecure `password=` argv form. Dead `_scan_thread` / `_connect_thread` attribute writes removed (the daemon thread leaked live `nmcli` subprocesses).
+- **Image viewer**: previous render thread is cancelled via a `threading.Event` before a new one starts. Cache look-up skips `os.stat` on the fast path. `get_screen_pos` accepts `frame_size`.
+- **Logviewer**: severity highlight restricted to leading bracketed / prefix formats to avoid false positives on substring matches. Precomputed `self.lines_lc` lowercase mirror avoids `line.lower()` per row per draw. `query_lc` and `basename` cached on the instance and only re-derived when the underlying value changes. `draw` no longer calls `_poll_for_updates` (was reopening the log file per redraw when the ticker was overdue).
+- **Hexviewer**: 2-slot LRU cache so the `tick()` warm-up survives the `draw()` read.
+- **Process manager**: `ProcessLookupError` now surfaces a `REFRESH` with a message instead of a silent no-op.
+- **Calculator**: `_button_rect` returns `None` when `bh` is too small to fit the button grid (so the body fill is not overwritten by buttons).
+- **draw_box()** with `_bounds=`: threaded through window / dialog / menu / app_manager. **ContextMenu** uses `try/finally` for the attr stack and caches the clamped draw coordinates for hit testing. **4 game `draw()` overrides** (minesweeper / snake / solitaire / tetris) accept `frame_size=None` and forward it.
+- **22 LOW items** in apps/ui: process_manager kill no longer silent, `os.path.basename` cached, terminal scrollback reset on alt-screen, retro tab close neighbour, snake speed scale, etc.
+
+### Performance (10 + 2 structural fixes)
+- **WindowManager.active_window pointer** — `get_active_window` is O(1) instead of O(n). `set_active_window` only deactivates the previous active window.
+- **PaneState name index** — `select_by_name` is O(1) via a `{name: idx}` dict rebuilt in `_rebuild_pane`; subsequent linear scan only as a fallback.
+- **File manager preview stat cached** — `get_entry_info_lines` returns a cached `(mtime_ns, size)`-keyed result.
+- **Per-row " " * bw** hoists across multiple apps; module-level compiled regexes in markdown viewer and retronet; `inspect.signature` cached on app after first call.
+- **Sysmon** graph: snapshot `cpu_history` slice once per draw (was re-`list`ing on every row), `list+join` instead of `line +=`.
+- **Process manager**: `/proc/meminfo` opened once via `_read_meminfo()`.
+- **Event loop**: 3× `app.windows` walks per iteration combined into 1 (`_tick_and_probe_windows`).
+- **Game score files** are now `atomic_write_text`-backed (M-from-L).
+- **Notepad per-line wrap cache (M15)** — `_wrap_line_cache[i]` holds the wrapped chunks for `self.buffer[i]`. `_invalidate_wrap(line_idx=None)` marks a single line dirty (cheap) or all (for width changes). `_sync_wrap_cache_to_buffer()` re-aligns the cache list after insert/delete (re-baking the baked-in `line_idx` for surviving lines). Single-character insert is now O(stale_lines) per draw instead of O(buffer_length); micro-benchmark on a 2000-line file: 30.5ms → 0.27ms (~113× speedup).
+- **Hidden-CSV parser cache (M11)** — module-level `@functools.lru_cache(maxsize=32)` on the CSV split; cache key is the raw string. `get_hidden_icon_labels` and `get_hidden_menu_keys` reuse the same cached parser. Micro-benchmark: 1000 lookups on a 50-token CSV dropped from 4.5ms to 0.1ms (~45× speedup).
+
+### Added
+- `tests/test_perf_cache_stress.py` — 7 stress tests for the M15 (wrap cache) and M11 (hidden-CSV) caches: large buffer + 200 single-char edits + 200 draws, 5000-line buffer + many insert/delete, cache invalidation on string change, large CSV perf.
+
+---
+
 ## [v0.9.5] - 2026-06-19
 
 ### Added
