@@ -61,7 +61,11 @@ class FileEntry:
         elif is_dir:
             self.display_text = f'  {dir_icon} {name}/'
         else:
-            self.display_text = f'  {file_icon} {name:<30} {self._format_size():>8}'
+            # ``name[:30]:<30`` truncates names longer than 30 chars before
+            # left-aligning so the size column stays aligned. Without the
+            # slice, names like executables with long paths overflow into
+            # the size column and break the visual grid.
+            self.display_text = f'  {file_icon} {name[:30]:<30} {self._format_size():>8}'
 
     @staticmethod
     def _probe_executable(path):

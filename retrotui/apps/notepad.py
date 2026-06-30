@@ -10,7 +10,7 @@ from ..ui.menu import WindowMenu
 from ..core.actions import ActionResult, ActionType, AppAction
 from ..core.clipboard import copy_text, paste_text
 from ..utils import safe_addstr, normalize_key_code, theme_attr
-from ..constants import C_STATUS, C_SCROLLBAR
+from ..constants import C_STATUS, C_SCROLLBAR, WIN_MIN_WIDTH
 
 
 def _cell_width(ch):
@@ -96,7 +96,12 @@ class NotepadWindow(SelectableTextMixin, Window):
 
     def __init__(self, x, y, w, h, filepath=None, wrap_default=False):
         title = 'Notepad'
-        super().__init__(title, x, y, w, h, content=[])
+        # Defensive clamp on both dimensions so direct callers (tests,
+        # programmatic use) can't shrink the window below the safe
+        # render minimum. Action-runner already clamps before spawning
+        # (see action_runner._spawn_registered_app), so this only matters
+        # for callers that bypass that path.
+        super().__init__(title, x, y, max(WIN_MIN_WIDTH, w), max(8, h), content=[])
         self.buffer = ['']  # list[str] — one string per logical line
         self.filepath = filepath
         self.modified = False

@@ -38,7 +38,10 @@ class MarkdownViewerWindow(Window):
     """Read-only viewer for Markdown files with basic formatting."""
 
     def __init__(self, x, y, w, h, filepath=None):
-        super().__init__("Markdown Viewer", x, y, w, h, content=[])
+        # Defensive clamp so callers (tests, programmatic use) that
+        # bypass viewer.py's spawn clamp can't shrink the window below
+        # the safe render minimum.
+        super().__init__("Markdown Viewer", x, y, max(40, w), max(10, h), content=[])
         self.window_menu = WindowMenu(
             {
                 "File": [
