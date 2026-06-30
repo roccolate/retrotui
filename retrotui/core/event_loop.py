@@ -163,6 +163,42 @@ def _has_animated_windows(app):
     return False
 
 
+def _tick_and_probe_windows(app):
+    """Run per-window ``tick`` hooks and probe for live/animated windows.
+
+    Combines the three separate ``app.windows`` walks (tick, live,
+    animated) into a single iteration. The cost saving is the second
+    and third walks, which previously ran every loop iteration even
+    when no window had anything to do.
+    """
+    changed = False
+    has_live = False
+    has_animated = False
+    for w in app.windows:
+        if not getattr(w, "visible", True):
+            continue
+        tick = getattr(w, "tick", None)
+        if callable(tick):
+            try:
+                changed = bool(tick()) or changed
+            except _INPUT_TIMEOUT_APPLY_ERRORS:
+                LOGGER.debug("window tick failed", exc_info=True)
+        # Probe for live terminals / animated windows while we
+        # already have the attribute lookup cached.
+        if not has_live:
+            session = getattr(w, "_session", None)
+            if session is not None and getattr(session, "running", False):
+                has_live = True
+        if not has_animated and getattr(w, "_animated", False):
+            has_animated = True
+        if has_live and has_animated:
+            # Both flags can short-circuit; no need to keep walking.
+            # Continue to run remaining ticks (they may flip
+            # ``changed`` even if the live/animated result is final).
+            pass
+    return changed, has_live, has_animated
+
+
 def _tick_visible_windows(app):
     """Run per-window update hooks outside rendering.
 
@@ -389,13 +425,12 @@ def run_app_loop(app):
                         app._dirty = True
                     if _notif.has_visible:
                         app._dirty = True
-                if _tick_visible_windows(app):
+                # Single walk that (1) runs per-window ``tick`` hooks,
+                # (2) detects live terminals, (3) detects animated
+                # windows. Avoids 3× walks of ``app.windows`` per loop.
+                _tick_changed, has_live, has_animated = _tick_and_probe_windows(app)
+                if _tick_changed:
                     app._dirty = True
-                # Live terminals / animated windows drive both the redraw
-                # cadence AND the input-timeout selection. Compute them
-                # once and reuse to avoid walking ``app.windows`` twice.
-                has_live = _has_live_terminals(app)
-                has_animated = _has_animated_windows(app)
                 if has_live or has_animated:
                     app._dirty = True
                 if getattr(app, '_dirty', True):

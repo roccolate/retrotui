@@ -64,8 +64,10 @@ class MinesweeperWindow(Window):
         try:
             path = self._score_file_path()
             path.parent.mkdir(parents=True, exist_ok=True)
-            with open(path, "w", encoding="utf-8") as f:
-                json.dump(self.best_times, f)
+            from ..utils import atomic_write_text
+            atomic_write_text(
+                path, json.dumps(self.best_times), encoding="utf-8",
+            )
         except _MINESWEEPER_SCORE_SAVE_ERRORS:
             pass
 

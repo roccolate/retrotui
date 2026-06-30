@@ -251,8 +251,11 @@ class ProcessManagerWindow(Window):
             return
         self._last_refresh = now
 
-        mem_total_kb = self._read_mem_total_kb()
-        mem_avail_kb = self._read_mem_available_kb()
+        # Read /proc/meminfo once; the wrapper helpers each re-opened
+        # the file and re-walked the buffer (two opens, two passes per
+        # refresh).
+        mem_total_kb, mem_avail_kb = self._read_meminfo()
+        mem_total_kb = mem_total_kb or 1
         total_jiffies = self._read_total_jiffies()
         total_delta = 0
         if self._prev_total_jiffies is not None:

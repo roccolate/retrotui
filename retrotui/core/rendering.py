@@ -114,12 +114,22 @@ def draw_icons(app, frame_size=None):
     h, w = _resolve_frame_size(app, frame_size)
     bounds = (h, w)
     get_pos = app.get_icon_screen_pos
-    # Backwards compat with mock/test stubs that don't accept frame_size kwarg.
-    try:
-        import inspect
-        accepts_frame_size = "frame_size" in inspect.signature(get_pos).parameters
-    except (TypeError, ValueError):
-        accepts_frame_size = False
+    # Backwards compat with mock/test stubs that don't accept the
+    # ``frame_size`` kwarg. Cached on the app after the first call so we
+    # don't pay ``inspect.signature`` per redraw.
+    accepts_frame_size = getattr(app, "_get_pos_accepts_frame_size", None)
+    if accepts_frame_size is None:
+        try:
+            import inspect
+            accepts_frame_size = "frame_size" in inspect.signature(get_pos).parameters
+        except (TypeError, ValueError):
+            accepts_frame_size = False
+        try:
+            app._get_pos_accepts_frame_size = accepts_frame_size
+        except (AttributeError, TypeError):
+            # Stubs that don't allow attr set still get a working
+            # fallback path.
+            pass
     for idx, icon in enumerate(app.icons):
         # Use dynamic position helper
         if accepts_frame_size:

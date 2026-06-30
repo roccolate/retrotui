@@ -22,6 +22,12 @@ from ..constants import _CURSES_ERROR
 
 LOGGER = logging.getLogger(__name__)
 
+# Compiled once: per-line parse would otherwise rebuild the patterns
+# for every line on every page fetch (Python's regex cache helps but
+# is contention-prone under concurrent fetches).
+_LINK_RE = re.compile(r'\[L\](.*?)\|(.*?)\[/L\]')
+_BTN_RE = re.compile(r'\[BT\](.*?)\[/BT\]')
+
 _URL_SANITIZE_ERRORS = (
     AttributeError,
     LookupError,
@@ -678,8 +684,8 @@ class RetroNetWindow(Window):
 
             working = line_raw
             while True:
-                m_link = re.search(r'\[L\](.*?)\|(.*?)\[/L\]', working)
-                m_btn = re.search(r'\[BT\](.*?)\[/BT\]', working)
+                m_link = _LINK_RE.search(working)
+                m_btn = _BTN_RE.search(working)
 
                 indices = [i for i in [m_link, m_btn] if i]
                 if not indices: break

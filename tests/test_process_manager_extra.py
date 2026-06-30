@@ -63,8 +63,7 @@ class ProcessManagerExtraTests(unittest.TestCase):
         self.assertIn("d", self.ProcessManagerWindow._format_uptime(seconds))
 
     def test_refresh_processes_populates_rows_and_summaries(self):
-        self.win._read_mem_total_kb = lambda: 2048
-        self.win._read_mem_available_kb = lambda: 1024
+        self.win._read_meminfo = lambda: (2048, 1024)
         self.win._read_uptime_seconds = lambda: 3600 * 2 + 30 * 60
         self.win._read_load_average = lambda: "0.10 0.20 0.30"
 

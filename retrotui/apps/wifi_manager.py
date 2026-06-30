@@ -33,13 +33,11 @@ class WifiManagerWindow(Window):
 
         # Background-scan state.
         self._scan_lock = threading.Lock()
-        self._scan_thread = None
         self._scan_in_progress = False
         self._scan_error = None
         self._scan_result_ready = False
         # Background-connect state.
         self._connect_lock = threading.Lock()
-        self._connect_thread = None
         self._connect_in_progress = False
         self._connect_result = None
 
@@ -94,9 +92,11 @@ class WifiManagerWindow(Window):
             self._scan_error = None
             self._scan_result_ready = False
         self._status_msg = "Rescanning..."
-        thread = threading.Thread(target=self._scan_worker, daemon=True)
-        self._scan_thread = thread
-        thread.start()
+        # Daemon thread; we don't need a reference (the in-progress
+        # flag above already serialises scans). Storing the previous
+        # thread reference only to overwrite it was leaking the live
+        # thread (it kept running NMCLI subprocesses until timeout).
+        threading.Thread(target=self._scan_worker, daemon=True).start()
 
     @staticmethod
     def _split_nmcli_fields(line, expected=5):
@@ -300,13 +300,14 @@ class WifiManagerWindow(Window):
             self._connect_result = None
         self._connecting_ssid = ssid
         self._status_msg = f"Connecting to {ssid}..."
-        thread = threading.Thread(
+        # See note on ``self._scan_thread`` in ``refresh`` — we don't
+        # keep a reference to the live thread; the ``_connect_in_progress``
+        # flag above serialises concurrent connect calls.
+        threading.Thread(
             target=self._connect_worker,
             args=(ssid, password),
             daemon=True,
-        )
-        self._connect_thread = thread
-        thread.start()
+        ).start()
 
     def _finish_connect(self, success, error_message):
         with self._connect_lock:

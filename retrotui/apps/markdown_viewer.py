@@ -10,6 +10,13 @@ from ..ui.menu import WindowMenu
 from ..ui.window import Window
 from ..utils import normalize_key_code, safe_addstr, theme_attr
 
+# Compiled once at module load. ``re.split`` / ``re.match`` on a string
+# pattern recompile on every call; module-level constants avoid that.
+_MARKDOWN_INLINE_PATTERN = re.compile(
+    r"(`[^`]+`)|(\*\*[^*]+\*\*)|(\*[^*]+\*)|(\[[^\]]+\]\([^)]+\))"
+)
+_MARKDOWN_LINK_PATTERN = re.compile(r"\[([^\]]+)\]\(([^)]+)\)")
+
 _CODE_PAIR = C_ANSI_START + 4 if C_ANSI_START + 4 <= 255 else 0
 _CURSES_COLOR_ERRORS = (
     AttributeError,
@@ -188,12 +195,10 @@ class MarkdownViewerWindow(Window):
     def _render_line(self, stdscr, y, x, line, bw, base_attr):
         """Render a single line with inline formatting (bold, italic, code, links)."""
         current_x = x
-        # Split on common inline markdown tokens. Order matters: code spans
-        # first to keep inner asterisks from being mis-interpreted, then
-        # bold, italic, and finally links (which can contain text with
-        # formatting inside).
-        pattern = r"(`[^`]+`)|(\*\*[^*]+\*\*)|(\*[^*]+\*)|(\[[^\]]+\]\([^)]+\))"
-        parts = re.split(pattern, line)
+        # Use module-level compiled regexes; the old inline string
+        # triggered ``re.split`` to recompile the pattern on every
+        # visible line on every redraw.
+        parts = re.split(_MARKDOWN_INLINE_PATTERN, line)
 
         for part in parts:
             if not part or current_x - x >= bw:
@@ -225,7 +230,7 @@ class MarkdownViewerWindow(Window):
                 # [label](url) - render only the label, with underline to
                 # signal the link visually. The URL itself is dropped to
                 # avoid cluttering the terminal output.
-                label_match = re.match(r"\[([^\]]+)\]\(([^)]+)\)", part)
+                label_match = _MARKDOWN_LINK_PATTERN.match(part)
                 if label_match:
                     text = label_match.group(1)
                     attr |= curses.A_UNDERLINE
