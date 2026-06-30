@@ -1,5 +1,6 @@
 # RetroTUI
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![CI](https://github.com/roccolate/retrotui/actions/workflows/ci.yml/badge.svg)](https://github.com/roccolate/retrotui/actions/workflows/ci.yml)
 [![Release](https://github.com/roccolate/retrotui/actions/workflows/release.yml/badge.svg)](https://github.com/roccolate/retrotui/actions/workflows/release.yml)
 [![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/I2I1WKMLQ)
