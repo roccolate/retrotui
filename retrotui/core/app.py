@@ -192,13 +192,6 @@ class RetroTUI:
         )
         self._pending_discard_callback = _on_discard
 
-    def _resolve_save_confirm_result(self, result_idx):
-        """Apply the user's choice from the save-confirm dialog."""
-        callback = getattr(self, "_pending_discard_callback", None)
-        self._pending_discard_callback = None
-        if result_idx == 0 and callback is not None:
-            callback()
-
     def show_rename_dialog(self, win):
         return self.file_ops.show_rename_dialog(win)
 
@@ -585,6 +578,11 @@ class RetroTUI:
         self.theme = get_theme(theme_name)
         self.theme_name = self.theme.key
         init_colors(self.theme)
+        # New palette won't show until the renderer picks up the new
+        # color pairs; flag the next frame so the change is visible
+        # immediately even when no other UI event would dirty the
+        # screen.
+        self._dirty = True
 
     def apply_preferences(
         self,
@@ -624,7 +622,11 @@ class RetroTUI:
             if hasattr(win, 'wrap_mode') and hasattr(win, '_invalidate_wrap'):
                 if win.wrap_mode != self.default_word_wrap:
                     win.wrap_mode = self.default_word_wrap
-                    win.view_left = 0
+                    # ``view_left`` is currently unique to NotepadWindow.
+                    # ``setattr`` keeps the call safe for any future
+                    # class that has ``wrap_mode`` + ``_invalidate_wrap``
+                    # but not ``view_left``.
+                    setattr(win, 'view_left', 0)
                     win._invalidate_wrap()
                     ensure_visible = getattr(win, '_ensure_cursor_visible', None)
                     if callable(ensure_visible):

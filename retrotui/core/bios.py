@@ -1,7 +1,6 @@
 """Nostalgic BIOS-style boot sequence for RetroTUI."""
 import curses
 import time
-import random
 
 from .. import __version__ as APP_VERSION
 from ..utils import safe_addstr, theme_attr
@@ -34,8 +33,6 @@ class BIOS:
         self.stdscr.nodelay(True)
         self.stdscr.clear()
         try:
-            h, w = self.stdscr.getmaxyx()
-
             # Color: Light Gray on Black (Classic BIOS)
             # Using body_attr as a base, but ideally we want white on black
             attr = curses.A_NORMAL

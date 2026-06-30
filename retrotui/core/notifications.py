@@ -52,7 +52,6 @@ class NotificationManager:
 
     def __init__(self, event_bus=None):
         self._toasts = []
-        self._bus = event_bus
         self._unsub = None
         if event_bus is not None:
             self._unsub = event_bus.subscribe(
