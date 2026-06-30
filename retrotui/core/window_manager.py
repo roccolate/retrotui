@@ -61,8 +61,11 @@ class WindowManager:
             previous.active = False
         win.active = True
         self._active_window = win
-        # Move to top of its layer.
-        self.windows.remove(win)
+        # Move to top of its layer. Guard the membership check so a
+        # stale reference (closed window, dangling test stub) cannot
+        # raise ``ValueError`` from ``list.remove``.
+        if win in self.windows:
+            self.windows.remove(win)
         self._layers_dirty = True
         self.normalize_window_layers()
         if win.always_on_top:

@@ -1111,6 +1111,20 @@ class CoreAppTests(unittest.TestCase):
         init_colors.assert_called_once_with(app.theme)
         self.assertEqual(app.theme_name, "hacker")
 
+    def test_apply_theme_marks_dirty_for_immediate_redraw(self):
+        """N7: apply_theme must set ``_dirty`` so the new palette shows
+        up on the next frame even when no other event would dirty."""
+        app = self._make_app()
+        app._dirty = False
+
+        with (
+            mock.patch.object(self.app_mod, "get_theme", return_value=types.SimpleNamespace(key="hacker")),
+            mock.patch.object(self.app_mod, "init_colors"),
+        ):
+            app.apply_theme("hacker")
+
+        self.assertTrue(app._dirty)
+
     def test_apply_preferences_updates_defaults_and_open_windows(self):
         app = self._make_app()
         app.default_show_hidden = False

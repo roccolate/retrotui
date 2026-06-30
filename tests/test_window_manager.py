@@ -32,6 +32,25 @@ class WindowManagerTests(unittest.TestCase):
         wm.close_window(w1)
         self.assertTrue(all(getattr(x, 'closed', False) or x is not w1 for x in [w1]))
 
+    def test_set_active_window_tolerates_stale_reference(self):
+        """N12: set_active_window must not raise ``ValueError`` when the
+        window isn't in the list (stale ref, dangling test stub). The
+        method is allowed to add the window as a side effect, but the
+        membership ``remove`` must be guarded."""
+        wm = WindowManager(None)
+        w1 = make_win('a')
+        wm.windows = [w1]
+
+        ghost = make_win('ghost')
+        # ghost is not in windows; this must not raise.
+        wm.set_active_window(ghost)
+
+        self.assertTrue(ghost.active)
+        self.assertIs(wm._active_window, ghost)
+        # The original window is still in the list, ghost got added.
+        self.assertIn(w1, wm.windows)
+        self.assertIn(ghost, wm.windows)
+
     def test_spawn_and_offset(self):
         wm = WindowManager(None)
         w = make_win('x')

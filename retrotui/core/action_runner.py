@@ -132,6 +132,11 @@ def execute_app_action(app, action, logger, *, version: str) -> None:
     try:
         if isinstance(action, str) and action.startswith('plugin:'):
             plugin_id = action.split(':', 1)[1]
+            if not plugin_id:
+                # ``plugin:`` with no id would silently no-op downstream.
+                # Treat as unknown action so the caller logs a warning.
+                logger.warning("Unknown action received: %s", action)
+                return
             opener = getattr(app, 'open_plugin', None)
             if callable(opener):
                 opener(plugin_id)
