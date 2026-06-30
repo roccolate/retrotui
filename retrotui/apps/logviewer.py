@@ -457,8 +457,10 @@ class LogViewerWindow(SelectableTextMixin, Window):
         if bh <= 0 or bw <= 0:
             return
 
+        blank = " " * bw
+
         for row in range(bh):
-            safe_addstr(stdscr, by + row, bx, " " * bw, body_attr)
+            safe_addstr(stdscr, by + row, bx, blank, body_attr)
 
         view_rows = self._visible_line_rows()
         self.scroll_offset = max(0, min(self.scroll_offset, self._max_scroll()))

@@ -245,8 +245,10 @@ class CalculatorWindow(Window):
         if bh <= 0:
             return
 
+        blank = " " * bw
+
         for row in range(bh):
-            safe_addstr(stdscr, by + row, bx, " " * bw, body_attr)
+            safe_addstr(stdscr, by + row, bx, blank, body_attr)
 
         # Draw Input
         label = "Expr> "

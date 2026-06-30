@@ -191,37 +191,67 @@ def _title_bar_hit(win, mx, my, norm=None):
     return True
 
 
+def _find_selecting_window(app):
+    """Return the window with ``_mouse_selecting`` set, or None.
+
+    Caches the result on the app so subsequent calls (on every
+    mouse motion event) are O(1) instead of walking
+    ``app.windows``. The cache is invalidated when the flag is
+    cleared by a window setting ``_mouse_selecting = False``
+    directly (callers should prefer ``_set_mouse_selecting``).
+    """
+    cached = getattr(app, "_mouse_selecting_window", None)
+    if cached is not None and bool(getattr(cached, "_mouse_selecting", False)):
+        return cached
+    found = None
+    for candidate in reversed(getattr(app, "windows", ())):
+        if bool(getattr(candidate, "_mouse_selecting", False)):
+            found = candidate
+            break
+    try:
+        app._mouse_selecting_window = found
+    except (AttributeError, TypeError):
+        # Stubs that don't allow attr set still work — the next
+        # call will re-scan.
+        pass
+    return found
+
+
 def _route_selection_drag_owner(app, mx, my, bstate, *, is_mouse_motion, is_button1_pressed, norm=None):
     """Keep selection drag captured by the window that initiated it."""
     if not (is_mouse_motion and is_button1_pressed):
         return False
 
-    for win in reversed(app.windows):
-        if not getattr(win, "visible", False):
-            continue
-        if not bool(getattr(win, "_mouse_selecting", False)):
-            continue
+    win = _find_selecting_window(app)
+    if win is None:
+        return False
 
-        contains = getattr(win, "contains", None)
-        pointer_inside = False
-        if callable(contains):
-            try:
-                pointer_inside = bool(contains(mx, my))
-            except _MOUSE_ROUTE_ERRORS:
-                pointer_inside = False
+    if not getattr(win, "visible", False):
+        return False
 
-        raw_pressed = bool((norm or {}).get("button1_pressed_raw"))
-        if not pointer_inside and not raw_pressed:
-            win._mouse_selecting = False
-            return False
+    contains = getattr(win, "contains", None)
+    pointer_inside = False
+    if callable(contains):
+        try:
+            pointer_inside = bool(contains(mx, my))
+        except _MOUSE_ROUTE_ERRORS:
+            pointer_inside = False
 
-        drag_handler = getattr(win, "handle_mouse_drag", None)
-        if drag_handler is None:
-            return True
-        drag_result = _invoke_mouse_handler(drag_handler, mx, my, bstate)
-        app._dispatch_window_result(drag_result, win)
+    raw_pressed = bool((norm or {}).get("button1_pressed_raw"))
+    if not pointer_inside and not raw_pressed:
+        win._mouse_selecting = False
+        try:
+            app._mouse_selecting_window = None
+        except (AttributeError, TypeError):
+            pass
+        return False
+
+    drag_handler = getattr(win, "handle_mouse_drag", None)
+    if drag_handler is None:
         return True
-    return False
+    drag_result = _invoke_mouse_handler(drag_handler, mx, my, bstate)
+    app._dispatch_window_result(drag_result, win)
+    return True
 
 
 def _pointer_capture_owner(app):
@@ -244,11 +274,25 @@ def _pointer_capture_owner(app):
 
     if not bool(getattr(app, "button1_pressed", False)):
         return (None, None)
-    for win in reversed(getattr(app, "windows", ())):
-        if not getattr(win, "visible", False):
-            continue
-        if bool(getattr(win, "_mouse_selecting", False)):
-            return ("window_selection", win)
+    # O(1) cached pointer for the selection-drag owner. Falls back to
+    # a single linear scan when the cache is stale (e.g. tests that
+    # set ``_mouse_selecting`` directly).
+    win = _find_selecting_window(app)
+    if win is not None:
+        return ("window_selection", win)
+
+    return (None, None)
+    # Single-window pointer for the selection drag owner (O(1)
+    # instead of walking ``app.windows`` per mouse event).
+    win = getattr(app, "_mouse_selecting_window", None)
+    if win is not None and bool(getattr(win, "_mouse_selecting", False)):
+        return ("window_selection", win)
+    # Fallback: scan once and refresh the cache so subsequent calls
+    # are O(1) again.
+    for candidate in reversed(getattr(app, "windows", ())):
+        if bool(getattr(candidate, "_mouse_selecting", False)):
+            app._mouse_selecting_window = candidate
+            return ("window_selection", candidate)
 
     return (None, None)
 

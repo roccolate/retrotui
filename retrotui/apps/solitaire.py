@@ -217,8 +217,9 @@ class SolitaireWindow(Window):
         bx, by, bw, bh = self.body_rect()
 
         # Clear body to prevent ghosting from deep columns
+        blank = " " * bw
         for row in range(bh):
-            safe_addstr(stdscr, by + row, bx, " " * bw, body_attr, _bounds=frame_size)
+            safe_addstr(stdscr, by + row, bx, blank, body_attr, _bounds=frame_size)
 
         self.card_rects = {}
 

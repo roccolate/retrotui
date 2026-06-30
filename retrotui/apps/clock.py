@@ -115,8 +115,10 @@ class ClockCalendarWindow(Window):
         if bh <= 0 or bw <= 0:
             return
 
+        blank = " " * bw
+
         for row in range(bh):
-            safe_addstr(stdscr, by + row, bx, " " * bw, body_attr)
+            safe_addstr(stdscr, by + row, bx, blank, body_attr)
 
         time_label = now.strftime("%H:%M:%S")
         date_label = now.strftime("%A, %Y-%m-%d")

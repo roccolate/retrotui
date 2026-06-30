@@ -6,7 +6,11 @@ from ..utils import safe_addstr, draw_box, normalize_key_code, theme_attr
 
 
 def _wrap_dialog_message(message, inner_w):
-    """Word-wrap a dialog message into a list of lines."""
+    """Word-wrap a dialog message into a list of lines.
+
+    Words longer than ``inner_w`` (e.g. file paths) are hard-broken
+    at ``inner_w`` so the dialog border doesn't crop them silently.
+    """
     lines = []
     for paragraph in str(message).split('\n'):
         words = paragraph.split()
@@ -15,6 +19,18 @@ def _wrap_dialog_message(message, inner_w):
             continue
         line = ''
         for word in words:
+            # Hard-break overlong words (paths, URLs) so a single
+            # very long token doesn't push the whole paragraph onto
+            # a line that gets truncated at the dialog's right border.
+            while len(word) > inner_w and line:
+                lines.append(line)
+                line = ''
+            if len(word) > inner_w:
+                # Split the word across multiple lines; the next
+                # loop iteration will handle the remainder.
+                while len(word) > inner_w:
+                    lines.append(word[:inner_w])
+                    word = word[inner_w:]
             needs_space = 1 if line else 0
             if len(line) + len(word) + needs_space <= inner_w:
                 line = f'{line} {word}' if line else word

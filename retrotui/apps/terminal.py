@@ -123,6 +123,11 @@ class TerminalWindow(SelectableTextMixin, Window):
 
     @_alt_screen.setter
     def _alt_screen(self, value: bool):
+        # Reset the user's scrollback offset when switching modes so
+        # the next ``ctrl-W`` / ``Normal`` exit doesn't leave the user
+        # offset into pre-existing scrollback (e.g. alt-screen exits
+        # mid-session). TUI programs expect a clean view.
+        self.scrollback_offset = 0
         self._screen.set_alt_screen(bool(value))
 
     @property

@@ -120,8 +120,9 @@ class MarkdownViewerWindow(Window):
             return
 
         # Clear body
+        blank = " " * bw
         for row in range(bh):
-            safe_addstr(stdscr, by + row, bx, " " * bw, body_attr)
+            safe_addstr(stdscr, by + row, bx, blank, body_attr)
 
         visible_rows = self._rows_visible()
         self.scroll_offset = max(0, min(self.scroll_offset, self._max_scroll()))

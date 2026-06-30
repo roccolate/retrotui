@@ -646,9 +646,14 @@ class FileManagerWindow(Window):
 
         if self._should_preview_image_async(entry, max_lines, max_cols):
             return self._start_image_preview(cache_key, entry, max_lines, max_cols)
-        
+
         lines = get_preview_lines(entry, max_lines, max_cols)
         with self._preview_lock:
+            # Double-check: another ``draw`` caller (e.g. a different
+            # pane rendering concurrently) may have already produced
+            # the same key. Avoid clobbering a fresher entry.
+            if self._preview_cache.get('key') == cache_key:
+                return self._preview_cache['lines']
             self._preview_cache = {'key': cache_key, 'lines': lines}
         return lines
 

@@ -335,8 +335,9 @@ class SnakeWindow(Window):
         body_attr = self.draw_frame(stdscr, frame_size=frame_size)
 
         # Clear body with background
+        blank = " " * bw
         for r in range(bh):
-            safe_addstr(stdscr, by + r, bx, " " * bw, body_attr, _bounds=frame_size)
+            safe_addstr(stdscr, by + r, bx, blank, body_attr, _bounds=frame_size)
 
         # Draw obstacles
         obs_attr = theme_attr("window_inactive")
