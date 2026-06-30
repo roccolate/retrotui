@@ -49,7 +49,10 @@ class Dialog:
         self.message = message
         self.buttons = buttons or ['OK']
         self.selected = 0
-        self.width = max(width, len(title) + 8)
+        # Floor at 20 cols so a tiny ``width`` arg (or a very short
+        # title with a large gap of buttons) can't shrink the dialog
+        # past the safe render minimum.
+        self.width = max(20, max(width, len(title) + 8))
 
         # Word wrap message
         inner_w = self.width - 6
@@ -343,7 +346,12 @@ class MultiSelectDialog(Dialog):
         list_x = x + 3
         list_w = self.width - 6
         
-        if list_x <= mx <= list_x + list_w and list_y <= my < list_y + self.visible_rows:
+        # ``mx < list_x + list_w`` (not ``<=``) so a click on the scrollbar
+        # column (drawn at ``list_x + list_w``) doesn't count as a list
+        # click that toggles a choice. The scrollbar has no click
+        # handler in this dialog, so anything in that column is just
+        # ignored.
+        if list_x <= mx < list_x + list_w and list_y <= my < list_y + self.visible_rows:
             click_idx = self.list_offset + (my - list_y)
             if click_idx < len(self.choices):
                 self.in_list = True

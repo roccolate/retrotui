@@ -150,15 +150,28 @@ class ContextMenu(Menu):
                 if item.get('separator'):
                     stdscr.addstr(row_y, draw_x, "├" + "─" * (self._width - 2) + "┤")
                 else:
-                    label = f" {item['label']}".ljust(self._width - 2)
+                    # ``.get('label', '')`` so a malformed item without a
+                    # 'label' key doesn't raise KeyError mid-draw.
+                    label = f" {item.get('label', '')}".ljust(self._width - 2)
                     if i == self.selected_index:
                         stdscr.attron(theme_attr('menu_selected'))
-                        stdscr.addstr(row_y, draw_x + 1, label)
-                        stdscr.attroff(theme_attr('menu_selected'))
+                        try:
+                            stdscr.addstr(row_y, draw_x + 1, label)
+                        finally:
+                            # Always release the nested attr, even if
+                            # addstr raises mid-line. Otherwise the
+                            # subsequent attron('menu_item') below
+                            # leaves ``menu_selected`` stuck on the
+                            # curses attr stack and bleeds into the
+                            # next draw.
+                            stdscr.attroff(theme_attr('menu_selected'))
                         # Draw borders with normal attr
                         stdscr.attron(theme_attr('menu_item'))
-                        stdscr.addch(row_y, draw_x, "│")
-                        stdscr.addch(row_y, draw_x + self._width - 1, "│")
+                        try:
+                            stdscr.addch(row_y, draw_x, "│")
+                            stdscr.addch(row_y, draw_x + self._width - 1, "│")
+                        finally:
+                            stdscr.attroff(theme_attr('menu_item'))
                     else:
                         stdscr.addstr(row_y, draw_x, "│" + label + "│")
 
