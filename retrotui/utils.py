@@ -14,7 +14,7 @@ from .constants import (
     C_BUTTON_SEL, C_DIALOG, C_STATUS, C_ICON_SEL, C_SCROLLBAR, C_FM_SELECTED,
     C_FM_DIR, C_TASKBAR, BOX_TL, BOX_TR, BOX_BL, BOX_BR, BOX_H, BOX_V,
     SB_TL, SB_TR, SB_BL, SB_BR, SB_H, SB_V, VIDEO_EXTENSIONS,
-    _CURSES_ERROR,
+    _CURSES_ERROR, C_ANSI_FGBG_START,
 )
 from .theme import ROLE_TO_PAIR_ID, get_theme
 
@@ -167,6 +167,13 @@ def init_colors(theme_key_or_obj=None):
     for i in range(8):
         # pair 50+i: fg=i, bg=term_bg
         curses.init_pair(50 + i, i, term_bg)
+
+    # ANSI fg x bg combos (pair 58..121 = 58 + fg*8 + bg). Required so that
+    # SGR sequences like \x1b[31;44m pick a pair encoding both fg and bg,
+    # not just fg. Without this, background colors are silently ignored.
+    for fg in range(8):
+        for bg in range(8):
+            curses.init_pair(C_ANSI_FGBG_START + fg * 8 + bg, fg, bg)
 
     # Invalidate theme_attr cache so next calls pick up new pairs.
     _theme_attr_cache.clear()

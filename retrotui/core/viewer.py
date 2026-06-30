@@ -5,7 +5,7 @@ File viewer type detection, opening, and video/URL dialog flows.
 import os
 import logging
 
-from ..constants import BINARY_DETECT_CHUNK_SIZE
+from ..constants import BINARY_DETECT_CHUNK_SIZE, WIN_MIN_HEIGHT, WIN_MIN_WIDTH
 from ..utils import is_video_file, play_ascii_video as _play_ascii_video_backend
 from ..apps.notepad import NotepadWindow
 from ..apps.logviewer import LogViewerWindow
@@ -81,8 +81,8 @@ def open_file_viewer(app, filepath):
     ox, oy = app._next_window_offset(base_x, base_y)
     win = cls(
         ox, oy,
-        min(max_w, w - _WINDOW_MARGIN),
-        min(max_h, h - _WINDOW_MARGIN),
+        min(max_w, max(WIN_MIN_WIDTH, w - _WINDOW_MARGIN)),
+        min(max_h, max(WIN_MIN_HEIGHT, h - _WINDOW_MARGIN)),
         filepath=filepath,
         **extra_kwargs,
     )

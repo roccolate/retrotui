@@ -110,6 +110,92 @@ class DialogDispatchTests(unittest.TestCase):
         dd.resolve_dialog_result(0)
         self.assertFalse(app.running)
 
+    def test_dispatch_save_confirm_forwards_payload_on_discard(self):
+        """REQUEST_SAVE_CONFIRM must pass the payload's on_discard callback
+        through to _show_save_confirm_dialog so the Discard button actually
+        runs the discard handler. Regression test for B3 (HIGH)."""
+        app = DummyApp()
+        captured = {}
+
+        def fake_show(win, payload=None):
+            captured['win'] = win
+            captured['payload'] = payload
+            app.dialog = SimpleNamespace(
+                title='Discard unsaved changes?',
+                buttons=['Discard', 'Cancel'],
+                callback=None,
+            )
+            # Mirror what the real _show_save_confirm_dialog does: stash the
+            # discard callback on the app so resolve_dialog_result can find it.
+            on_discard = None
+            if isinstance(payload, dict):
+                cand = payload.get('on_discard')
+                if callable(cand):
+                    on_discard = cand
+            if on_discard is None:
+                fb = getattr(win, '_do_open_path_force', None)
+                if callable(fb):
+                    on_discard = fb
+
+            def _wrapper():
+                if on_discard is not None:
+                    on_discard()
+
+            app._pending_discard_callback = _wrapper
+
+        app._show_save_confirm_dialog = fake_show
+
+        discard_called = []
+
+        def on_discard():
+            discard_called.append(True)
+
+        notepad = SimpleNamespace()
+        dd = DialogDispatcher(app)
+        result = ActionResult(
+            ActionType.REQUEST_SAVE_CONFIRM,
+            payload={'on_discard': on_discard},
+        )
+        dd.dispatch_window_result(result, notepad)
+        self.assertIs(captured.get('win'), notepad)
+        self.assertIs(captured.get('payload'), result.payload)
+
+        # Now resolve Discard: the payload's on_discard should fire.
+        dd.resolve_dialog_result(0)
+        self.assertEqual(discard_called, [True])
+
+    def test_dispatch_save_confirm_without_payload_is_noop(self):
+        """If the payload is missing/malformed, Discard must NOT crash; it
+        must silently no-op (matching the previous safe behaviour)."""
+        app = DummyApp()
+
+        def fake_show(win, payload=None):
+            app.dialog = SimpleNamespace(
+                title='Discard unsaved changes?',
+                buttons=['Discard', 'Cancel'],
+                callback=None,
+            )
+            # No on_discard in payload, no fallback on win → wrapper no-ops.
+            app._pending_discard_callback = lambda: None
+
+        app._show_save_confirm_dialog = fake_show
+        dd = DialogDispatcher(app)
+        notepad = SimpleNamespace()
+
+        # No payload at all.
+        dd.dispatch_window_result(
+            ActionResult(ActionType.REQUEST_SAVE_CONFIRM), notepad,
+        )
+        dd.resolve_dialog_result(0)  # must not raise
+
+        # Payload without on_discard key.
+        app.dialog = None
+        dd.dispatch_window_result(
+            ActionResult(ActionType.REQUEST_SAVE_CONFIRM, payload={'foo': 1}),
+            notepad,
+        )
+        dd.resolve_dialog_result(0)  # must not raise
+
 
 if __name__ == "__main__":
     unittest.main()

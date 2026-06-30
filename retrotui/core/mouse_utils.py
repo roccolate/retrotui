@@ -282,19 +282,6 @@ def _pointer_capture_owner(app):
         return ("window_selection", win)
 
     return (None, None)
-    # Single-window pointer for the selection drag owner (O(1)
-    # instead of walking ``app.windows`` per mouse event).
-    win = getattr(app, "_mouse_selecting_window", None)
-    if win is not None and bool(getattr(win, "_mouse_selecting", False)):
-        return ("window_selection", win)
-    # Fallback: scan once and refresh the cache so subsequent calls
-    # are O(1) again.
-    for candidate in reversed(getattr(app, "windows", ())):
-        if bool(getattr(candidate, "_mouse_selecting", False)):
-            app._mouse_selecting_window = candidate
-            return ("window_selection", candidate)
-
-    return (None, None)
 
 
 def _is_button1_click_event(bstate):

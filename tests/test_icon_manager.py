@@ -103,6 +103,30 @@ class IconManagerTests(unittest.TestCase):
         self.assertEqual(loaded['ASCII Vid'], (7, 9))
         self.assertEqual(loaded['Quote "App"'], (1, 2))
 
+    def test_load_preserves_keys_with_hash_inside_quotes(self):
+        """Regression for B8: icon keys with ``#`` in them (e.g. plugin
+        ids like ``RPG#1``) must survive the load/save round-trip even
+        though the comment stripper sees the ``#`` character."""
+        app = types.SimpleNamespace(
+            icons=[],
+            stdscr=types.SimpleNamespace(getmaxyx=lambda: (24, 120)),
+        )
+        mgr = IconPositionManager(app)
+        mgr.positions = {'RPG#1': (4, 5), 'plain': (10, 12)}
+
+        with TemporaryDirectory() as tmp:
+            path = f"{tmp}/config.toml"
+            mgr.save(path)
+            # The saved text will contain the literal ``#`` inside the
+            # quoted key (TOML basic strings don't require it to be
+            # escaped). Make sure the loader doesn't mistake it for a
+            # comment delimiter.
+            loaded = IconPositionManager(app).load(path)
+
+        self.assertEqual(loaded.get('RPG#1'), (4, 5),
+                         "key with '#' inside quotes must round-trip")
+        self.assertEqual(loaded.get('plain'), (10, 12))
+
 
 if __name__ == "__main__":
     unittest.main()

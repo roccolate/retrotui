@@ -20,7 +20,7 @@ from ..ui.dialog import Dialog
 from ..ui.window import Window
 from .actions import AppAction
 from .content import build_about_message, build_help_message
-from ..constants import _CURSES_ERROR
+from ..constants import _CURSES_ERROR, WIN_MIN_HEIGHT, WIN_MIN_WIDTH
 _TERMINAL_SIZE_ERRORS = (
     AttributeError,
     OSError,
@@ -109,8 +109,8 @@ def _spawn_registered_app(app, action, registry) -> bool:
     # Clamp to terminal size when curses is available.
     try:
         term_h, term_w = curses.LINES, curses.COLS
-        w = min(default_w, term_w - 4)
-        h = min(default_h, term_h - 4)
+        w = min(default_w, max(WIN_MIN_WIDTH, term_w - 4))
+        h = min(default_h, max(WIN_MIN_HEIGHT, term_h - 4))
     except _TERMINAL_SIZE_ERRORS:
         w, h = default_w, default_h
 
