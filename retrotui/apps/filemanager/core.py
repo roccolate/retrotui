@@ -76,15 +76,25 @@ class FileEntry:
             return False
 
     def _format_size(self):
-        units = ('B', 'K', 'M', 'G', 'T')
-        value = float(self.size)
-        unit_index = 0
-        while value >= 1024 and unit_index < len(units) - 1:
-            value /= 1024
-            unit_index += 1
-        if unit_index == 0:
-            return f'{int(value)}B'
-        return f'{value:.1f}{units[unit_index]}'
+        return _format_size(self.size)
+
+
+def _format_size(size_bytes):
+    """Render a byte count as ``XB`` / ``X.YK`` / ``X.YM`` / ``X.YG`` / ``X.YT``.
+
+    Module-level helper so callers that already have the size (e.g. preview
+    info lines read from ``stat()``) don't need a throwaway ``FileEntry``
+    just to call an instance method.
+    """
+    units = ('B', 'K', 'M', 'G', 'T')
+    value = float(size_bytes)
+    unit_index = 0
+    while value >= 1024 and unit_index < len(units) - 1:
+        value /= 1024
+        unit_index += 1
+    if unit_index == 0:
+        return f'{int(value)}B'
+    return f'{value:.1f}{units[unit_index]}'
 
 
 class PaneState:
