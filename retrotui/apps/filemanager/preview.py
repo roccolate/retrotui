@@ -10,7 +10,7 @@ try:
 except ImportError:
     pwd = None
 from datetime import datetime
-from .core import FileEntry
+from .core import FileEntry, _format_size
 
 IMAGE_EXTENSIONS = {
     '.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp', '.tiff', '.tif'
@@ -53,7 +53,7 @@ def get_entry_info_lines(entry):
     mode = stat.filemode(st.st_mode)
     owner = _owner_name(getattr(st, 'st_uid', 0))
     mtime = datetime.fromtimestamp(st.st_mtime).strftime('%Y-%m-%d %H:%M')
-    size = '-' if entry.is_dir else FileEntry(entry.name, False, entry.full_path, st.st_size)._format_size()
+    size = '-' if entry.is_dir else _format_size(st.st_size)
     lines = [
         f'Name: {entry.name}',
         f'Type: {type_label}',
