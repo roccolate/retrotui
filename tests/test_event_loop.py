@@ -103,6 +103,26 @@ class EventLoopTests(unittest.TestCase):
         app.stdscr.noutrefresh.assert_called_once_with()
         self.fake_curses.doupdate.assert_called_once_with()
 
+    def test_draw_frame_supports_legacy_window_draw_signature(self):
+        app = self._make_app()
+
+        class LegacyWindow:
+            visible = True
+
+            def __init__(self):
+                self.draw_calls = []
+
+            def draw(self, stdscr):
+                self.draw_calls.append(stdscr)
+
+        legacy = LegacyWindow()
+        app.windows = [legacy]
+
+        self.event_loop.draw_frame(app)
+
+        self.assertEqual(legacy.draw_calls, [app.stdscr])
+        self.assertFalse(legacy._retrotui_draw_accepts_frame_size)
+
     def test_draw_frame_renders_dialog_when_present(self):
         app = self._make_app()
         app.dialog = types.SimpleNamespace(draw=mock.Mock())
