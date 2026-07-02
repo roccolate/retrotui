@@ -1,6 +1,7 @@
 """Main loop helpers for RetroTUI."""
 
 import curses
+import inspect
 import logging
 import os
 import time
@@ -22,6 +23,43 @@ _INPUT_TIMEOUT_APPLY_ERRORS = (
     ValueError,
     _CURSES_ERROR,
 )
+
+
+def _method_accepts_frame_size(component, method_name):
+    """Return whether a component method accepts the frame_size keyword."""
+    cache_attr = f"_retrotui_{method_name}_accepts_frame_size"
+    cached = getattr(component, cache_attr, None)
+    if isinstance(cached, bool):
+        return cached
+
+    method = getattr(component, method_name)
+    try:
+        params = inspect.signature(method).parameters.values()
+    except (TypeError, ValueError):
+        accepts = False
+    else:
+        accepts = any(
+            param.name == "frame_size"
+            or param.kind == inspect.Parameter.VAR_KEYWORD
+            for param in params
+        )
+
+    try:
+        setattr(component, cache_attr, accepts)
+    except (AttributeError, TypeError):
+        pass
+    return accepts
+
+
+def _draw_component(component, stdscr, frame_size):
+    """Draw a component while supporting legacy draw(stdscr) implementations."""
+    draw = getattr(component, "draw", None)
+    if not callable(draw):
+        return
+    if _method_accepts_frame_size(component, "draw"):
+        draw(stdscr, frame_size=frame_size)
+    else:
+        draw(stdscr)
 
 
 def clamp_windows_to_terminal(app):
@@ -46,7 +84,7 @@ def draw_frame(app):
     if not app.has_background_operation():
         for win in app.windows:
             if getattr(win, "visible", True):
-                win.draw(app.stdscr, frame_size=frame_size)
+                _draw_component(win, app.stdscr, frame_size)
 
     app.menu.draw_bar(app.stdscr, frame_w, frame_size=frame_size)
     app.menu.draw_dropdown(app.stdscr, frame_size=frame_size)
@@ -54,12 +92,12 @@ def draw_frame(app):
     app.draw_statusbar(frame_size=frame_size)
 
     if app.dialog:
-        app.dialog.draw(app.stdscr, frame_size=frame_size)
+        _draw_component(app.dialog, app.stdscr, frame_size)
 
     # Context menu drawn on top of menus but under modal dialogs.
     ctx = app.context_menu
     if ctx and ctx.is_open():
-        ctx.draw(app.stdscr, frame_size=frame_size)
+        _draw_component(ctx, app.stdscr, frame_size)
 
     # Toast notifications overlay (top-right corner).
     _notifications = getattr(app, '_notifications', None)
