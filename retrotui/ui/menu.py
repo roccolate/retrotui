@@ -75,6 +75,28 @@ class MenuBar:
             x += len(name) + 3
         return positions
 
+    def menu_items_right_x(self, win_x=0):
+        """Return the exclusive right edge of the rendered menu items."""
+        if not self.menu_names:
+            return self._menu_start_x(win_x)
+        positions = self.get_menu_x_positions(win_x)
+        last_idx = len(self.menu_names) - 1
+        return positions[last_idx] + len(self.menu_names[last_idx]) + 2
+
+    def hit_test_menu_item(self, mx, my, *, win_x=0, win_y=0, win_w=None):
+        """Return True when a point is over an actual menu title."""
+        if my != self._bar_row(win_y):
+            return False
+        if self.mode == 'window' and win_w is not None:
+            if not (win_x + 1 <= mx < win_x + win_w - 1):
+                return False
+        positions = self.get_menu_x_positions(win_x)
+        for i, pos in enumerate(positions):
+            name = self.menu_names[i]
+            if pos <= mx < pos + len(name) + 2:
+                return True
+        return False
+
     def _current_items(self):
         if not self.menu_names:
             return []
@@ -183,6 +205,13 @@ class MenuBar:
         if clock_x <= menu_right + 1:
             return None
         return clock_x, clock
+
+    def right_reserved_start_x(self, width, win_x=0):
+        """Return the first x reserved for right-side bar widgets."""
+        layout = self._clock_layout(width, win_x=win_x)
+        if layout is None:
+            return width
+        return layout[0]
 
     def refresh_clock(self, stdscr, *, width=None, win_x=0, force=False, frame_size=None):
         """Refresh only the global clock segment when it changed."""

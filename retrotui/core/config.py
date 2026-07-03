@@ -36,7 +36,6 @@ DEFAULT_HIDDEN_MENU_ITEMS = ",".join(
             AppAction.MARKDOWN_VIEWER.value,
             AppAction.SYSTEM_MONITOR.value,
             AppAction.TRASH_BIN.value,
-            AppAction.CONTROL_PANEL.value,
             AppAction.SETTINGS.value,
             AppAction.DESKTOP_ICON_MANAGER.value,
             AppAction.ICONS.value,
@@ -64,7 +63,6 @@ DEFAULT_HIDDEN_ICONS = ",".join(
             "menus",
             "mdview",
             "sysmon",
-            "control",
             PLUGIN_VISIBILITY_WILDCARD,
         }
     )

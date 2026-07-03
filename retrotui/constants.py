@@ -165,8 +165,8 @@ C_ANSI_START = 50
 C_ANSI_FGBG_START = 58  # 8x8 combos for (fg, bg) both explicit; pair = 58 + fg*8 + bg
 
 # Layout constants
-MENU_BAR_HEIGHT = 1          # Row 0 is the global menu bar
-BOTTOM_BARS_HEIGHT = 1       # Unified bottom bar (taskbar + status info)
+MENU_BAR_HEIGHT = 1          # Row 0 is the unified global menu/taskbar
+BOTTOM_BARS_HEIGHT = 0       # No separate bottom bar; row 0 owns shell chrome
 TASKBAR_TITLE_MAX_LEN = 15   # Max chars shown in taskbar buttons
 WIN_MIN_WIDTH = 20           # Minimum window width on resize
 WIN_MIN_HEIGHT = 8           # Minimum window height on resize
@@ -179,7 +179,7 @@ ICON_DEFAULT_SPACING_Y = 5   # Default icon grid vertical spacing
 ICON_GRID_BOTTOM_MARGIN = 3  # Rows reserved at bottom for icon grid boundary
 ICON_FALLBACK_TERMINAL_HEIGHT = 24  # Fallback terminal height when stdscr is unavailable
 DEFAULT_DOUBLE_CLICK_INTERVAL = 0.35  # Seconds for double-click detection
-CLOCK_CLICK_REGION_WIDTH = 8  # Width of clock area in status bar
+CLOCK_CLICK_REGION_WIDTH = 8  # Width of clock area in unified shell bar
 BINARY_DETECT_CHUNK_SIZE = 1024  # Bytes read to detect binary files
 
 # Terminal / input constants
@@ -195,5 +195,4 @@ MOUSE_SCROLL_DOWN_FALLBACK = 0x200000  # Fallback mask for BUTTON5_PRESSED (scro
 
 # Welcome window dimensions
 WELCOME_WIN_WIDTH = 44   # Width of the welcome dialog window
-WELCOME_WIN_HEIGHT = 20  # Height of the welcome dialog window
-
+WELCOME_WIN_HEIGHT = 21  # Height of the welcome dialog window

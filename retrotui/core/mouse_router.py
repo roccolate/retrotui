@@ -7,7 +7,7 @@ and drag/resize handlers. Utility helpers live in ``mouse_utils``.
 import curses
 import logging
 
-from ..constants import MENU_BAR_HEIGHT, CLOCK_CLICK_REGION_WIDTH
+from ..constants import MENU_BAR_HEIGHT, BOTTOM_BARS_HEIGHT, CLOCK_CLICK_REGION_WIDTH
 from .actions import AppAction
 from .platform.mouse_backend import normalize_mouse_payload
 from .mouse_utils import (
@@ -99,6 +99,26 @@ _BUTTON4_PRESSED = getattr(curses, 'BUTTON4_PRESSED', 0)
 _BUTTON3_MASK = _BUTTON3_PRESSED | _BUTTON3_CLICKED | _BUTTON3_RELEASED
 
 
+def _bottom_limit_y(screen_h):
+    return screen_h - BOTTOM_BARS_HEIGHT
+
+
+def _clock_row(screen_h):
+    return screen_h - BOTTOM_BARS_HEIGHT if BOTTOM_BARS_HEIGHT else 0
+
+
+def _menu_should_handle_top_click(app, mx, my):
+    if my != 0:
+        return False
+    menu = getattr(app, "menu", None)
+    if getattr(menu, "active", False):
+        return True
+    hit_test = getattr(menu, "hit_test_menu_item", None)
+    if callable(hit_test):
+        return bool(hit_test(mx, my))
+    return True
+
+
 def handle_file_drag_drop_mouse(app, mx, my, bstate, norm=None):
     """Handle file drag-and-drop between windows."""
     if norm is None:
@@ -120,7 +140,10 @@ def handle_drag_resize_mouse(app, mx, my, bstate):
         new_x = mx - dragging.drag_offset_x
         new_y = my - dragging.drag_offset_y
         dragging.x = max(0, min(new_x, w - dragging.w))
-        dragging.y = max(MENU_BAR_HEIGHT, min(new_y, h - dragging.h - 1))
+        dragging.y = max(
+            MENU_BAR_HEIGHT,
+            min(new_y, _bottom_limit_y(h) - dragging.h),
+        )
         return True
 
     # Resize tracking
@@ -445,7 +468,7 @@ def handle_mouse_event(app, event):
     if handle_file_drag_drop_mouse(app, mx, my, bstate, norm=norm):
         return True
 
-    if my == 0 and norm.get("is_click_like"):
+    if norm.get("is_click_like") and _menu_should_handle_top_click(app, mx, my):
         action = app.menu.handle_click(mx, my)
         if action:
             app.execute_action(action)
@@ -461,7 +484,7 @@ def handle_mouse_event(app, event):
         return True
 
     h, w = app.stdscr.getmaxyx()
-    if my == h - 1 and mx >= w - CLOCK_CLICK_REGION_WIDTH:
+    if my == _clock_row(h) and mx >= w - CLOCK_CLICK_REGION_WIDTH:
         if norm.get("button1_clicked") or norm.get("button1_double"):
             app.execute_action("plugin:clock")
             return True

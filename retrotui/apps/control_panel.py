@@ -33,7 +33,7 @@ class ControlPanelWindow(Window):
         self.show_hidden = bool(app.default_show_hidden)
         self.word_wrap_default = bool(app.default_word_wrap)
         self.sunday_first = bool(app.config.sunday_first)
-        self.show_welcome = bool(app.config.show_welcome)
+        self.show_welcome = bool(getattr(app, "show_welcome", app.config.show_welcome))
 
         # For Theme selection
         self._themes = list_themes()
@@ -110,6 +110,15 @@ class ControlPanelWindow(Window):
         self.app.apply_theme(self.theme_name)
         self.app.persist_config()
 
+    def _toggle_welcome(self):
+        self.show_welcome = not self.show_welcome
+        self.app.apply_preferences(
+            show_welcome=self.show_welcome,
+            apply_to_open_windows=True,
+        )
+        self.app.persist_config()
+        return ActionResult(ActionType.REFRESH)
+
     def handle_key(self, key):
         code = normalize_key_code(key)
         if self.selected_cat == 0 and code in (curses.KEY_LEFT, curses.KEY_RIGHT):
@@ -143,11 +152,7 @@ class ControlPanelWindow(Window):
                     apply_to_open_windows=True,
                 )
             elif self.selected_cat == 3:
-                self.show_welcome = not self.show_welcome
-                self.app.apply_preferences(
-                    show_welcome=self.show_welcome,
-                    apply_to_open_windows=True,
-                )
+                return self._toggle_welcome()
 
             # Auto-save when changing
             self.app.persist_config()
@@ -175,6 +180,11 @@ class ControlPanelWindow(Window):
                 self.app.apply_theme(self.theme_name)
                 self.app.persist_config()
                 return None
+
+        if self.selected_cat == 3 and pane_divider_x <= mx:
+            ry = by + 1
+            if my == ry + 2:
+                return self._toggle_welcome()
 
         # Check buttons
         btn_y = by + bh - 2
