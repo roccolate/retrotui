@@ -73,6 +73,34 @@ class WindowComponentTests(unittest.TestCase):
         self.assertFalse(win.on_title_bar(18, 4))
         self.assertFalse(win.on_title_bar(9, 3))   # outside title horizontal range
 
+    def test_disabled_title_controls_are_hidden_and_inactive(self):
+        win = self.window_mod.Window(
+            "Welcome",
+            10,
+            3,
+            30,
+            10,
+            minimizable=False,
+            maximizable=False,
+        )
+        win.active = True
+
+        self.assertFalse(win.on_minimize_button(30, 3))
+        self.assertFalse(win.on_maximize_button(33, 3))
+        self.assertTrue(win.on_close_button(36, 3))
+        self.assertTrue(win.on_title_bar(29, 3))
+        self.assertFalse(win.on_title_bar(36, 3))
+
+        with (
+            mock.patch.object(self.window_mod, "draw_box"),
+            mock.patch.object(self.window_mod, "safe_addstr") as safe_addstr,
+        ):
+            win.draw_frame(types.SimpleNamespace())
+
+        rendered = [call.args[3] for call in safe_addstr.call_args_list if len(call.args) > 3]
+        self.assertIn("[×]", rendered)
+        self.assertNotIn("[─][□][×]", rendered)
+
     def test_toggle_maximize_and_restore_with_clamp(self):
         win = self.window_mod.Window("Test", 12, 8, 40, 14)
         win.window_menu = types.SimpleNamespace(active=True)
@@ -80,12 +108,13 @@ class WindowComponentTests(unittest.TestCase):
         win.toggle_maximize(120, 40)
         self.assertTrue(win.maximized)
         self.assertEqual((win.x, win.y, win.w, win.h), (0, 1, 120, 39))
+        self.assertEqual(win.y + win.h, 40)
         self.assertFalse(win.window_menu.active)
 
         win.restore_rect = (200, 100, 50, 20)
         win.toggle_maximize(100, 40)
         self.assertFalse(win.maximized)
-        self.assertEqual((win.x, win.y), (50, 19))
+        self.assertEqual((win.x, win.y), (50, 20))
 
     def test_toggle_minimize_updates_visibility_and_active(self):
         win = self.window_mod.Window("Test", 0, 0, 20, 10)
@@ -124,7 +153,7 @@ class WindowComponentTests(unittest.TestCase):
 
         win.resize_edge = "bottom"
         win.apply_resize(mx=12, my=200, term_w=100, term_h=40)
-        self.assertEqual(win.h, 34)  # clamped by term_h - y - 1
+        self.assertEqual(win.h, 35)  # clamped by term_h - y
         self.assertFalse(win.window_menu.active)
 
     def test_draw_frame_and_draw_body_render_expected_paths(self):

@@ -3,8 +3,9 @@
 from ..utils import get_system_info
 
 
-def build_welcome_content(version: str) -> list[str]:
+def build_welcome_content(version: str, *, show_on_startup: bool = True) -> list[str]:
     """Build startup window content."""
+    startup_mark = "x" if show_on_startup else " "
     return [
         "",
         " +--------------------------------------+",
@@ -14,15 +15,16 @@ def build_welcome_content(version: str) -> list[str]:
         " |  environment for the Linux console.  |",
         " |                                      |",
         " |  Highlights:                         |",
-        " |  - Modular package structure         |",
-        " |  - ASCII video player                |",
+        " |  - Apps, games and plugins           |",
         " |  - Per-window menus                  |",
         " |  - Text editor + file manager        |",
         " |                                      |",
         " |  Use mouse or keyboard to navigate.  |",
-        " |  Press F9 to hide this forever.      |",
         " |  Press Ctrl+Q to exit.               |",
         " +--------------------------------------+",
+        "",
+        f"  [{startup_mark}] Show welcome on startup",
+        "  Space toggles. F9 hides forever.",
         "",
     ]
 
@@ -89,4 +91,3 @@ def build_settings_content() -> list[str]:
         " |                                      |",
         " +--------------------------------------+",
     ]
-

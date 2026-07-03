@@ -231,6 +231,9 @@ class StaticModuleContentTests(unittest.TestCase):
             about = content.build_about_message("0.9.5")
 
         self.assertTrue(any("v0.9.5" in line for line in welcome))
+        self.assertTrue(any("[x] Show welcome on startup" in line for line in welcome))
+        hidden_welcome = content.build_welcome_content("0.9.5", show_on_startup=False)
+        self.assertTrue(any("[ ] Show welcome on startup" in line for line in hidden_welcome))
         self.assertIn("Ctrl+Q", help_text)
         self.assertTrue(any("Theme:" in line for line in settings))
         self.assertIn("RetroTUI v0.9.5", about)

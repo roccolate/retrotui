@@ -33,8 +33,35 @@ def _resolve_frame_size(app, frame_size):
     return _frame_size(app)
 
 
+def _taskbar_row(frame_h):
+    return frame_h - BOTTOM_BARS_HEIGHT if BOTTOM_BARS_HEIGHT else 0
+
+
+def _taskbar_bounds(app, width):
+    if BOTTOM_BARS_HEIGHT:
+        return 1, width
+
+    menu = getattr(app, "menu", None)
+    start_x = 1
+    menu_right = getattr(menu, "menu_items_right_x", None)
+    if callable(menu_right):
+        try:
+            start_x = max(start_x, int(menu_right()) + 2)
+        except (TypeError, ValueError):
+            start_x = 1
+
+    end_x = width
+    reserved = getattr(menu, "right_reserved_start_x", None)
+    if callable(reserved):
+        try:
+            end_x = min(end_x, max(start_x, int(reserved(width)) - 1))
+        except (TypeError, ValueError):
+            end_x = width
+    return start_x, end_x
+
+
 def _window_stats(app):
-    """Return cached per-frame window stats used by taskbar/statusbar."""
+    """Return cached per-frame window stats used by shell bar rendering."""
     window_mgr = getattr(app, "window_mgr", None)
     if window_mgr is not None and hasattr(window_mgr, "window_stats"):
         stats = window_mgr.window_stats()
@@ -71,20 +98,28 @@ def _window_stats(app):
     return stats
 
 
-def _taskbar_buttons(app, width, stats=None):
+def _taskbar_buttons(app, width, stats=None, *, start_x=None, end_x=None):
     """Return taskbar button layout as `(start_x, end_x, label, win)` tuples."""
     window_mgr = getattr(app, "window_mgr", None)
     if window_mgr is not None and hasattr(window_mgr, "taskbar_buttons"):
-        return tuple(window_mgr.taskbar_buttons(width))
+        try:
+            return tuple(
+                window_mgr.taskbar_buttons(width, start_x=start_x, end_x=end_x)
+            )
+        except TypeError:
+            return tuple(window_mgr.taskbar_buttons(width))
 
     if stats is None:
         stats = _window_stats(app)
 
-    x = 1
+    if start_x is None or end_x is None:
+        start_x, end_x = _taskbar_bounds(app, width)
+
+    x = start_x
     buttons = []
     for label in stats["minimized_labels"]:
         btn_w = len(label) + 2  # [label]
-        if x + btn_w > width:
+        if x + btn_w > end_x:
             break
         buttons.append((x, x + btn_w, label, None))
         x += btn_w + 1
@@ -105,7 +140,7 @@ def draw_desktop(app, frame_size=None):
         _desktop_line_cache['key'] = cache_key
     line = _desktop_line_cache['line']
 
-    for row in range(MENU_BAR_HEIGHT, h - BOTTOM_BARS_HEIGHT + 1):
+    for row in range(MENU_BAR_HEIGHT, h - BOTTOM_BARS_HEIGHT):
         safe_addstr(app.stdscr, row, 0, line, attr, _bounds=bounds)
 
 
@@ -166,32 +201,36 @@ def draw_icons(app, frame_size=None):
 
 
 def draw_taskbar(app, frame_size=None):
-    """Draw taskbar row with minimized window buttons."""
+    """Draw minimized window buttons on the shell bar."""
     h, w = _resolve_frame_size(app, frame_size)
     bounds = (h, w)
-    taskbar_y = h - BOTTOM_BARS_HEIGHT
-    attr = theme_attr("taskbar")
+    taskbar_y = _taskbar_row(h)
+    attr = theme_attr("taskbar" if BOTTOM_BARS_HEIGHT else "menubar")
 
-    # Always clear the taskbar line
-    safe_addstr(app.stdscr, taskbar_y, 0, ' ' * w, attr, _bounds=bounds)
+    if BOTTOM_BARS_HEIGHT:
+        safe_addstr(app.stdscr, taskbar_y, 0, ' ' * w, attr, _bounds=bounds)
 
     stats = _window_stats(app)
-    buttons = _taskbar_buttons(app, w, stats=stats)
+    start_x, end_x = _taskbar_bounds(app, w)
+    buttons = _taskbar_buttons(app, w, stats=stats, start_x=start_x, end_x=end_x)
     for start_x, _end_x, label, _win in buttons:
         safe_addstr(app.stdscr, taskbar_y, start_x, f'[{label}]', attr | curses.A_BOLD, _bounds=bounds)
 
 
 def draw_statusbar(app, version, frame_size=None):
-    """Draw status text on the unified bottom bar without clearing taskbar buttons."""
+    """Draw legacy bottom status text when a separate bottom bar exists."""
+    if not BOTTOM_BARS_HEIGHT:
+        return
     h, w = _resolve_frame_size(app, frame_size)
-    attr = theme_attr("status")
+    attr = theme_attr("taskbar")
     stats = _window_stats(app)
     visible = stats["visible"]
     total = stats["total"]
     status_text = f' RetroTUI v{version} | Windows: {visible}/{total} | Mouse: Enabled '
 
-    statusbar_y = h - BOTTOM_BARS_HEIGHT
-    buttons = _taskbar_buttons(app, w, stats=stats)
+    statusbar_y = _taskbar_row(h)
+    start_x, end_x = _taskbar_bounds(app, w)
+    buttons = _taskbar_buttons(app, w, stats=stats, start_x=start_x, end_x=end_x)
     left_reserved = buttons[-1][1] + 1 if buttons else 0
 
     status_x = left_reserved + 1

@@ -412,19 +412,61 @@ class RetroTUI:
         if self.show_welcome:
             h, w = stdscr.getmaxyx()
             welcome_content = build_welcome_content(APP_VERSION)
-            win = Window('Welcome to RetroTUI', w // 2 - WELCOME_WIN_WIDTH // 2, h // 2 - WELCOME_WIN_HEIGHT // 2, WELCOME_WIN_WIDTH, WELCOME_WIN_HEIGHT,
-                          content=welcome_content)
+            win = Window(
+                'Welcome to RetroTUI',
+                w // 2 - WELCOME_WIN_WIDTH // 2,
+                h // 2 - WELCOME_WIN_HEIGHT // 2,
+                WELCOME_WIN_WIDTH,
+                WELCOME_WIN_HEIGHT,
+                content=welcome_content,
+                resizable=False,
+                minimizable=False,
+                maximizable=False,
+            )
 
-            # Custom handler to process "Don't show again"
+            def _refresh_welcome_content():
+                win.content = build_welcome_content(
+                    APP_VERSION,
+                    show_on_startup=self.show_welcome,
+                )
+
+            def _persist_welcome_preference(show_on_startup):
+                self.apply_preferences(show_welcome=show_on_startup)
+                _refresh_welcome_content()
+                self.persist_config()
+                self._dirty = True
+
+            def _toggle_welcome_preference():
+                _persist_welcome_preference(not self.show_welcome)
+                return ActionResult(ActionType.REFRESH)
+
+            def _welcome_checkbox_row():
+                for idx, line in enumerate(getattr(win, "content", ())):
+                    if "Show welcome on startup" in line:
+                        return win.y + 1 + idx
+                return None
+
+            # Custom handler to process the startup preference checkbox.
             def _welcome_handle_key(key):
                 if getattr(curses, "KEY_F9", -1) == key or key == "KEY_F9":
-                    self.show_welcome = False
-                    self.persist_config()
+                    _persist_welcome_preference(False)
                     self.close_window(win)
                     return ActionResult(ActionType.REFRESH)
+                if key in (" ", "\n", "\r", 10, 13, getattr(curses, "KEY_ENTER", -1)):
+                    return _toggle_welcome_preference()
                 return Window.handle_key(win, key)
 
+            def _welcome_handle_click(mx, my, bstate=None):
+                _ = bstate
+                checkbox_y = _welcome_checkbox_row()
+                if checkbox_y is not None and my == checkbox_y:
+                    bx, _by, bw, _bh = win.body_rect()
+                    if bx <= mx < bx + bw:
+                        return _toggle_welcome_preference()
+                return Window.handle_click(win, mx, my)
+
             win.handle_key = _welcome_handle_key
+            win.handle_click = _welcome_handle_click
             win.active = True
             self.windows.append(win)
         # load persisted icon positions (if any)
@@ -787,11 +829,11 @@ class RetroTUI:
         return draw_icons(self, frame_size=frame_size)
 
     def draw_taskbar(self, frame_size=None):
-        """Draw taskbar row with minimized window buttons."""
+        """Draw minimized window buttons on the shell bar."""
         return draw_taskbar(self, frame_size=frame_size)
 
     def draw_statusbar(self, frame_size=None):
-        """Draw the bottom status bar."""
+        """Draw legacy bottom status content when configured."""
         return draw_statusbar(self, APP_VERSION, frame_size=frame_size)
 
     # ------------------------------------------------------------------
@@ -981,7 +1023,7 @@ class RetroTUI:
         return True
 
     def handle_taskbar_click(self, mx, my):
-        """Handle click on taskbar row. Returns True if handled."""
+        """Handle click on taskbar buttons. Returns True if handled."""
         return self.window_mgr.handle_taskbar_click(mx, my)
 
     def _handle_drag_resize_mouse(self, mx, my, bstate):

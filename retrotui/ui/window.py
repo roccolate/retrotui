@@ -24,11 +24,24 @@ class Window:
 
     _next_id = 0
     TITLE_CONTROLS = '[─][□][×]'
+    TITLE_CONTROL_WIDTH = 3
     MIN_BTN_OFFSET = 10
     MAX_BTN_OFFSET = 7
     CLOSE_BTN_OFFSET = 4
 
-    def __init__(self, title, x, y, w, h, content=None, resizable=True):
+    def __init__(
+        self,
+        title,
+        x,
+        y,
+        w,
+        h,
+        content=None,
+        resizable=True,
+        minimizable=True,
+        maximizable=True,
+        closable=True,
+    ):
         self.id = Window._next_id
         Window._next_id += 1
         self.title = title
@@ -48,6 +61,9 @@ class Window:
         self.drag_offset_x = 0
         self.drag_offset_y = 0
         self.resizable = resizable
+        self.minimizable = minimizable
+        self.maximizable = maximizable
+        self.closable = closable
         self.resizing = False
         self.resize_edge = None       # 'right', 'bottom', 'corner'
         self.always_on_top = False
@@ -62,6 +78,9 @@ class Window:
 
     def close_button_pos(self):
         """Return (x, y) of the close button."""
+        control = self._title_control_range("close")
+        if control is not None:
+            return (control[0], self.y)
         return (self.x + self.w - self.CLOSE_BTN_OFFSET, self.y)
 
     def body_rect(self):
@@ -88,24 +107,61 @@ class Window:
         if mx < self.x + 1 or mx > self.x + self.w - 2:
             return False
         # Reserve right-side title controls: [─][□][×]
-        if mx >= self.x + self.w - self.MIN_BTN_OFFSET:
+        controls_start = self._title_controls_start_x()
+        if controls_start is not None and mx >= controls_start:
             return False
         return True
 
     def on_close_button(self, mx, my):
         """Check if point is on the close button [×]."""
-        start_x = self.x + self.w - self.CLOSE_BTN_OFFSET
-        return my == self.y and (start_x <= mx <= start_x + 2)
+        control = self._title_control_range("close")
+        if control is None:
+            return False
+        start_x, end_x = control
+        return my == self.y and (start_x <= mx < end_x)
 
     def on_minimize_button(self, mx, my):
         """Check if point is on the minimize button [─]."""
-        start_x = self.x + self.w - self.MIN_BTN_OFFSET
-        return my == self.y and (start_x <= mx <= start_x + 2)
+        control = self._title_control_range("minimize")
+        if control is None:
+            return False
+        start_x, end_x = control
+        return my == self.y and (start_x <= mx < end_x)
 
     def on_maximize_button(self, mx, my):
         """Check if point is on the maximize button [□]."""
-        start_x = self.x + self.w - self.MAX_BTN_OFFSET
-        return my == self.y and (start_x <= mx <= start_x + 2)
+        control = self._title_control_range("maximize")
+        if control is None:
+            return False
+        start_x, end_x = control
+        return my == self.y and (start_x <= mx < end_x)
+
+    def _title_control_specs(self):
+        specs = []
+        if self.minimizable:
+            specs.append(("minimize", "[─]"))
+        if self.maximizable:
+            specs.append(("maximize", "[□]"))
+        if self.closable:
+            specs.append(("close", "[×]"))
+        return specs
+
+    def _title_controls_start_x(self):
+        specs = self._title_control_specs()
+        if not specs:
+            return None
+        total_w = len(specs) * self.TITLE_CONTROL_WIDTH
+        return self.x + self.w - 1 - total_w
+
+    def _title_control_range(self, name):
+        start = self._title_controls_start_x()
+        if start is None:
+            return None
+        for idx, (control_name, _label) in enumerate(self._title_control_specs()):
+            if control_name == name:
+                control_start = start + idx * self.TITLE_CONTROL_WIDTH
+                return control_start, control_start + self.TITLE_CONTROL_WIDTH
+        return None
 
     def toggle_maximize(self, term_w, term_h):
         """Toggle between maximized and normal state."""
@@ -116,7 +172,10 @@ class Window:
             self.x = 0
             self.y = MENU_BAR_HEIGHT  # Below global menu
             self.w = term_w
-            self.h = term_h - BOTTOM_BARS_HEIGHT  # Above taskbar
+            self.h = max(
+                WIN_MIN_HEIGHT,
+                term_h - MENU_BAR_HEIGHT - BOTTOM_BARS_HEIGHT,
+            )
             # Force close menu on resize
             if self.window_menu:
                 self.window_menu.active = False
@@ -127,7 +186,10 @@ class Window:
             self.maximized = False
             # Clamp to screen just in case
             self.x = max(0, min(self.x, term_w - self.w))
-            self.y = max(MENU_BAR_HEIGHT, min(self.y, term_h - self.h - 1))
+            self.y = max(
+                MENU_BAR_HEIGHT,
+                min(self.y, term_h - self.h - BOTTOM_BARS_HEIGHT),
+            )
 
     def toggle_minimize(self):
         """Toggle between minimized and visible state."""
@@ -164,7 +226,10 @@ class Window:
         
         if self.resize_edge == 'bottom' or self.resize_edge == 'corner':
             new_h = my - self.y + 1
-            self.h = max(WIN_MIN_HEIGHT, min(new_h, term_h - self.y - 1))
+            self.h = max(
+                WIN_MIN_HEIGHT,
+                min(new_h, term_h - self.y - BOTTOM_BARS_HEIGHT),
+            )
         
         if self.window_menu:
             self.window_menu.active = False
@@ -206,14 +271,17 @@ class Window:
         # Buttons
         if self.active:
             # Right-aligned title controls: [─][□][×]
-            safe_addstr(
-                stdscr,
-                self.y,
-                self.x + self.w - self.MIN_BTN_OFFSET,
-                self.TITLE_CONTROLS,
-                theme_attr('window_title_invert'),
-                _bounds=frame_size,
-            )
+            controls = "".join(label for _name, label in self._title_control_specs())
+            controls_start = self._title_controls_start_x()
+            if controls and controls_start is not None:
+                safe_addstr(
+                    stdscr,
+                    self.y,
+                    controls_start,
+                    controls,
+                    theme_attr('window_title_invert'),
+                    _bounds=frame_size,
+                )
 
         # Window Menu Bar
         if self.window_menu:

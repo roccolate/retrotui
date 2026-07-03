@@ -209,25 +209,52 @@ class WindowManager:
             self._window_stats_cache["stats"] = stats
         return stats
 
-    def taskbar_buttons(self, width):
+    def _taskbar_row(self, height):
+        return height - BOTTOM_BARS_HEIGHT if BOTTOM_BARS_HEIGHT else 0
+
+    def _taskbar_bounds(self, width):
+        if BOTTOM_BARS_HEIGHT:
+            return 1, width
+
+        menu = getattr(self._app, "menu", None)
+        start_x = 1
+        menu_right = getattr(menu, "menu_items_right_x", None)
+        if callable(menu_right):
+            try:
+                start_x = max(start_x, int(menu_right()) + 2)
+            except (TypeError, ValueError):
+                start_x = 1
+
+        end_x = width
+        reserved = getattr(menu, "right_reserved_start_x", None)
+        if callable(reserved):
+            try:
+                end_x = min(end_x, max(start_x, int(reserved(width)) - 1))
+            except (TypeError, ValueError):
+                end_x = width
+        return start_x, end_x
+
+    def taskbar_buttons(self, width, *, start_x=None, end_x=None):
         """Return cached taskbar button layout for minimized windows.
 
         Each entry is `(start_x, end_x, label, win)` where `end_x` is exclusive.
         """
+        if start_x is None or end_x is None:
+            start_x, end_x = self._taskbar_bounds(width)
         stats = self.window_stats()
         cycle = self._current_render_cycle()
-        key = (int(width), cycle, stats.get("minimized"))
+        key = (int(width), int(start_x), int(end_x), cycle, stats.get("minimized"))
         if cycle is None:
-            key = (int(width), stats.get("minimized"))
+            key = (int(width), int(start_x), int(end_x), stats.get("minimized"))
         cached_key = self._taskbar_cache.get("key")
         if cached_key == key:
             return self._taskbar_cache.get("buttons", ())
 
-        x = 1
+        x = int(start_x)
         buttons = []
         for label, win in stats.get("minimized", ()):
             btn_w = len(label) + 2  # [label]
-            if x + btn_w > width:
+            if x + btn_w > end_x:
                 break
             buttons.append((x, x + btn_w, label, win))
             x += btn_w + 1
@@ -238,9 +265,9 @@ class WindowManager:
         return result
 
     def handle_taskbar_click(self, mx, my):
-        """Handle click on taskbar row. Returns True if handled."""
+        """Handle click on taskbar buttons. Returns True if handled."""
         h, w = self._app.stdscr.getmaxyx()
-        taskbar_y = h - BOTTOM_BARS_HEIGHT
+        taskbar_y = self._taskbar_row(h)
         if my != taskbar_y:
             return False
         buttons = self.taskbar_buttons(w)

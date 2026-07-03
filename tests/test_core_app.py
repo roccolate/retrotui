@@ -21,6 +21,7 @@ def _install_fake_curses():
     fake.KEY_DC = 330
     fake.KEY_MOUSE = 409
     fake.KEY_RESIZE = 410
+    fake.KEY_F9 = 273
     fake.KEY_F10 = 266
     fake.ALL_MOUSE_EVENTS = 0xFFFFFFFF
     fake.REPORT_MOUSE_POSITION = 0x200000
@@ -250,6 +251,119 @@ class CoreAppTests(unittest.TestCase):
         expected = {(icon.get("label"), icon.get("action")) for icon in self.app_mod.ICONS_ASCII}
         current = {(icon.get("label"), icon.get("action")) for icon in app.icons}
         self.assertTrue(expected.issubset(current))
+
+    def test_welcome_checkbox_key_toggles_and_persists(self):
+        stdscr = types.SimpleNamespace(getmaxyx=lambda: (30, 120))
+        fake_menu = types.SimpleNamespace(
+            active=False,
+            selected_menu=0,
+            selected_item=0,
+            handle_key=mock.Mock(return_value=None),
+            handle_click=mock.Mock(return_value=None),
+            handle_hover=mock.Mock(return_value=None),
+            hit_test_dropdown=mock.Mock(return_value=False),
+            hit_test_menu_item=mock.Mock(return_value=False),
+        )
+
+        with (
+            mock.patch.object(self.app_mod, "check_unicode_support", return_value=True),
+            mock.patch.object(self.app_mod, "load_config", return_value=types.SimpleNamespace(theme="win31", show_hidden=False, word_wrap_default=False, sunday_first=False, show_welcome=True, hidden_icons="", hidden_menu_items="")),
+            mock.patch.object(self.app_mod, "configure_terminal"),
+            mock.patch.object(self.app_mod, "disable_flow_control"),
+            mock.patch.object(self.app_mod, "enable_mouse_support", return_value=(1, 2, 3)),
+            mock.patch.object(self.app_mod, "init_colors"),
+            mock.patch("retrotui.ui.menu.Menu", return_value=fake_menu),
+            mock.patch.object(self.app_mod, "save_config") as save_config,
+        ):
+            app = self.app_mod.RetroTUI(stdscr)
+            win = app.windows[0]
+
+            self.assertFalse(win.resizable)
+            self.assertFalse(win.minimizable)
+            self.assertFalse(win.maximizable)
+            self.assertTrue(win.closable)
+            self.assertTrue(any("[x] Show welcome on startup" in line for line in win.content))
+            result = win.handle_key(" ")
+
+            self.assertEqual(result.type, self.actions_mod.ActionType.REFRESH)
+            self.assertFalse(app.show_welcome)
+            self.assertTrue(any("[ ] Show welcome on startup" in line for line in win.content))
+            save_config.assert_called_once()
+
+            win.handle_key(10)
+            self.assertTrue(app.show_welcome)
+            self.assertTrue(any("[x] Show welcome on startup" in line for line in win.content))
+            self.assertEqual(save_config.call_count, 2)
+
+    def test_welcome_checkbox_click_toggles_and_persists(self):
+        stdscr = types.SimpleNamespace(getmaxyx=lambda: (30, 120))
+        fake_menu = types.SimpleNamespace(
+            active=False,
+            selected_menu=0,
+            selected_item=0,
+            handle_key=mock.Mock(return_value=None),
+            handle_click=mock.Mock(return_value=None),
+            handle_hover=mock.Mock(return_value=None),
+            hit_test_dropdown=mock.Mock(return_value=False),
+            hit_test_menu_item=mock.Mock(return_value=False),
+        )
+
+        with (
+            mock.patch.object(self.app_mod, "check_unicode_support", return_value=True),
+            mock.patch.object(self.app_mod, "load_config", return_value=types.SimpleNamespace(theme="win31", show_hidden=False, word_wrap_default=False, sunday_first=False, show_welcome=True, hidden_icons="", hidden_menu_items="")),
+            mock.patch.object(self.app_mod, "configure_terminal"),
+            mock.patch.object(self.app_mod, "disable_flow_control"),
+            mock.patch.object(self.app_mod, "enable_mouse_support", return_value=(1, 2, 3)),
+            mock.patch.object(self.app_mod, "init_colors"),
+            mock.patch("retrotui.ui.menu.Menu", return_value=fake_menu),
+            mock.patch.object(self.app_mod, "save_config") as save_config,
+        ):
+            app = self.app_mod.RetroTUI(stdscr)
+            win = app.windows[0]
+            checkbox_idx = next(
+                idx for idx, line in enumerate(win.content)
+                if "Show welcome on startup" in line
+            )
+
+            result = win.handle_click(win.x + 3, win.y + 1 + checkbox_idx)
+
+            self.assertEqual(result.type, self.actions_mod.ActionType.REFRESH)
+            self.assertFalse(app.show_welcome)
+            self.assertTrue(any("[ ] Show welcome on startup" in line for line in win.content))
+            save_config.assert_called_once()
+
+    def test_welcome_f9_hides_and_closes(self):
+        stdscr = types.SimpleNamespace(getmaxyx=lambda: (30, 120))
+        fake_menu = types.SimpleNamespace(
+            active=False,
+            selected_menu=0,
+            selected_item=0,
+            handle_key=mock.Mock(return_value=None),
+            handle_click=mock.Mock(return_value=None),
+            handle_hover=mock.Mock(return_value=None),
+            hit_test_dropdown=mock.Mock(return_value=False),
+            hit_test_menu_item=mock.Mock(return_value=False),
+        )
+
+        with (
+            mock.patch.object(self.app_mod, "check_unicode_support", return_value=True),
+            mock.patch.object(self.app_mod, "load_config", return_value=types.SimpleNamespace(theme="win31", show_hidden=False, word_wrap_default=False, sunday_first=False, show_welcome=True, hidden_icons="", hidden_menu_items="")),
+            mock.patch.object(self.app_mod, "configure_terminal"),
+            mock.patch.object(self.app_mod, "disable_flow_control"),
+            mock.patch.object(self.app_mod, "enable_mouse_support", return_value=(1, 2, 3)),
+            mock.patch.object(self.app_mod, "init_colors"),
+            mock.patch("retrotui.ui.menu.Menu", return_value=fake_menu),
+            mock.patch.object(self.app_mod, "save_config") as save_config,
+        ):
+            app = self.app_mod.RetroTUI(stdscr)
+            win = app.windows[0]
+
+            result = win.handle_key(self.curses.KEY_F9)
+
+            self.assertEqual(result.type, self.actions_mod.ActionType.REFRESH)
+            self.assertFalse(app.show_welcome)
+            self.assertNotIn(win, app.windows)
+            save_config.assert_called_once()
 
     def test_cleanup_delegates_to_bootstrap_helper(self):
         app = self._make_app()
@@ -515,7 +629,7 @@ class CoreAppTests(unittest.TestCase):
 
         menu_items = app._build_global_menu_items()
 
-        self.assertEqual(set(menu_items), {"File"})
+        self.assertEqual(set(menu_items), {"File", "Edit"})
         file_actions = [action for _, action in menu_items["File"] if action is not None]
         self.assertEqual(
             file_actions,
@@ -526,6 +640,8 @@ class CoreAppTests(unittest.TestCase):
                 self.actions_mod.AppAction.EXIT,
             ],
         )
+        edit_actions = [action for _, action in menu_items["Edit"] if action is not None]
+        self.assertEqual(edit_actions, [self.actions_mod.AppAction.CONTROL_PANEL])
 
     def test_refresh_icons_includes_plugins_and_honors_hidden_keys(self):
         app = self._make_app()
@@ -562,6 +678,7 @@ class CoreAppTests(unittest.TestCase):
                 self.actions_mod.AppAction.FILE_MANAGER,
                 self.actions_mod.AppAction.NOTEPAD,
                 self.actions_mod.AppAction.TERMINAL,
+                self.actions_mod.AppAction.CONTROL_PANEL,
             ],
         )
 
@@ -1974,7 +2091,7 @@ class CoreAppTests(unittest.TestCase):
         app.windows = [normal, minimized]
         app.set_active_window = mock.Mock()
 
-        handled = app.handle_taskbar_click(2, 29)  # taskbar row = h - 1
+        handled = app.handle_taskbar_click(2, 0)
 
         self.assertTrue(handled)
         minimized.toggle_minimize.assert_called_once_with()
@@ -1986,12 +2103,12 @@ class CoreAppTests(unittest.TestCase):
         app.windows = []
 
         self.assertFalse(app.handle_taskbar_click(2, 10))  # not taskbar row
-        self.assertFalse(app.handle_taskbar_click(2, 29))  # taskbar row but no minimized
+        self.assertFalse(app.handle_taskbar_click(2, 0))  # taskbar row but no minimized
 
         minimized = types.SimpleNamespace(minimized=True, title="One", toggle_minimize=mock.Mock())
         app.windows = [minimized]
         app.set_active_window = mock.Mock()
-        self.assertFalse(app.handle_taskbar_click(119, 29))  # misses button area
+        self.assertFalse(app.handle_taskbar_click(119, 0))  # misses button area
 
     def test_resolve_dialog_result_ignores_invalid_index_or_missing_dialog(self):
         app = self._make_app()

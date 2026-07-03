@@ -27,6 +27,7 @@ class RenderingTests(unittest.TestCase):
             sys.modules.pop(mod_name, None)
 
         cls.rendering = importlib.import_module("retrotui.core.rendering")
+        cls.constants = importlib.import_module("retrotui.constants")
         cls.curses = sys.modules["curses"]
 
     @classmethod
@@ -58,6 +59,8 @@ class RenderingTests(unittest.TestCase):
         self.assertEqual(
             first_call[4], self.curses.color_pair(self.rendering.C_DESKTOP)
         )
+        last_call = safe_addstr.call_args_list[-1].args
+        self.assertEqual(last_call[1], 9)
 
     def test_draw_icons_uses_selected_and_normal_colors(self):
         stdscr = types.SimpleNamespace(getmaxyx=mock.Mock(return_value=(20, 80)))
@@ -128,8 +131,7 @@ class RenderingTests(unittest.TestCase):
         with mock.patch.object(self.rendering, "safe_addstr") as safe_addstr:
             self.rendering.draw_taskbar(app)
 
-        # Only the background clear line, no button labels.
-        self.assertEqual(safe_addstr.call_count, 1)
+        self.assertEqual(safe_addstr.call_count, 0)
 
     def test_draw_taskbar_renders_buttons_for_minimized_windows(self):
         stdscr = types.SimpleNamespace(getmaxyx=mock.Mock(return_value=(20, 80)))
@@ -145,9 +147,34 @@ class RenderingTests(unittest.TestCase):
         with mock.patch.object(self.rendering, "safe_addstr") as safe_addstr:
             self.rendering.draw_taskbar(app)
 
-        self.assertGreaterEqual(safe_addstr.call_count, 3)
+        self.assertGreaterEqual(safe_addstr.call_count, 2)
         self.assertTrue(any("[Notes]" in call.args[3] for call in safe_addstr.call_args_list))
         self.assertTrue(any("[Files]" in call.args[3] for call in safe_addstr.call_args_list))
+
+    def test_draw_taskbar_uses_unified_top_bar_free_space(self):
+        stdscr = types.SimpleNamespace(getmaxyx=mock.Mock(return_value=(20, 80)))
+        app = types.SimpleNamespace(
+            stdscr=stdscr,
+            windows=[types.SimpleNamespace(minimized=True, title="Notes")],
+            menu=types.SimpleNamespace(
+                menu_items_right_x=mock.Mock(return_value=20),
+                right_reserved_start_x=mock.Mock(return_value=70),
+            ),
+        )
+
+        with mock.patch.object(self.rendering, "safe_addstr") as safe_addstr:
+            self.rendering.draw_taskbar(app)
+
+        self.assertTrue(
+            any(
+                call.args[1] == 0
+                and call.args[2] == 22
+                and call.args[3] == "[Notes]"
+                and call.args[4]
+                == (self.curses.color_pair(self.constants.C_MENUBAR) | self.curses.A_BOLD)
+                for call in safe_addstr.call_args_list
+            )
+        )
 
     def test_draw_taskbar_uses_window_manager_taskbar_layout_when_available(self):
         stdscr = types.SimpleNamespace(getmaxyx=mock.Mock(return_value=(20, 80)))
@@ -165,7 +192,7 @@ class RenderingTests(unittest.TestCase):
         with mock.patch.object(self.rendering, "safe_addstr") as safe_addstr:
             self.rendering.draw_taskbar(app)
 
-        window_mgr.taskbar_buttons.assert_called_once_with(80)
+        window_mgr.taskbar_buttons.assert_called_once_with(80, start_x=1, end_x=80)
         self.assertTrue(any(call.args[2] == 1 and call.args[3] == "[Notes]" for call in safe_addstr.call_args_list))
         self.assertTrue(any(call.args[2] == 10 and call.args[3] == "[Files]" for call in safe_addstr.call_args_list))
 
@@ -179,10 +206,9 @@ class RenderingTests(unittest.TestCase):
         with mock.patch.object(self.rendering, "safe_addstr") as safe_addstr:
             self.rendering.draw_taskbar(app)
 
-        # Background row is drawn, but oversized button is skipped.
-        self.assertEqual(safe_addstr.call_count, 1)
+        self.assertEqual(safe_addstr.call_count, 0)
 
-    def test_draw_statusbar_includes_version_and_window_counts(self):
+    def test_draw_statusbar_is_noop_without_bottom_bar(self):
         stdscr = types.SimpleNamespace(getmaxyx=mock.Mock(return_value=(20, 80)))
         app = types.SimpleNamespace(
             stdscr=stdscr,
@@ -195,13 +221,9 @@ class RenderingTests(unittest.TestCase):
         with mock.patch.object(self.rendering, "safe_addstr") as safe_addstr:
             self.rendering.draw_statusbar(app, "0.3.4")
 
-        self.assertGreaterEqual(safe_addstr.call_count, 1)
-        # Find the call that contains the status text
-        all_text = "".join(str(call.args[3]) for call in safe_addstr.call_args_list if len(call.args) > 3)
-        self.assertIn("v0.3.4", all_text)
-        self.assertIn("Windows: 1/2", all_text)
+        safe_addstr.assert_not_called()
 
-    def test_draw_statusbar_uses_explicit_frame_size_without_terminal_query(self):
+    def test_draw_statusbar_noop_uses_no_terminal_query_with_explicit_frame_size(self):
         stdscr = types.SimpleNamespace(getmaxyx=mock.Mock(side_effect=AssertionError("unexpected getmaxyx call")))
         app = types.SimpleNamespace(
             stdscr=stdscr,
@@ -212,9 +234,9 @@ class RenderingTests(unittest.TestCase):
             self.rendering.draw_statusbar(app, "0.3.4", frame_size=(20, 80))
 
         stdscr.getmaxyx.assert_not_called()
-        self.assertGreaterEqual(safe_addstr.call_count, 1)
+        safe_addstr.assert_not_called()
 
-    def test_draw_statusbar_uses_window_manager_stats_when_available(self):
+    def test_draw_statusbar_noop_does_not_read_window_manager_stats(self):
         stdscr = types.SimpleNamespace(getmaxyx=mock.Mock(return_value=(20, 80)))
         window_mgr = types.SimpleNamespace(
             window_stats=mock.Mock(
@@ -233,11 +255,10 @@ class RenderingTests(unittest.TestCase):
         with mock.patch.object(self.rendering, "safe_addstr") as safe_addstr:
             self.rendering.draw_statusbar(app, "0.3.4")
 
-        window_mgr.window_stats.assert_called_once_with()
-        all_text = "".join(str(call.args[3]) for call in safe_addstr.call_args_list if len(call.args) > 3)
-        self.assertIn("Windows: 2/3", all_text)
+        window_mgr.window_stats.assert_not_called()
+        safe_addstr.assert_not_called()
 
-    def test_taskbar_and_statusbar_share_window_stats_cache_per_render_cycle(self):
+    def test_taskbar_draw_uses_window_stats_cache_per_render_cycle(self):
         class _CountingWindows(list):
             def __init__(self, *items):
                 super().__init__(items)
