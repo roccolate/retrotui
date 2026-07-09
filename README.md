@@ -85,11 +85,15 @@ retrotui
 ## Documentation
 *   [ARCHITECTURE.md](ARCHITECTURE.md) - System design and internals.
 *   [ROADMAP.md](ROADMAP.md) - Project status and release plan.
+*   [docs/CODEX_NEXT_STEPS.md](docs/CODEX_NEXT_STEPS.md) - Operational handoff for the active v0.9.6 milestone.
+*   [CHANGELOG.md](CHANGELOG.md) - Release notes and unreleased hardening notes.
 *   [CONTRIBUTING.md](CONTRIBUTING.md) - Development guide.
-*   [CHANGELOG.md](CHANGELOG.md) - Release notes.
+*   [tools/TESTING.md](tools/TESTING.md) - Full manual testing checklist.
+*   [docs/TTY_TEST_MATRIX.md](docs/TTY_TEST_MATRIX.md) - Cross-terminal/TTY certification matrix and result log.
+*   [docs/IMPROVEMENTS.md](docs/IMPROVEMENTS.md) - Technical audit history and improvement backlog.
+*   [docs/RELEASE.md](docs/RELEASE.md) - Release process and version gates.
 *   [docs/plugin-guide.md](docs/plugin-guide.md) - Plugin development guide.
-*   [tools/TESTING.md](tools/TESTING.md) - Manual testing checklist.
-*   [docs/IMPROVEMENTS.md](docs/IMPROVEMENTS.md) - Technical audit and improvement backlog.
+*   [docs/SHORTCUT_POLICY_PLAN.md](docs/SHORTCUT_POLICY_PLAN.md) - Keyboard shortcut policy and cleanup plan.
 
 ---
 
