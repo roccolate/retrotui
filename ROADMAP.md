@@ -6,7 +6,7 @@
 
 **Regla:** después de v0.9.8 no entran features nuevas para 1.0. Todo lo nuevo pasa a post-1.0.
 
-**Estado actual:** v0.9.5 cerrado (release 2026-06-19). Próximo: v0.9.6 certificación cross-terminal. La auditoria tecnica viva esta en [IMPROVEMENTS.md](IMPROVEMENTS.md).
+**Estado actual:** v0.9.5 cerrado (release 2026-06-19). v0.9.5.1 documenta el hardening pre-v0.9.6 como entrada no publicada en [CHANGELOG.md](CHANGELOG.md). Próximo: v0.9.6 certificación cross-terminal. El handoff operativo está en [docs/CODEX_NEXT_STEPS.md](docs/CODEX_NEXT_STEPS.md), la matriz viva en [docs/TTY_TEST_MATRIX.md](docs/TTY_TEST_MATRIX.md), el checklist manual en [tools/TESTING.md](tools/TESTING.md), y la auditoría técnica en [docs/IMPROVEMENTS.md](docs/IMPROVEMENTS.md).
 
 ---
 
@@ -85,11 +85,13 @@
 - [ ] Probar tmux/screen.
 - [ ] Probar WSL + Windows Terminal.
 - [ ] Probar Windows nativo con `pywinpty`/ConPTY.
+- [ ] Registrar resultados por entorno en `docs/TTY_TEST_MATRIX.md`.
+- [ ] Ejecutar el checklist completo de `tools/TESTING.md` donde aplique.
 - [ ] Documentar diferencias GPM vs SGR mouse.
-- [ ] Crear `docs/testing-matrix.md`.
 - [ ] Corregir bugs de input, resize, foco, mouse y redraw encontrados en la matriz.
+- [ ] Mantener `docs/CODEX_NEXT_STEPS.md`, `docs/TTY_TEST_MATRIX.md`, `tools/TESTING.md` y README alineados con lo probado.
 
-**Criterio de salida:** matriz clara de soportado, parcialmente soportado y no soportado.
+**Criterio de salida:** matriz clara de soportado, parcialmente soportado y no soportado, sin documentación que prometa soporte no certificado.
 
 ---
 
@@ -118,7 +120,7 @@
 - [ ] Congelar lista de apps incluidas en 1.0.
 - [ ] Congelar API pública de plugins para 1.0.
 - [ ] Congelar formato de config para 1.0.
-- [ ] Revisar documentación principal: README, plugins, install, usage, testing.
+- [ ] Revisar documentación principal: README, roadmap, arquitectura, plugins, testing, matriz TTY, release y handoff Codex.
 - [ ] Revisar empaquetado: `pyproject.toml`, entrypoints, dependencias y extras.
 - [ ] QA completo con `python tools/qa.py`.
 - [ ] Agregar smoke tests para inicio, abrir/cerrar ventanas, Terminal, File Manager y Notepad.
