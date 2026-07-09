@@ -20,8 +20,12 @@ Use these files as the main references:
 
 - `ROADMAP.md`
 - `ARCHITECTURE.md`
+- `CHANGELOG.md`
 - `docs/IMPROVEMENTS.md`
+- `docs/TTY_TEST_MATRIX.md`
 - `tools/TESTING.md`
+- `docs/RELEASE.md`
+- `docs/SHORTCUT_POLICY_PLAN.md`
 - `pyproject.toml`
 - `retrotui/__init__.py`
 - `setup.sh`
@@ -42,7 +46,7 @@ The v0.9.6 milestone exists to certify RetroTUI in real terminal environments:
 
 Expected deliverable:
 
-- `docs/testing-matrix.md`
+- Updated `docs/TTY_TEST_MATRIX.md`
 - Compatibility notes for keyboard, mouse, resize, redraw, Unicode, color, terminal PTY, and app behavior
 - Fixes for critical or high-impact issues found during testing
 - Regression tests for bugs that can be reproduced without a real terminal
@@ -64,24 +68,26 @@ Do not work on the following during v0.9.6 unless needed to fix a certification 
 
 These belong to v0.9.7, v0.9.8, or post-1.0.
 
-## Testing matrix document
+## Compatibility matrix document
 
-Create `docs/testing-matrix.md` with the following structure:
+`docs/TTY_TEST_MATRIX.md` is the living v0.9.6 terminal compatibility matrix. Do not create a parallel `docs/testing-matrix.md` unless the matrix is intentionally renamed in a dedicated documentation-only commit and every reference is updated.
+
+During v0.9.6, update `docs/TTY_TEST_MATRIX.md` so it includes:
 
 ```markdown
-# RetroTUI — Terminal Compatibility Matrix
+## v0.9.6 Certification Summary
 
 Last updated: YYYY-MM-DD
 RetroTUI version tested: 0.9.5 / 0.9.6-dev
 
-## Legend
+### Legend
 
 - ✅ Supported
 - ⚠️ Partially supported
 - ❌ Not supported
 - 🧪 Not tested yet
 
-## Summary
+### Summary
 
 | Environment | Startup | Keyboard | Mouse | Resize | Unicode | Colors | Embedded Terminal | Status |
 |---|---:|---:|---:|---:|---:|---:|---:|---|
@@ -92,45 +98,9 @@ RetroTUI version tested: 0.9.5 / 0.9.6-dev
 | screen | 🧪 | 🧪 | 🧪 | 🧪 | 🧪 | 🧪 | 🧪 | Pending |
 | WSL + Windows Terminal | 🧪 | 🧪 | 🧪 | 🧪 | 🧪 | 🧪 | 🧪 | Pending |
 | Windows native | 🧪 | 🧪 | 🧪 | 🧪 | 🧪 | 🧪 | 🧪 | Pending |
-
-## Per-environment notes
-
-### Environment name
-
-- OS:
-- Terminal:
-- `$TERM`:
-- Python version:
-- RetroTUI version / commit:
-- Launch command:
-
-#### Checklist
-
-- [ ] App starts cleanly
-- [ ] App exits cleanly with Ctrl+Q
-- [ ] File Manager opens and navigates
-- [ ] Notepad opens, edits, saves, reopens
-- [ ] Terminal opens and runs simple commands
-- [ ] Terminal runs `nano`, `vim`, `less`, `top`, `htop`, and `mc` where available
-- [ ] Mouse click works
-- [ ] Mouse drag works
-- [ ] Mouse wheel works where supported
-- [ ] Right-click context menu works
-- [ ] Resize keeps layout valid
-- [ ] Unicode box drawing is readable
-- [ ] Fallback behavior is acceptable when Unicode is poor
-- [ ] Colors are readable
-- [ ] No high CPU usage while idle
-- [ ] No crash on close with apps open
-
-#### Findings
-
-Write concrete observations here.
-
-#### Bugs discovered
-
-Link issues or commits here.
 ```
+
+Keep the existing per-environment checklist and result log format in `docs/TTY_TEST_MATRIX.md`; extend it rather than replacing it.
 
 ## Manual certification procedure
 
@@ -160,9 +130,9 @@ For each environment:
    - Notepad
    - Terminal
 
-5. Then test secondary apps and bundled plugins only after the base profile works.
+5. Run the relevant portions of `tools/TESTING.md`.
 
-6. Record results in `docs/testing-matrix.md`.
+6. Record results in `docs/TTY_TEST_MATRIX.md`.
 
 7. Convert any reproducible failure into either:
 
@@ -221,7 +191,7 @@ Prioritize tests around these areas:
 
 v0.9.6 is done when:
 
-- `docs/testing-matrix.md` exists and covers all target environments.
+- `docs/TTY_TEST_MATRIX.md` covers all target environments.
 - Each target environment is marked supported, partially supported, unsupported, or explicitly untested with a reason.
 - Base profile behavior is documented for each environment.
 - Critical and high-impact bugs discovered during certification are fixed or explicitly deferred with justification.
@@ -232,7 +202,7 @@ v0.9.6 is done when:
 
 Use small commits in this order:
 
-1. `docs: add terminal compatibility matrix`
+1. `docs: update terminal compatibility matrix`
 2. `test: add terminal regression coverage for v0.9.6 blockers`
 3. `fix: handle <specific terminal/input/resize issue>`
 4. `docs: document v0.9.6 compatibility findings`
