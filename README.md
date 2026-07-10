@@ -12,16 +12,17 @@
 ║ ≡ File   Edit   Help                            12:30:45     ║
 ╠══════════════════════════════════════════════════════════════╣
 ║░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░║
-║░░ 📁 ░░░░╔═══ File Manager ═══════════[─][□][×]╗░░░░░░░░░░░░░║
-║░ Files ░░║ 📂 /home/user                       ║░░░░░░░░░░░░░║
-║░░░░░░░░░░║ ──────────────────────────           ║░░░░░░░░░░░░░║
-║░░ 📝 ░░░░║  📁 Documents/                      ║░░░░░░░░░░░░░║
-║░Notepad░░║  📁 Downloads/                      ║░░░░░░░░░░░░░║
-║░░░░░░░░░░║  📄 readme.txt            2.4K      ║░░░░░░░░░░░░░║
-║░░ 💻 ░░░░║  📄 config.json           512B      ║░░░░░░░░░░░░░║
-║░Terminal░╚══════════════════════════════════════╝░░░░░░░░░░░░░║
-║░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░║
-║ RetroTUI v0.9.5 │ Windows: 1/1 │ Mouse: Enabled │ Ctrl+Q: Exit║
+║░░┌──┐░░░░╔═══ File Manager ═══════════[─][□][×]╗░░░░░░░░░░░░░║
+║░░│FL│░░░░║ 📂 /home/user                       ║░░░░░░░░░░░░░║
+║░░└──┘░░░░║ ──────────────────────────           ║░░░░░░░░░░░░░║
+║░ Files ░░║  📁 Documents/                      ║░░░░░░░░░░░░░║
+║░░╔══╗░░░░║  📁 Downloads/                      ║░░░░░░░░░░░░░║
+║░░║NP║░░░░║  📄 readme.txt            2.4K      ║░░░░░░░░░░░░░║
+║░░╚══╝░░░░║  📄 config.json           512B      ║░░░░░░░░░░░░░║
+║░Notepad░░╚══════════════════════════════════════╝░░░░░░░░░░░░░║
+║░░┌──┐░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░║
+║░░│>_│░░░░ RetroTUI v0.9.5 │ Mouse: Enabled │ Ctrl+Q: Exit   ║
+║░░└──┘░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░║
 ╚══════════════════════════════════════════════════════════════╝
 ```
 
@@ -35,6 +36,7 @@ RetroTUI is a Windows 3.1-style desktop environment that runs entirely in the te
 *   **Mouse Support**: Works in TTY consoles (via `gpm`) and terminal emulators (xterm protocol).
 *   **Embedded Terminal**: Full PTY shell inside a window (POSIX and Windows via `pywinpty`).
 *   **Stable base profile**: File Manager, Notepad, and Terminal are the only apps visible by default.
+*   **Desktop icon styles**: Classic clean letter boxes, Win31 Art 3-line per-app artwork, and Retro 0.1 compact icons for very small screens.
 *   **Secondary apps installed but disabled by default**: Calculator, Hex Viewer, Markdown Viewer, Process Manager, System Monitor, Log Viewer, Clipboard Viewer, Settings, Control Panel, Trash, Icon Editor, and Menu Editor.
 *   **Optional games and plugins**: Minesweeper, Solitaire, Snake, Tetris, RetroNet Explorer, Character Map, Clock/Calendar, Image Viewer, and WiFi Manager stay outside the base profile.
 *   **Themes**: Windows 3.1, DOS, Windows 95, Hacker, Amiga.
@@ -86,6 +88,7 @@ retrotui
 *   [ARCHITECTURE.md](ARCHITECTURE.md) - System design and internals.
 *   [ROADMAP.md](ROADMAP.md) - Project status and release plan.
 *   [docs/CODEX_NEXT_STEPS.md](docs/CODEX_NEXT_STEPS.md) - Operational handoff for the active v0.9.6 milestone.
+*   [docs/ICON_STYLES.md](docs/ICON_STYLES.md) - Supported desktop icon styles and legacy aliases.
 *   [CHANGELOG.md](CHANGELOG.md) - Release notes and unreleased hardening notes.
 *   [CONTRIBUTING.md](CONTRIBUTING.md) - Development guide.
 *   [tools/TESTING.md](tools/TESTING.md) - Full manual testing checklist.
