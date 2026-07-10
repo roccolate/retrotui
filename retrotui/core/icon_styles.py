@@ -8,566 +8,59 @@ from ..constants import ICONS, ICONS_ASCII
 from .actions import AppAction
 
 ICON_STYLE_DEFAULT = "default"
+ICON_STYLE_WIN31_ART = "win31_art"
+ICON_STYLE_RETRO_01 = "retro_01"
+
+# Deprecated style keys kept as input aliases so old configs do not break.
 ICON_STYLE_MINI = "mini"
 ICON_STYLE_BRAILLE = "braille"
-ICON_STYLE_RETRO_01 = "retro_01"  # Legacy alias kept for backwards compatibility.
 
 
 # ---------------------------------------------------------------------------
-# Braille pixel art helpers
+# Win31 Art — compact 3-line per-app icon art
 # ---------------------------------------------------------------------------
 
-def _grid_to_braille(text):
-    """Convert an 8-wide x 12-tall pixel grid to 4x3 braille characters.
-
-    ``#`` = filled dot, any other character = empty.  The grid is supplied as
-    a multi-line string (12 lines of up to 8 characters each).
-    """
-    lines = text.strip().splitlines()
-    while len(lines) < 12:
-        lines.append("")
-    pixels = []
-    for line in lines[:12]:
-        pixels.append([(1 if i < len(line) and line[i] == "#" else 0) for i in range(8)])
-    result = []
-    for br in range(3):
-        row = ""
-        for bc in range(4):
-            val = 0
-            r, c = br * 4, bc * 2
-            if pixels[r][c]:       val |= 0x01
-            if pixels[r + 1][c]:   val |= 0x02
-            if pixels[r + 2][c]:   val |= 0x04
-            if pixels[r][c + 1]:   val |= 0x08
-            if pixels[r + 1][c + 1]: val |= 0x10
-            if pixels[r + 2][c + 1]: val |= 0x20
-            if pixels[r + 3][c]:   val |= 0x40
-            if pixels[r + 3][c + 1]: val |= 0x80
-            row += chr(0x2800 + val)
-        result.append(row)
-    return result
-
-
-# 8x12 pixel grids for braille icon art.  Each grid is keyed by either an
-# AppAction value (built-in apps) or "plugin:<id>" (example plugins).
-_BRAILLE_GRIDS = {
-    # -- Built-in apps --------------------------------------------------
-    "filemanager": """\
-.####...
-########
-########
-########
-########
-########
-########
-########
-########
-.######.
-........
-........""",
-    "notepad": """\
-.######.
-.######.
-.#..#.#.
-.######.
-.#..#.#.
-.######.
-.#..#.#.
-.######.
-.######.
-........
-........
-........""",
-    "asciivideo": """\
-..#.....
-.##.....
-####..##
-#####.##
-####..##
-.##.....
-..#.....
-........
-........
-........
-........
-........""",
-    "terminal": """\
-########
-#......#
-#.#....#
-#..#...#
-#.#.##.#
-#......#
-#......#
-#......#
-########
-........
-........
-........""",
-    "calculator": """\
-########
-#.####.#
-#.####.#
-#......#
-#.#..#.#
-#.#..#.#
-#......#
-#.#..#.#
-########
-........
-........
-........""",
-    "log_viewer": """\
-.######.
-.######.
-.##..##.
-.######.
-.##..##.
-.######.
-.##..##.
-.######.
-.######.
-...##...
-...##...
-........""",
-    "process_manager": """\
-########
-#......#
-#.#.##.#
-#.#.##.#
-#.####.#
-#.####.#
-#.####.#
-#......#
-########
-........
-........
-........""",
-    "trash_bin": """\
-.######.
-########
-.######.
-.######.
-.#.##.#.
-.#.##.#.
-.#.##.#.
-.######.
-..####..
-........
-........
-........""",
-    "settings": """\
-..#..#..
-.######.
-########
-###..###
-###..###
-########
-.######.
-..#..#..
-........
-........
-........
-........""",
-    "about": """\
-..####..
-.######.
-.##..##.
-..####..
-...##...
-...##...
-...##...
-..####..
-........
-........
-........
-........""",
-    "clipboard": """\
-..####..
-########
-##....##
-##.##.##
-##....##
-##.##.##
-##....##
-########
-........
-........
-........
-........""",
-    "hex_viewer": """\
-.##..##.
-#..#.#.#
-#..#..#.
-#..#.#..
-#..#.#.#
-.##..##.
-........
-........
-........
-........
-........
-........""",
-    "desktop_icon_manager": """\
-##..##..
-##..##..
-........
-##..##..
-##..##..
-........
-##..##..
-##..##..
-........
-........
-........
-........""",
-    "icons": """\
-...##...
-..####..
-.######.
-########
-.######.
-..####..
-...##...
-........
-........
-........
-........
-........""",
-    "menu_editor": """\
-########
-........
-.######.
-........
-.####...
-........
-.######.
-........
-########
-........
-........
-........""",
-    "markdown_viewer": """\
-.######.
-.##..##.
-.#.##.#.
-.#....#.
-.######.
-.#..#.#.
-.######.
-.######.
-.######.
-........
-........
-........""",
-    "system_monitor": """\
-......#.
-......##
-....#.##
-....####
-..#.####
-..######
-########
-########
-........
-........
-........
-........""",
-    "control_panel": """\
-########
-#......#
-#.####.#
-#......#
-#..###.#
-#......#
-#.####.#
-#......#
-########
-........
-........
-........""",
-    # -- Example plugins ------------------------------------------------
-    "plugin:ascii-aquarium": """\
-........
-..#.....
-.###.##.
-########
-.###.##.
-..#.....
-........
-........
-........
-........
-........
-........""",
-    "plugin:contacts": """\
-...##...
-..####..
-...##...
-..####..
-.######.
-########
-.######.
-..####..
-........
-........
-........
-........""",
-    "plugin:cron-editor": """\
-.######.
-##....##
-#.#...##
-#..#..##
-#..##.##
-#.....##
-##....##
-.######.
-........
-........
-........
-........""",
-    "plugin:db-browser": """\
-.######.
-########
-.######.
-.######.
-########
-.######.
-.######.
-########
-.######.
-........
-........
-........""",
-    "plugin:disk-usage": """\
-..####..
-.######.
-####..##
-####..##
-######.#
-.######.
-..####..
-........
-........
-........
-........
-........""",
-    "plugin:docker-manager": """\
-#.#.#.#.
-########
-########
-########
-########
-########
-.######.
-........
-........
-........
-........
-........""",
-    "plugin:fortune-cookie": """\
-..####..
-.######.
-.#####..
-..###...
-..##.#..
-.##..##.
-........
-........
-........
-........
-........
-........""",
-    "plugin:game-of-life": """\
-........
-.##.....
-.##.##..
-....##..
-.....##.
-##...##.
-##......
-........
-........
-........
-........
-........""",
-    "plugin:git-status": """\
-....##..
-....##..
-.#..##..
-.##.##..
-..####..
-...##...
-...##...
-...##...
-........
-........
-........
-........""",
-    "plugin:json-viewer": """\
-..##....
-.##.....
-.##.....
-##......
-.##.....
-.##.....
-..##....
-........
-........
-........
-........
-........""",
-    "plugin:matrix-rain": """\
-.#..#..#
-.#.##..#
-.#.##.##
-##.##.##
-##.##.##
-##..#.##
-##..#.#.
-.#..#.#.
-........
-........
-........
-........""",
-    "plugin:network-monitor": """\
-.##..##.
-.##..##.
-..####..
-...##...
-..####..
-.##..##.
-.##..##.
-........
-........
-........
-........
-........""",
-    "plugin:pomodoro": """\
-..####..
-.######.
-##.##.##
-##.##.##
-##..#.##
-##....##
-.######.
-..####..
-........
-........
-........
-........""",
-    "plugin:qa-runner": """\
-........
-......#.
-.....##.
-....##..
-#..##...
-.####...
-..##....
-........
-........
-........
-........
-........""",
-    "plugin:rss-reader": """\
-........
-...####.
-.#.##...
-.###....
-.##.....
-.##.....
-........
-........
-........
-........
-........
-........""",
-    "plugin:service-manager": """\
-##...##.
-.##.##..
-..###...
-...##...
-..###...
-.##.##..
-##...##.
-........
-........
-........
-........
-........""",
-    "plugin:starwars-ascii": """\
-...##...
-...##...
-########
-.######.
-..####..
-.##..##.
-##....##
-........
-........
-........
-........
-........""",
-    "plugin:sticky-notes": """\
-########
-########
-##....##
-##....##
-##....##
-########
-########
-........
-........
-........
-........
-........""",
-    "plugin:system-monitor": """\
-......#.
-......##
-....#.##
-....####
-..#.####
-..######
-########
-########
-........
-........
-........
-........""",
-    "plugin:todo-list": """\
-.#.#####
-##.#####
-.#......
-.#.#####
-##.#####
-.#......
-.#.#####
-##.#####
-........
-........
-........
-........""",
-    "plugin:weather-widget": """\
-......##
-..###.##
-.######.
-########
-########
-.######.
-........
-........
-........
-........
-........
-........""",
+_WIN31_ART_UNICODE = {
+    AppAction.FILE_MANAGER.value: ["┌──┐", "│▒▒│", "└──┘"],
+    AppAction.NOTEPAD.value: ["╔══╗", "║≡≡║", "╚══╝"],
+    AppAction.ASCII_VIDEO.value: ["╭──╮", "│▶ │", "╰──╯"],
+    AppAction.TERMINAL.value: ["┌──┐", "│>_│", "└──┘"],
+    AppAction.CALCULATOR.value: ["╭──╮", "│+=│", "╰──╯"],
+    AppAction.LOG_VIEWER.value: ["╔══╗", "║≣!║", "╚══╝"],
+    AppAction.PROCESS_MANAGER.value: ["╭──╮", "│▓▓│", "╰──╯"],
+    AppAction.TRASH_BIN.value: ["╭──╮", "│╳ │", "╰──╯"],
+    AppAction.SETTINGS.value: ["╭──╮", "│⚙ │", "╰──╯"],
+    AppAction.ABOUT.value: ["╭──╮", "│ ?│", "╰──╯"],
+    AppAction.CLIPBOARD.value: ["┌──┐", "│▣ │", "└──┘"],
+    AppAction.HEX_VIEWER.value: ["┌──┐", "│0x│", "└──┘"],
+    AppAction.DESKTOP_ICON_MANAGER.value: ["╭──╮", "│▦ │", "╰──╯"],
+    AppAction.ICONS.value: ["╭──╮", "│◇ │", "╰──╯"],
+    AppAction.MENU_EDITOR.value: ["╔══╗", "║☰ ║", "╚══╝"],
+    AppAction.MARKDOWN_VIEWER.value: ["╭──╮", "│M↓│", "╰──╯"],
+    AppAction.SYSTEM_MONITOR.value: ["╭──╮", "│▁▇│", "╰──╯"],
+    AppAction.CONTROL_PANEL.value: ["╔══╗", "║▣ ║", "╚══╝"],
 }
 
-_BRAILLE_ART = {k: _grid_to_braille(v) for k, v in _BRAILLE_GRIDS.items()}
-
-
-def braille_art_for_action(action_key):
-    """Return 3-line braille pixel art for *action_key*, or None."""
-    return _BRAILLE_ART.get(str(action_key or "").lower())
+_WIN31_ART_ASCII = {
+    AppAction.FILE_MANAGER.value: ["+--+", "|##|", "+--+"],
+    AppAction.NOTEPAD.value: ["+==+", "|==|", "+==+"],
+    AppAction.ASCII_VIDEO.value: ["+--+", "|> |", "+--+"],
+    AppAction.TERMINAL.value: ["+--+", "|>_|", "+--+"],
+    AppAction.CALCULATOR.value: ["+--+", "|+=|", "+--+"],
+    AppAction.LOG_VIEWER.value: ["+==+", "|=!|", "+==+"],
+    AppAction.PROCESS_MANAGER.value: ["+--+", "|##|", "+--+"],
+    AppAction.TRASH_BIN.value: ["+--+", "|X |", "+--+"],
+    AppAction.SETTINGS.value: ["+--+", "|**|", "+--+"],
+    AppAction.ABOUT.value: ["+--+", "| ?|", "+--+"],
+    AppAction.CLIPBOARD.value: ["+--+", "|[]|", "+--+"],
+    AppAction.HEX_VIEWER.value: ["+--+", "|0x|", "+--+"],
+    AppAction.DESKTOP_ICON_MANAGER.value: ["+--+", "|[]|", "+--+"],
+    AppAction.ICONS.value: ["+--+", "|<>|", "+--+"],
+    AppAction.MENU_EDITOR.value: ["+==+", "|# |", "+==+"],
+    AppAction.MARKDOWN_VIEWER.value: ["+--+", "|MD|", "+--+"],
+    AppAction.SYSTEM_MONITOR.value: ["+--+", "|/_|", "+--+"],
+    AppAction.CONTROL_PANEL.value: ["+==+", "|[]|", "+==+"],
+}
 
 
 # ---------------------------------------------------------------------------
@@ -596,12 +89,23 @@ def split_config_csv(raw):
 
 
 def normalize_icon_style(style):
-    """Return supported icon style key."""
+    """Return supported icon style key.
+
+    User-facing styles are intentionally small:
+    - default: current clean letter boxes
+    - win31_art: the expressive 3-line v0.2.2-style icons
+    - retro_01: tiny mini boxes for very small screens
+
+    Historical ``mini`` maps to ``retro_01``. Historical ``braille`` and
+    ``codex`` fall back to the stable default style.
+    """
     normalized = str(style or ICON_STYLE_DEFAULT).strip().lower()
-    if normalized == ICON_STYLE_RETRO_01:
-        return ICON_STYLE_MINI
-    if normalized in (ICON_STYLE_DEFAULT, ICON_STYLE_MINI, ICON_STYLE_BRAILLE):
-        return normalized
+    if normalized in (ICON_STYLE_RETRO_01, ICON_STYLE_MINI, "retro01", "retro-01"):
+        return ICON_STYLE_RETRO_01
+    if normalized in (ICON_STYLE_WIN31_ART, "win31", "win31-art", "classic_art"):
+        return ICON_STYLE_WIN31_ART
+    if normalized in (ICON_STYLE_DEFAULT, "classic"):
+        return ICON_STYLE_DEFAULT
     return ICON_STYLE_DEFAULT
 
 
@@ -612,48 +116,62 @@ _ICON_STYLE_VARIANTS = None
 
 
 def icon_style_variants():
-    """Return per-icon style variants keyed by action/value key."""
+    """Return per-icon retro_01 variants keyed by action/value key."""
     global _ICON_STYLE_VARIANTS
     if _ICON_STYLE_VARIANTS is None:
         _ICON_STYLE_VARIANTS = {
-            AppAction.FILE_MANAGER.value: {"mini": ":D"},
-            AppAction.NOTEPAD.value: {"mini": ":|"},
-            AppAction.ASCII_VIDEO.value: {"mini": "AV"},
-            AppAction.TERMINAL.value: {"mini": ">:"},
-            AppAction.CALCULATOR.value: {"mini": "+)"},
-            AppAction.LOG_VIEWER.value: {"mini": "LG"},
-            AppAction.PROCESS_MANAGER.value: {"mini": "PS"},
-            AppAction.TRASH_BIN.value: {"mini": "TR"},
-            AppAction.SETTINGS.value: {"mini": "8)"},
-            AppAction.ABOUT.value: {"mini": "i)"},
-            AppAction.CLIPBOARD.value: {"mini": "CB"},
-            AppAction.HEX_VIEWER.value: {"mini": "0x"},
-            AppAction.DESKTOP_ICON_MANAGER.value: {"mini": "DT"},
-            AppAction.ICONS.value: {"mini": ":)"},
-            AppAction.MENU_EDITOR.value: {"mini": "MN"},
-            AppAction.MARKDOWN_VIEWER.value: {"mini": "MD"},
-            AppAction.SYSTEM_MONITOR.value: {"mini": "SM"},
-            AppAction.CONTROL_PANEL.value: {"mini": "CT"},
+            AppAction.FILE_MANAGER.value: {ICON_STYLE_RETRO_01: ":D"},
+            AppAction.NOTEPAD.value: {ICON_STYLE_RETRO_01: ":|"},
+            AppAction.ASCII_VIDEO.value: {ICON_STYLE_RETRO_01: "AV"},
+            AppAction.TERMINAL.value: {ICON_STYLE_RETRO_01: ">:"},
+            AppAction.CALCULATOR.value: {ICON_STYLE_RETRO_01: "+)"},
+            AppAction.LOG_VIEWER.value: {ICON_STYLE_RETRO_01: "LG"},
+            AppAction.PROCESS_MANAGER.value: {ICON_STYLE_RETRO_01: "PS"},
+            AppAction.TRASH_BIN.value: {ICON_STYLE_RETRO_01: "TR"},
+            AppAction.SETTINGS.value: {ICON_STYLE_RETRO_01: "8)"},
+            AppAction.ABOUT.value: {ICON_STYLE_RETRO_01: "i)"},
+            AppAction.CLIPBOARD.value: {ICON_STYLE_RETRO_01: "CB"},
+            AppAction.HEX_VIEWER.value: {ICON_STYLE_RETRO_01: "0x"},
+            AppAction.DESKTOP_ICON_MANAGER.value: {ICON_STYLE_RETRO_01: "DT"},
+            AppAction.ICONS.value: {ICON_STYLE_RETRO_01: ":)"},
+            AppAction.MENU_EDITOR.value: {ICON_STYLE_RETRO_01: "MN"},
+            AppAction.MARKDOWN_VIEWER.value: {ICON_STYLE_RETRO_01: "MD"},
+            AppAction.SYSTEM_MONITOR.value: {ICON_STYLE_RETRO_01: "SM"},
+            AppAction.CONTROL_PANEL.value: {ICON_STYLE_RETRO_01: "CT"},
         }
     return _ICON_STYLE_VARIANTS
 
 
+def _action_key(action):
+    key = getattr(action, "value", action)
+    return str(key or "").lower()
+
+
 def style_symbol_for_icon(icon, style):
     """Return style-specific symbol token for one icon."""
-    if style == ICON_STYLE_BRAILLE:
-        return None  # Braille uses pixel art, not symbols.
+    style = normalize_icon_style(style)
     action = icon.get("action")
-    key = getattr(action, "value", action)
-    key = str(key or "").lower()
+    key = _action_key(action)
     by_icon = icon_style_variants().get(key, {})
 
     if key.startswith("plugin:"):
         token = icon.get("_token", "")
-        if style == ICON_STYLE_MINI:
+        if style == ICON_STYLE_RETRO_01:
             return token if token else ":)"
         return None
 
     return by_icon.get(style)
+
+
+def _win31_art_for_icon(icon, use_unicode):
+    action = icon.get("action")
+    key = _action_key(action)
+    if key.startswith("plugin:"):
+        token = icon.get("_token", "")
+        label = icon.get("label", "")
+        return plugin_icon_art(label, use_unicode, token=token)
+    table = _WIN31_ART_UNICODE if use_unicode else _WIN31_ART_ASCII
+    return table.get(key)
 
 
 def styled_icon_entry(icon, style, use_unicode):
@@ -664,19 +182,15 @@ def styled_icon_entry(icon, style, use_unicode):
         styled.pop("symbol", None)
         return styled
 
-    # Braille pixel art — use pre-computed 3-line art directly.
-    if style == ICON_STYLE_BRAILLE:
+    if style == ICON_STYLE_WIN31_ART:
         styled = dict(icon)
-        action = icon.get("action")
-        key = getattr(action, "value", action)
-        key = str(key or "").lower()
-        art = braille_art_for_action(key)
+        art = _win31_art_for_icon(styled, use_unicode)
         if art:
             styled["art"] = list(art)
             styled.pop("symbol", None)
         return styled
 
-    # Mini style — symbol inside a box.
+    # Retro 0.1 style — tiny symbol inside a rounded box for small screens.
     styled = dict(icon)
     symbol = style_symbol_for_icon(styled, style)
     if symbol:
@@ -708,7 +222,7 @@ def _preview_symbol_lookup(use_unicode):
         token = None
         art = icon.get("art") or []
         if len(art) >= 2 and isinstance(art[1], str):
-            mid = art[1].strip("| ").strip()
+            mid = art[1].strip("| ║│").strip()
             if mid:
                 token = mid
         if token is None:
@@ -721,18 +235,22 @@ def _preview_symbol_lookup(use_unicode):
     return lookup
 
 
+def _middle_token_from_art(art):
+    if art and len(art) >= 2 and isinstance(art[1], str):
+        return art[1].strip("| ║│").strip() or art[1]
+    return "[]"
+
+
 def icon_style_preview_symbol(style, icon_key, use_unicode):
     """Return one preview symbol token for *style* and *icon_key*."""
     normalized = normalize_icon_style(style)
+    target_key = str(icon_key or "").lower()
     if normalized == ICON_STYLE_DEFAULT:
-        target_key = str(icon_key or "").lower()
         return _preview_symbol_lookup(use_unicode).get(target_key, "[]")
-    if normalized == ICON_STYLE_BRAILLE:
-        art = braille_art_for_action(icon_key)
-        if art and len(art) >= 2:
-            return art[1]
-        return "⣿⣿"
-    probe_icon = {"action": icon_key}
+    if normalized == ICON_STYLE_WIN31_ART:
+        probe = {"action": target_key, "label": target_key}
+        return _middle_token_from_art(_win31_art_for_icon(probe, use_unicode))
+    probe_icon = {"action": target_key}
     return style_symbol_for_icon(probe_icon, normalized) or "[]"
 
 
