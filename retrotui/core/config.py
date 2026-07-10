@@ -186,6 +186,17 @@ def _parse_toml(text: str) -> dict:
     return _fallback_parse_toml(text)
 
 
+def _normalize_icon_style_value(value) -> str:
+    icon_style = str(value or "default").strip().lower() or "default"
+    if icon_style in ("mini", "retro_01", "retro01", "retro-01"):
+        return "retro_01"
+    if icon_style in ("win31_art", "win31", "win31-art", "classic_art"):
+        return "win31_art"
+    if icon_style in ("default", "classic"):
+        return "default"
+    return "default"
+
+
 def _normalize_config(raw: dict) -> AppConfig:
     ui = raw.get("ui", raw)
     if not isinstance(ui, dict):
@@ -199,11 +210,7 @@ def _normalize_config(raw: dict) -> AppConfig:
     word_wrap_default = _coerce_bool(ui.get("word_wrap_default"), default=False)
     sunday_first = _coerce_bool(ui.get("sunday_first"), default=False)
     show_welcome = _coerce_bool(ui.get("show_welcome"), default=True)
-    icon_style = str(ui.get("icon_style", "default")).strip().lower() or "default"
-    if icon_style == "retro_01":
-        icon_style = "mini"
-    if icon_style not in ("default", "mini", "braille"):
-        icon_style = "default"
+    icon_style = _normalize_icon_style_value(ui.get("icon_style", "default"))
     hidden_icons = str(ui.get("hidden_icons", DEFAULT_HIDDEN_ICONS)).strip()
     hidden_menu_items = str(ui.get("hidden_menu_items", DEFAULT_HIDDEN_MENU_ITEMS)).strip()
     return AppConfig(
