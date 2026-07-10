@@ -321,8 +321,8 @@ class IconsWindow(DesktopIconManagerWindow):
 
     STYLE_OPTIONS = (
         ("default", "Classic"),
-        ("mini", "Mini"),
-        ("braille", "Braille"),
+        ("win31_art", "Win31 Art"),
+        ("retro_01", "Retro 0.1"),
     )
 
     def __init__(self, x, y, w, h, app):
@@ -331,6 +331,10 @@ class IconsWindow(DesktopIconManagerWindow):
         self._help_text = "Choose icon style and which desktop icons are visible."
         self._status_text = "Tip: F2 or S toggles icon style."
         current = str(getattr(app, "icon_style", "default") or "default").strip().lower()
+        if current == "mini":
+            current = "retro_01"
+        elif current in ("braille", "codex"):
+            current = "default"
         self._style_index = 0
         for idx, (key, _) in enumerate(self.STYLE_OPTIONS):
             if key == current:
@@ -365,9 +369,9 @@ class IconsWindow(DesktopIconManagerWindow):
         if callable(getter):
             return str(getter(style_key))
         fallback = {
-            "default": "📁",
-            "mini": ":D",
-            "braille": "⠋⠊",
+            "default": "FL",
+            "win31_art": "▒▒",
+            "retro_01": ":D",
         }
         return fallback.get(style_key, "[]")
 
@@ -416,8 +420,8 @@ class IconsWindow(DesktopIconManagerWindow):
         draw_box(stdscr, box_y, box_x, box_h, box_w, body_attr, double=False, _bounds=frame_size)
         safe_addstr(stdscr, box_y, box_x + 2, "Preview", body_attr | curses.A_BOLD)
 
-        preview_styles = ("default", "mini", self.STYLE_OPTIONS[self._style_index][0])
-        preview_labels = ("Classic", "Mini", "Selected")
+        preview_styles = ("default", "win31_art", "retro_01")
+        preview_labels = ("Classic", "Win31 Art", "Retro 0.1")
         col_w = max(10, (box_w - 2) // 3)
         for idx, style_key in enumerate(preview_styles):
             px = box_x + 1 + idx * col_w
