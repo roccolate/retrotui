@@ -40,7 +40,7 @@ jobs:
       - name: Verify legacy runtime flags are gone
         shell: bash
         run: |
-          ! grep -R "needs_redraw\|_animated" \
+          ! grep -R --include='*.py' "needs_redraw\|_animated" \
             retrotui/core/event_loop.py \
             retrotui/ui/window.py \
             retrotui/apps/filemanager/window.py \
