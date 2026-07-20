@@ -112,6 +112,14 @@ class EventLoopCircuitBreakerTests(unittest.TestCase):
     def test_repeated_renderer_failure_aborts_cleanly_after_limit(self):
         app = self._make_loop_app()
         first_error = RuntimeError("renderer unavailable")
+        polls = {"count": 0}
+
+        def _legacy_safety_stop():
+            polls["count"] += 1
+            if polls["count"] > app.event_loop_failure_limit:
+                app.running = False
+
+        app.poll_background_operation.side_effect = _legacy_safety_stop
 
         with mock.patch.object(
             self.event_loop,
