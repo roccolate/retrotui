@@ -1,0 +1,445 @@
+name: Apply transactional close patch
+
+on:
+  push:
+    branches:
+      - stabilization/pre-0.9.6
+    paths:
+      - tests/test_close_lifecycle_contract.py
+      - .github/workflows/apply-close-transaction.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: stabilization/pre-0.9.6
+
+      - name: Apply transactional close contract
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path, old, new):
+              file_path = Path(path)
+              text = file_path.read_text(encoding="utf-8")
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"expected one match in {path}, found {count}: {old!r}")
+              file_path.write_text(text.replace(old, new, 1), encoding="utf-8")
+
+          replace_once(
+              "retrotui/ui/window.py",
+              "    def on_ipc_message(self, message):\n"
+              "        \"\"\"Handle an IPC message from another window.  Override in subclasses.\"\"\"\n"
+              "\n"
+              "    def close_button_pos(self):\n",
+              "    def on_ipc_message(self, message):\n"
+              "        \"\"\"Handle an IPC message from another window.  Override in subclasses.\"\"\"\n"
+              "\n"
+              "    def request_close(self):\n"
+              "        \"\"\"Return True when the window may be closed immediately.\"\"\"\n"
+              "        return True\n"
+              "\n"
+              "    def close_button_pos(self):\n",
+          )
+
+          replace_once(
+              "retrotui/core/window_manager.py",
+              "    def close_window(self, win):\n"
+              "        \"\"\"Close a window. Idempotent: safe to call more than once.\"\"\"\n"
+              "        # Clear menu owner if it points at the window being closed, even on\n"
+              "        # re-entry. This must run before the membership check below so a\n"
+              "        # stale reference is recovered.\n"
+              "        if getattr(self._app, \"_active_window_menu_owner\", None) is win:\n"
+              "            menu = getattr(win, \"window_menu\", None)\n"
+              "            if menu is not None:\n"
+              "                menu.active = False\n"
+              "            self._app._active_window_menu_owner = None\n"
+              "        if win not in self.windows:\n"
+              "            return\n"
+              "        closer = getattr(win, 'close', None)\n"
+              "        if callable(closer):\n"
+              "            try:\n"
+              "                closer()\n"
+              "            except _WINDOW_CLOSE_HOOK_ERRORS:  # pragma: no cover - defensive window cleanup path\n"
+              "                LOGGER.debug('Window close hook failed for %r', win, exc_info=True)\n"
+              "        if win in self.windows:\n"
+              "            self.windows.remove(win)\n"
+              "        if self._active_window is win:\n"
+              "            self._active_window = None\n"
+              "        self._layers_dirty = True\n"
+              "        self._emit_event(\"window.closed\", win)\n"
+              "        self._activate_last_visible_window()\n",
+              "    def close_window(self, win, *, force=False):\n"
+              "        \"\"\"Request and, when authorized, close *win*.\n"
+              "\n"
+              "        Returns True only when the window was removed. ``force=True`` is\n"
+              "        reserved for shutdown and bypasses the interactive close request.\n"
+              "        \"\"\"\n"
+              "        if win not in self.windows:\n"
+              "            return False\n"
+              "\n"
+              "        if not force:\n"
+              "            requester = getattr(win, \"request_close\", None)\n"
+              "            if callable(requester):\n"
+              "                try:\n"
+              "                    request_result = requester()\n"
+              "                except _WINDOW_CLOSE_HOOK_ERRORS:\n"
+              "                    LOGGER.debug('Window close request failed for %r', win, exc_info=True)\n"
+              "                    return False\n"
+              "                if request_result is False:\n"
+              "                    return False\n"
+              "                if request_result is not None and request_result is not True:\n"
+              "                    dispatcher = getattr(self._app, \"_dispatch_window_result\", None)\n"
+              "                    if callable(dispatcher):\n"
+              "                        dispatcher(request_result, win)\n"
+              "                    return False\n"
+              "\n"
+              "        if getattr(self._app, \"_active_window_menu_owner\", None) is win:\n"
+              "            menu = getattr(win, \"window_menu\", None)\n"
+              "            if menu is not None:\n"
+              "                menu.active = False\n"
+              "            self._app._active_window_menu_owner = None\n"
+              "\n"
+              "        closer = getattr(win, 'close', None)\n"
+              "        if callable(closer):\n"
+              "            try:\n"
+              "                closer()\n"
+              "            except _WINDOW_CLOSE_HOOK_ERRORS:  # pragma: no cover - defensive window cleanup path\n"
+              "                LOGGER.debug('Window close hook failed for %r', win, exc_info=True)\n"
+              "        if win in self.windows:\n"
+              "            self.windows.remove(win)\n"
+              "        if self._active_window is win:\n"
+              "            self._active_window = None\n"
+              "        self._layers_dirty = True\n"
+              "        self._emit_event(\"window.closed\", win)\n"
+              "        self._activate_last_visible_window()\n"
+              "        return True\n",
+          )
+
+          replace_once(
+              "retrotui/core/app.py",
+              "        for win in list(self.windows):\n"
+              "            self._close_window_safely(win)\n",
+              "        for win in list(self.windows):\n"
+              "            self.window_mgr.close_window(win, force=True)\n",
+          )
+
+          replace_once(
+              "retrotui/core/app.py",
+              "    def close_window(self, win):\n"
+              "        \"\"\"Close a window.\"\"\"\n"
+              "        self.window_mgr.close_window(win)\n",
+              "    def close_window(self, win, *, force=False):\n"
+              "        \"\"\"Request that a window close, or force it during shutdown.\"\"\"\n"
+              "        return self.window_mgr.close_window(win, force=force)\n",
+          )
+
+          replace_once(
+              "retrotui/core/app.py",
+              "    def _show_save_confirm_dialog(self, win, payload=None):\n"
+              "        \"\"\"Prompt the user before discarding unsaved work in *win*.\"\"\"\n"
+              "        # The ``on_discard`` callback is attached via the ActionResult payload\n"
+              "        # at the call site (notepad.py emits it when open_path hits a dirty\n"
+              "        # buffer). Prefer the payload; fall back to a window method for tests\n"
+              "        # or direct callers.\n"
+              "        from ..ui.dialog import Dialog\n"
+              "        try:\n"
+              "            title = getattr(win, \"title\", \"Notepad\")\n"
+              "        except Exception:\n"
+              "            title = \"Notepad\"\n"
+              "        message = (\n"
+              "            f\"{title} has unsaved changes.\\n\"\n"
+              "            \"Discard them and open the new file?\"\n"
+              "        )\n"
+              "        on_discard = None\n"
+              "        if isinstance(payload, dict):\n"
+              "            candidate = payload.get(\"on_discard\")\n"
+              "            if callable(candidate):\n"
+              "                on_discard = candidate\n"
+              "        if on_discard is None:\n"
+              "            fallback = getattr(win, \"_do_open_path_force\", None)\n"
+              "            if callable(fallback):\n"
+              "                on_discard = fallback\n"
+              "\n"
+              "        def _on_discard():\n"
+              "            if on_discard is not None:\n"
+              "                on_discard()\n"
+              "\n"
+              "        self.dialog = Dialog(\n"
+              "            title=\"Discard unsaved changes?\",\n"
+              "            message=message,\n"
+              "            buttons=[\"Discard\", \"Cancel\"],\n"
+              "            width=58,\n"
+              "        )\n"
+              "        self._pending_discard_callback = _on_discard\n",
+              "    def _show_save_confirm_dialog(self, win, payload=None):\n"
+              "        \"\"\"Prompt before a destructive operation on unsaved work.\"\"\"\n"
+              "        from ..ui.dialog import Dialog\n"
+              "\n"
+              "        try:\n"
+              "            title = getattr(win, \"title\", \"Notepad\")\n"
+              "        except Exception:\n"
+              "            title = \"Notepad\"\n"
+              "        message = (\n"
+              "            f\"{title} has unsaved changes.\\n\"\n"
+              "            \"Discard them and continue?\"\n"
+              "        )\n"
+              "        on_discard = None\n"
+              "        on_cancel = None\n"
+              "        if isinstance(payload, dict):\n"
+              "            candidate = payload.get(\"on_discard\")\n"
+              "            if callable(candidate):\n"
+              "                on_discard = candidate\n"
+              "            candidate = payload.get(\"on_cancel\")\n"
+              "            if callable(candidate):\n"
+              "                on_cancel = candidate\n"
+              "            custom_message = payload.get(\"message\")\n"
+              "            if isinstance(custom_message, str) and custom_message.strip():\n"
+              "                message = custom_message\n"
+              "        if on_discard is None:\n"
+              "            fallback = getattr(win, \"_do_open_path_force\", None)\n"
+              "            if callable(fallback):\n"
+              "                on_discard = fallback\n"
+              "\n"
+              "        self.dialog = Dialog(\n"
+              "            title=\"Discard unsaved changes?\",\n"
+              "            message=message,\n"
+              "            buttons=[\"Discard\", \"Cancel\"],\n"
+              "            width=58,\n"
+              "        )\n"
+              "        self.dialog.kind = \"save_confirm\"\n"
+              "        self.dialog.source_window = win\n"
+              "        self._pending_discard_callback = on_discard\n"
+              "        self._pending_discard_cancel_callback = on_cancel\n"
+              "        self._pending_discard_source = win\n",
+          )
+
+          replace_once(
+              "retrotui/core/dialog_dispatch.py",
+              "        dialog = self._app.dialog\n"
+              "        btn_text = dialog.buttons[result_idx] if result_idx < len(dialog.buttons) else ''\n"
+              "        callback_result = None\n"
+              "\n"
+              "        if dialog.title == 'Exit RetroTUI' and btn_text == 'Yes':\n"
+              "            self._app.running = False\n"
+              "        elif dialog.title == 'Discard unsaved changes?':\n"
+              "            # Save-confirm prompt: ``Discard`` (idx 0) runs the pending\n"
+              "            # discard callback; ``Cancel`` (idx 1) is a no-op.\n"
+              "            callback = getattr(self._app, '_pending_discard_callback', None)\n"
+              "            self._app._pending_discard_callback = None\n"
+              "            if result_idx == 0 and callable(callback):\n"
+              "                callback()\n"
+              "        elif result_idx == 0:\n"
+              "            callback = getattr(dialog, 'callback', None)\n"
+              "            if callable(callback):\n"
+              "                if hasattr(dialog, 'value'):\n"
+              "                    callback_result = callback(dialog.value)\n"
+              "                else:\n"
+              "                    callback_result = callback()\n"
+              "\n"
+              "        if self._app.dialog is dialog:\n"
+              "            self._app.dialog = None\n"
+              "        if callback_result is not None:\n"
+              "            app_dispatch = getattr(self._app, '_dispatch_window_result', None)\n"
+              "            if callable(app_dispatch):\n"
+              "                app_dispatch(callback_result, self._app.get_active_window())\n"
+              "            else:\n"
+              "                self.dispatch_window_result(callback_result, self._app.get_active_window())\n",
+              "        dialog = self._app.dialog\n"
+              "        btn_text = dialog.buttons[result_idx] if result_idx < len(dialog.buttons) else ''\n"
+              "        callback_result = None\n"
+              "        callback_source = getattr(dialog, 'source_window', None)\n"
+              "\n"
+              "        if dialog.title == 'Exit RetroTUI' and btn_text == 'Yes':\n"
+              "            self._app.running = False\n"
+              "        elif getattr(dialog, 'kind', None) == 'save_confirm' or dialog.title == 'Discard unsaved changes?':\n"
+              "            callback_source = getattr(\n"
+              "                self._app, '_pending_discard_source', callback_source\n"
+              "            )\n"
+              "            if result_idx == 0:\n"
+              "                callback = getattr(self._app, '_pending_discard_callback', None)\n"
+              "            else:\n"
+              "                callback = getattr(self._app, '_pending_discard_cancel_callback', None)\n"
+              "            self._app._pending_discard_callback = None\n"
+              "            self._app._pending_discard_cancel_callback = None\n"
+              "            self._app._pending_discard_source = None\n"
+              "            if callable(callback):\n"
+              "                callback_result = callback()\n"
+              "        elif result_idx == 0:\n"
+              "            callback = getattr(dialog, 'callback', None)\n"
+              "            if callable(callback):\n"
+              "                if hasattr(dialog, 'value'):\n"
+              "                    callback_result = callback(dialog.value)\n"
+              "                else:\n"
+              "                    callback_result = callback()\n"
+              "\n"
+              "        if self._app.dialog is dialog:\n"
+              "            self._app.dialog = None\n"
+              "        if callback_result is not None:\n"
+              "            source_win = callback_source or self._app.get_active_window()\n"
+              "            app_dispatch = getattr(self._app, '_dispatch_window_result', None)\n"
+              "            if callable(app_dispatch):\n"
+              "                app_dispatch(callback_result, source_win)\n"
+              "            else:\n"
+              "                self.dispatch_window_result(callback_result, source_win)\n",
+          )
+
+          replace_once(
+              "retrotui/apps/notepad.py",
+              "        self._search_query = ''\n"
+              "        self._force_close = False\n",
+              "        self._search_query = ''\n"
+              "        self._force_close = False\n"
+              "        self._close_confirm_pending = False\n"
+              "        self._open_path_confirm_pending = None\n",
+          )
+
+          replace_once(
+              "retrotui/apps/notepad.py",
+              "        self._redo_stack.clear()\n"
+              "        self._force_close = False\n"
+              "        # Whole buffer was replaced; reset the per-line cache list.\n",
+              "        self._redo_stack.clear()\n"
+              "        self._force_close = False\n"
+              "        self._close_confirm_pending = False\n"
+              "        self._open_path_confirm_pending = None\n"
+              "        # Whole buffer was replaced; reset the per-line cache list.\n",
+          )
+
+          replace_once(
+              "retrotui/apps/notepad.py",
+              "        self.modified = False\n"
+              "        self._update_title()\n"
+              "        return True\n",
+              "        self.modified = False\n"
+              "        self._force_close = False\n"
+              "        self._close_confirm_pending = False\n"
+              "        self._update_title()\n"
+              "        return True\n",
+          )
+
+          replace_once(
+              "retrotui/apps/notepad.py",
+              "            return ActionResult(\n"
+              "                ActionType.REQUEST_SAVE_CONFIRM,\n"
+              "                payload={\"on_discard\": self._do_open_path_force},\n"
+              "            )\n",
+              "            return ActionResult(\n"
+              "                ActionType.REQUEST_SAVE_CONFIRM,\n"
+              "                payload={\n"
+              "                    \"on_discard\": self._do_open_path_force,\n"
+              "                    \"on_cancel\": self._cancel_open_path,\n"
+              "                    \"message\": (\n"
+              "                        f\"{self.title} has unsaved changes.\\n\"\n"
+              "                        \"Discard them and open the new file?\"\n"
+              "                    ),\n"
+              "                },\n"
+              "            )\n",
+          )
+
+          replace_once(
+              "retrotui/apps/notepad.py",
+              "    def _do_open_path_force(self):\n"
+              "        \"\"\"Discard current buffer and open the pending path.\"\"\"\n"
+              "        pending = self._open_path_confirm_pending\n"
+              "        self._open_path_confirm_pending = None\n"
+              "        if pending:\n"
+              "            self._do_open_path(pending)\n"
+              "\n"
+              "\n"
+              "    def _invalidate_wrap(self, line_idx=None):\n",
+              "    def _do_open_path_force(self):\n"
+              "        \"\"\"Discard current buffer and open the pending path.\"\"\"\n"
+              "        pending = self._open_path_confirm_pending\n"
+              "        self._open_path_confirm_pending = None\n"
+              "        if pending:\n"
+              "            self._do_open_path(pending)\n"
+              "\n"
+              "    def _cancel_open_path(self):\n"
+              "        \"\"\"Cancel a pending destructive open request.\"\"\"\n"
+              "        self._open_path_confirm_pending = None\n"
+              "\n"
+              "    def request_close(self):\n"
+              "        \"\"\"Return a confirmation request when the buffer is modified.\"\"\"\n"
+              "        if not self.modified or self._force_close:\n"
+              "            return True\n"
+              "        if self._close_confirm_pending:\n"
+              "            return False\n"
+              "        self._close_confirm_pending = True\n"
+              "        return ActionResult(\n"
+              "            ActionType.REQUEST_SAVE_CONFIRM,\n"
+              "            payload={\n"
+              "                \"on_discard\": self._confirm_close,\n"
+              "                \"on_cancel\": self._cancel_close_request,\n"
+              "                \"message\": (\n"
+              "                    f\"{self.title} has unsaved changes.\\n\"\n"
+              "                    \"Discard them and close the window?\"\n"
+              "                ),\n"
+              "            },\n"
+              "        )\n"
+              "\n"
+              "    def _confirm_close(self):\n"
+              "        self._close_confirm_pending = False\n"
+              "        self._force_close = True\n"
+              "        return ActionResult(ActionType.EXECUTE, AppAction.CLOSE_WINDOW)\n"
+              "\n"
+              "    def _cancel_close_request(self):\n"
+              "        self._close_confirm_pending = False\n"
+              "\n"
+              "\n"
+              "    def _invalidate_wrap(self, line_idx=None):\n",
+          )
+
+          replace_once(
+              "retrotui/apps/notepad.py",
+              "    def _push_undo(self):\n"
+              "        self._force_close = False\n",
+              "    def _push_undo(self):\n"
+              "        self._force_close = False\n"
+              "        self._close_confirm_pending = False\n",
+          )
+
+          replace_once(
+              "retrotui/apps/notepad.py",
+              "        elif action == AppAction.NP_CLOSE:\n"
+              "            if self.modified and not self._force_close:\n"
+              "                self._force_close = True\n"
+              "                return ActionResult(ActionType.ERROR, \"Unsaved changes! Press Close again to discard.\")\n"
+              "            return ActionResult(ActionType.EXECUTE, AppAction.CLOSE_WINDOW)\n",
+              "        elif action == AppAction.NP_CLOSE:\n"
+              "            return ActionResult(ActionType.EXECUTE, AppAction.CLOSE_WINDOW)\n",
+          )
+          PY
+
+      - name: Run focused close lifecycle tests
+        run: |
+          python -m unittest \
+            tests.test_close_lifecycle_contract \
+            tests.test_window_manager \
+            tests.test_notepad_component \
+            tests.test_dialog_dispatch \
+            tests.test_core_app
+
+      - name: Check patch formatting
+        run: git diff --check
+
+      - name: Commit verified close contract
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            retrotui/ui/window.py \
+            retrotui/core/window_manager.py \
+            retrotui/core/app.py \
+            retrotui/core/dialog_dispatch.py \
+            retrotui/apps/notepad.py
+          git commit -m "fix(core): make window close transactional"
+          git push origin HEAD:stabilization/pre-0.9.6
