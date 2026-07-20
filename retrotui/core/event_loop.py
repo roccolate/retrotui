@@ -25,6 +25,90 @@ _INPUT_TIMEOUT_APPLY_ERRORS = (
     _CURSES_ERROR,
 )
 
+DEFAULT_EVENT_LOOP_FAILURE_LIMIT = 3
+DEFAULT_EVENT_LOOP_ERROR_BACKOFF_S = 0.05
+
+
+def _event_loop_failure_limit(app):
+    """Return a bounded consecutive-failure threshold."""
+    try:
+        value = int(
+            getattr(app, "event_loop_failure_limit", DEFAULT_EVENT_LOOP_FAILURE_LIMIT)
+        )
+    except (TypeError, ValueError):
+        value = DEFAULT_EVENT_LOOP_FAILURE_LIMIT
+    return max(1, value)
+
+
+def _event_loop_backoff_s(app, failure_count):
+    """Return a short bounded delay for a failing global loop iteration."""
+    try:
+        base = float(
+            getattr(
+                app,
+                "event_loop_error_backoff_s",
+                DEFAULT_EVENT_LOOP_ERROR_BACKOFF_S,
+            )
+        )
+    except (TypeError, ValueError):
+        base = DEFAULT_EVENT_LOOP_ERROR_BACKOFF_S
+    return min(0.5, max(0.0, base) * max(1, int(failure_count)))
+
+
+def _component_failure_attr(phase, suffix):
+    return f"_retrotui_{phase}_{suffix}"
+
+
+def _reset_component_failure(component, phase):
+    """Reset one component failure streak after a successful call."""
+    try:
+        setattr(component, _component_failure_attr(phase, "failure_count"), 0)
+        setattr(component, _component_failure_attr(phase, "first_error"), None)
+    except (AttributeError, TypeError):
+        pass
+
+
+def _record_component_failure(app, component, phase, exc):
+    """Record and eventually isolate a repeatedly failing window hook."""
+    count_attr = _component_failure_attr(phase, "failure_count")
+    first_attr = _component_failure_attr(phase, "first_error")
+    disabled_attr = _component_failure_attr(phase, "disabled")
+    count = int(getattr(component, count_attr, 0) or 0) + 1
+    try:
+        setattr(component, count_attr, count)
+        if getattr(component, first_attr, None) is None:
+            setattr(component, first_attr, exc)
+    except (AttributeError, TypeError):
+        pass
+
+    title = getattr(component, "title", component.__class__.__name__)
+    if count == 1:
+        LOGGER.exception("window %s failed during %s", title, phase)
+    else:
+        LOGGER.warning(
+            "window %s repeated %s failure (%d/%d): %s",
+            title,
+            phase,
+            count,
+            _event_loop_failure_limit(app),
+            exc,
+        )
+
+    if count < _event_loop_failure_limit(app):
+        return False
+
+    try:
+        setattr(component, disabled_attr, True)
+        if phase == "tick":
+            setattr(component, "tick_when_hidden", False)
+            setattr(component, "wants_periodic_tick", False)
+        elif phase == "draw":
+            setattr(component, "visible", False)
+    except (AttributeError, TypeError):
+        pass
+    LOGGER.error("disabled window %s after repeated %s failures", title, phase)
+    return True
+
 
 def _method_accepts_frame_size(component, method_name):
     """Return whether a component method accepts the frame_size keyword."""
@@ -63,6 +147,18 @@ def _draw_component(component, stdscr, frame_size):
         draw(stdscr)
 
 
+def _draw_window_component(app, component, stdscr, frame_size):
+    """Draw one window and isolate it after repeated deterministic failures."""
+    if getattr(component, "_retrotui_draw_disabled", False):
+        return
+    try:
+        _draw_component(component, stdscr, frame_size)
+    except Exception as exc:  # Window/plugin boundary: isolate third-party code.
+        _record_component_failure(app, component, "draw", exc)
+        return
+    _reset_component_failure(component, "draw")
+
+
 def clamp_windows_to_terminal(app):
     """Keep window origins inside current terminal bounds."""
     new_h, new_w = app.stdscr.getmaxyx()
@@ -85,7 +181,7 @@ def draw_frame(app):
     if not app.has_background_operation():
         for win in app.windows:
             if getattr(win, "visible", True):
-                _draw_component(win, app.stdscr, frame_size)
+                _draw_window_component(app, win, app.stdscr, frame_size)
 
     app.menu.draw_bar(app.stdscr, frame_w, frame_size=frame_size)
     app.menu.draw_dropdown(app.stdscr, frame_size=frame_size)
@@ -220,13 +316,15 @@ def _tick_and_probe_windows(app):
             continue
 
         tick = getattr(window, "tick", None)
-        if callable(tick):
+        if callable(tick) and not getattr(window, "_retrotui_tick_disabled", False):
             try:
                 tick_changed = bool(tick())
+            except Exception as exc:  # Window/plugin boundary.
+                _record_component_failure(app, window, "tick", exc)
+            else:
+                _reset_component_failure(window, "tick")
                 if visible:
                     changed = tick_changed or changed
-            except _INPUT_TIMEOUT_APPLY_ERRORS:
-                LOGGER.debug("window tick failed", exc_info=True)
 
         if not has_live:
             session = getattr(window, "_session", None)
@@ -251,14 +349,16 @@ def _tick_visible_windows(app):
         if not visible and not getattr(w, "tick_when_hidden", False):
             continue
         tick = getattr(w, "tick", None)
-        if not callable(tick):
+        if not callable(tick) or getattr(w, "_retrotui_tick_disabled", False):
             continue
         try:
             tick_changed = bool(tick())
+        except Exception as exc:  # Window/plugin boundary.
+            _record_component_failure(app, w, "tick", exc)
+        else:
+            _reset_component_failure(w, "tick")
             if visible:
                 changed = tick_changed or changed
-        except _INPUT_TIMEOUT_APPLY_ERRORS:
-            LOGGER.debug("window tick failed", exc_info=True)
     return changed
 
 
@@ -448,35 +548,47 @@ def _refresh_idle_clock(app):
 
 
 def run_app_loop(app):
-    """Run main draw/input loop with terminal cleanup on exit."""
+    """Run the main loop with bounded recovery and guaranteed cleanup."""
     metrics = _ensure_runtime_metrics(app)
     install_handlers = getattr(app, "_install_runtime_signal_handlers", None)
     if callable(install_handlers):
         install_handlers()
+
+    consecutive_errors = 0
+    first_error = None
+    first_error_phase = None
+    phase = "startup"
+    app._event_loop_first_error = None
+    app._event_loop_first_error_phase = None
+
     try:
         while app.running:
             try:
                 metrics["loops"] += 1
-                # Keep background progression deterministic: one poll per loop.
+                phase = "background"
                 app.poll_background_operation()
-                # Expire toast notifications and force redraw while visible.
-                _notif = getattr(app, '_notifications', None)
+
+                _notif = getattr(app, "_notifications", None)
                 if _notif is not None:
                     if _notif.tick():
                         app._dirty = True
                     if _notif.has_visible:
                         app._dirty = True
-                # One walk collects the three independent contracts:
-                # change, service liveness and periodic cadence.
+
+                phase = "tick"
                 _tick_changed, has_live, has_periodic = _tick_and_probe_windows(app)
                 if _tick_changed:
                     app._dirty = True
-                if getattr(app, '_dirty', True):
+
+                phase = "render"
+                if getattr(app, "_dirty", True):
                     draw_start = time.perf_counter()
                     draw_frame(app)
                     metrics["draw_time_s"] += time.perf_counter() - draw_start
                     metrics["redraws"] += 1
                     app._dirty = False
+
+                phase = "input"
                 _apply_input_timeout(
                     app,
                     _select_input_timeout_ms(
@@ -497,27 +609,77 @@ def run_app_loop(app):
                 if key is None and _refresh_idle_clock(app):
                     metrics["redraws"] += 1
                 _record_input_stats(metrics, key)
+
+                phase = "dispatch"
                 dispatch_start = time.perf_counter()
                 if dispatch_input(app, key):
                     app._dirty = True
                     metrics["dispatched_events"] += 1
                 metrics["dispatch_time_s"] += time.perf_counter() - dispatch_start
                 _emit_runtime_metrics(metrics, final=False)
+
+                # A complete iteration breaks the global failure streak.
+                consecutive_errors = 0
+                first_error = None
+                first_error_phase = None
+                app._event_loop_first_error = None
+                app._event_loop_first_error_phase = None
             except KeyboardInterrupt:
-                # Fallback safety net for terminals that still surface Ctrl+C as host interrupt.
                 app.handle_key("\x03")
                 app._dirty = True
                 metrics["dispatched_events"] += 1
+                consecutive_errors = 0
+                first_error = None
+                first_error_phase = None
                 continue
-            except Exception:
-                # A buggy ``tick``/``handle_key``/``dispatch_input`` chain
-                # used to escape the inner ``try`` and propagate into the
-                # outer ``finally``, where ``app.cleanup()`` would mask the
-                # original traceback if it also raised. Log and continue
-                # instead so the user keeps the app running.
-                LOGGER.exception("Unhandled exception in main loop iteration")
+            except Exception as exc:
+                consecutive_errors += 1
+                if first_error is None:
+                    first_error = exc
+                    first_error_phase = phase
+                    app._event_loop_first_error = exc
+                    app._event_loop_first_error_phase = phase
+                    LOGGER.exception(
+                        "Unhandled exception in main loop phase %s", phase
+                    )
+                else:
+                    LOGGER.error(
+                        "Repeated main-loop failure in phase %s (%d/%d): %s",
+                        phase,
+                        consecutive_errors,
+                        _event_loop_failure_limit(app),
+                        exc,
+                    )
+
+                if consecutive_errors >= _event_loop_failure_limit(app):
+                    app.running = False
+                    app._event_loop_abort_reason = (
+                        f"{first_error_phase} failed {consecutive_errors} "
+                        f"consecutive times: {first_error}"
+                    )
+                    LOGGER.critical(
+                        "Event loop circuit breaker opened: %s",
+                        app._event_loop_abort_reason,
+                        exc_info=(
+                            type(first_error),
+                            first_error,
+                            first_error.__traceback__,
+                        ),
+                    )
+                    break
+
                 app._dirty = True
+                delay = _event_loop_backoff_s(app, consecutive_errors)
+                if delay > 0:
+                    time.sleep(delay)
                 continue
     finally:
         _emit_runtime_metrics(metrics, final=True)
-        app.cleanup()
+        try:
+            app.cleanup()
+        except Exception:
+            if first_error is None:
+                raise
+            LOGGER.exception(
+                "cleanup failed after event-loop error; preserving original cause"
+            )
