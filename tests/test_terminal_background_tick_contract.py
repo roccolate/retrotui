@@ -4,6 +4,8 @@ import types
 import unittest
 from unittest import mock
 
+# Hidden service ticks advance PTY state without entering the curses draw path.
+
 
 def _install_fake_curses():
     fake = types.ModuleType("curses")
