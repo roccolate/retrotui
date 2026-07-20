@@ -4,6 +4,8 @@ import types
 import unittest
 from unittest import mock
 
+# The transactional close contract is validated in isolation from curses state.
+
 
 class CloseLifecycleContractTests(unittest.TestCase):
     def test_window_manager_defers_close_and_dispatches_request(self):
