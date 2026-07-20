@@ -26,25 +26,9 @@ jobs:
         run: python -m pip install -e .
 
       - name: Apply focused patch
-        run: python tools/apply_redraw_contract_patch.py
-
-      - name: Remove legacy timeout fallback
-        shell: bash
         run: |
-          python - <<'PY'
-          from pathlib import Path
-          path = Path('retrotui/core/event_loop.py')
-          text = path.read_text(encoding='utf-8')
-          old = '''getattr(
-                    app,
-                    "input_timeout_animated_ms",
-                    TERMINAL_ANIMATED_INPUT_TIMEOUT_MS,
-                )'''
-          new = 'TERMINAL_ANIMATED_INPUT_TIMEOUT_MS'
-          if text.count(old) != 1:
-              raise SystemExit(f'expected one legacy timeout fallback, found {text.count(old)}')
-          path.write_text(text.replace(old, new, 1), encoding='utf-8')
-          PY
+          python tools/apply_redraw_contract_patch.py
+          python tools/finalize_redraw_contract_patch.py
 
       - name: Run focused tests
         run: |
