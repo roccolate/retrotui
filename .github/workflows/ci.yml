@@ -31,13 +31,31 @@ jobs:
         run: python tools/apply_close_transaction_patch.py
 
       - name: Run focused tests
+        id: tests
+        shell: bash
         run: |
+          set +e
           python -m unittest \
             tests.test_close_lifecycle_contract \
             tests.test_window_manager \
             tests.test_notepad_component \
             tests.test_dialog_dispatch \
-            tests.test_core_app
+            tests.test_core_app > close-tests.log 2>&1
+          status=$?
+          echo "$status" > close-tests.status
+          exit 0
+
+      - name: Upload close diagnostics
+        uses: actions/upload-artifact@v4
+        with:
+          name: close-lifecycle-diagnostics
+          path: |
+            close-tests.log
+            close-tests.status
+
+      - name: Preserve test result
+        shell: bash
+        run: test "$(cat close-tests.status)" = "0"
 
       - name: Check patch formatting
         run: git diff --check
