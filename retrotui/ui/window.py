@@ -20,7 +20,9 @@ from .menu import WindowMenu
 class Window:
     """A draggable window with title bar and content area."""
 
-    needs_redraw = False
+    # Public runtime scheduling contract.
+    wants_periodic_tick = False
+    tick_when_hidden = False
 
     _next_id = 0
     TITLE_CONTROLS = '[─][□][×]'

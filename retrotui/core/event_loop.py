@@ -193,53 +193,50 @@ def _has_live_terminals(app):
     return False
 
 
-def _has_animated_windows(app):
-    """Return True if any visible window requests periodic redraws."""
-    for w in app.windows:
-        if not getattr(w, "visible", True):
+def _has_periodic_windows(app):
+    """Return True if any visible window requests periodic scheduling."""
+    for window in app.windows:
+        if not getattr(window, "visible", True):
             continue
-        if getattr(w, "needs_redraw", False):
+        if bool(getattr(window, "wants_periodic_tick", False)):
             return True
     return False
 
 
 def _tick_and_probe_windows(app):
-    """Run per-window ``tick`` hooks and probe for live/animated windows.
+    """Run update hooks and collect the public runtime scheduling signals.
 
-    Combines the three separate ``app.windows`` walks (tick, live,
-    animated) into a single iteration. The cost saving is the second
-    and third walks, which previously ran every loop iteration even
-    when no window had anything to do.
+    ``tick()`` is the only per-window redraw signal. A True return means
+    visible state changed. ``wants_periodic_tick`` only selects a shorter
+    polling cadence, while ``tick_when_hidden`` allows service progression.
     """
     changed = False
     has_live = False
-    has_animated = False
-    for w in app.windows:
-        visible = getattr(w, "visible", True)
-        tick_when_hidden = bool(getattr(w, "tick_when_hidden", False))
+    has_periodic = False
+    for window in app.windows:
+        visible = getattr(window, "visible", True)
+        tick_when_hidden = bool(getattr(window, "tick_when_hidden", False))
         if not visible and not tick_when_hidden:
             continue
 
-        tick = getattr(w, "tick", None)
+        tick = getattr(window, "tick", None)
         if callable(tick):
             try:
                 tick_changed = bool(tick())
-                # Hidden service ticks advance background state but do not
-                # dirty the visual frame until the window becomes visible.
                 if visible:
                     changed = tick_changed or changed
             except _INPUT_TIMEOUT_APPLY_ERRORS:
                 LOGGER.debug("window tick failed", exc_info=True)
 
-        # A service-ticked hidden terminal still needs the low-latency input
-        # timeout so its PTY cannot fill while minimized.
         if not has_live:
-            session = getattr(w, "_session", None)
+            session = getattr(window, "_session", None)
             if session is not None and getattr(session, "running", False):
                 has_live = True
-        if visible and not has_animated and getattr(w, "_animated", False):
-            has_animated = True
-    return changed, has_live, has_animated
+        if visible and not has_periodic:
+            has_periodic = bool(
+                getattr(window, "wants_periodic_tick", False)
+            )
+    return changed, has_live, has_periodic
 
 
 def _tick_visible_windows(app):
@@ -265,21 +262,19 @@ def _tick_visible_windows(app):
     return changed
 
 
-def _select_input_timeout_ms(app, *, has_live=None, has_animated=None):
+def _select_input_timeout_ms(app, *, has_live=None, has_periodic=None):
     """Return the target input timeout for the current runtime state.
 
-    ``has_live``/``has_animated`` may be supplied by the caller when it
-    has already computed them for the redraw decision; otherwise the
-    helpers are invoked on demand. Reusing the cached values avoids two
-    extra ``app.windows`` walks per loop iteration.
+    Live services and periodic windows affect polling cadence only. Redraws
+    remain controlled by ``tick()`` returns and app-level invalidation.
     """
     idle = int(getattr(app, "input_timeout_idle_ms", TERMINAL_INPUT_TIMEOUT_MS))
     timeout_ms = max(1, idle)
 
     if has_live is None:
         has_live = _has_live_terminals(app)
-    if has_animated is None:
-        has_animated = _has_animated_windows(app)
+    if has_periodic is None:
+        has_periodic = _has_periodic_windows(app)
 
     if has_live:
         live = int(
@@ -291,15 +286,15 @@ def _select_input_timeout_ms(app, *, has_live=None, has_animated=None):
         )
         return max(1, live)
 
-    if has_animated:
-        anim = int(
+    if has_periodic:
+        periodic = int(
             getattr(
                 app,
-                "input_timeout_animated_ms",
+                "input_timeout_periodic_ms",
                 TERMINAL_ANIMATED_INPUT_TIMEOUT_MS,
             )
         )
-        return max(1, min(timeout_ms, anim))
+        return max(1, min(timeout_ms, periodic))
 
     has_background_operation = getattr(app, "has_background_operation", None)
     if callable(has_background_operation) and bool(has_background_operation()):
@@ -471,15 +466,10 @@ def run_app_loop(app):
                         app._dirty = True
                     if _notif.has_visible:
                         app._dirty = True
-                # Single walk that (1) runs per-window ``tick`` hooks,
-                # (2) detects live terminals, (3) detects animated
-                # windows. Avoids 3× walks of ``app.windows`` per loop.
-                _tick_changed, has_live, has_animated = _tick_and_probe_windows(app)
+                # One walk collects the three independent contracts:
+                # change, service liveness and periodic cadence.
+                _tick_changed, has_live, has_periodic = _tick_and_probe_windows(app)
                 if _tick_changed:
-                    app._dirty = True
-                # PTY output dirties the frame through ``tick_changed``.
-                # Merely being alive is a polling concern, not a redraw reason.
-                if has_animated:
                     app._dirty = True
                 if getattr(app, '_dirty', True):
                     draw_start = time.perf_counter()
@@ -487,7 +477,12 @@ def run_app_loop(app):
                     metrics["draw_time_s"] += time.perf_counter() - draw_start
                     metrics["redraws"] += 1
                     app._dirty = False
-                _apply_input_timeout(app, _select_input_timeout_ms(app, has_live=has_live, has_animated=has_animated))
+                _apply_input_timeout(
+                    app,
+                    _select_input_timeout_ms(
+                        app, has_live=has_live, has_periodic=has_periodic
+                    ),
+                )
                 input_start = time.perf_counter()
                 key = read_input_key(app.stdscr)
                 metrics["input_wait_time_s"] += time.perf_counter() - input_start

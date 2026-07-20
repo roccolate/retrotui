@@ -126,6 +126,7 @@ class FileManagerWindow(Window):
         self._preview_cache = {'key': None, 'lines': []}
         self._preview_lock = threading.Lock()
         self._preview_pending = set()
+        self._preview_redraw_pending = False
         self.dual_pane_enabled = self.w >= self.DUAL_PANE_MIN_WIDTH
         self.active_pane = 0
         self._secondary = PaneState(self.current_path)
@@ -686,7 +687,7 @@ class FileManagerWindow(Window):
                 self._preview_pending.discard(cache_key)
                 if self._preview_cache.get('key') == cache_key:
                     self._preview_cache = {'key': cache_key, 'lines': lines}
-                    self.needs_redraw = True
+                    self._preview_redraw_pending = True
 
         thread = threading.Thread(target=_worker, name='retrotui-preview', daemon=True)
         thread.start()
@@ -700,6 +701,14 @@ class FileManagerWindow(Window):
         """Clear the preview cache."""
         with self._preview_lock:
             self._preview_cache = {'key': None, 'lines': []}
+            self._preview_redraw_pending = False
+
+    def tick(self):
+        """Consume one completed asynchronous preview update."""
+        with self._preview_lock:
+            changed = self._preview_redraw_pending
+            self._preview_redraw_pending = False
+        return changed
 
     def _resolve_destination_path(self, entry, dest_path):
         """Check if destination is valid and return full target path."""
