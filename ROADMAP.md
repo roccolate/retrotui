@@ -6,7 +6,7 @@
 
 **Regla:** después de v0.9.8 no entran features nuevas para 1.0. Todo lo nuevo pasa a post-1.0.
 
-**Estado actual:** v0.9.5 cerrado (release 2026-06-19). v0.9.5.1 documenta el hardening pre-v0.9.6 como entrada no publicada en [CHANGELOG.md](CHANGELOG.md). Próximo: v0.9.6 certificación cross-terminal. El handoff operativo está en [docs/CODEX_NEXT_STEPS.md](docs/CODEX_NEXT_STEPS.md), la matriz viva en [docs/TTY_TEST_MATRIX.md](docs/TTY_TEST_MATRIX.md), el checklist manual en [tools/TESTING.md](tools/TESTING.md), y la auditoría técnica en [docs/IMPROVEMENTS.md](docs/IMPROVEMENTS.md).
+**Estado actual:** v0.9.5 fue publicado el 2026-06-19. La auditoría de código del 2026-07-19 reabrió el hardening antes de v0.9.6 y documentó P0-P2 en [docs/TECHNICAL_AUDIT_2026-07.md](docs/TECHNICAL_AUDIT_2026-07.md) y [docs/CORE_AUDIT_2026-07.md](docs/CORE_AUDIT_2026-07.md). La certificación cross-terminal no comienza como gate de salida hasta cerrar los P0 de ciclo de vida, PTY, redraw, colores, RetroNet y CI. El handoff operativo sigue en [docs/CODEX_NEXT_STEPS.md](docs/CODEX_NEXT_STEPS.md), la matriz viva en [docs/TTY_TEST_MATRIX.md](docs/TTY_TEST_MATRIX.md) y el checklist manual en [tools/TESTING.md](tools/TESTING.md).
 
 ---
 
@@ -61,23 +61,60 @@
 
 - [x] Crear `TerminalScreenBuffer` normal-screen `rows x cols`.
 - [x] Separar normal-screen, alt-screen y scrollback.
-- [x] Soportar wrap, scroll, clear, insert/delete char/line y resize.
-- [x] Cablear `TerminalScreenBuffer` dentro de `TerminalWindow` como fuente única de verdad (13 tests en `tests/test_terminal_buffer_wiring.py`).
-- [x] Cursor real por fila/columna (la API del buffer expone `cursor_row/col` y `_draw_live_cursor` los lee directamente).
-- [x] Atributos por celda para selección/copy (cada celda guarda `(char, attr)`; el sistema de selección los expone via `_line_cells` rstrípeado).
-- [x] Mouse pass-through opcional cuando el programa hijo active mouse reporting (14 tests en `tests/test_terminal_mouse_passthrough.py`; tracking de DEC private modes `_mouse_modes`, encode SGR `\e[<Cb;Cx;CyM`/`m`, reenvío via `_forward_payload`).
-- [x] Mantener compatibilidad GPM para menús/selección de RetroTUI (cubierto por la rama "sin modes" del mismo handler).
-- [x] Sincronizar versión en `pyproject.toml`, `retrotui/__init__.py`, `APP_VERSION` y `setup.sh` (v0.9.5).
-- [ ] Validar `nano`, `vim`, `mc`, `htop`, `less` y `top` (manual; cae en v0.9.6 cert).
-- [ ] Pruebas de regresión: alt-screen, resize, cursor, copy/select y atributos (cubierto parcialmente; ampliar en v0.9.6).
+- [x] Soportar wrap, scroll, clear, insert/delete char/line y resize a nivel de buffer.
+- [x] Cablear `TerminalScreenBuffer` dentro de `TerminalWindow` como fuente principal de estado.
+- [x] Cursor real por fila/columna.
+- [x] Atributos por celda para selección/copy.
+- [x] Mouse pass-through opcional cuando el programa hijo active mouse reporting.
+- [x] Mantener compatibilidad GPM para menús/selección de RetroTUI.
+- [x] Sincronizar versión en fuentes de release.
+- [ ] Validar `nano`, `vim`, `mc`, `htop`, `less` y `top` en terminales reales.
+- [ ] Eliminar duplicación entre append manual de newline y scroll sink.
+- [ ] Garantizar que Terminal minimizado siga drenando el PTY.
+- [ ] Presupuestar bytes/reads por tick para evitar monopolizar el main loop.
+- [ ] Completar pruebas de regresión: alt-screen, resize, cursor, copy/select y atributos.
 
-**Criterio de salida:** Terminal usable con apps TUI comunes y sin grids paralelos inconsistentes.
+**Criterio de salida revisado:** buffer y PTY sin historial duplicado, sin bloqueo por minimización y con aplicaciones TUI comunes validadas en la matriz real.
+
+---
+
+## Gate de estabilización pre-v0.9.6 — Auditoría 2026-07
+
+**Objetivo:** corregir fallos confirmados antes de interpretar la matriz TTY como certificación del producto.
+
+### P0 obligatorios
+
+- [ ] Unificar spawn a través de `WindowManager._spawn_window()` y verificar `window.opened` + `subscribe_to_bus()`.
+- [ ] Crear EventBus de forma determinista o dejar de consultar `_event_bus` directamente.
+- [ ] Implementar protocolo único de cierre y confirmación para datos sin guardar.
+- [ ] Inicializar `_open_path_confirm_pending` y cubrir el flujo dirty → Open.
+- [ ] Añadir circuit breaker/backoff al main loop.
+- [ ] Ejecutar ticks de servicio para ventanas minimizadas.
+- [ ] Unificar `_animated`, `needs_redraw`, retorno de `tick()` y `_dirty`.
+- [ ] Negociar pares de color con `curses.COLOR_PAIRS`.
+- [ ] Corregir scrollback duplicado.
+- [ ] Corregir `content_w` en click de tabs de RetroNet.
+- [ ] Hacer que CI recoja todos los tests unittest/pytest.
+
+### P1 antes de feature freeze
+
+- [ ] Tipar workflows de diálogo y eliminar dispatch por títulos visibles.
+- [ ] Conservar source window en callbacks de diálogo.
+- [ ] Añadir generation IDs y límite de respuesta a RetroNet.
+- [ ] Eliminar fallback TLS automático con `CERT_NONE`.
+- [ ] Hacer transaccional metadata + move de Trash.
+- [ ] Corregir prioridad `accept_dropped_path()` en drag-and-drop.
+- [ ] Añadir cancelación/ownership a background tasks.
+- [ ] Normalizar datos de NotificationManager.
+- [ ] Versionar schema de configuración y definir preservación de secciones desconocidas.
+
+**Criterio de salida:** cero P0 abiertos y pruebas de regresión recogidas por CI.
 
 ---
 
 ## v0.9.6 — Certificación cross-terminal
 
-**Objetivo:** comprobar RetroTUI en entornos reales antes de agregar más experiencia visual.
+**Objetivo:** comprobar RetroTUI en entornos reales después del gate de estabilización.
 
 - [ ] Probar Linux console directa.
 - [ ] Probar terminales GUI en Linux.
@@ -122,7 +159,7 @@
 - [ ] Congelar formato de config para 1.0.
 - [ ] Revisar documentación principal: README, roadmap, arquitectura, plugins, testing, matriz TTY, release y handoff Codex.
 - [ ] Revisar empaquetado: `pyproject.toml`, entrypoints, dependencias y extras.
-- [ ] QA completo con `python tools/qa.py`.
+- [ ] QA completo con `python tools/qa.py` más cualquier runner adicional requerido por tests pytest.
 - [ ] Agregar smoke tests para inicio, abrir/cerrar ventanas, Terminal, File Manager y Notepad.
 - [ ] Limpiar TODOs obvios, prints de debug y warnings evitables.
 - [ ] Marcar explícitamente lo que queda fuera de 1.0 en `docs/post-1.0.md`.
@@ -171,14 +208,14 @@
 
 RetroTUI 1.0 está listo cuando:
 
-- `python tools/qa.py` pasa limpio.
-- File Manager, Notepad y Terminal funcionan sin errores críticos.
-- La terminal embebida corre apps TUI comunes de forma usable.
-- El sistema de plugins está documentado y estable.
-- La matriz de compatibilidad está documentada.
-- La configuración persiste sin corromperse.
-- La app inicia, cierra y restaura estado básico de forma confiable.
-- No hay bugs críticos conocidos.
+- toda la suite escrita es recogida por CI y pasa limpia;
+- File Manager, Notepad y Terminal funcionan sin errores críticos;
+- la terminal embebida corre apps TUI comunes de forma usable en entornos certificados;
+- el sistema de plugins está documentado y estable;
+- la matriz de compatibilidad está documentada;
+- la configuración persiste sin corromperse ni borrar extensiones no reconocidas sin una política explícita;
+- la app inicia, cierra y restaura estado básico de forma confiable;
+- no hay bugs críticos conocidos.
 
 ---
 
@@ -199,9 +236,10 @@ Ideas que no deben bloquear 1.0:
 
 # Política de versiones
 
-- `0.9.5`: Terminal sólida.
-- `0.9.6`: Compatibilidad certificada.
-- `0.9.7`: Experiencia de sistema.
-- `0.9.8`: Feature complete.
-- `0.9.9`: Bugtest only.
-- `1.0.0`: Stable release.
+- `0.9.5`: base de TerminalScreen/PTY publicada; hardening reabierto por auditoría.
+- `pre-0.9.6`: cierre de P0 de auditoría.
+- `0.9.6`: compatibilidad certificada.
+- `0.9.7`: experiencia de sistema.
+- `0.9.8`: feature complete.
+- `0.9.9`: bugtest only.
+- `1.0.0`: stable release.
