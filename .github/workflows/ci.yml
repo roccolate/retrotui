@@ -35,26 +35,12 @@ jobs:
           from pathlib import Path
           path = Path('retrotui/core/event_loop.py')
           text = path.read_text(encoding='utf-8')
-          old = '''        periodic = int(
-              getattr(
-                  app,
-                  "input_timeout_periodic_ms",
-                  getattr(
-                      app,
-                      "input_timeout_animated_ms",
-                      TERMINAL_ANIMATED_INPUT_TIMEOUT_MS,
-                  ),
-              )
-          )
-          '''
-          new = '''        periodic = int(
-              getattr(
-                  app,
-                  "input_timeout_periodic_ms",
-                  TERMINAL_ANIMATED_INPUT_TIMEOUT_MS,
-              )
-          )
-          '''
+          old = '''getattr(
+                    app,
+                    "input_timeout_animated_ms",
+                    TERMINAL_ANIMATED_INPUT_TIMEOUT_MS,
+                )'''
+          new = 'TERMINAL_ANIMATED_INPUT_TIMEOUT_MS'
           if text.count(old) != 1:
               raise SystemExit(f'expected one legacy timeout fallback, found {text.count(old)}')
           path.write_text(text.replace(old, new, 1), encoding='utf-8')
