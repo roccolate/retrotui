@@ -9,7 +9,7 @@ from retrotui.core.window_manager import WindowManager
 class WindowLifecycleContractTests(unittest.TestCase):
     def test_app_spawn_facade_delegates_to_window_manager(self):
         """The app facade must not maintain a second spawn implementation."""
-        # Import lazily so unittest discovery does not initialize the complete
+        # Import inside the test so discovery does not initialize the complete
         # app graph before test_core_app installs its fake curses environment.
         from retrotui.core.app import RetroTUI
 
