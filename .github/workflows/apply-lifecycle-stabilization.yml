@@ -1,4 +1,4 @@
-name: Apply lifecycle stabilization patch
+name: Apply lifecycle stabilization patch v2
 
 on:
   push:
