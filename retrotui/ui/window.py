@@ -76,6 +76,10 @@ class Window:
     def on_ipc_message(self, message):
         """Handle an IPC message from another window.  Override in subclasses."""
 
+    def request_close(self):
+        """Return True when the window may be closed immediately."""
+        return True
+
     def close_button_pos(self):
         """Return (x, y) of the close button."""
         control = self._title_control_range("close")

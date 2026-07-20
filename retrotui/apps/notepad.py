@@ -116,6 +116,8 @@ class NotepadWindow(SelectableTextMixin, Window):
         self._search_mode = False
         self._search_query = ''
         self._force_close = False
+        self._close_confirm_pending = False
+        self._open_path_confirm_pending = None
         # Per-line wrap cache: ``self._wrap_line_cache[i]`` holds the
         # wrapped chunks for ``self.buffer[i]`` (or ``None`` when
         # stale). The list always has the same length as
@@ -162,6 +164,8 @@ class NotepadWindow(SelectableTextMixin, Window):
         self._undo_stack.clear()
         self._redo_stack.clear()
         self._force_close = False
+        self._close_confirm_pending = False
+        self._open_path_confirm_pending = None
         # Whole buffer was replaced; reset the per-line cache list.
         self._wrap_line_cache = [None] * len(self.buffer)
         self._wrap_cache_w = None
@@ -181,6 +185,8 @@ class NotepadWindow(SelectableTextMixin, Window):
         except (PermissionError, OSError) as e:
             return ActionResult(ActionType.SAVE_ERROR, str(e))
         self.modified = False
+        self._force_close = False
+        self._close_confirm_pending = False
         self._update_title()
         return True
 
@@ -220,7 +226,14 @@ class NotepadWindow(SelectableTextMixin, Window):
             )
             return ActionResult(
                 ActionType.REQUEST_SAVE_CONFIRM,
-                payload={"on_discard": self._do_open_path_force},
+                payload={
+                    "on_discard": self._do_open_path_force,
+                    "on_cancel": self._cancel_open_path,
+                    "message": (
+                        f"{self.title} has unsaved changes.\n"
+                        "Discard them and open the new file?"
+                    ),
+                },
             )
         self._do_open_path(os.path.abspath(os.path.expanduser(path)))
         return None
@@ -236,6 +249,37 @@ class NotepadWindow(SelectableTextMixin, Window):
         self._open_path_confirm_pending = None
         if pending:
             self._do_open_path(pending)
+
+    def _cancel_open_path(self):
+        """Cancel a pending destructive open request."""
+        self._open_path_confirm_pending = None
+
+    def request_close(self):
+        """Return a confirmation request when the buffer is modified."""
+        if not self.modified or self._force_close:
+            return True
+        if self._close_confirm_pending:
+            return False
+        self._close_confirm_pending = True
+        return ActionResult(
+            ActionType.REQUEST_SAVE_CONFIRM,
+            payload={
+                "on_discard": self._confirm_close,
+                "on_cancel": self._cancel_close_request,
+                "message": (
+                    f"{self.title} has unsaved changes.\n"
+                    "Discard them and close the window?"
+                ),
+            },
+        )
+
+    def _confirm_close(self):
+        self._close_confirm_pending = False
+        self._force_close = True
+        return ActionResult(ActionType.EXECUTE, AppAction.CLOSE_WINDOW)
+
+    def _cancel_close_request(self):
+        self._close_confirm_pending = False
 
 
     def _invalidate_wrap(self, line_idx=None):
@@ -375,6 +419,7 @@ class NotepadWindow(SelectableTextMixin, Window):
 
     def _push_undo(self):
         self._force_close = False
+        self._close_confirm_pending = False
         state = self._state_for_undo()
         if state is None:
             return
@@ -729,9 +774,6 @@ class NotepadWindow(SelectableTextMixin, Window):
         elif action == AppAction.NP_NEW:
             return ActionResult(ActionType.EXECUTE, AppAction.NOTEPAD)
         elif action == AppAction.NP_CLOSE:
-            if self.modified and not self._force_close:
-                self._force_close = True
-                return ActionResult(ActionType.ERROR, "Unsaved changes! Press Close again to discard.")
             return ActionResult(ActionType.EXECUTE, AppAction.CLOSE_WINDOW)
         return None
 

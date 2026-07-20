@@ -156,33 +156,33 @@ class RetroTUI:
         return self.file_ops.show_open_dialog(win)
 
     def _show_save_confirm_dialog(self, win, payload=None):
-        """Prompt the user before discarding unsaved work in *win*."""
-        # The ``on_discard`` callback is attached via the ActionResult payload
-        # at the call site (notepad.py emits it when open_path hits a dirty
-        # buffer). Prefer the payload; fall back to a window method for tests
-        # or direct callers.
+        """Prompt before a destructive operation on unsaved work."""
         from ..ui.dialog import Dialog
+
         try:
             title = getattr(win, "title", "Notepad")
         except Exception:
             title = "Notepad"
         message = (
             f"{title} has unsaved changes.\n"
-            "Discard them and open the new file?"
+            "Discard them and continue?"
         )
         on_discard = None
+        on_cancel = None
         if isinstance(payload, dict):
             candidate = payload.get("on_discard")
             if callable(candidate):
                 on_discard = candidate
+            candidate = payload.get("on_cancel")
+            if callable(candidate):
+                on_cancel = candidate
+            custom_message = payload.get("message")
+            if isinstance(custom_message, str) and custom_message.strip():
+                message = custom_message
         if on_discard is None:
             fallback = getattr(win, "_do_open_path_force", None)
             if callable(fallback):
                 on_discard = fallback
-
-        def _on_discard():
-            if on_discard is not None:
-                on_discard()
 
         self.dialog = Dialog(
             title="Discard unsaved changes?",
@@ -190,7 +190,11 @@ class RetroTUI:
             buttons=["Discard", "Cancel"],
             width=58,
         )
-        self._pending_discard_callback = _on_discard
+        self.dialog.kind = "save_confirm"
+        self.dialog.source_window = win
+        self._pending_discard_callback = on_discard
+        self._pending_discard_cancel_callback = on_cancel
+        self._pending_discard_source = win
 
     def show_rename_dialog(self, win):
         return self.file_ops.show_rename_dialog(win)
@@ -774,7 +778,7 @@ class RetroTUI:
                         self.BACKGROUND_OPERATION_JOIN_TIMEOUT,
                     )
         for win in list(self.windows):
-            self._close_window_safely(win)
+            self.window_mgr.close_window(win, force=True)
         if hasattr(self, '_notifications'):
             self._notifications.cleanup()
         if hasattr(self, '_event_bus'):
@@ -858,9 +862,9 @@ class RetroTUI:
         """Keep always-on-top windows above regular windows preserving order."""
         self.window_mgr.normalize_window_layers()
 
-    def close_window(self, win):
-        """Close a window."""
-        self.window_mgr.close_window(win)
+    def close_window(self, win, *, force=False):
+        """Request that a window close, or force it during shutdown."""
+        return self.window_mgr.close_window(win, force=force)
 
     def _activate_last_visible_window(self):
         """Activate topmost visible window after z-order/window-list changes."""

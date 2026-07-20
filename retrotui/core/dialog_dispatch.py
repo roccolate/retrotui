@@ -167,16 +167,23 @@ class DialogDispatcher:
         dialog = self._app.dialog
         btn_text = dialog.buttons[result_idx] if result_idx < len(dialog.buttons) else ''
         callback_result = None
+        callback_source = getattr(dialog, 'source_window', None)
 
         if dialog.title == 'Exit RetroTUI' and btn_text == 'Yes':
             self._app.running = False
-        elif dialog.title == 'Discard unsaved changes?':
-            # Save-confirm prompt: ``Discard`` (idx 0) runs the pending
-            # discard callback; ``Cancel`` (idx 1) is a no-op.
-            callback = getattr(self._app, '_pending_discard_callback', None)
+        elif getattr(dialog, 'kind', None) == 'save_confirm' or dialog.title == 'Discard unsaved changes?':
+            callback_source = getattr(
+                self._app, '_pending_discard_source', callback_source
+            )
+            if result_idx == 0:
+                callback = getattr(self._app, '_pending_discard_callback', None)
+            else:
+                callback = getattr(self._app, '_pending_discard_cancel_callback', None)
             self._app._pending_discard_callback = None
-            if result_idx == 0 and callable(callback):
-                callback()
+            self._app._pending_discard_cancel_callback = None
+            self._app._pending_discard_source = None
+            if callable(callback):
+                callback_result = callback()
         elif result_idx == 0:
             callback = getattr(dialog, 'callback', None)
             if callable(callback):
@@ -188,8 +195,9 @@ class DialogDispatcher:
         if self._app.dialog is dialog:
             self._app.dialog = None
         if callback_result is not None:
+            source_win = callback_source or self._app.get_active_window()
             app_dispatch = getattr(self._app, '_dispatch_window_result', None)
             if callable(app_dispatch):
-                app_dispatch(callback_result, self._app.get_active_window())
+                app_dispatch(callback_result, source_win)
             else:
-                self.dispatch_window_result(callback_result, self._app.get_active_window())
+                self.dispatch_window_result(callback_result, source_win)

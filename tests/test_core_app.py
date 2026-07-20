@@ -379,9 +379,10 @@ class CoreAppTests(unittest.TestCase):
         bad = types.SimpleNamespace(close=mock.Mock(side_effect=RuntimeError("close failed")))
         app.windows = [good, bad]
 
+        from retrotui.core import window_manager as wm_mod
         with (
             mock.patch.object(self.app_mod, "disable_mouse_support") as disable_mouse_support,
-            mock.patch.object(self.app_mod.LOGGER, "debug") as log_debug,
+            mock.patch.object(wm_mod.LOGGER, "debug") as log_debug,
         ):
             app.cleanup()
 

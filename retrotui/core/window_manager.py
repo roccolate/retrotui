@@ -95,18 +95,37 @@ class WindowManager:
         self.windows = normal + pinned
         self._layers_dirty = False
 
-    def close_window(self, win):
-        """Close a window. Idempotent: safe to call more than once."""
-        # Clear menu owner if it points at the window being closed, even on
-        # re-entry. This must run before the membership check below so a
-        # stale reference is recovered.
+    def close_window(self, win, *, force=False):
+        """Request and, when authorized, close *win*.
+
+        Returns True only when the window was removed. ``force=True`` is
+        reserved for shutdown and bypasses the interactive close request.
+        """
+        if win not in self.windows:
+            return False
+
+        if not force:
+            requester = getattr(win, "request_close", None)
+            if callable(requester):
+                try:
+                    request_result = requester()
+                except _WINDOW_CLOSE_HOOK_ERRORS:
+                    LOGGER.debug('Window close request failed for %r', win, exc_info=True)
+                    return False
+                if request_result is False:
+                    return False
+                if request_result is not None and request_result is not True:
+                    dispatcher = getattr(self._app, "_dispatch_window_result", None)
+                    if callable(dispatcher):
+                        dispatcher(request_result, win)
+                    return False
+
         if getattr(self._app, "_active_window_menu_owner", None) is win:
             menu = getattr(win, "window_menu", None)
             if menu is not None:
                 menu.active = False
             self._app._active_window_menu_owner = None
-        if win not in self.windows:
-            return
+
         closer = getattr(win, 'close', None)
         if callable(closer):
             try:
@@ -120,6 +139,7 @@ class WindowManager:
         self._layers_dirty = True
         self._emit_event("window.closed", win)
         self._activate_last_visible_window()
+        return True
 
     def _activate_last_visible_window(self):
         """Activate topmost visible window after z-order/window-list changes."""
