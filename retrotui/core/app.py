@@ -354,6 +354,9 @@ class RetroTUI:
         self._prev_signal_handlers = {}
         self._sigint_handler_installed = False
         self._shutdown_signal = None
+        # Create the lifecycle bus before managers so events and
+        # subscriptions never depend on accidental access order.
+        self._event_bus = self.event_bus
         self.window_mgr = WindowManager(self)
         self.use_unicode = check_unicode_support()
         self.config = load_config()
@@ -467,8 +470,7 @@ class RetroTUI:
 
             win.handle_key = _welcome_handle_key
             win.handle_click = _welcome_handle_click
-            win.active = True
-            self.windows.append(win)
+            self._spawn_window(win)
         # load persisted icon positions (if any)
         try:
             self._load_icon_positions()
@@ -877,9 +879,8 @@ class RetroTUI:
         return action
 
     def _spawn_window(self, win):
-        """Append a window and make it active."""
-        self.windows.append(win)
-        self.set_active_window(win)
+        """Open *win* through the authoritative lifecycle manager."""
+        return self.window_mgr._spawn_window(win)
 
     def _next_window_offset(self, base_x, base_y, step_x=2, step_y=1):
         """Return staggered window coordinates based on open window count."""

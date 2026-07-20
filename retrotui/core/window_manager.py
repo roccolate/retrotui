@@ -33,9 +33,15 @@ class WindowManager:
         # costs O(n) per call.
         self._active_window = None
 
+    def _event_bus(self):
+        """Return the app's public lifecycle bus, if an app is attached."""
+        if self._app is None:
+            return None
+        return getattr(self._app, "event_bus", None)
+
     def _emit_event(self, topic, win):
-        """Publish a window lifecycle event on the app's bus (if available)."""
-        bus = getattr(self._app, '_event_bus', None)
+        """Publish a window lifecycle event on the app's public bus."""
+        bus = self._event_bus()
         if bus is not None:
             bus.publish(topic, data={
                 "window_id": getattr(win, "id", None),
@@ -68,13 +74,13 @@ class WindowManager:
             self.windows.remove(win)
         self._layers_dirty = True
         self.normalize_window_layers()
-        if win.always_on_top:
+        if getattr(win, "always_on_top", False):
             self.windows.append(win)
             return
 
         insert_at = len(self.windows)
         for i, candidate in enumerate(self.windows):
-            if candidate.always_on_top:
+            if getattr(candidate, "always_on_top", False):
                 insert_at = i
                 break
         self.windows.insert(insert_at, win)
@@ -84,8 +90,8 @@ class WindowManager:
         """Keep always-on-top windows above regular windows preserving order."""
         if not self._layers_dirty:
             return
-        normal = [w for w in self.windows if not w.always_on_top]
-        pinned = [w for w in self.windows if w.always_on_top]
+        normal = [w for w in self.windows if not getattr(w, "always_on_top", False)]
+        pinned = [w for w in self.windows if getattr(w, "always_on_top", False)]
         self.windows = normal + pinned
         self._layers_dirty = False
 
@@ -163,7 +169,7 @@ class WindowManager:
         # Let windows subscribe to the event bus (if they opt in).
         bus_sub = getattr(win, "subscribe_to_bus", None)
         if callable(bus_sub):
-            bus = getattr(self._app, "_event_bus", None)
+            bus = self._event_bus()
             if bus is not None:
                 bus_sub(bus)
         self.set_active_window(win)
