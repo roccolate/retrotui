@@ -10,35 +10,6 @@ env:
   MODULE_COVERAGE_FAIL_UNDER: "75.0"
 
 jobs:
-  apply-lifecycle-patch:
-    if: github.event_name == 'pull_request' && github.head_ref == 'stabilization/pre-0.9.6'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - name: Checkout stabilization branch
-        uses: actions/checkout@v5
-        with:
-          ref: stabilization/pre-0.9.6
-
-      - name: Apply focused lifecycle patch
-        run: python tools/apply_lifecycle_stabilization.py
-
-      - name: Run lifecycle contract regressions
-        run: python -m unittest -v tests.test_window_lifecycle_contract
-
-      - name: Check patch formatting
-        run: git diff --check
-
-      - name: Commit verified patch
-        shell: bash
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add retrotui/core/app.py retrotui/core/window_manager.py
-          git commit -m "fix(core): unify window spawn lifecycle"
-          git push origin HEAD:stabilization/pre-0.9.6
-
   quality:
     runs-on: ${{ matrix.os }}
     strategy:
