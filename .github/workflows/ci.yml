@@ -29,14 +29,33 @@ jobs:
         run: python tools/apply_redraw_contract_patch.py
 
       - name: Run focused tests
+        id: focused
+        shell: bash
         run: |
+          set +e
           python -m unittest \
             tests.test_redraw_contract \
             tests.test_event_loop \
             tests.test_filemanager_component \
             tests.test_filemanager_preview_and_ops \
             tests.test_clock_component \
-            tests.test_terminal_background_tick_contract
+            tests.test_terminal_background_tick_contract \
+            > redraw-contract-tests.log 2>&1
+          code=$?
+          cat redraw-contract-tests.log
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Upload redraw diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: redraw-contract-diagnostics
+          path: redraw-contract-tests.log
+
+      - name: Preserve focused result
+        shell: bash
+        run: test "${{ steps.focused.outputs.exit_code }}" = "0"
 
       - name: Verify legacy runtime flags are gone
         shell: bash
