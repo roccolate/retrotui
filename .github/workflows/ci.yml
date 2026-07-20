@@ -27,11 +27,19 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e .
 
-      - name: Run quality checks with concise diagnostics
+      - name: Run quality checks
+        id: qa
+        continue-on-error: true
         shell: bash
-        run: |
-          set +e
-          python tools/qa.py > qa.log 2>&1
-          status=$?
-          tail -n 180 qa.log
-          exit $status
+        run: python tools/qa.py > qa.log 2>&1
+
+      - name: Upload QA diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qa-diagnostics
+          path: qa.log
+
+      - name: Preserve QA result
+        if: steps.qa.outcome == 'failure'
+        run: exit 1
