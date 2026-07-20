@@ -1208,12 +1208,11 @@ class CoreAppTests(unittest.TestCase):
         app = self._make_app()
         app.windows = [types.SimpleNamespace(active=False), types.SimpleNamespace(active=False)]
         win = types.SimpleNamespace(active=False)
-        app.set_active_window = mock.Mock()
+        app.window_mgr._spawn_window = mock.Mock()
 
         self.assertEqual(app._next_window_offset(10, 5), (14, 7))
         app._spawn_window(win)
-        self.assertIn(win, app.windows)
-        app.set_active_window.assert_called_once_with(win)
+        app.window_mgr._spawn_window.assert_called_once_with(win)
 
     def test_apply_theme_updates_state_and_calls_init_colors(self):
         app = self._make_app()
