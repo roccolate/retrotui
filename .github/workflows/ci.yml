@@ -7,6 +7,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: retrotui-stabilization-circuit-breaker
+  cancel-in-progress: true
+
 jobs:
   apply-event-loop-circuit-breaker:
     if: github.event_name == 'pull_request' && github.head_ref == 'stabilization/pre-0.9.6'
