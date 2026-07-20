@@ -27,21 +27,23 @@ jobs:
 
           path = Path("tests/test_core_app.py")
           text = path.read_text(encoding="utf-8")
-          old = '''        win = types.SimpleNamespace(active=False)
-        app.set_active_window = mock.Mock()
-
-        self.assertEqual(app._next_window_offset(10, 5), (14, 7))
-        app._spawn_window(win)
-        self.assertIn(win, app.windows)
-        app.set_active_window.assert_called_once_with(win)
-'''
-          new = '''        win = types.SimpleNamespace(active=False)
-        app.window_mgr._spawn_window = mock.Mock()
-
-        self.assertEqual(app._next_window_offset(10, 5), (14, 7))
-        app._spawn_window(win)
-        app.window_mgr._spawn_window.assert_called_once_with(win)
-'''
+          old = (
+              "        win = types.SimpleNamespace(active=False)\n"
+              "        app.set_active_window = mock.Mock()\n"
+              "\n"
+              "        self.assertEqual(app._next_window_offset(10, 5), (14, 7))\n"
+              "        app._spawn_window(win)\n"
+              "        self.assertIn(win, app.windows)\n"
+              "        app.set_active_window.assert_called_once_with(win)\n"
+          )
+          new = (
+              "        win = types.SimpleNamespace(active=False)\n"
+              "        app.window_mgr._spawn_window = mock.Mock()\n"
+              "\n"
+              "        self.assertEqual(app._next_window_offset(10, 5), (14, 7))\n"
+              "        app._spawn_window(win)\n"
+              "        app.window_mgr._spawn_window.assert_called_once_with(win)\n"
+          )
           if text.count(old) != 1:
               raise SystemExit("legacy spawn facade expectation was not found exactly once")
           path.write_text(text.replace(old, new, 1), encoding="utf-8")
