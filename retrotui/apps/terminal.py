@@ -48,8 +48,10 @@ _MOUSE_REPORT_MODES = frozenset({1000, 1002, 1003, 1005, 1006, 1015})
 class TerminalWindow(SelectableTextMixin, Window):
     """PTY-backed terminal window with ANSI color support and scrollback."""
 
+    # PTY sessions are services: minimizing the window must not suspend reads.
+    tick_when_hidden = True
     DEFAULT_SCROLLBACK = 2000
-    MAX_OUTPUT_PER_FRAME = 8192  # Throttle: max bytes processed per render tick.
+    MAX_OUTPUT_PER_FRAME = 8192  # Compatibility name: max chars processed per service tick.
     MENU_CLEAR = 'term_clear'
     MENU_COPY = 'term_copy'
     MENU_INTERRUPT = 'term_interrupt'
@@ -332,9 +334,18 @@ class TerminalWindow(SelectableTextMixin, Window):
             self._session_error = message
             self._reported_session_error = False
 
+    def _drain_pending_output(self):
+        """Process one bounded output chunk without using curses APIs."""
+        if not self._pending_output:
+            return False
+        to_process = self._pending_output[:self.MAX_OUTPUT_PER_FRAME]
+        self._pending_output = self._pending_output[self.MAX_OUTPUT_PER_FRAME:]
+        self._consume_output(to_process)
+        return True
+
     def tick(self):
-        """Poll PTY state outside the render path."""
-        before = len(self._pending_output)
+        """Poll and consume PTY output outside the render path."""
+        changed = False
         self._ensure_session()
         text_cols, text_rows = self._text_area_size()
         if self._session is not None:
@@ -346,13 +357,15 @@ class TerminalWindow(SelectableTextMixin, Window):
                 chunk = self._session.read()
                 if chunk:
                     self._pending_output += chunk
+                    changed = True
                 self._session.poll_exit()
             except (OSError, RuntimeError) as exc:
                 self._set_session_error(exc)
         if self._session_error and not self._reported_session_error:
             self._pending_output += self._session_error + '\n'
             self._reported_session_error = True
-        return len(self._pending_output) != before
+            changed = True
+        return self._drain_pending_output() or changed
 
     # OLD _strip_ansi removed, replaced by self.ansi usage
 
@@ -669,11 +682,8 @@ class TerminalWindow(SelectableTextMixin, Window):
                 for r in range(alt.rows):
                     alt._grid[r] = [blank_cell] * alt.cols
 
-        # Throttle: process at most MAX_OUTPUT_PER_FRAME per render tick.
-        if self._pending_output:
-            to_process = self._pending_output[:self.MAX_OUTPUT_PER_FRAME]
-            self._pending_output = self._pending_output[self.MAX_OUTPUT_PER_FRAME:]
-            self._consume_output(to_process)
+        # PTY output is consumed by ``tick`` so minimized windows continue
+        # draining without entering the curses render path.
 
         visible, start_idx, total_lines = self._visible_slice(text_rows)
 

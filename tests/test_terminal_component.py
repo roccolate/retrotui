@@ -387,10 +387,24 @@ class TerminalComponentTests(unittest.TestCase):
         win._session = fake_session
 
         self.assertTrue(win.tick())
-        self.assertEqual(win._pending_output, "pty read failed\n")
+        self.assertEqual(win._pending_output, "")
+        self.assertTrue(any("pty read failed" in line for line in self._get_scroll_text(win)))
 
         self.assertFalse(win.tick())
-        self.assertEqual(win._pending_output, "pty read failed\n")
+        self.assertEqual(win._pending_output, "")
+
+    def test_hidden_tick_drains_pty_without_draw(self):
+        win = self._make_window()
+        win.visible = False
+        fake_session = _FakeSession()
+        fake_session.read_chunks = ["hidden output\n"]
+        win._session = fake_session
+
+        self.assertTrue(win.tick())
+
+        self.assertEqual(win._pending_output, "")
+        self.assertTrue(any("hidden output" in line for line in self._get_scroll_text(win)))
+        self.assertTrue(win.tick_when_hidden)
 
     def test_draw_states_init_and_exit_and_hidden_short_circuit(self):
         win = self._make_window()

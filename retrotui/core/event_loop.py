@@ -182,9 +182,10 @@ def dispatch_input(app, key):
 
 
 def _has_live_terminals(app):
-    """Return True if any window has an active PTY session producing output."""
+    """Return True if a visible or service-ticked window has a live PTY."""
     for w in app.windows:
-        if not getattr(w, "visible", True):
+        visible = getattr(w, "visible", True)
+        if not visible and not getattr(w, "tick_when_hidden", False):
             continue
         session = getattr(w, '_session', None)
         if session is not None and getattr(session, 'running', False):
@@ -214,27 +215,30 @@ def _tick_and_probe_windows(app):
     has_live = False
     has_animated = False
     for w in app.windows:
-        if not getattr(w, "visible", True):
+        visible = getattr(w, "visible", True)
+        tick_when_hidden = bool(getattr(w, "tick_when_hidden", False))
+        if not visible and not tick_when_hidden:
             continue
+
         tick = getattr(w, "tick", None)
         if callable(tick):
             try:
-                changed = bool(tick()) or changed
+                tick_changed = bool(tick())
+                # Hidden service ticks advance background state but do not
+                # dirty the visual frame until the window becomes visible.
+                if visible:
+                    changed = tick_changed or changed
             except _INPUT_TIMEOUT_APPLY_ERRORS:
                 LOGGER.debug("window tick failed", exc_info=True)
-        # Probe for live terminals / animated windows while we
-        # already have the attribute lookup cached.
+
+        # A service-ticked hidden terminal still needs the low-latency input
+        # timeout so its PTY cannot fill while minimized.
         if not has_live:
             session = getattr(w, "_session", None)
             if session is not None and getattr(session, "running", False):
                 has_live = True
-        if not has_animated and getattr(w, "_animated", False):
+        if visible and not has_animated and getattr(w, "_animated", False):
             has_animated = True
-        if has_live and has_animated:
-            # Both flags can short-circuit; no need to keep walking.
-            # Continue to run remaining ticks (they may flip
-            # ``changed`` even if the live/animated result is final).
-            pass
     return changed, has_live, has_animated
 
 
@@ -246,13 +250,16 @@ def _tick_visible_windows(app):
     """
     changed = False
     for w in app.windows:
-        if not getattr(w, "visible", True):
+        visible = getattr(w, "visible", True)
+        if not visible and not getattr(w, "tick_when_hidden", False):
             continue
         tick = getattr(w, "tick", None)
         if not callable(tick):
             continue
         try:
-            changed = bool(tick()) or changed
+            tick_changed = bool(tick())
+            if visible:
+                changed = tick_changed or changed
         except _INPUT_TIMEOUT_APPLY_ERRORS:
             LOGGER.debug("window tick failed", exc_info=True)
     return changed
@@ -470,7 +477,9 @@ def run_app_loop(app):
                 _tick_changed, has_live, has_animated = _tick_and_probe_windows(app)
                 if _tick_changed:
                     app._dirty = True
-                if has_live or has_animated:
+                # PTY output dirties the frame through ``tick_changed``.
+                # Merely being alive is a polling concern, not a redraw reason.
+                if has_animated:
                     app._dirty = True
                 if getattr(app, '_dirty', True):
                     draw_start = time.perf_counter()
