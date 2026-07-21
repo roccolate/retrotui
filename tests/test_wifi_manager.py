@@ -36,8 +36,9 @@ class WifiManagerTests(unittest.TestCase):
             sys.modules.pop("curses", None)
 
     def test_draw_handles_no_nmcli(self):
-        win = self.mod.WifiManagerWindow(0, 0, 60, 20)
-        # Force nmcli absence
+        with mock.patch.object(self.mod.shutil, "which", return_value=None):
+            win = self.mod.WifiManagerWindow(0, 0, 60, 20)
+        # Preserve the no-backend state without launching a real scan.
         win.nmcli = None
         with mock.patch.object(win, "draw_frame", return_value=0), mock.patch.object(
             self.mod, "safe_addstr"
