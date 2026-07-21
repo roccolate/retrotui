@@ -9,6 +9,16 @@ import threading
 from pathlib import Path
 from ...core.actions import ActionResult, ActionType
 from ...core.file_transfer import cooperative_copy, cooperative_move
+from ...core.trash_transaction import (
+    clear_trash_metadata as _clear_trash_metadata_strict,
+    read_trash_metadata as _read_trash_metadata_strict,
+    transactional_empty_trash,
+    transactional_move_to_trash,
+    transactional_permanent_delete,
+    transactional_restore,
+    trash_metadata_path,
+    write_trash_metadata as _write_trash_metadata_strict,
+)
 from .core import FileEntry
 
 _TRASH_METADATA_ERRORS = (
@@ -21,53 +31,26 @@ _TRASH_METADATA_ERRORS = (
 
 def _trash_metadata_path(trash_path):
     """Return sidecar path that records the original location of a trash item."""
-    return f"{trash_path}.trashinfo"
+    return trash_metadata_path(trash_path)
 
 
 def write_trash_metadata(trash_path, original_path):
-    """Persist ``original_path`` next to ``trash_path`` so we can restore later."""
-    from ...utils import atomic_write_text
+    """Best-effort compatibility wrapper for callers that stage metadata."""
     try:
-        atomic_write_text(
-            _trash_metadata_path(trash_path),
-            json.dumps({"original_path": str(original_path)}),
-            encoding="utf-8",
-        )
+        _write_trash_metadata_strict(trash_path, original_path)
     except _TRASH_METADATA_ERRORS:
-        # Metadata is best-effort; restore will fall back to the trash root
-        # when sidecars are missing.
-        try:
-            path = Path(_trash_metadata_path(trash_path))
-            if path.exists():
-                path.unlink()
-        except _TRASH_METADATA_ERRORS:
-            pass
+        _clear_trash_metadata_strict(trash_path)
 
 
 def read_trash_metadata(trash_path):
     """Return the original path stored alongside ``trash_path`` or None."""
-    sidecar = _trash_metadata_path(trash_path)
-    if not os.path.exists(sidecar):
-        return None
-    try:
-        with open(sidecar, "r", encoding="utf-8") as stream:
-            data = json.load(stream)
-    except _TRASH_METADATA_ERRORS:
-        return None
-    if not isinstance(data, dict):
-        return None
-    original = data.get("original_path")
-    if not isinstance(original, str) or not original:
-        return None
-    return original
+    return _read_trash_metadata_strict(trash_path)
 
 
 def clear_trash_metadata(trash_path):
     """Remove a trash sidecar (best-effort)."""
-    try:
-        os.unlink(_trash_metadata_path(trash_path))
-    except OSError:
-        pass
+    _clear_trash_metadata_strict(trash_path)
+
 
 def _trash_base_dir():
     """Return platform-local trash directory used for undoable delete."""
@@ -150,32 +133,34 @@ def perform_move(
         return ActionResult(ActionType.ERROR, str(exc))
 
 
-def perform_delete(source_path, trash_dir=None):
-    """Move file or directory to trash."""
+def perform_delete(
+    source_path,
+    trash_dir=None,
+    *,
+    cancel_event=None,
+    progress_callback=None,
+):
+    """Move a path to trash through a durable, recoverable transaction."""
     try:
         trash_path = next_trash_path(source_path, trash_dir=trash_dir)
-        # Write the metadata sidecar *before* moving so a SIGKILL between
-        # the move and the metadata write can't leave the file in trash
-        # with no way to restore. The trash path is already determined
-        # by ``next_trash_path`` so this is safe to do up front.
-        write_trash_metadata(trash_path, source_path)
-        try:
-            shutil.move(source_path, trash_path)
-        except (OSError, shutil.Error):
-            # Clean up the sidecar so an undo doesn't try to restore
-            # something that was never moved.
-            try:
-                Path(_trash_metadata_path(trash_path)).unlink()
-            except OSError:
-                pass
-            raise
+        transactional_move_to_trash(
+            source_path,
+            trash_path,
+            cancel_event=cancel_event,
+            progress_callback=progress_callback,
+        )
         return trash_path
-    except (OSError, shutil.Error):
+    except (OSError, shutil.Error, ValueError):
         return None
 
 
-def perform_undo(last_trash_move):
-    """Restore last trashed path back to its original location."""
+def perform_undo(
+    last_trash_move,
+    *,
+    cancel_event=None,
+    progress_callback=None,
+):
+    """Restore the last trashed path back to its original location."""
     if not last_trash_move:
         return ActionResult(ActionType.ERROR, 'Nothing to undo.')
     source = last_trash_move.get('source')
@@ -190,19 +175,25 @@ def perform_undo(last_trash_move):
         return ActionResult(ActionType.ERROR, 'Cannot undo: parent directory does not exist.')
 
     try:
-        shutil.move(trash_path, source)
-    except OSError as exc:
+        transactional_restore(
+            trash_path,
+            source,
+            cancel_event=cancel_event,
+            progress_callback=progress_callback,
+        )
+    except (OSError, shutil.Error, ValueError) as exc:
         return ActionResult(ActionType.ERROR, str(exc))
-    clear_trash_metadata(trash_path)
     return ActionResult(ActionType.REFRESH)
 
 
-def perform_restore(trash_path, fallback_dir=None):
-    """Restore a single item currently in the trash back to its origin.
-
-    Returns a tuple ``(result, restored_path)`` so the caller can update any
-    local undo state. ``restored_path`` is ``None`` when the move failed.
-    """
+def perform_restore(
+    trash_path,
+    fallback_dir=None,
+    *,
+    cancel_event=None,
+    progress_callback=None,
+):
+    """Restore one trash item and return ``(result, restored_path)``."""
     if not trash_path or not os.path.exists(trash_path):
         return ActionResult(ActionType.ERROR, 'Item is no longer in the trash.'), None
     original = read_trash_metadata(trash_path)
@@ -217,11 +208,66 @@ def perform_restore(trash_path, fallback_dir=None):
     if not os.path.isdir(parent):
         return ActionResult(ActionType.ERROR, f'Cannot restore: parent {parent} no longer exists.'), None
     try:
-        shutil.move(trash_path, target)
-    except (OSError, shutil.Error) as exc:
+        transactional_restore(
+            trash_path,
+            target,
+            cancel_event=cancel_event,
+            progress_callback=progress_callback,
+        )
+    except (OSError, shutil.Error, ValueError) as exc:
         return ActionResult(ActionType.ERROR, str(exc)), None
-    clear_trash_metadata(trash_path)
     return ActionResult(ActionType.REFRESH), target
+
+
+def perform_permanent_delete(
+    path,
+    trash_root,
+    *,
+    cancel_event=None,
+    progress_callback=None,
+):
+    """Stage and cooperatively clean one permanent-delete transaction."""
+    try:
+        progress = transactional_permanent_delete(
+            path,
+            trash_root,
+            cancel_event=cancel_event,
+            progress_callback=progress_callback,
+        )
+    except (OSError, shutil.Error, ValueError) as exc:
+        return ActionResult(ActionType.ERROR, str(exc))
+    message = (
+        'Deletion committed; physical cleanup deferred.'
+        if progress.phase == 'deferred'
+        else None
+    )
+    return ActionResult(ActionType.REFRESH, message)
+
+
+def perform_empty_trash(
+    trash_root,
+    *,
+    cancel_event=None,
+    progress_callback=None,
+):
+    """Permanently remove all user-visible trash entries."""
+    try:
+        progress = transactional_empty_trash(
+            trash_root,
+            cancel_event=cancel_event,
+            progress_callback=progress_callback,
+        )
+    except FileNotFoundError:
+        return ActionResult(ActionType.ERROR, 'Trash is already empty.')
+    except (OSError, shutil.Error, ValueError) as exc:
+        return ActionResult(ActionType.ERROR, str(exc))
+    message = (
+        'Trash cleanup deferred; it will resume when Trash opens again.'
+        if progress.phase == 'deferred'
+        else None
+    )
+    return ActionResult(ActionType.REFRESH, message)
+
 
 def create_directory(base_path, name):
     """Create a new directory."""

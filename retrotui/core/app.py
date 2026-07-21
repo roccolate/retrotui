@@ -204,6 +204,9 @@ class RetroTUI:
     def show_delete_confirm_dialog(self, win):
         return self.file_ops.show_delete_confirm_dialog(win)
 
+    def show_restore_trash(self, win):
+        return self.file_ops.show_restore_trash(win)
+
     def show_copy_dialog(self, win):
         return self.file_ops.show_copy_dialog(win)
 
