@@ -66,3 +66,20 @@ class ClipboardViewerTests(unittest.TestCase):
             win.draw(None)
 
         theme_attr.assert_any_call("file_selected")
+    def test_tick_syncs_system_clipboard_at_bounded_cadence(self):
+        win = self.mod.ClipboardViewerWindow(0, 0, 40, 12)
+        win.history = []
+        win._last_poll = 0.0
+        with mock.patch.object(self.mod.time, "monotonic", side_effect=[10.0, 10.1]), mock.patch.object(
+            self.mod, "paste_text", return_value="external"
+        ) as paste_text:
+            self.assertTrue(win.tick())
+            self.assertFalse(win.tick())
+        paste_text.assert_called_once_with(sync_system=True)
+
+    def test_close_chains_base_window_cleanup(self):
+        win = self.mod.ClipboardViewerWindow(0, 0, 40, 12)
+        with mock.patch.object(self.mod.Window, "close", return_value=True) as base_close:
+            self.assertTrue(win.close())
+        base_close.assert_called_once_with()
+

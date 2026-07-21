@@ -266,7 +266,8 @@ class SettingsWindow(Window):
         return None
 
     def close(self):
-        """Revert preview state when window closes without save/cancel."""
+        """Revert preview state and release resources owned by the window."""
         if not self._finalized:
             self._revert_runtime()
         self._finalized = True
+        return super().close()

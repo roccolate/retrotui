@@ -28,6 +28,11 @@ LOGGER = logging.getLogger(__name__)
 _LINK_RE = re.compile(r'\[L\](.*?)\|(.*?)\[/L\]')
 _BTN_RE = re.compile(r'\[BT\](.*?)\[/BT\]')
 
+
+class _ResponseTooLargeError(Exception):
+    """Raised when a network response exceeds the configured limit."""
+
+
 _URL_SANITIZE_ERRORS = (
     AttributeError,
     LookupError,
@@ -45,6 +50,7 @@ _RETRONET_FETCH_ERRORS = (
     ssl.SSLError,
     http.client.HTTPException,
     ConnectionError,
+    _ResponseTooLargeError,
 )
 _RESPONSE_CLOSE_ERRORS = (
     AttributeError,
@@ -55,6 +61,7 @@ _RESPONSE_CLOSE_ERRORS = (
 )
 
 _MAX_HISTORY = 200
+MAX_RESPONSE_BYTES = 2 * 1024 * 1024
 
 
 class _RetroNetHTMLParser(html.parser.HTMLParser):
@@ -652,29 +659,16 @@ class RetroNetWindow(Window):
                 'Upgrade-Insecure-Requests': '1',
             }
             context = ssl.create_default_context()
-            ssl_warning = False
-
             req = urllib.request.Request(url, headers=headers)
-            try:
-                response = urllib.request.urlopen(req, timeout=10, context=context)
-            except ssl.SSLError as ssl_exc:
-                # The first TLS error falls back to an unverified context.
-                # That's a meaningful security downgrade (phishing / MITM
-                # exposure) and the user deserves to know that *every
-                # future request in this session* will share the relaxed
-                # trust — so surface a strong warning instead of the
-                # previous single-line banner.
-                context = ssl.create_default_context()
-                context.check_hostname = False
-                context.verify_mode = ssl.CERT_NONE
-                response = urllib.request.urlopen(req, timeout=10, context=context)
-                ssl_warning = (
-                    f"[SSL: certificate verification failed ({ssl_exc.reason or ssl_exc}). "
-                    f"Subsequent requests in this session are also unverified.]"
-                )
+            response = urllib.request.urlopen(req, timeout=10, context=context)
             try:
                 charset = response.info().get_content_charset() or 'utf-8'
-                raw_html = response.read().decode(charset, errors='ignore')
+                raw_bytes = response.read(MAX_RESPONSE_BYTES + 1)
+                if len(raw_bytes) > MAX_RESPONSE_BYTES:
+                    raise _ResponseTooLargeError(
+                        f"Response exceeds {MAX_RESPONSE_BYTES // (1024 * 1024)} MiB limit."
+                    )
+                raw_html = raw_bytes.decode(charset, errors='ignore')
             finally:
                 try:
                     response.close()
@@ -692,8 +686,6 @@ class RetroNetWindow(Window):
                 tab_id=tab_id,
                 generation=generation,
             )
-            if ssl_warning:
-                parsed.insert(0, RichLine("[SSL: certificate verification failed — showing unverified content]", self.attr_error))
             if cancel_event.is_set():
                 return
             with self._lock:
