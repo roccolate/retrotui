@@ -65,8 +65,26 @@ jobs:
       - name: Reject undefined names
         run: python -m ruff check --select F821 retrotui tests tools
 
-      - name: Run unittest suite
-        run: python -m unittest discover -s tests -v
+      - name: Capture unittest report
+        shell: bash
+        run: |
+          set +e
+          python -m unittest discover -s tests -v > transactional-trash-unittest.txt 2>&1
+          status=$?
+          echo "$status" > transactional-trash-unittest-status.txt
+          exit 0
+
+      - name: Upload unittest report
+        uses: actions/upload-artifact@v5
+        with:
+          name: transactional-trash-unittest-report
+          path: |
+            transactional-trash-unittest.txt
+            transactional-trash-unittest-status.txt
+
+      - name: Enforce unittest suite
+        shell: bash
+        run: test "$(cat transactional-trash-unittest-status.txt)" = "0"
 
       - name: Run pytest suite
         run: python -m pytest tests -q
