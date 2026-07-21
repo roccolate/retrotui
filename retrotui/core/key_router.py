@@ -231,6 +231,10 @@ def handle_key_event(app, key):
         return
 
     if key_code == 17:  # Ctrl+Q
+        # Preserve the inactive global-menu hook for compatibility, but never
+        # let an open menu consume Ctrl+Q before the safe close-first policy.
+        if not menu_layer_open:
+            app._handle_global_menu_key(key_code)
         _handle_ctrl_q(app)
         return
 
