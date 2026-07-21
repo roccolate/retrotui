@@ -1167,6 +1167,62 @@ class TerminalComponentTests(unittest.TestCase):
         draw_call = safe_addstr.call_args
         self.assertEqual(draw_call.args[2], 4)
         self.assertEqual(draw_call.args[3], "你")
+    def test_dec_scroll_region_origin_and_cursor_save_restore(self):
+        win = self._make_window()
+        win.body_rect = mock.Mock(return_value=(4, 5, 8, 6))
+        win._sync_screen_size()
+
+        win._consume_output("\x1b[2;4r\x1b[?6h\x1b[2;3H")
+        active = win._screen._active
+        self.assertEqual((active.scroll_top, active.scroll_bottom), (1, 3))
+        self.assertEqual((active.cursor_row, active.cursor_col), (2, 2))
+
+        win._consume_output("\x1b[s\x1b[1;1H\x1b[u")
+        self.assertEqual((active.cursor_row, active.cursor_col), (2, 2))
+
+        win._consume_output("\x1b[?6l")
+        self.assertFalse(win.modes.origin_mode)
+        self.assertEqual((active.cursor_row, active.cursor_col), (0, 0))
+
+    def test_csi_insert_erase_and_region_line_operations(self):
+        win = self._make_window()
+        win.body_rect = mock.Mock(return_value=(4, 5, 7, 6))
+        win._sync_screen_size()
+        active = win._screen._active
+        for row in range(active.rows):
+            active._grid[row] = [(str(row), 0) for _ in range(active.cols)]
+
+        active.set_scroll_region(1, 3)
+        active.set_cursor(2, 0)
+        win._apply_csi([1], "L")
+        self.assertEqual(active.get_row(2), [(" ", 0)] * active.cols)
+        self.assertEqual(active.get_row(3), [("2", 0)] * active.cols)
+
+        win._apply_csi([1], "M")
+        self.assertEqual(active.get_row(2), [("2", 0)] * active.cols)
+
+        active._grid[0] = [(ch, 0) for ch in "ABCDE "]
+        active.set_cursor(0, 1)
+        win._apply_csi([1], "@")
+        self.assertEqual("".join(ch for ch, _ in active.get_row(0)), "A BCDE")
+        win._apply_csi([2], "X")
+        self.assertEqual("".join(ch for ch, _ in active.get_row(0)), "A  CDE")
+
+    def test_dec_1049_restores_normal_cursor_and_isolates_alt_screen(self):
+        win = self._make_window()
+        win._normal_buf.set_cursor(2, 3)
+
+        win._consume_output("\x1b[?1049h")
+        self.assertTrue(win._alt_screen)
+        self.assertEqual((win._screen.cursor_row, win._screen.cursor_col), (0, 0))
+        win._consume_output("X")
+        self.assertEqual(win._alt_buf.get_cell(0, 0)[0], "X")
+
+        win._consume_output("\x1b[?1049l")
+        self.assertFalse(win._alt_screen)
+        self.assertEqual((win._normal_buf.cursor_row, win._normal_buf.cursor_col), (2, 3))
+        self.assertNotEqual(win._normal_buf.get_cell(0, 0)[0], "X")
+
 
 if __name__ == "__main__":
     unittest.main()
