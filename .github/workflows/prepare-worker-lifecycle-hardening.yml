@@ -1,0 +1,75 @@
+name: Prepare worker lifecycle hardening
+
+on:
+  push:
+    branches:
+      - hardening/core-worker-lifecycle
+    paths:
+      - tools/prepare_worker_lifecycle_hardening.py
+      - .github/workflows/prepare-worker-lifecycle-hardening.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v5
+        with:
+          ref: hardening/core-worker-lifecycle
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Apply deterministic hardening patch
+        run: python tools/prepare_worker_lifecycle_hardening.py
+
+      - name: Install test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[test]"
+
+      - name: Repository QA
+        run: python tools/qa.py --skip-tests
+
+      - name: Reject undefined names
+        run: python -m ruff check --select F821 retrotui tests tools
+
+      - name: Run unittest suite
+        run: python -m unittest discover -s tests -v
+
+      - name: Run pytest suite
+        run: python -m pytest tests -q
+
+      - name: Enforce coverage floor
+        run: >-
+          python tools/report_module_coverage.py
+          --quiet-tests
+          --top 20
+          --fail-under 75.0
+
+      - name: Package validated payload
+        run: |
+          tar -czf worker-lifecycle-hardening.tar.gz \
+            retrotui/core/worker_scope.py \
+            retrotui/ui/window.py \
+            retrotui/core/app.py \
+            retrotui/core/file_operations.py \
+            retrotui/apps/terminal.py \
+            retrotui/apps/image_viewer.py \
+            retrotui/apps/filemanager/window.py \
+            retrotui/apps/wifi_manager.py \
+            retrotui/apps/retronet.py \
+            tests/test_worker_lifecycle.py
+
+      - name: Upload validated payload
+        uses: actions/upload-artifact@v5
+        with:
+          name: worker-lifecycle-hardening
+          path: worker-lifecycle-hardening.tar.gz
