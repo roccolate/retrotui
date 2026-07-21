@@ -1,4 +1,5 @@
 import importlib
+import os
 import types
 import unittest
 from pathlib import Path
@@ -108,7 +109,7 @@ class PluginLoaderUnitTests(unittest.TestCase):
         self.assertEqual(len(manifests), 1)
         self.assertEqual(manifests[0].get("plugin", {}).get("id"), "bundled")
 
-    def test_discover_plugins_uses_cwd_examples_fallback_when_repo_path_missing(self):
+    def test_discover_plugins_does_not_trust_cwd_examples_by_default(self):
         tmpdir = make_repo_tmpdir(prefix="_tmp_plugin_loader_")
         self.addCleanup(tmpdir.cleanup)
         root = Path(tmpdir.name)
@@ -124,11 +125,50 @@ class PluginLoaderUnitTests(unittest.TestCase):
             mock.patch.object(self.loader, "_repo_examples_plugin_dir", return_value=str(root / "nope")),
             mock.patch.object(self.loader, "_cwd_examples_plugin_dir", return_value=str(examples)),
             mock.patch.object(self.loader, "_bundled_plugin_dir", return_value=str(root / "_nonexistent_bundled")),
+            mock.patch.dict(os.environ, {}, clear=False),
+        ):
+            os.environ.pop("RETROTUI_DEV_PLUGINS", None)
+            manifests = self.loader.discover_plugins()
+
+        self.assertEqual(manifests, [])
+
+    def test_discover_plugins_allows_cwd_examples_with_explicit_dev_opt_in(self):
+        tmpdir = make_repo_tmpdir(prefix="_tmp_plugin_loader_")
+        self.addCleanup(tmpdir.cleanup)
+        root = Path(tmpdir.name)
+        examples = root / "examples" / "plugins"
+        examples.mkdir(parents=True)
+        self._create_plugin(examples, "cwd-bundled")
+
+        missing_default = root / "missing-default"
+        self.loader._DEFAULT_PLUGIN_DIR = str(missing_default)
+        self.loader.PLUGIN_DIR = str(missing_default)
+
+        with (
+            mock.patch.object(self.loader, "_repo_examples_plugin_dir", return_value=str(root / "nope")),
+            mock.patch.object(self.loader, "_cwd_examples_plugin_dir", return_value=str(examples)),
+            mock.patch.object(self.loader, "_bundled_plugin_dir", return_value=str(root / "_nonexistent_bundled")),
+            mock.patch.dict(os.environ, {"RETROTUI_DEV_PLUGINS": "1"}),
         ):
             manifests = self.loader.discover_plugins()
 
         self.assertEqual(len(manifests), 1)
         self.assertEqual(manifests[0].get("plugin", {}).get("id"), "cwd-bundled")
+
+    def test_load_plugin_isolates_application_defined_exception(self):
+        tmpdir = make_repo_tmpdir(prefix="_tmp_plugin_loader_")
+        self.addCleanup(tmpdir.cleanup)
+        root = Path(tmpdir.name)
+        plugin_dir = self._create_plugin(root, "boom")
+        (plugin_dir / "__init__.py").write_text(
+            "class PluginBoom(Exception):\n"
+            "    pass\n"
+            "raise PluginBoom('boom')\n",
+            encoding="utf-8",
+        )
+        manifest = {"plugin": {"id": "boom"}, "_path": str(plugin_dir)}
+
+        self.assertIsNone(self.loader.load_plugin(manifest))
 
     def test_user_plugin_overrides_bundled_plugin_with_same_id(self):
         tmpdir = make_repo_tmpdir(prefix="_tmp_plugin_loader_")

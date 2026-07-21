@@ -15,21 +15,6 @@ _PLUGIN_DISCOVERY_IMPORT_ERRORS = (
     TypeError,
     ValueError,
 )
-_RUNTIME_ISOLATION_ERRORS = (
-    ArithmeticError,
-    AssertionError,
-    AttributeError,
-    ImportError,
-    LookupError,
-    NameError,
-    OSError,
-    RuntimeError,
-    SyntaxError,
-    TypeError,
-    ValueError,
-)
-
-
 def load_plugins_runtime(app):
     """Discover and register plugins (best effort; never crash startup)."""
     app._plugins = {}
@@ -45,7 +30,14 @@ def load_plugins_runtime(app):
         app._rebuild_global_menu()
         return
 
-    for manifest in discover_plugins():
+    try:
+        manifests = discover_plugins()
+    except Exception:  # Discovery boundary: a plugin source must not abort startup.
+        LOGGER.debug("plugin discovery failed", exc_info=True)
+        app.refresh_icons()
+        app._rebuild_global_menu()
+        return
+    for manifest in manifests:
         register_plugin_manifest(app, manifest, load_plugin)
     app.refresh_icons()
     app._rebuild_global_menu()
@@ -66,7 +58,7 @@ def register_plugin_manifest(app, manifest, load_plugin):
     """Register one plugin manifest with defensive isolation."""
     try:
         app_class = load_plugin(manifest)
-    except _RUNTIME_ISOLATION_ERRORS:
+    except Exception:  # Plugin boundary: isolate application-defined exceptions.
         LOGGER.debug('failed to load plugin manifest', exc_info=True)
         return
     if not app_class:
@@ -143,7 +135,7 @@ def build_plugin_window(app, info, plugin_id):
         cls = info.get('class')
         x, y = app._next_window_offset(8, 3)
         return cls(manifest.get('name', plugin_id), x, y, w, h)
-    except _RUNTIME_ISOLATION_ERRORS:
+    except Exception:  # Plugin boundary: isolate application-defined exceptions.
         LOGGER.debug('failed to open plugin %s', plugin_id, exc_info=True)
         return None
 
