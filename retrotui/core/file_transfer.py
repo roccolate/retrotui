@@ -7,11 +7,13 @@ temporary state instead of leaving a partial destination behind.
 """
 from __future__ import annotations
 
+import ctypes
 import errno
 import logging
 import os
 import shutil
 import stat
+import sys
 import tempfile
 from dataclasses import dataclass, replace
 from typing import Any, Callable
@@ -271,25 +273,58 @@ def _copy_directory(
         shutil.copystat(src_dir, dst_dir, follow_symlinks=False)
 
 
-def _commit_filelike(temp_path: str, dest: str) -> None:
-    # Reserve the final name without overwriting a path that appeared after the
-    # initial validation, then atomically replace our own placeholder.
-    fd = os.open(dest, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
-    os.close(fd)
-    try:
-        os.replace(temp_path, dest)
-    except Exception:
+def _rename_noreplace(source: str, dest: str) -> None:
+    """Atomically rename *source* without replacing an existing destination.
+
+    Windows already gives ``os.rename`` no-replace semantics. Linux uses
+    ``renameat2(RENAME_NOREPLACE)`` when libc exposes it. Other POSIX hosts
+    retain a checked fallback; that fallback is safe for normal operation but
+    cannot close the final cross-process race without a platform-specific API.
+    """
+
+    if os.name == "nt":
+        os.rename(source, dest)
+        return
+
+    if sys.platform.startswith("linux"):
         try:
-            os.unlink(dest)
-        except OSError:
-            pass
-        raise
+            renameat2 = ctypes.CDLL(None, use_errno=True).renameat2
+        except AttributeError:
+            renameat2 = None
+        if renameat2 is not None:
+            renameat2.argtypes = (
+                ctypes.c_int,
+                ctypes.c_char_p,
+                ctypes.c_int,
+                ctypes.c_char_p,
+                ctypes.c_uint,
+            )
+            renameat2.restype = ctypes.c_int
+            result = renameat2(
+                -100,
+                os.fsencode(source),
+                -100,
+                os.fsencode(dest),
+                1,
+            )
+            if result == 0:
+                return
+            error_number = ctypes.get_errno()
+            unsupported = {errno.ENOSYS, errno.EINVAL, errno.EOPNOTSUPP}
+            if error_number not in unsupported:
+                raise OSError(error_number, os.strerror(error_number), dest)
+
+    if os.path.lexists(dest):
+        raise FileExistsError(dest)
+    os.rename(source, dest)
+
+
+def _commit_filelike(temp_path: str, dest: str) -> None:
+    _rename_noreplace(temp_path, dest)
 
 
 def _commit_directory(temp_path: str, dest: str) -> None:
-    if os.path.lexists(dest):
-        raise FileExistsError(dest)
-    os.rename(temp_path, dest)
+    _rename_noreplace(temp_path, dest)
 
 
 def cooperative_copy(
@@ -352,7 +387,7 @@ def cooperative_copy(
 
 def _try_atomic_move(source: str, dest: str) -> bool:
     try:
-        os.rename(source, dest)
+        _rename_noreplace(source, dest)
         return True
     except OSError as exc:
         if exc.errno == errno.EXDEV:
