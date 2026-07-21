@@ -10,10 +10,12 @@ import sys
 import time
 from datetime import datetime
 from pathlib import Path
-from .core.app import RetroTUI
 from .constants import _CURSES_ERROR
 
 LOGGER = logging.getLogger(__name__)
+# Resolved lazily so maintenance commands such as ``--install-terminfo`` do not
+# import the complete curses desktop and all window classes.
+RetroTUI = None
 # Populated by ``main()`` when the curses session exits so ``run()`` can
 # surface a meaningful exit code for signals caught by RetroTUI's own
 # runtime handlers (SIGTERM/SIGHUP/SIGBREAK). ``KeyboardInterrupt`` is
@@ -47,10 +49,21 @@ if os.environ.get('RETROTUI_DEBUG'):
         format='ts=%(asctime)s level=%(levelname)s logger=%(name)s msg="%(message)s"'
     )
 
+
+def _resolve_app_class():
+    """Return the desktop class, importing it only for an interactive run."""
+    global RetroTUI
+    if RetroTUI is None:
+        from .core.app import RetroTUI as app_class
+
+        RetroTUI = app_class
+    return RetroTUI
+
+
 def main(stdscr):
     global _LAST_SHUTDOWN_SIGNAL
     boot_start = time.perf_counter()
-    app = RetroTUI(stdscr)
+    app = _resolve_app_class()(stdscr)
     boot_ms = (time.perf_counter() - boot_start) * 1000.0
     if os.environ.get('RETROTUI_DEBUG') or os.environ.get('RETROTUI_PROFILE'):
         LOGGER.debug(
