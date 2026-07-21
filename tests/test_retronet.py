@@ -2,13 +2,14 @@ import unittest
 import os
 from unittest import mock
 import sys
+import ssl
 from _support import make_fake_curses
 
 # Use the shared fake curses helper to ensure consistent constants across tests
 sys.modules['curses'] = make_fake_curses()
 
 
-from retrotui.apps.retronet import RetroNetWindow, RichLine, InteractiveSpan
+from retrotui.apps.retronet import RetroNetWindow, RichLine, InteractiveSpan, MAX_RESPONSE_BYTES
 from retrotui.core.actions import ActionType, AppAction
 import curses
 
@@ -538,6 +539,29 @@ class RetroNetTests(unittest.TestCase):
             res = self.win.handle_click(bx + 2, by + 1)
             mock_load.assert_called_with("http://old.com")
             self.assertEqual(res.type, ActionType.REFRESH)
+
+    @mock.patch('urllib.request.urlopen')
+    def test_fetch_thread_does_not_retry_invalid_tls(self, mock_urlopen):
+        mock_urlopen.side_effect = ssl.SSLError("certificate verify failed")
+        self.win._fetch_thread("https://invalid.example", self.win.active_tab_idx)
+        invalid_calls = [
+            call for call in mock_urlopen.call_args_list
+            if getattr(call.args[0], "full_url", "") == "https://invalid.example"
+        ]
+        self.assertEqual(len(invalid_calls), 1)
+        self.assertFalse(self.win.is_loading)
+        self.assertTrue(any("certificate verify failed" in line.text for line in self.win.content))
+
+    @mock.patch('urllib.request.urlopen')
+    def test_fetch_thread_rejects_oversized_response(self, mock_urlopen):
+        mock_response = mock.MagicMock()
+        mock_response.read.return_value = b"x" * (MAX_RESPONSE_BYTES + 1)
+        mock_response.info().get_content_charset.return_value = 'utf-8'
+        mock_urlopen.return_value = mock_response
+        self.win._fetch_thread("https://large.example", self.win.active_tab_idx)
+        mock_response.read.assert_called_once_with(MAX_RESPONSE_BYTES + 1)
+        self.assertFalse(self.win.is_loading)
+        self.assertTrue(any("exceeds" in line.text for line in self.win.content))
 
 
 if __name__ == "__main__":

@@ -32,6 +32,11 @@ class LogViewerWindow(SelectableTextMixin, Window):
     COLOR_INFO_PAIR = 62
     _log_colors_ready = False
 
+    @property
+    def wants_periodic_tick(self):
+        """Request periodic scheduling only while actively following a file."""
+        return bool(self.filepath and self.follow_mode and not self.freeze_scroll)
+
     def __init__(self, x, y, w, h, filepath=None):
         super().__init__("Log Viewer", x, y, w, h, content=[])
         self.filepath = None
