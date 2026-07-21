@@ -1,61 +1,43 @@
 name: CI
 
 on:
+  push:
   pull_request:
 
-permissions:
-  contents: write
-
 env:
+  # Keep the current module coverage floor explicit while the complete
+  # unittest + pytest gate is stabilized across supported platforms.
   MODULE_COVERAGE_FAIL_UNDER: "75.0"
 
 jobs:
-  apply_windows_backend_parity:
-    if: github.actor != 'github-actions[bot]'
-    runs-on: windows-latest
-    steps:
-      - name: Checkout stabilization branch
-        uses: actions/checkout@v5
-        with:
-          ref: ${{ github.event.pull_request.head.ref }}
-          fetch-depth: 0
+  quality:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python-version: ["3.10", "3.12", "3.14"]
 
-      - name: Apply Windows PTY parity contract
-        run: |
-          python tools/apply_windows_backend_parity.py
-          python tools/update_terminal_windows_close_test.py
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
 
       - name: Setup Python
         uses: actions/setup-python@v6
         with:
-          python-version: "3.12"
+          python-version: ${{ matrix.python-version }}
 
-      - name: Install dependencies
-        run: python -m pip install -e ".[test]"
+      - name: Install package and test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[test]"
 
-      - name: Compile changed modules
-        run: python -m py_compile retrotui/core/terminal_session.py tests/test_terminal_windows_parity.py tests/test_terminal_session.py
-
-      - name: Run focused Windows PTY tests
-        run: python -m unittest tests.test_terminal_windows_parity -v
-
-      - name: Run terminal session regressions
-        run: python -m unittest tests.test_terminal_session -v
+      - name: Run repository quality checks
+        run: python tools/qa.py --skip-tests
 
       - name: Run unittest suite
         run: python -m unittest discover -s tests -v
 
       - name: Run pytest suite
+        if: ${{ !cancelled() }}
         run: python -m pytest tests -q
-
-      - name: Commit validated runtime and tests
-        shell: bash
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add retrotui/core/terminal_session.py tests/test_terminal_windows_parity.py tests/test_terminal_session.py
-          git commit -m "terminal: complete Windows PTY backend parity"
-
-      - name: Push validated runtime and tests
-        shell: bash
-        run: git push origin HEAD:${{ github.event.pull_request.head.ref }}
