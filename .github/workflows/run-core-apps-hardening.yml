@@ -1,0 +1,46 @@
+name: Run direct core apps hardening
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  harden:
+    if: github.event.issue.title == '[maintenance] run core apps hardening'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Apply focused source and test changes
+        run: python tools/apply_core_apps_hardening.py
+
+      - name: Compile
+        run: python -m compileall -q retrotui tests
+
+      - name: Project QA
+        run: python tools/qa.py
+
+      - name: Install pytest
+        run: python -m pip install --disable-pip-version-check pytest
+
+      - name: Pytest
+        run: python -m pytest -q
+
+      - name: Commit validated changes directly to main
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add retrotui tests
+          git commit -m "Harden bundled app lifecycle, polling, and network safety"
+          git push origin HEAD:main
