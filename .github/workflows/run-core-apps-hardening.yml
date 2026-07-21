@@ -31,7 +31,7 @@ jobs:
         run: |
           set -o pipefail
           {
-            python tools/apply_core_apps_hardening.py
+            python tools/run_core_apps_hardening.py
             python -m compileall -q retrotui tests
             python tools/qa.py
             python -m pip install --disable-pip-version-check pytest
