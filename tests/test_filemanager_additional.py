@@ -16,6 +16,7 @@ from retrotui.apps.filemanager import (
     _fit_text_to_cells,
 )
 from retrotui.core.actions import ActionType
+from retrotui.apps.filemanager import operations as file_operations
 
 
 class FakeStdScr:
@@ -87,19 +88,22 @@ class FileManagerAdditionalTests(unittest.TestCase):
         self.assertEqual(res.type, ActionType.REFRESH)
 
     def test_delete_selected_handles_oserror(self):
-        # pick an entry and monkeypatch shutil.move to raise
+        # Simulate failure at the transactional move boundary.
         for i, e in enumerate(self.win.entries):
             if not e.is_dir and e.name != '..':
                 self.win.selected_index = i
                 break
-        orig = shutil.move
+        original = file_operations.transactional_move_to_trash
         try:
-            shutil.move = lambda a, b: (_ for _ in ()).throw(OSError('nope'))
+            def fail_transaction(*_args, **_kwargs):
+                raise OSError('nope')
+
+            file_operations.transactional_move_to_trash = fail_transaction
             res = self.win.delete_selected()
             self.assertIsNotNone(res)
             self.assertEqual(res.type, ActionType.ERROR)
         finally:
-            shutil.move = orig
+            file_operations.transactional_move_to_trash = original
 
     def test_toggle_hidden_rebuilds(self):
         before = len(self.win.entries)

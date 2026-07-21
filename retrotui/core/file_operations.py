@@ -9,6 +9,7 @@ from types import SimpleNamespace
 from ..ui.dialog import Dialog, InputDialog, ProgressDialog
 from .actions import ActionResult, ActionType
 from .file_transfer import TransferCancelled
+from .trash_transaction import list_trash_items
 from .dialog_workflow import DialogWorkflowId, bind_dialog
 from .worker_scope import WorkerScope
 
@@ -114,7 +115,7 @@ class FileOperationManager:
         )
 
     def show_delete_confirm_dialog(self, win):
-        """Show confirmation dialog before deleting selected File Manager entry."""
+        """Show confirmation before trashing or permanently deleting an entry."""
         entry = self._window_selected_entry(win)
         if entry is None:
             self._notify_error('No item selected.')
@@ -123,24 +124,39 @@ class FileOperationManager:
             self._notify_error('Cannot delete parent entry.')
             return
 
+        permanent = bool(getattr(win, 'is_trash_window', False))
         kind = 'directory' if entry.is_dir else 'file'
-        message = (
-            f"Delete {kind}:\n{entry.name}\n\n"
-            "Item will be moved to Trash.\n"
-            "Use Undo Delete (U) to restore."
-        )
+        if permanent:
+            message = (
+                f"Permanently delete {kind}:\n{entry.name}\n\n"
+                "This cannot be undone. Cancelling after staging only pauses "
+                "physical cleanup."
+            )
+            title = 'Confirm Permanent Delete'
+            button = 'Delete'
+            operation = 'purge'
+        else:
+            message = (
+                f"Delete {kind}:\n{entry.name}\n\n"
+                "Item will be moved to Trash.\n"
+                "Use Undo Delete (U) to restore."
+            )
+            title = 'Confirm Delete'
+            button = 'Delete'
+            operation = 'delete'
+
         self._app.dialog = bind_dialog(
-            Dialog('Confirm Delete', message, ['Delete', 'Cancel'], width=58),
+            Dialog(title, message, [button, 'Cancel'], width=62),
             workflow_id=DialogWorkflowId.CALLBACK,
             source_window=win,
-            on_accept=lambda target=win: self._app._run_file_operation_with_progress(
+            on_accept=lambda target=win, op=operation: self._app._run_file_operation_with_progress(
                 target,
-                operation='delete',
+                operation=op,
             ),
         )
 
     def show_empty_trash_confirm_dialog(self, win):
-        """Show confirmation dialog before permanently emptying the trash."""
+        """Show confirmation before permanently emptying the trash."""
         try:
             trash_root = win._trash_root() if hasattr(win, '_trash_root') else None
         except Exception:
@@ -149,28 +165,44 @@ class FileOperationManager:
             self._notify_error('Trash is unavailable.')
             return
         try:
-            names = os.listdir(trash_root)
+            paths = list_trash_items(trash_root)
         except OSError as exc:
             self._notify_error(str(exc))
             return
-        if not names:
+        if not paths:
             self._notify_error('Trash is already empty.')
             return
+        names = [os.path.basename(path) for path in paths]
         sample = ", ".join(names[:5])
         if len(names) > 5:
             sample += f" (and {len(names) - 5} more)"
         message = (
             f"Permanently delete all {len(names)} item(s) from Trash?\n\n"
             f"{sample}\n\n"
-            "This cannot be undone."
+            "This cannot be undone. Cancellation may defer physical cleanup "
+            "for an item already staged."
         )
-        empty = getattr(win, 'empty_trash', None)
         self._app.dialog = bind_dialog(
-            Dialog('Empty Trash', message, ['Empty', 'Cancel'], width=64),
+            Dialog('Empty Trash', message, ['Empty', 'Cancel'], width=66),
             workflow_id=DialogWorkflowId.CALLBACK,
             source_window=win,
-            on_accept=(lambda target=win: target.empty_trash()) if callable(empty) else None,
+            on_accept=lambda target=win: self._app._run_file_operation_with_progress(
+                target,
+                operation='empty_trash',
+            ),
         )
+
+    def show_restore_trash(self, win):
+        """Run a restore request, dispatching immediate small-item results."""
+        result = self._app._run_file_operation_with_progress(
+            win,
+            operation='restore',
+        )
+        if result is not None:
+            dispatch = getattr(self._app, '_dispatch_window_result', None)
+            if callable(dispatch):
+                dispatch(result, win)
+        return result
 
     def show_copy_dialog(self, win):
         """Show destination input for copy operation in File Manager."""
@@ -508,7 +540,7 @@ class FileOperationManager:
             self._app._dispatch_window_result(result, state.get('source_win'))
 
     def _run_file_operation_with_progress(self, win, *, operation, destination=None, source_path=None):
-        """Run file operation directly or via background worker with progress dialog."""
+        """Run filesystem operations directly or in the owned worker scope."""
         entry = self._window_selected_entry(win)
         operation = str(operation).lower()
 
@@ -562,18 +594,75 @@ class FileOperationManager:
             title = 'Moving'
             details = f"Moving:\n{getattr(entry, 'name', 'item')}"
         elif operation == 'delete':
-            def worker():
-                return win.delete_selected()
+            def worker(cancel_event=None, progress_callback=None):
+                if cancel_event is None and progress_callback is None:
+                    return win.delete_selected()
+                return win.delete_selected(
+                    cancel_event=cancel_event,
+                    progress_callback=progress_callback,
+                )
 
-            title = 'Deleting'
-            details = f"Deleting:\n{getattr(entry, 'name', 'item')}"
+            title = 'Moving to Trash'
+            details = f"Moving to Trash:\n{getattr(entry, 'name', 'item')}"
+        elif operation == 'purge':
+            def worker(cancel_event=None, progress_callback=None):
+                if cancel_event is None and progress_callback is None:
+                    return win.delete_selected()
+                return win.delete_selected(
+                    cancel_event=cancel_event,
+                    progress_callback=progress_callback,
+                )
+
+            title = 'Deleting Permanently'
+            details = f"Deleting Permanently:\n{getattr(entry, 'name', 'item')}"
+        elif operation == 'restore':
+            def worker(cancel_event=None, progress_callback=None):
+                if cancel_event is None and progress_callback is None:
+                    return win.restore_selected()
+                return win.restore_selected(
+                    cancel_event=cancel_event,
+                    progress_callback=progress_callback,
+                )
+
+            title = 'Restoring'
+            details = f"Restoring:\n{getattr(entry, 'name', 'item')}"
+        elif operation == 'empty_trash':
+            try:
+                trash_root = win._trash_root()
+            except Exception:
+                return ActionResult(ActionType.ERROR, 'Trash is unavailable.')
+            entry = SimpleNamespace(
+                name='Trash',
+                full_path=trash_root,
+                is_dir=True,
+                size=None,
+            )
+
+            def worker(cancel_event=None, progress_callback=None):
+                if cancel_event is None and progress_callback is None:
+                    return win.empty_trash()
+                return win.empty_trash(
+                    cancel_event=cancel_event,
+                    progress_callback=progress_callback,
+                )
+
+            title = 'Emptying Trash'
+            details = 'Emptying Trash'
         else:
             return ActionResult(ActionType.ERROR, f'Unsupported file operation: {operation}')
 
-        if operation in ('copy', 'move'):
+        if operation in (
+            'copy',
+            'move',
+            'delete',
+            'purge',
+            'restore',
+            'empty_trash',
+        ):
             setattr(worker, '_retrotui_cancellable', True)
 
-        if not self._is_long_file_operation(entry):
+        force_background = operation == 'empty_trash'
+        if not force_background and not self._is_long_file_operation(entry):
             return worker()
 
         message = f'{details}\n\nPlease wait...'
@@ -583,4 +672,3 @@ class FileOperationManager:
             worker=worker,
             source_win=win,
         )
-
