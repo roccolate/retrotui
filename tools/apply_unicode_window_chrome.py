@@ -162,11 +162,16 @@ class UnicodeChromeTests(unittest.TestCase):
     def test_window_title_stays_inside_reserved_title_columns(self):
         win = Window("你你你你", 0, 1, 18, 6)
         win.active = True
+        safe_addstr = mock.Mock()
+        draw_globals = Window.draw_frame.__globals__
 
-        with (
-            mock.patch("retrotui.ui.window.draw_box"),
-            mock.patch("retrotui.ui.window.theme_attr", return_value=0),
-            mock.patch("retrotui.ui.window.safe_addstr") as safe_addstr,
+        with mock.patch.dict(
+            draw_globals,
+            {
+                "draw_box": mock.Mock(),
+                "theme_attr": mock.Mock(return_value=0),
+                "safe_addstr": safe_addstr,
+            },
         ):
             win.draw_frame(SimpleNamespace(), frame_size=(24, 80))
 
