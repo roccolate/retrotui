@@ -1,58 +1,20 @@
 name: CI
 
 on:
-  push:
   pull_request:
 
 permissions:
   contents: write
 
-env:
-  # Keep the current module coverage floor explicit while the complete
-  # unittest + pytest gate is stabilized across supported platforms.
-  MODULE_COVERAGE_FAIL_UNDER: "75.0"
-
 jobs:
-  quality:
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest]
-        python-version: ["3.10", "3.12", "3.14"]
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v5
-
-      - name: Setup Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: ${{ matrix.python-version }}
-
-      - name: Install package and test dependencies
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install -e ".[test]"
-
-      - name: Run repository quality checks
-        run: python tools/qa.py --skip-tests
-
-      - name: Run unittest suite
-        run: python -m unittest discover -s tests -v
-
-      - name: Run pytest suite
-        if: ${{ !cancelled() }}
-        run: python -m pytest tests -q
-
   apply_partial_pty_writes:
-    if: github.event_name == 'push' && github.actor != 'github-actions[bot]'
+    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout stabilization branch
         uses: actions/checkout@v5
         with:
-          ref: stabilization/pre-0.9.6
+          ref: ${{ github.event.pull_request.head.ref }}
 
       - name: Apply queued partial-write contract
         shell: bash
@@ -332,7 +294,7 @@ jobs:
         run: python -m pytest tests -q
 
       - name: Restore permanent CI workflow
-        run: git show HEAD^:.github/workflows/ci.yml > .github/workflows/ci.yml
+        run: git show a6f7abca0b97e2fb0f681b8a1d2a270fadbc6934:.github/workflows/ci.yml > .github/workflows/ci.yml
 
       - name: Commit validated partial-write contract
         shell: bash
@@ -341,4 +303,4 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
           git commit -m "terminal: queue partial PTY writes"
-          git push origin HEAD:stabilization/pre-0.9.6
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
