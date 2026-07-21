@@ -1063,5 +1063,69 @@ class TerminalComponentTests(unittest.TestCase):
         self.assertEqual(win.scrollback_offset, 0)
 
 
+    def test_dec_private_modes_update_cursor_keys_paste_and_cursor_visibility(self):
+        win = self._make_window()
+
+        win._consume_output("\x1b[?25l\x1b[?1h\x1b[?2004h")
+
+        self.assertFalse(win.modes.cursor_visible)
+        self.assertTrue(win.modes.application_cursor_keys)
+        self.assertTrue(win.modes.bracketed_paste)
+        self.assertEqual(
+            win._key_to_input(self.curses.KEY_UP, self.curses.KEY_UP),
+            "\x1bOA",
+        )
+
+        win._consume_output("\x1b[?25h\x1b[?1;2004l")
+        self.assertTrue(win.modes.cursor_visible)
+        self.assertFalse(win.modes.application_cursor_keys)
+        self.assertFalse(win.modes.bracketed_paste)
+        self.assertEqual(
+            win._key_to_input(self.curses.KEY_UP, self.curses.KEY_UP),
+            "\x1b[A",
+        )
+
+    def test_bracketed_paste_frames_and_sanitizes_clipboard_payload(self):
+        win = self._make_window()
+        win.window_menu = types.SimpleNamespace(active=False)
+        win._session = _FakeSession()
+        win.modes.bracketed_paste = True
+
+        with mock.patch.object(
+            self.terminal_mod,
+            "paste_text",
+            return_value="one\n\x1b[201~two",
+        ):
+            self.assertIsNone(win.handle_key(22))
+
+        self.assertEqual(
+            win._session.writes[-1],
+            "\x1b[200~one\n\x1b[201;~two\x1b[201~",
+        )
+
+    def test_hidden_dec_cursor_suppresses_cursor_overlay(self):
+        win = self._make_window()
+        win.active = True
+        win.modes.cursor_visible = False
+        win._line_cells = [("X", 0)]
+
+        with mock.patch.object(self.terminal_mod, "safe_addstr") as safe_addstr:
+            win._draw_live_cursor(None, 4, 5, 10, 3, 0, 3, 0)
+
+        safe_addstr.assert_not_called()
+
+    def test_restart_session_resets_dec_modes(self):
+        win = self._make_window()
+        win.modes.cursor_visible = False
+        win.modes.application_cursor_keys = True
+        win.modes.bracketed_paste = True
+
+        self.assertTrue(win.restart_session())
+
+        self.assertTrue(win.modes.cursor_visible)
+        self.assertFalse(win.modes.application_cursor_keys)
+        self.assertFalse(win.modes.bracketed_paste)
+
+
 if __name__ == "__main__":
     unittest.main()

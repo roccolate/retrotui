@@ -325,6 +325,24 @@ PTY input uses a FIFO pending-byte queue.
 - `TerminalWindow.tick()` flushes pending input before reading output.
 - Closing a successfully terminated session clears pending input.
 
+### Terminal capabilities and DEC modes
+
+`core/terminal_modes.py` declares the conservative capability contract and
+holds mutable per-session DEC mode state. `AnsiStateMachine` preserves CSI
+private markers through a list-compatible `CsiParams` object so `?25`, `?1`,
+`?7` and `?2004` cannot be confused with ordinary CSI parameters.
+
+`TerminalWindow` owns the side effects:
+
+- `?25h` / `?25l` controls cursor visibility;
+- `?1h` / `?1l` selects application or normal cursor-key encoding;
+- `?2004h` / `?2004l` enables bracketed paste framing;
+- `?7h` / `?7l` records autowrap mode for the upcoming cell-engine slice;
+- alternate-screen and mouse modes remain owned by the same window authority.
+
+Bracketed paste sanitizes an embedded end marker before framing the payload, so
+clipboard content cannot terminate paste mode early.
+
 ### Scrollback
 
 The normal screen buffer is the source of truth for visible rows. Only rows expelled by scroll operations enter the scrollback deque. Newlines that remain inside the viewport do not duplicate content.
