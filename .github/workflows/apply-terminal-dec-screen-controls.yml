@@ -26,7 +26,9 @@ jobs:
           python-version: '3.12'
 
       - name: Apply asserted changes
-        run: python tools/_apply_terminal_dec_screen_controls.py
+        run: |
+          python tools/_apply_terminal_dec_screen_controls.py
+          python tools/_fix_terminal_dec_screen_tests.py
 
       - name: Install package and test dependencies
         run: |
