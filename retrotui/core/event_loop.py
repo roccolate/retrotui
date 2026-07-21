@@ -387,6 +387,35 @@ def _has_periodic_windows(app):
     return False
 
 
+def _visible_notification_signature(notifications):
+    """Return the identity of the currently rendered toast stack."""
+    try:
+        toasts = tuple(notifications.visible_toasts)
+    except (AttributeError, TypeError):
+        return ()
+    return tuple(
+        (id(toast), getattr(toast, "created_at", None))
+        for toast in toasts
+    )
+
+
+def _tick_notifications(app):
+    """Advance toast expiry and invalidate only on visible changes."""
+    previous = getattr(app, "_notification_visible_signature", ())
+    notifications = getattr(app, "_notifications", None)
+    if notifications is None:
+        if previous:
+            app._notification_visible_signature = ()
+            return True
+        return False
+
+    tick = getattr(notifications, "tick", None)
+    expired = bool(tick()) if callable(tick) else False
+    signature = _visible_notification_signature(notifications)
+    app._notification_visible_signature = signature
+    return expired or signature != previous
+
+
 def _tick_and_probe_windows(app):
     """Run update hooks and collect the public runtime scheduling signals.
 
@@ -666,12 +695,8 @@ def run_app_loop(app):
                 phase = "background"
                 app.poll_background_operation()
 
-                _notif = getattr(app, "_notifications", None)
-                if _notif is not None:
-                    if _notif.tick():
-                        app._dirty = True
-                    if _notif.has_visible:
-                        app._dirty = True
+                if _tick_notifications(app):
+                    app._dirty = True
 
                 phase = "tick"
                 _tick_changed, has_live, has_periodic = _tick_and_probe_windows(app)
