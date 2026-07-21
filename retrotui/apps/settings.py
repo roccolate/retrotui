@@ -121,7 +121,7 @@ class SettingsWindow(Window):
             self._apply_runtime()
             try:
                 self.app.persist_config()
-            except OSError as exc:
+            except (OSError, ValueError) as exc:
                 self._finalized = False
                 return ActionResult(ActionType.SAVE_ERROR, str(exc))
             return ActionResult(ActionType.EXECUTE, AppAction.CLOSE_WINDOW)
