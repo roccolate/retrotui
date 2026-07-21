@@ -1,0 +1,64 @@
+name: Apply terminal VT modes maintenance
+
+on:
+  issues:
+    types: [opened, reopened]
+
+permissions:
+  contents: write
+  issues: write
+
+concurrency:
+  group: terminal-vt-maintenance
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    if: github.event.issue.title == '[maintenance] apply terminal VT modes'
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TARGET_BRANCH: agent/terminal-vt-modes
+    steps:
+      - name: Announce start
+        run: gh issue comment "${{ github.event.issue.number }}" --repo "${{ github.repository }}" --body "Terminal VT mode hardening run started on agent/terminal-vt-modes."
+
+      - name: Checkout target branch
+        uses: actions/checkout@v5
+        with:
+          ref: agent/terminal-vt-modes
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Apply asserted patch
+        run: python tools/apply_terminal_vt_modes.py
+
+      - name: Install dependencies
+        run: python -m pip install -e ".[test]"
+
+      - name: Validate focused slice
+        run: |
+          python tools/qa.py --skip-tests
+          python -m ruff check --select F821 retrotui tests tools
+          python -m unittest tests.test_terminal_component -v
+          python -m pytest tests/test_terminal_component.py -q
+
+      - name: Commit implementation
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add retrotui/core/ansi.py retrotui/core/terminal_modes.py retrotui/apps/terminal.py tests/test_terminal_component.py ARCHITECTURE.md
+          git commit -m "Strengthen terminal VT modes and bracketed paste"
+          git push origin HEAD:${TARGET_BRANCH}
+
+      - name: Report success
+        if: success()
+        run: gh issue comment "${{ github.event.issue.number }}" --repo "${{ github.repository }}" --body "Terminal VT mode hardening passed focused validation and was committed to agent/terminal-vt-modes."
+
+      - name: Report failure
+        if: failure()
+        run: gh issue comment "${{ github.event.issue.number }}" --repo "${{ github.repository }}" --body "Terminal VT mode hardening failed before commit. Inspect the maintenance workflow logs; no partial implementation commit was pushed."
