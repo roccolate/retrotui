@@ -1,24 +1,23 @@
 name: Apply terminal DEC screen controls
 
 on:
-  push:
+  pull_request:
     branches:
-      - agent/terminal-dec-screen-controls
-    paths:
-      - tools/_apply_terminal_dec_screen_controls.py
-      - .github/workflows/apply-terminal-dec-screen-controls.yml
+      - main
 
 permissions:
   contents: write
+  pull-requests: read
 
 jobs:
   apply:
     if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout branch
+      - name: Checkout source branch
         uses: actions/checkout@v5
         with:
+          ref: ${{ github.event.pull_request.head.ref }}
           fetch-depth: 0
 
       - name: Setup Python
@@ -64,6 +63,4 @@ jobs:
             exit 0
           fi
           git commit -m "Implement DEC screen regions and editing controls"
-          git push
-
-# Trigger after workflow registration.
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
