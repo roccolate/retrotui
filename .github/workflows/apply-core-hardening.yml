@@ -16,7 +16,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   apply:
@@ -115,14 +115,22 @@ jobs:
         shell: bash
         run: test "${COVERAGE_STATUS}" -eq 0
 
-      - name: Commit validated code changes
+      - name: Package validated payload
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add retrotui tests tools/report_module_coverage.py pyproject.toml
-          if git diff --cached --quiet; then
-            echo "No validated code changes to commit."
-            exit 0
-          fi
-          git commit --no-verify -m "Harden core close, focus, and validation contracts"
-          git push origin HEAD:hardening/core-contracts
+          tar -czf core-hardening-payload.tar.gz \
+            retrotui/core/key_router.py \
+            retrotui/core/window_manager.py \
+            retrotui/apps/terminal.py \
+            retrotui/apps/wifi_manager.py \
+            tests/test_core_hardening_contracts.py \
+            tests/test_module_coverage_tool.py \
+            tools/report_module_coverage.py \
+            pyproject.toml \
+            .github/workflows/ci.yml \
+            .github/workflows/release.yml
+
+      - name: Upload validated payload
+        uses: actions/upload-artifact@v5
+        with:
+          name: core-hardening-payload
+          path: core-hardening-payload.tar.gz
