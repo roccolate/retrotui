@@ -108,6 +108,18 @@ class AnsiBasicTests(unittest.TestCase):
         texts = [t for t in out3 if t[0] == 'TEXT']
         self.assertTrue(any(t[1] == 'X' for t in texts))
 
+    def test_single_byte_esc_dispatch_and_multichunk_state(self):
+        state = AnsiStateMachine()
+        events = list(state.parse_chunk("\x1bD\x1bE\x1bM\x1bH\x1b7\x1b8"))
+        self.assertEqual(
+            [(kind, data) for kind, data, _ in events],
+            [("ESC", value) for value in "DEMH78"],
+        )
+
+        split = AnsiStateMachine()
+        self.assertEqual(list(split.parse_chunk("\x1b")), [])
+        self.assertEqual(list(split.parse_chunk("M")), [("ESC", "M", 0)])
+
 
 if __name__ == '__main__':
     unittest.main()
