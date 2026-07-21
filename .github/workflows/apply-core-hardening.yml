@@ -7,6 +7,9 @@ on:
     paths:
       - tools/apply_core_hardening.py
       - .github/workflows/apply-core-hardening.yml
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
@@ -14,6 +17,7 @@ permissions:
 
 jobs:
   apply:
+    if: github.head_ref == 'hardening/core-contracts' || github.ref == 'refs/heads/hardening/core-contracts'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout hardening branch
