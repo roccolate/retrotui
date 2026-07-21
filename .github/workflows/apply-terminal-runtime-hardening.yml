@@ -10,7 +10,7 @@ permissions:
 
 concurrency:
   group: apply-terminal-runtime-hardening
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   apply-and-verify:
@@ -35,12 +35,14 @@ jobs:
       - name: Apply asserted source changes
         run: python tools/_apply_terminal_runtime_hardening.py
 
-      - name: Run focused regressions
-        run: >-
-          python -m unittest -v
-          tests.test_ansi_basic
-          tests.test_window_manager
-          tests.test_terminal_component
+      - name: Run focused ANSI regressions
+        run: python -m unittest discover -s tests -p "test_ansi_basic.py" -v
+
+      - name: Run focused window manager regressions
+        run: python -m unittest discover -s tests -p "test_window_manager.py" -v
+
+      - name: Run focused terminal component regressions
+        run: python -m unittest discover -s tests -p "test_terminal_component.py" -v
 
       - name: Run repository quality checks
         run: python tools/qa.py --skip-tests
