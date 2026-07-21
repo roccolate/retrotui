@@ -107,6 +107,10 @@ new_write = dedent('''
         return len(payload)
 
 ''')
+new_write = "".join(
+    ("    " + line if line else line) + "\n"
+    for line in new_write.strip("\n").split("\n")
+) + "\n"
 session_text = prefix + new_write + end_marker + suffix
 session_path.write_text(session_text, encoding="utf-8")
 
