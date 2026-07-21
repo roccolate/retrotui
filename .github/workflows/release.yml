@@ -12,41 +12,109 @@ on:
         type: string
 
 permissions:
-  contents: write
+  contents: read
+
+env:
+  RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref_name }}
+  RELEASE_REF: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref }}
+  MODULE_COVERAGE_FAIL_UNDER: "75.0"
 
 jobs:
-  release:
-    runs-on: ubuntu-latest
-    env:
-      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref_name }}
+  verify:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python-version: ["3.10", "3.12", "3.14"]
 
     steps:
-      - name: Checkout
+      - name: Checkout release ref
         uses: actions/checkout@v5
         with:
-          fetch-depth: 0
-          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref }}
+          ref: ${{ env.RELEASE_REF }}
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install package and test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[test]"
+
+      - name: Run repository quality checks
+        run: python tools/qa.py --skip-tests
+
+      - name: Reject undefined Python names
+        run: python -m ruff check --select F821 retrotui tests tools
+
+      - name: Run unittest suite
+        run: python -m unittest discover -s tests -v
+
+      - name: Run pytest suite
+        if: ${{ !cancelled() }}
+        run: python -m pytest tests -q
+
+  coverage:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout release ref
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ env.RELEASE_REF }}
 
       - name: Setup Python
         uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
-      - name: Install package
+      - name: Install package and test dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -e .
+          python -m pip install -e ".[test]"
 
-      - name: Run quality checks
-        run: python tools/qa.py
+      - name: Enforce module coverage floor
+        run: >-
+          python tools/report_module_coverage.py
+          --quiet-tests
+          --top 20
+          --fail-under "${{ env.MODULE_COVERAGE_FAIL_UNDER }}"
+
+  release:
+    needs: [verify, coverage]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout release ref
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          ref: ${{ env.RELEASE_REF }}
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
 
       - name: Validate release tag
         run: python tools/check_release_tag.py --tag "${{ env.RELEASE_TAG }}"
 
       - name: Build distributions
         run: |
-          python -m pip install build
+          python -m pip install --upgrade pip build
           python -m build
+
+      - name: Smoke-test built wheel
+        run: |
+          python -m venv .release-smoke
+          .release-smoke/bin/python -m pip install --upgrade pip
+          .release-smoke/bin/python -m pip install dist/*.whl
+          .release-smoke/bin/python -c "import retrotui; print(retrotui.__version__)"
 
       - name: Upload release artifacts
         uses: actions/upload-artifact@v5
