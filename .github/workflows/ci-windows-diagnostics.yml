@@ -25,6 +25,7 @@ jobs:
           python -m pip install windows-curses
 
       - name: Capture Windows failures
+        continue-on-error: true
         shell: pwsh
         run: |
           python -m unittest discover -s tests -v *> unittest.log
