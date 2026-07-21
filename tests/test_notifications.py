@@ -98,6 +98,28 @@ class NotificationTests(unittest.TestCase):
         self.bus.publish("notification", data=None)
         self.assertEqual(len(self.mgr.visible_toasts), 0)
 
+    def test_notify_normalizes_untrusted_payload_fields(self):
+        self.mgr.notify(None, title=None, level="INVALID", duration="not-a-number")
+        toast = self.mgr.visible_toasts[0]
+        self.assertEqual(toast.message, "")
+        self.assertEqual(toast.title, "Info")
+        self.assertEqual(toast.level, "info")
+        self.assertEqual(toast.duration, TOAST_DISPLAY_SECONDS)
+        self.assertFalse(self.mgr.tick())
+
+    def test_bus_invalid_duration_cannot_poison_tick(self):
+        self.bus.publish("notification", data={
+            "message": "safe",
+            "duration": object(),
+        })
+        self.assertFalse(self.mgr.tick())
+        self.assertEqual(self.mgr.visible_toasts[0].message, "safe")
+
+    def test_negative_duration_is_clamped_to_immediate_expiry(self):
+        self.mgr.notify("expire", duration=-10)
+        self.assertTrue(self.mgr.tick())
+        self.assertFalse(self.mgr.has_visible)
+
     # ------------------------------------------------------------------
     # Cleanup
     # ------------------------------------------------------------------
