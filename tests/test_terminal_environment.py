@@ -1,5 +1,7 @@
+import importlib
 import os
 import subprocess
+import sys
 import tempfile
 import types
 import unittest
@@ -7,6 +9,40 @@ from pathlib import Path
 from unittest import mock
 
 from retrotui.core import terminal_environment as terminal_env
+
+
+_CURSES_IMPORT_CONTRACT = {
+    "KEY_LEFT": 260,
+    "KEY_RIGHT": 261,
+    "KEY_UP": 259,
+    "KEY_DOWN": 258,
+    "KEY_ENTER": 343,
+    "KEY_HOME": 262,
+    "KEY_END": 360,
+    "KEY_PPAGE": 339,
+    "KEY_NPAGE": 338,
+    "KEY_BACKSPACE": 263,
+    "KEY_DC": 330,
+    "KEY_IC": 331,
+    "A_BOLD": 1,
+    "A_REVERSE": 2,
+    "A_DIM": 4,
+    "A_UNDERLINE": 8,
+    "COLOR_WHITE": 7,
+    "COLOR_BLUE": 4,
+    "COLOR_BLACK": 0,
+    "COLOR_CYAN": 6,
+    "COLOR_YELLOW": 3,
+    "COLORS": 256,
+    "COLOR_PAIRS": 256,
+    "error": Exception,
+    "color_pair": lambda _pair: 0,
+    "can_change_color": lambda: False,
+    "start_color": lambda: None,
+    "use_default_colors": lambda: None,
+    "init_color": lambda *_args: None,
+    "init_pair": lambda *_args: None,
+}
 
 
 class TerminalEnvironmentTests(unittest.TestCase):
@@ -109,36 +145,46 @@ class TerminalEnvironmentTests(unittest.TestCase):
                 terminal_env.install_terminfo()
 
     def test_action_runner_injects_environment_only_when_supported(self):
-        from retrotui.core import action_runner
+        curses_module = importlib.import_module("curses")
+        sys.modules.pop("retrotui.core.action_runner", None)
+        try:
+            with mock.patch.dict(
+                vars(curses_module),
+                _CURSES_IMPORT_CONTRACT,
+                clear=False,
+            ):
+                action_runner = importlib.import_module("retrotui.core.action_runner")
 
-        class TerminalWithEnvironment:
-            def __init__(self, x, y, w, h, env=None):
-                self.env = env
+            class TerminalWithEnvironment:
+                def __init__(self, x, y, w, h, env=None):
+                    self.env = env
 
-        app = types.SimpleNamespace(
-            _next_window_offset=mock.Mock(return_value=(1, 2)),
-            _spawn_window=mock.Mock(),
-            terminal_env_overrides={"SHELL_MARKER": "yes"},
-        )
-
-        with (
-            mock.patch.object(action_runner, "TerminalWindow", TerminalWithEnvironment),
-            mock.patch.object(
-                action_runner,
-                "build_child_environment",
-                return_value={"TERM": "retrotui", "SHELL_MARKER": "yes"},
-            ) as builder,
-        ):
-            handled = action_runner._spawn_registered_app(
-                app,
-                action_runner.AppAction.TERMINAL,
-                action_runner._APP_REGISTRY,
+            app = types.SimpleNamespace(
+                _next_window_offset=mock.Mock(return_value=(1, 2)),
+                _spawn_window=mock.Mock(),
+                terminal_env_overrides={"SHELL_MARKER": "yes"},
             )
 
-        self.assertTrue(handled)
-        builder.assert_called_once_with(app.terminal_env_overrides)
-        spawned = app._spawn_window.call_args.args[0]
-        self.assertEqual(spawned.env["TERM"], "retrotui")
+            with (
+                mock.patch.object(action_runner, "TerminalWindow", TerminalWithEnvironment),
+                mock.patch.object(
+                    action_runner,
+                    "build_child_environment",
+                    return_value={"TERM": "retrotui", "SHELL_MARKER": "yes"},
+                ) as builder,
+            ):
+                handled = action_runner._spawn_registered_app(
+                    app,
+                    action_runner.AppAction.TERMINAL,
+                    action_runner._APP_REGISTRY,
+                )
+
+            self.assertTrue(handled)
+            builder.assert_called_once_with(app.terminal_env_overrides)
+            spawned = app._spawn_window.call_args.args[0]
+            self.assertEqual(spawned.env["TERM"], "retrotui")
+        finally:
+            sys.modules.pop("retrotui.core.action_runner", None)
 
     def test_cli_installs_terminfo_without_starting_curses(self):
         from retrotui import __main__ as entry
