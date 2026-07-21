@@ -6,6 +6,7 @@ on:
       - hardening/core-contracts
     paths:
       - tools/apply_core_hardening.py
+      - tools/apply_core_hardening_f821.py
       - .github/workflows/apply-core-hardening.yml
   pull_request:
     branches:
@@ -32,7 +33,9 @@ jobs:
           python-version: "3.12"
 
       - name: Apply deterministic patch
-        run: python tools/apply_core_hardening.py
+        run: |
+          python tools/apply_core_hardening.py
+          python tools/apply_core_hardening_f821.py
 
       - name: Install validation dependencies
         run: |
