@@ -263,7 +263,7 @@ jobs:
         run: python -m pytest tests -q
 
       - name: Remove temporary patch machinery
-        run: git rm tools/apply_dialog_workflow_fix.py .github/workflows/dialog-workflow-fix.yml
+        run: git rm -f tools/apply_dialog_workflow_fix.py .github/workflows/dialog-workflow-fix.yml
 
       - name: Commit validated dialog workflows
         shell: bash
