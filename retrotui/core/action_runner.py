@@ -19,6 +19,7 @@ from ..apps.clipboard_viewer import ClipboardViewerWindow
 from ..ui.dialog import Dialog
 from ..ui.window import Window
 from .actions import AppAction
+from .dialog_workflow import DialogWorkflowId, bind_dialog
 from .content import build_about_message, build_help_message
 from ..constants import _CURSES_ERROR, WIN_MIN_HEIGHT, WIN_MIN_WIDTH
 _TERMINAL_SIZE_ERRORS = (
@@ -148,11 +149,15 @@ def execute_app_action(app, action, logger, *, version: str) -> None:
     # --- Special-case actions (non-trivial logic) ---
 
     if action == AppAction.EXIT:
-        app.dialog = Dialog(
-            "Exit RetroTUI",
-            "Are you sure you want to exit?\n\nAll windows will be closed.",
-            ["Yes", "No"],
-            width=44,
+        app.dialog = bind_dialog(
+            Dialog(
+                "Exit RetroTUI",
+                "Are you sure you want to exit?\n\nAll windows will be closed.",
+                ["Yes", "No"],
+                width=44,
+            ),
+            workflow_id=DialogWorkflowId.EXIT,
+            on_accept=lambda: setattr(app, "running", False),
         )
         return
 

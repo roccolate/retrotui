@@ -14,6 +14,7 @@ from ..apps.hexviewer import HexViewerWindow
 from ..apps.markdown_viewer import MarkdownViewerWindow
 from ..ui.dialog import Dialog, InputDialog
 from .actions import ActionResult, ActionType
+from .dialog_workflow import DialogWorkflowId, bind_dialog
 
 LOGGER = logging.getLogger(__name__)
 
@@ -99,16 +100,21 @@ def play_ascii_video(app, filepath, subtitle_path=None):
 def show_url_dialog(app, source_win, default_url=None):
     """Show input dialog for web URLs."""
     initial = default_url or getattr(source_win, 'url', '')
-    dialog = InputDialog('RetroNet Explorer', 'Enter URL:', initial_value=initial, width=64)
-    dialog.callback = source_win.open_path
-    app.dialog = dialog
+    app.dialog = bind_dialog(
+        InputDialog('RetroNet Explorer', 'Enter URL:', initial_value=initial, width=64),
+        workflow_id=DialogWorkflowId.CALLBACK,
+        source_window=source_win,
+        on_accept=source_win.open_path,
+    )
 
 
 def show_video_open_dialog(app):
     """Open dialog flow to play a video path without using File Manager."""
-    dialog = InputDialog('Open Video', 'Enter video path:', width=64)
-    dialog.callback = lambda filepath: handle_video_path_input(app, filepath)
-    app.dialog = dialog
+    app.dialog = bind_dialog(
+        InputDialog('Open Video', 'Enter video path:', width=64),
+        workflow_id=DialogWorkflowId.CALLBACK,
+        on_accept=lambda filepath: handle_video_path_input(app, filepath),
+    )
 
 
 def handle_video_path_input(app, filepath):
@@ -122,19 +128,21 @@ def handle_video_path_input(app, filepath):
     if not is_video_file(video_path):
         return ActionResult(ActionType.ERROR, f'Unsupported video format:\n{video_path}')
 
-    dialog = InputDialog(
-        'Subtitles (Optional)',
-        'Enter subtitle path (.srt/.ass/.vtt) or leave empty:',
-        width=70,
+    app.dialog = bind_dialog(
+        InputDialog(
+            'Subtitles (Optional)',
+            'Enter subtitle path (.srt/.ass/.vtt) or leave empty:',
+            width=70,
+        ),
+        workflow_id=DialogWorkflowId.CALLBACK,
+        on_accept=(
+            lambda subtitle_path, selected_video=video_path: handle_subtitle_path_input(
+                app,
+                selected_video,
+                subtitle_path,
+            )
+        ),
     )
-    dialog.callback = (
-        lambda subtitle_path, selected_video=video_path: handle_subtitle_path_input(
-            app,
-            selected_video,
-            subtitle_path,
-        )
-    )
-    app.dialog = dialog
     return None
 
 

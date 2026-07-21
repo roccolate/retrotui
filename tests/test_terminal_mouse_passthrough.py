@@ -212,8 +212,8 @@ class MousePassthroughTests(unittest.TestCase):
     def test_scroll_wheel_stays_in_retrotui_when_mouse_mode_off(self):
         # GPM compat path: scroll wheel moves the scrollback, not the PTY.
         # Populate scrollback so the wheel has somewhere to go.
-        for ch in "abcdefghij":
-            self.win._consume_output(ch + "\n")
+        for idx in range(self.win._normal_buf.rows + 3):
+            self.win._consume_output(f"{idx}\n")
         self.win.handle_scroll("up", 3)
         self.assertEqual(self.session.writes, [])
         self.assertGreater(self.win.scrollback_offset, 0)

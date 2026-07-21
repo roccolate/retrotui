@@ -47,14 +47,14 @@ class CharacterMapWindow(Window):
         win_h = max(20, h)
         super().__init__("Character Map", x, y, win_w, win_h, content=[], resizable=True)
         
+        self._status_message = ""
+        self._status_ttl = 0
         self.block_idx = 0
         self.chars = []
         self._load_block()
         
         self.sel_idx = 0
         self.selected_char = self.chars[0] if self.chars else None
-        self._status_message = ""
-        self._status_ttl = 0
         
         # Menu setup
         range_items = []

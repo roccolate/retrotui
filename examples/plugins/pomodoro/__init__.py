@@ -8,7 +8,7 @@ from retrotui.utils import safe_addstr, theme_attr
 
 class Plugin(RetroApp):
     @property
-    def needs_redraw(self):
+    def wants_periodic_tick(self):
         return getattr(self, "state", "idle") == "running"
 
     def __init__(self, *args, **kwargs):

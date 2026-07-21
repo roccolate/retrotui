@@ -75,20 +75,25 @@ class DragDropManager:
             return
 
         result = None
-        open_path = getattr(target, 'open_path', None)
         accept_path = getattr(target, 'accept_dropped_path', None)
+        open_path = getattr(target, 'open_path', None)
+        # ``accept_dropped_path`` is the explicit drop capability.  A target
+        # such as File Manager may also expose ``open_path`` for navigation;
+        # using the generic opener first would turn a copy operation into an
+        # unrelated directory change.
+        #
         # Isolate drop-target handlers so a buggy target can't kill the
         # mouse-event loop. ``FileNotFoundError`` and ``PermissionError``
-        # are common when the user drops a path the target cannot open
-        # (per the audit); we log them as info rather than tracebacks.
+        # are common when the user drops a path the target cannot accept;
+        # we log them as info rather than tracebacks.
         try:
-            if callable(open_path):
-                result = open_path(path)
-            elif callable(accept_path):
+            if callable(accept_path):
                 result = accept_path(path)
+            elif callable(open_path):
+                result = open_path(path)
         except (FileNotFoundError, PermissionError, IsADirectoryError) as exc:
             LOGGER.info(
-                "Drop target %r could not open %r: %s",
+                "Drop target %r could not accept %r: %s",
                 target, path, exc,
             )
             return

@@ -62,26 +62,25 @@ class FileManagerEdgeTests(unittest.TestCase):
         self.assertEqual(res, payload)
         self.assertIsNone(self.win._pending_drag_payload)
 
-
-
     def test_next_trash_path_collisions_and_undo_delete(self):
         trash_dir = os.path.join(self.base, 'trash')
-        
-        # Patch operations._trash_base_dir
-        with mock.patch('retrotui.apps.filemanager.operations._trash_base_dir', return_value=trash_dir):
+
+        # Patch the imported module directly; dotted mock resolution differs
+        # across supported Python versions when package submodules were reloaded.
+        with mock.patch.object(operations, '_trash_base_dir', return_value=trash_dir):
             os.makedirs(trash_dir, exist_ok=True)
             src = os.path.join(self.base, 'todel.txt')
             # create candidate collision
             candidate = os.path.join(trash_dir, 'todel.txt')
             with open(candidate, 'w', encoding='utf-8') as f:
                 f.write('z')
-                
+
             # Use operations.next_trash_path directly
             alt = operations.next_trash_path(src)
             self.assertNotEqual(alt, candidate)
-    
+
             from retrotui.core.actions import ActionType
-    
+
             # delete_selected should move file into trash and set last move
             self._select_by_name('todel.txt')
             res = self.win.delete_selected()
@@ -89,7 +88,7 @@ class FileManagerEdgeTests(unittest.TestCase):
             self.assertIsNotNone(self.win._last_trash_move)
             trash_path = self.win._last_trash_move['trash']
             self.assertTrue(os.path.exists(trash_path))
-    
+
             # undo should restore
             res = self.win.undo_delete()
             self.assertEqual(res.type, ActionType.REFRESH)
@@ -97,7 +96,7 @@ class FileManagerEdgeTests(unittest.TestCase):
 
     def test_rename_selected_errors_and_success(self):
         from retrotui.core.actions import ActionType
-        
+
         self._select_by_name('old.txt')
         # invalid name
         res = self.win.rename_selected('')
@@ -110,9 +109,10 @@ class FileManagerEdgeTests(unittest.TestCase):
         if os.path.exists(target):
             try:
                 os.remove(target)
-            except: pass
+            except OSError:
+                pass
         self.assertFalse(os.path.exists(target), "Target new.txt already exists!")
-        
+
         res = self.win.rename_selected('new.txt')
         ignore_msg = getattr(res, 'payload', '')
         self.assertEqual(res.type, ActionType.REFRESH, f"Rename failed: {ignore_msg}")

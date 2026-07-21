@@ -5,6 +5,8 @@ few rows of selected table. Uses stdlib `sqlite3`.
 """
 import os
 import sqlite3
+from contextlib import closing
+
 from retrotui.plugins.base import RetroApp
 from retrotui.utils import safe_addstr, theme_attr
 
@@ -27,7 +29,10 @@ class Plugin(RetroApp):
             self.tables = []
             return
         try:
-            with sqlite3.connect(self.path) as con:
+            # sqlite3.Connection's context manager commits or rolls back but
+            # does not close the handle. Explicit closing is required so
+            # Windows can delete temporary database files immediately.
+            with closing(sqlite3.connect(self.path)) as con:
                 cur = con.cursor()
                 cur.execute("SELECT name FROM sqlite_master WHERE type='table'")
                 self.tables = [r[0] for r in cur.fetchall()]
@@ -36,7 +41,7 @@ class Plugin(RetroApp):
 
     def _load_rows(self, table):
         try:
-            with sqlite3.connect(self.path) as con:
+            with closing(sqlite3.connect(self.path)) as con:
                 cur = con.cursor()
                 cur.execute(f'SELECT * FROM {_quote_identifier(table)} LIMIT 10')
                 cols = [d[0] for d in cur.description] if cur.description else []

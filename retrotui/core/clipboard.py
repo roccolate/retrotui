@@ -95,7 +95,10 @@ def _system_copy(text: str) -> bool:
                 check=False,
                 timeout=CLIPBOARD_COMMAND_TIMEOUT,
             )
-    except (OSError, subprocess.SubprocessError):
+    except (OSError, subprocess.SubprocessError, UnicodeError):
+        # System clipboard synchronization is best-effort. The in-process
+        # clipboard remains authoritative even when a platform command cannot
+        # encode or decode a Unicode character using its inherited locale.
         return False
     return result.returncode == 0
 
@@ -138,7 +141,7 @@ def _system_paste() -> str | None:
                 check=False,
                 timeout=CLIPBOARD_COMMAND_TIMEOUT,
             )
-    except (OSError, subprocess.SubprocessError):
+    except (OSError, subprocess.SubprocessError, UnicodeError):
         return None
     if result.returncode != 0:
         return None

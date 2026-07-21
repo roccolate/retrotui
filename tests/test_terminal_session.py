@@ -547,10 +547,14 @@ class TerminalSessionTests(unittest.TestCase):
 
     def test_close_windows(self):
         session = self.mod.TerminalSession()
-        session._win_pty = mock.MagicMock()
+        backend = mock.MagicMock()
+        backend.isalive.return_value = False
+        session._win_pty = backend
         session.running = True
 
-        session.close()
+        self.assertTrue(session.close())
+        backend.close.assert_called_once_with(force=True)
+        backend.isalive.assert_called_once_with()
         self.assertIsNone(session._win_pty)
         self.assertFalse(session.running)
 
