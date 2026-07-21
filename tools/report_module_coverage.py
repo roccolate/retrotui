@@ -125,12 +125,54 @@ def run_unittest_suite_result(tests_dir: str, verbosity: int) -> unittest.TestRe
     return unittest.TextTestRunner(verbosity=verbosity).run(suite)
 
 
-def build_unittest_suite(tests_dir: str) -> unittest.TestSuite:
-    """Discover and return unittest suite for the provided directory."""
+DEFAULT_COVERAGE_EXCLUDED_TEST_MODULES = ("test_perf_cache_stress",)
+
+
+def _iter_test_cases(suite: unittest.TestSuite):
+    """Yield individual cases from a recursively nested unittest suite."""
+    for item in suite:
+        if isinstance(item, unittest.TestSuite):
+            yield from _iter_test_cases(item)
+        else:
+            yield item
+
+
+def filter_unittest_suite(
+    suite: unittest.TestSuite,
+    *,
+    exclude_modules: Iterable[str] = (),
+) -> unittest.TestSuite:
+    """Return a suite excluding test modules unsuitable for instrumentation.
+
+    Timing-sensitive tests remain mandatory in the normal unittest and pytest
+    jobs. They are excluded only while stdlib ``trace`` instrumentation is
+    active, because the tracer changes the performance characteristic being
+    asserted and can create false regressions.
+    """
+    excluded = {str(name).strip() for name in exclude_modules if str(name).strip()}
+    filtered = unittest.TestSuite()
+    for test in _iter_test_cases(suite):
+        module_name = getattr(test.__class__, "__module__", "")
+        if any(
+            module_name == name or module_name.endswith(f".{name}")
+            for name in excluded
+        ):
+            continue
+        filtered.addTest(test)
+    return filtered
+
+
+def build_unittest_suite(
+    tests_dir: str,
+    *,
+    exclude_modules: Iterable[str] = (),
+) -> unittest.TestSuite:
+    """Discover tests and optionally exclude instrumentation-hostile modules."""
     project_root = str(Path.cwd().resolve())
     if project_root not in sys.path:
         sys.path.insert(0, project_root)
-    return unittest.defaultTestLoader.discover(start_dir=tests_dir)
+    suite = unittest.defaultTestLoader.discover(start_dir=tests_dir)
+    return filter_unittest_suite(suite, exclude_modules=exclude_modules)
 
 
 def build_coverage_rows(package_dir: str, counts: dict[tuple[str, int], int]) -> list[ModuleCoverage]:
@@ -211,6 +253,15 @@ def main() -> int:
     parser.add_argument("--top", type=int, default=20, help="Show lowest-N coverage modules (default: 20)")
     parser.add_argument("--quiet-tests", action="store_true", help="Run tests with minimal verbosity")
     parser.add_argument(
+        "--exclude-test-module",
+        action="append",
+        default=None,
+        help=(
+            "Test module to exclude only from the traced coverage run. "
+            "May be repeated; defaults to timing-sensitive stress tests."
+        ),
+    )
+    parser.add_argument(
         "--fail-under",
         type=float,
         default=None,
@@ -218,7 +269,20 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    suite = build_unittest_suite(args.tests)
+    excluded_modules = (
+        DEFAULT_COVERAGE_EXCLUDED_TEST_MODULES
+        if args.exclude_test_module is None
+        else tuple(args.exclude_test_module)
+    )
+    suite = build_unittest_suite(
+        args.tests,
+        exclude_modules=excluded_modules,
+    )
+    if excluded_modules:
+        print(
+            "Coverage instrumentation exclusions: "
+            + ", ".join(sorted(excluded_modules))
+        )
     runner = unittest.TextTestRunner(verbosity=0 if args.quiet_tests else 1)
 
     tracer = trace.Trace(

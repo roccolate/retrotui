@@ -1107,7 +1107,8 @@ class TerminalWindow(SelectableTextMixin, Window):
 
     def restart_session(self):
         """Reset scrollback state and start a fresh shell session lazily."""
-        self.close()
+        if self.close() is False:
+            return False
         self._session_error = None
         self._reported_session_error = False
         self._last_pty_size = None
@@ -1121,11 +1122,18 @@ class TerminalWindow(SelectableTextMixin, Window):
         # The fresh child has not re-enabled mouse reporting yet.
         self._mouse_modes = set()
         self.scrollback_offset = 0
+        return True
 
     def close(self):
-        """Release PTY resources when terminal window is closed."""
+        """Release PTY resources only after the child is verified stopped."""
+        session = self._session
+        if session is not None:
+            if session.close() is False:
+                self._set_session_error(
+                    RuntimeError("Terminal child is still alive; close was cancelled.")
+                )
+                return False
+            self._session = None
         self._pending_output = ''
         self._last_pty_size = None
-        if self._session is not None:
-            self._session.close()
-            self._session = None
+        return True

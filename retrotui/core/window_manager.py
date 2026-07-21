@@ -129,9 +129,13 @@ class WindowManager:
         closer = getattr(win, 'close', None)
         if callable(closer):
             try:
-                closer()
-            except _WINDOW_CLOSE_HOOK_ERRORS:  # pragma: no cover - defensive window cleanup path
+                close_result = closer()
+            except _WINDOW_CLOSE_HOOK_ERRORS:
                 LOGGER.debug('Window close hook failed for %r', win, exc_info=True)
+                return False
+            if close_result is False:
+                LOGGER.warning('Window close was not verified for %r; keeping it registered', win)
+                return False
         if win in self.windows:
             self.windows.remove(win)
         if self._active_window is win:
@@ -155,26 +159,44 @@ class WindowManager:
         return None
 
     def get_active_window(self):
-        """Return the active window, if any.
+        """Return a visible active window, repairing hidden focus if needed.
 
-        Returns the cached ``_active_window`` pointer; falls back to a
-        linear scan only when the pointer is out of sync (e.g. a test
-        that poked ``active`` or ``windows`` directly).
+        A component isolated after repeated draw failures may remain in the
+        window list. It must not keep keyboard focus after becoming invisible.
+        A list replacement with no active window remains a legitimate no-focus
+        state and must not activate a window as a side effect.
         """
         cached = self._active_window
-        # Reject the cache if the window is no longer in the list, or
-        # its ``active`` flag was cleared externally.
         if (
             cached is not None
             and getattr(cached, "active", False)
+            and getattr(cached, "visible", True)
             and cached in self.windows
         ):
             return cached
+
+        repair_hidden_focus = False
+        if (
+            cached is not None
+            and cached in self.windows
+            and getattr(cached, "active", False)
+            and not getattr(cached, "visible", True)
+        ):
+            cached.active = False
+            repair_hidden_focus = True
         self._active_window = None
-        for w in self.windows:
-            if getattr(w, "active", False):
-                self._active_window = w
-                return w
+
+        for window in self.windows:
+            if not getattr(window, "active", False):
+                continue
+            if getattr(window, "visible", True):
+                self._active_window = window
+                return window
+            window.active = False
+            repair_hidden_focus = True
+
+        if repair_hidden_focus:
+            return self._activate_last_visible_window()
         return None
 
     # ------------------------------------------------------------------
