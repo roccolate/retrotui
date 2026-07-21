@@ -13,7 +13,10 @@ The ANSI parser now emits explicit `ESC` events for:
 - `HTS` (`ESC H`): set a horizontal tab stop at the current physical column;
 - `DECSC` / `DECRC` (`ESC 7` / `ESC 8`): save and restore cursor position.
 
-Unknown single-byte ESC commands remain safely consumed.
+The current `DECSC` / `DECRC` contract is intentionally cursor-only; graphic
+rendition, character-set shift state and other VT220 save-state fields remain a
+separate compatibility cut. Unknown single-byte ESC commands are consumed
+safely.
 
 ## Horizontal tabulation
 
