@@ -1,9 +1,13 @@
 """Keyboard routing helpers for RetroTUI."""
 
 import curses
+import logging
 
 from ..utils import normalize_key_code
 from .actions import AppAction
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 def normalize_app_key(key):

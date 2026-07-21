@@ -58,6 +58,30 @@ class ModuleCoverageToolTests(unittest.TestCase):
         ordered = self.mod.sort_coverage_rows(rows)
         self.assertEqual([r.module for r in ordered], ["b.py", "c.py", "a.py"])
 
+    def test_filter_suite_excludes_only_named_timing_module(self):
+        class RegularCase(unittest.TestCase):
+            def test_regular(self):
+                pass
+
+        class TimingCase(unittest.TestCase):
+            def test_timing(self):
+                pass
+
+        RegularCase.__module__ = "test_regular"
+        TimingCase.__module__ = "tests.test_perf_cache_stress"
+        suite = unittest.TestSuite(
+            [RegularCase("test_regular"), TimingCase("test_timing")]
+        )
+
+        filtered = self.mod.filter_unittest_suite(
+            suite,
+            exclude_modules=("test_perf_cache_stress",),
+        )
+        test_ids = [test.id() for test in self.mod._iter_test_cases(filtered)]
+
+        self.assertEqual(len(test_ids), 1)
+        self.assertTrue(test_ids[0].startswith("test_regular."))
+
     def test_build_coverage_rows_maps_counts_from_foreign_root_by_suffix(self):
         tmp_root = Path("tests") / "_tmp_module_cov_rows"
         package_root = tmp_root / "retrotui"
