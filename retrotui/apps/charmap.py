@@ -40,22 +40,23 @@ UNICODE_BLOCKS = [
     ("Braille Patterns", 0x2800, 0x28FF),
 ]
 
+
 class CharacterMapWindow(Window):
     def __init__(self, x, y, w, h):
         # Premium fixed size or responsive
         win_w = max(60, w)
         win_h = max(20, h)
         super().__init__("Character Map", x, y, win_w, win_h, content=[], resizable=True)
-        
+
         self._status_message = ""
         self._status_ttl = 0
         self.block_idx = 0
         self.chars = []
         self._load_block()
-        
+
         self.sel_idx = 0
         self.selected_char = self.chars[0] if self.chars else None
-        
+
         # Menu setup
         range_items = []
         for i, (name, _, _) in enumerate(UNICODE_BLOCKS):
@@ -72,13 +73,22 @@ class CharacterMapWindow(Window):
             ]
         })
 
+    @property
+    def status_message(self):
+        """Compatibility view of the status text used by older integrations."""
+        return self._status_message
+
+    @status_message.setter
+    def status_message(self, value):
+        self._status_message = str(value or "")
+
     def _load_block(self):
         name, start, end = UNICODE_BLOCKS[self.block_idx]
         self.chars = [chr(i) for i in range(start, end + 1)]
         # The footer reads ``self._status_message``; assigning to the
-        # unguarded ``status_message`` silently dropped the previous
-        # block name (typo carried over from the typo'd attribute).
-        self._status_message = f"Block: {name}"
+        # compatibility property keeps older callers working while the
+        # private field remains the canonical internal storage.
+        self.status_message = f"Block: {name}"
 
     # Width reserved for the detail pane on the right side of the body.
     # Must match `detail_x = bx + bw - 20` below and the block-rendering
@@ -107,25 +117,25 @@ class CharacterMapWindow(Window):
 
         cols, rows = self._get_grid_dims(bw, bh)
         per_page = cols * rows
-        
+
         page = self.sel_idx // per_page
         start_idx = page * per_page
-        
+
         # Draw Grid
         for r in range(rows):
             for c in range(cols):
                 idx = start_idx + r * cols + c
                 if idx >= len(self.chars):
                     break
-                
+
                 ch = self.chars[idx]
                 cx = bx + c * 3
                 cy = by + r + 1
-                
+
                 attr = body_attr
                 if idx == self.sel_idx:
                     attr = theme_attr("menu_selected")
-                
+
                 safe_addstr(stdscr, cy, cx, f" {ch} ", attr)
 
         # Draw Detail Pane (Right Side). `DETAIL_PANE_WIDTH` controls how
@@ -134,8 +144,8 @@ class CharacterMapWindow(Window):
         detail_x = bx + bw - self.DETAIL_PANE_WIDTH
         # Vertical separator
         for r in range(bh):
-            safe_addstr(stdscr, by + r, detail_x - 1, "\u2502", theme_attr("window_border"))
-            
+            safe_addstr(stdscr, by + r, detail_x - 1, "│", theme_attr("window_border"))
+
         if self.selected_char:
             ch = self.selected_char
             cp = ord(ch)
@@ -143,25 +153,25 @@ class CharacterMapWindow(Window):
                 name = unicodedata.name(ch, "UNKNOWN")
             except ValueError:
                 name = "UNKNOWN"
-            
+
             # Zoom area
-            safe_addstr(stdscr, by + 1, detail_x + 5, "\u250c\u2500\u2500\u2500\u2510", body_attr)
-            safe_addstr(stdscr, by + 2, detail_x + 5, f"\u2502 {ch} \u2502", body_attr | curses.A_BOLD)
-            safe_addstr(stdscr, by + 3, detail_x + 5, "\u2514\u2500\u2500\u2500\u2518", body_attr)
-            
+            safe_addstr(stdscr, by + 1, detail_x + 5, "┌───┐", body_attr)
+            safe_addstr(stdscr, by + 2, detail_x + 5, f"│ {ch} │", body_attr | curses.A_BOLD)
+            safe_addstr(stdscr, by + 3, detail_x + 5, "└───┘", body_attr)
+
             # Info
             safe_addstr(stdscr, by + 5, detail_x + 1, "Name:", theme_attr("menubar"))
             # Wrap name
             name_parts = [name[i:i+18] for i in range(0, len(name), 18)]
             for i, part in enumerate(name_parts[:3]):
                 safe_addstr(stdscr, by + 6 + i, detail_x + 1, part, body_attr)
-                
+
             safe_addstr(stdscr, by + 10, detail_x + 1, "Hex:", theme_attr("menubar"))
             safe_addstr(stdscr, by + 10, detail_x + 6, f"U+{cp:04X}", body_attr)
-            
+
             safe_addstr(stdscr, by + 11, detail_x + 1, "Dec:", theme_attr("menubar"))
             safe_addstr(stdscr, by + 11, detail_x + 6, str(cp), body_attr)
-            
+
             safe_addstr(stdscr, by + bh - 2, detail_x + 1, "Press 'C' to Copy", theme_attr("status"))
 
         # Footer
@@ -222,18 +232,18 @@ class CharacterMapWindow(Window):
             action = self.window_menu.handle_click(mx, my, self.x, self.y, self.w)
             if action:
                 return self.execute_action(action)
-        
+
         bx, by, bw, bh = self.body_rect()
         cols, rows = self._get_grid_dims(bw, bh)
-        
+
         # Check if click in grid
         if bx <= mx < bx + cols * 3 and by + 1 <= my < by + 1 + rows:
             grid_x = (mx - bx) // 3
             grid_y = my - (by + 1)
-            
+
             per_page = cols * rows
             page = self.sel_idx // per_page
-            
+
             idx = page * per_page + grid_y * cols + grid_x
             if 0 <= idx < len(self.chars):
                 self.sel_idx = idx
