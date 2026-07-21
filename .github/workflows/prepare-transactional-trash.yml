@@ -6,6 +6,7 @@ on:
       - hardening/transactional-trash
     paths:
       - tools/prepare_transactional_trash.py
+      - tools/refine_transactional_trash.py
       - retrotui/core/trash_transaction.py
       - retrotui/apps/trash.py
       - tests/test_trash_transactions.py
@@ -15,6 +16,7 @@ on:
       - hardening/cooperative-file-transfers
     paths:
       - tools/prepare_transactional_trash.py
+      - tools/refine_transactional_trash.py
       - retrotui/core/trash_transaction.py
       - retrotui/apps/trash.py
       - tests/test_trash_transactions.py
@@ -42,7 +44,8 @@ jobs:
       - name: Apply deterministic integration patch
         run: |
           python tools/prepare_transactional_trash.py
-          rm tools/prepare_transactional_trash.py
+          python tools/refine_transactional_trash.py
+          rm tools/prepare_transactional_trash.py tools/refine_transactional_trash.py
           python -m py_compile \
             retrotui/core/trash_transaction.py \
             retrotui/apps/trash.py \
