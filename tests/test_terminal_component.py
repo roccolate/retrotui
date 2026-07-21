@@ -1300,5 +1300,19 @@ class TerminalComponentTests(unittest.TestCase):
         self.assertEqual(fake_session.writes[-2:], ["\x1b[?0n", "\x1b[?3;5R"])
 
 
+    def test_consume_output_at_tail_does_not_materialize_all_lines(self):
+        win = self._make_window()
+        win.scrollback_offset = 0
+
+        with mock.patch.object(
+            win,
+            "_all_lines",
+            side_effect=AssertionError("tail output must not rebuild scrollback"),
+        ):
+            win._consume_output("X")
+
+        self.assertEqual(self._get_text(win), "X")
+
+
 if __name__ == "__main__":
     unittest.main()
