@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import curses
+import logging
 import shutil
 import subprocess
 import threading
@@ -10,6 +11,8 @@ from ..core.key_router import normalize_key_code
 from ..ui.window import Window
 from ..ui.dialog import InputDialog
 from ..utils import safe_addstr, theme_attr
+
+LOGGER = logging.getLogger(__name__)
 
 NMCLI_QUICK_TIMEOUT = 5.0
 NMCLI_SCAN_TIMEOUT = 15.0
