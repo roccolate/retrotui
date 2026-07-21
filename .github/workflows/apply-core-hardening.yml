@@ -92,8 +92,26 @@ jobs:
       - name: pytest
         run: python -m pytest tests -q
 
-      - name: Coverage floor
-        run: python tools/report_module_coverage.py --quiet-tests --top 20 --fail-under 75.0
+      - name: Capture coverage baseline
+        shell: bash
+        run: |
+          set +e
+          python tools/report_module_coverage.py --quiet-tests --top 20 --fail-under 75.0 > coverage-report.txt 2>&1
+          status=$?
+          tail -n 80 coverage-report.txt
+          echo "COVERAGE_STATUS=$status" >> "$GITHUB_ENV"
+          exit 0
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: coverage-report
+          path: coverage-report.txt
+
+      - name: Enforce coverage floor
+        shell: bash
+        run: test "${COVERAGE_STATUS}" -eq 0
 
       - name: Commit validated hardening changes
         run: |
