@@ -42,8 +42,26 @@ jobs:
       - name: Repository QA
         run: python tools/qa.py --skip-tests
 
-      - name: Undefined-name lint
-        run: python -m ruff check --select F821 retrotui tests tools
+      - name: Capture undefined-name report
+        shell: bash
+        run: |
+          set +e
+          python -m ruff check --select F821 --output-format=concise retrotui tests tools > ruff-f821.txt
+          status=$?
+          cat ruff-f821.txt
+          echo "RUFF_STATUS=$status" >> "$GITHUB_ENV"
+          exit 0
+
+      - name: Upload undefined-name report
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: ruff-f821-report
+          path: ruff-f821.txt
+
+      - name: Enforce undefined-name lint
+        shell: bash
+        run: test "${RUFF_STATUS}" -eq 0
 
       - name: unittest
         run: python -m unittest discover -s tests -v
