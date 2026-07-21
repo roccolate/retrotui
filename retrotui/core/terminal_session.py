@@ -15,6 +15,8 @@ _BACKENDS_CACHE = {"value": _BACKENDS_UNSET}
 _WIN_BACKEND_CACHE = {"value": _BACKENDS_UNSET}
 _CLOSE_WAIT_SECONDS = 0.2
 _CLOSE_POLL_INTERVAL = 0.01
+_DEFAULT_READ_BUDGET = 8192
+_DEFAULT_WRITE_BUDGET = 8192
 
 
 class TerminalScreenBuffer:
@@ -394,6 +396,7 @@ class TerminalSession:
         self.running = False
         self._win_pty = None
         self._decoder = codecs.getincrementaldecoder("utf-8")("replace")
+        self._pending_write = bytearray()
 
     @staticmethod
     def is_supported():
@@ -430,11 +433,33 @@ class TerminalSession:
         self._set_nonblocking(fcntl_mod, master_fd)
         self.resize(self.cols, self.rows)
 
+    def _windows_environment_block(self):
+        """Build the CreateProcess-style environment block for ConPTY."""
+        env = os.environ.copy()
+        env.update({str(key): str(value) for key, value in self.extra_env.items()})
+        return "\0".join(
+            f"{key}={value}" for key, value in sorted(env.items())
+        ) + "\0"
+
+    def _spawn_windows_process(self, pty, shell):
+        """Spawn with cwd/env when supported, retaining legacy fallbacks."""
+        env_block = self._windows_environment_block()
+        try:
+            return pty.spawn(shell, cwd=self.cwd, env=env_block)
+        except TypeError:
+            pass
+
+        try:
+            return pty.spawn(shell, None, self.cwd, env_block)
+        except TypeError:
+            legacy_shell = shell.encode() if isinstance(shell, str) else shell
+            return pty.spawn(legacy_shell)
+
     def _start_windows(self, winpty_mod):
         """Spawn shell process inside a Windows ConPTY."""
         shell = self.shell or os.environ.get("COMSPEC") or "cmd.exe"
         pty = winpty_mod.PTY(self.cols, self.rows)
-        pty.spawn(shell.encode() if isinstance(shell, str) else shell)
+        self._spawn_windows_process(pty, shell)
         self._win_pty = pty
         self.running = True
 
@@ -455,18 +480,34 @@ class TerminalSession:
 
         raise RuntimeError("No PTY backend available (need POSIX pty or pywinpty).")
 
-    def read(self, max_bytes=4096):
-        """Read available PTY output (non-blocking)."""
+    def read(self, max_bytes=4096, max_total_bytes=_DEFAULT_READ_BUDGET):
+        """Read available PTY output without exceeding an optional total budget.
+
+        ``max_bytes`` limits each backend read. ``max_total_bytes`` limits the
+        aggregate bytes admitted by this call and defaults to 8 KiB; unread
+        data remains buffered by the PTY for the next service tick. Pass
+        ``None`` only for an explicit unbounded drain.
+        """
+        max_bytes = max(1, int(max_bytes))
+        if max_total_bytes is None:
+            remaining = None
+        else:
+            remaining = max(0, int(max_total_bytes))
+            if remaining == 0:
+                return ""
+
         if self._win_pty is not None:
-            return self._read_windows(max_bytes)
+            read_size = max_bytes if remaining is None else min(max_bytes, remaining)
+            return self._read_windows(read_size)
 
         if self.master_fd is None:
             return ""
 
         chunks = []
-        while True:
+        while remaining is None or remaining > 0:
+            read_size = max_bytes if remaining is None else min(max_bytes, remaining)
             try:
-                chunk = os.read(self.master_fd, max_bytes)
+                chunk = os.read(self.master_fd, read_size)
             except BlockingIOError:
                 break
             except OSError as exc:
@@ -482,12 +523,18 @@ class TerminalSession:
                 break
 
             chunks.append(chunk)
-            if len(chunk) < max_bytes:
+            if remaining is not None:
+                remaining -= len(chunk)
+            if len(chunk) < read_size:
                 break
 
         if not chunks:
             return ""
         return self._decoder.decode(b"".join(chunks))
+
+    def read_budgeted(self, max_total_bytes, max_bytes=4096):
+        """Read at most ``max_total_bytes`` for one main-loop service tick."""
+        return self.read(max_bytes=max_bytes, max_total_bytes=max_total_bytes)
 
     def _read_windows(self, max_bytes=4096):
         """Read available output from Windows ConPTY."""
@@ -501,30 +548,76 @@ class TerminalSession:
             return self._decoder.decode(data)
         return data
 
-    def write(self, data):
-        """Write data to PTY input."""
-        if self._win_pty is not None:
-            return self._write_windows(data)
+    @property
+    def pending_write_bytes(self):
+        """Return the number of queued input bytes awaiting the PTY."""
+        return len(self._pending_write)
 
-        if self.master_fd is None:
+    def write(self, data):
+        """Accept a complete input payload and queue any unsent suffix.
+
+        The return value is the number of bytes accepted by the session,
+        not necessarily the number synchronously written to the backend.
+        """
+        if self._win_pty is None and self.master_fd is None:
             return 0
         if isinstance(data, str):
             payload = data.encode("utf-8", errors="replace")
         else:
             payload = bytes(data)
-        return os.write(self.master_fd, payload)
+        if not payload:
+            return 0
+        self._pending_write.extend(payload)
+        flushed = self.flush_pending_writes()
+        if self._win_pty is not None and not self.running and flushed == 0:
+            return 0
+        return len(payload)
+
+    def flush_pending_writes(self, max_total_bytes=_DEFAULT_WRITE_BUDGET):
+        """Flush queued input without exceeding one service-tick budget."""
+        budget = max(0, int(max_total_bytes))
+        if budget == 0 or not self._pending_write:
+            return 0
+        if self._win_pty is None and self.master_fd is None:
+            return 0
+
+        total = 0
+        while self._pending_write and total < budget:
+            chunk = bytes(self._pending_write[:budget - total])
+            try:
+                if self._win_pty is not None:
+                    written = self._write_windows(chunk)
+                else:
+                    written = os.write(self.master_fd, chunk)
+            except BlockingIOError:
+                break
+            except OSError as exc:
+                if exc.errno in (errno.EAGAIN, errno.EWOULDBLOCK):
+                    break
+                if exc.errno in (errno.EIO, errno.EPIPE, errno.EBADF):
+                    self.running = False
+                raise
+
+            if written is None:
+                written = len(chunk)
+            written = max(0, min(int(written), len(chunk)))
+            if written == 0:
+                break
+            del self._pending_write[:written]
+            total += written
+        return total
 
     def _write_windows(self, data):
-        """Write data to Windows ConPTY input."""
-        if isinstance(data, str):
-            payload = data.encode("utf-8", errors="replace")
-        else:
-            payload = bytes(data)
+        """Write one queued chunk to Windows ConPTY."""
+        payload = data.encode("utf-8", errors="replace") if isinstance(data, str) else bytes(data)
         try:
-            self._win_pty.write(payload)
+            result = self._win_pty.write(payload)
         except OSError:
+            self._pending_write.clear()
             self.running = False
             return 0
+        if isinstance(result, int):
+            return max(0, min(result, len(payload)))
         return len(payload)
 
     def send_signal(self, sig):
@@ -617,6 +710,66 @@ class TerminalSession:
                 return False
             time.sleep(min(_CLOSE_POLL_INTERVAL, max(0.0, deadline - time.monotonic())))
 
+    def _windows_is_alive(self):
+        """Probe ConPTY liveness without leaking backend exceptions."""
+        if self._win_pty is None:
+            return False
+        probe = getattr(self._win_pty, "isalive", None)
+        if not callable(probe):
+            return bool(self.running)
+        try:
+            return bool(probe())
+        except Exception:
+            return False
+
+    def _wait_for_windows_exit(self, timeout):
+        """Wait briefly until the Windows child is observably stopped."""
+        deadline = time.monotonic() + max(0.0, float(timeout))
+        while self._windows_is_alive():
+            if time.monotonic() >= deadline:
+                return False
+            time.sleep(min(_CLOSE_POLL_INTERVAL, max(0.0, deadline - time.monotonic())))
+        self.running = False
+        return True
+
+    def _close_windows_backend(self):
+        """Close ConPTY explicitly and verify that its child exited."""
+        backend = self._win_pty
+        if backend is None:
+            return True
+
+        close_method = getattr(backend, "close", None)
+        if callable(close_method):
+            try:
+                try:
+                    close_method(force=True)
+                except TypeError:
+                    close_method()
+            except Exception:
+                pass
+            if self._wait_for_windows_exit(_CLOSE_WAIT_SECONDS):
+                return True
+
+        cancel_io = getattr(backend, "cancel_io", None)
+        if callable(cancel_io):
+            try:
+                cancel_io()
+            except Exception:
+                pass
+
+        if self._windows_is_alive():
+            self.running = True
+            self._send_signal_windows(signal.SIGTERM)
+            if not self._wait_for_windows_exit(_CLOSE_WAIT_SECONDS):
+                force_signal = getattr(signal, "SIGKILL", signal.SIGTERM)
+                self._send_signal_windows(force_signal)
+                if not self._wait_for_windows_exit(_CLOSE_WAIT_SECONDS):
+                    self.running = True
+                    return False
+        else:
+            self.running = False
+        return True
+
     def resize(self, cols, rows):
         """Update terminal window size and notify child PTY."""
         self.cols = max(1, int(cols))
@@ -649,7 +802,7 @@ class TerminalSession:
             return False
 
         if self._win_pty is not None:
-            if not self._win_pty.isalive():
+            if not self._windows_is_alive():
                 self.running = False
                 return True
             return False
@@ -659,15 +812,14 @@ class TerminalSession:
         return self._reap_posix_child(nohang=True)
 
     def close(self):
-        """Close PTY fd and mark session stopped."""
+        """Close the PTY and report whether its backend stopped cleanly."""
         if self._win_pty is not None:
-            try:
-                del self._win_pty
-            except Exception:
-                pass
+            if not self._close_windows_backend():
+                return False
             self._win_pty = None
+            self._pending_write.clear()
             self.running = False
-            return
+            return True
 
         if self.running:
             self.terminate()
@@ -683,4 +835,6 @@ class TerminalSession:
             except OSError:
                 pass
             self.master_fd = None
+        self._pending_write.clear()
         self.running = False
+        return True

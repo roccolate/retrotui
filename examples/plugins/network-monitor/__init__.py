@@ -24,7 +24,7 @@ def _parse_proc_net_dev():
 
 
 class Plugin(RetroApp):
-    needs_redraw = True
+    wants_periodic_tick = True
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

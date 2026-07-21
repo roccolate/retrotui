@@ -114,8 +114,9 @@ class FileManagerMore3Tests(unittest.TestCase):
         thread_start = mock.Mock()
         fake_thread = mock.Mock()
         fake_thread.start = thread_start
+        method_globals = self.win._start_image_preview.__globals__
         with mock.patch.object(self.win, '_should_preview_image_async', return_value=True), \
-             mock.patch('retrotui.apps.filemanager.window.threading.Thread', return_value=fake_thread):
+             mock.patch.object(method_globals['threading'], 'Thread', return_value=fake_thread):
             lines = self.win._entry_preview_lines(entry_img, 2, max_cols=20)
 
         self.assertEqual(lines, ['[image preview loading]'])

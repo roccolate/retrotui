@@ -18,7 +18,7 @@ class Plugin(RetroApp):
     """Render the classic ASCII movie stream inside RetroTUI."""
 
     @property
-    def needs_redraw(self):
+    def wants_periodic_tick(self):
         thread = getattr(self, "_worker_thread", None)
         return thread is not None and thread.is_alive()
 

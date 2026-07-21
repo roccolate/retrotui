@@ -48,6 +48,7 @@ class WindowLogicTests(unittest.TestCase):
             'retrotui.ui.menu',
             'retrotui.ui.window',
             'retrotui.apps.notepad',
+            'retrotui.apps.filemanager.window',
             'retrotui.apps.filemanager',
             'retrotui.core.actions',
         ):
@@ -68,6 +69,7 @@ class WindowLogicTests(unittest.TestCase):
             'retrotui.ui.menu',
             'retrotui.ui.window',
             'retrotui.apps.notepad',
+            'retrotui.apps.filemanager.window',
             'retrotui.apps.filemanager',
             'retrotui.core.actions',
         ):

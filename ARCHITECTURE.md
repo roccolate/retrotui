@@ -1,488 +1,454 @@
 # RetroTUI Architecture
 
-This document describes the internals of RetroTUI for anyone who wants to contribute, fix bugs, or build plugins.
+This document describes the current runtime architecture after the pre-v0.9.6 stabilization pass. It is the primary reference for contributors changing lifecycle, input, rendering, dialogs, plugins or terminal behavior.
 
-## Design Principles
+## Design goals
 
-- **Windows 3.1 Experience**: A faithful TUI recreation of the classic desktop environment — no X11, no Wayland, just Python and `curses`.
-- **Zero Dependencies on Linux**: Only the Python 3.10+ standard library. Windows requires `pywinpty` (ConPTY backend for the embedded terminal). On Python 3.14+ `curses` is part of the standard library on Windows, so no extra curses package is needed.
-- **Main-Thread UI**: Rendering and input dispatch happen on one curses thread. Long-running work must run through explicit background workers and communicate back through polled state, locks, events, or `ActionResult`.
-- **Testability**: Core logic is decoupled from curses via a fake curses module injected in tests. No real terminal needed to run the test suite.
+- Recreate a Windows 3.1-style desktop inside a terminal.
+- Keep rendering and input on one curses-owning main thread.
+- Make lifecycle ownership explicit instead of relying on incidental focus or visible strings.
+- Keep long-running or blocking work outside render paths.
+- Preserve compatibility with constrained terminals and older plugin integrations where practical.
+- Make every critical contract testable without requiring a physical terminal.
 
-## Directory Structure
+## Platform model
+
+| Platform | UI backend | Embedded terminal backend |
+|---|---|---|
+| POSIX systems | stdlib `curses` | `pty.fork()`, `fcntl`, `termios` |
+| Native Windows | `windows-curses` | `pywinpty` / ConPTY |
+
+The package declares Windows dependencies with environment markers. POSIX backend resolution is preferred whenever available.
+
+Real terminal capabilities still vary. Unit tests validate internal behavior; [docs/TTY_TEST_MATRIX.md](docs/TTY_TEST_MATRIX.md) records environment certification.
+
+## Repository layout
 
 ```text
 retrotui/
-├── __main__.py             # Entry point (python -m retrotui)
-├── constants.py            # Box-drawing chars, color pair IDs, layout constants
-├── utils.py                # safe_addstr, draw_box, theme_attr, key normalization
-├── theme.py                # Theme dataclass + built-in themes (win31, dos, win95, hacker, amiga)
+├── __main__.py                 # CLI entry point
+├── constants.py                # layout and logical constants
+├── color_pairs.py              # logical-to-physical color negotiation
+├── theme.py                    # built-in themes
+├── utils.py                    # safe drawing and shared helpers
 │
-├── core/                   # Core system — the "engine"
-│   ├── app.py              # RetroTUI facade class (~150 methods, delegates everything)
-│   ├── event_loop.py       # Main loop: input → dispatch → draw
-│   ├── bootstrap.py        # Terminal setup (cbreak, mouse, flow control)
-│   ├── rendering.py        # Desktop background, icons, taskbar, status bar
-│   ├── window_manager.py   # Window list, z-order, focus, spawn/close
-│   ├── mouse_router.py     # Mouse event routing (hit-test → dispatch)
-│   ├── mouse_utils.py      # Mouse utility functions (arity cache, hit-tests, captures)
-│   ├── key_router.py       # Keyboard routing (hotkeys → active window)
-│   ├── actions.py          # ActionType, AppAction, ActionResult — the message contract
-│   ├── action_runner.py    # App-level action dispatch (_APP_REGISTRY → spawn window)
-│   ├── dialog_dispatch.py  # Routes ActionResult from windows to dialogs/operations
-│   ├── context_menu_handler.py  # Right-click menu logic
-│   ├── drag_drop.py        # File drag-and-drop between windows
-│   ├── event_bus.py        # Pub/sub event system (clipboard, file ops, window events)
-│   ├── ipc.py              # Window-to-window messaging (IPCRouter)
-│   ├── notifications.py    # Toast notification system
-│   ├── signal_handler.py   # Unix signal → synthetic key queue (no curses corruption)
-│   ├── plugin_manager.py   # Plugin lifecycle (discover, register, spawn)
-│   ├── menu_builder.py     # Global menu construction + plugin menu items
-│   ├── icon_manager.py     # Desktop icon positions (draggable, persisted)
-│   ├── icon_styles.py      # Icon style system (default, mini, braille)
-│   ├── config.py           # AppConfig dataclass, TOML load/save
-│   ├── clipboard.py        # Internal clipboard + system clipboard bridge
-│   ├── file_operations.py  # File dialogs + background copy/move with progress
-│   ├── bookmarks.py        # RetroNet bookmarks (load/save to ~/.config/retrotui/bookmarks.toml)
-│   ├── terminal_session.py # PTY session (POSIX pty + Windows ConPTY via pywinpty)
-│   ├── ansi.py             # ANSI escape code state machine for terminal emulation
-│   ├── viewer.py           # File type detection → viewer window dispatch
-│   ├── content.py          # Static text (welcome, about, help)
-│   └── platform/
-│       └── mouse_backend.py  # Mouse event normalization (GPM, SGR, fallback)
+├── core/
+│   ├── app.py                  # RetroTUI facade and shared state
+│   ├── event_loop.py           # main loop and hook isolation
+│   ├── rendering.py            # desktop/frame composition
+│   ├── window_manager.py       # window lifecycle authority
+│   ├── event_bus.py            # synchronous pub/sub
+│   ├── key_router.py           # keyboard dispatch
+│   ├── mouse_router.py         # mouse dispatch
+│   ├── actions.py              # ActionType, AppAction, ActionResult
+│   ├── action_runner.py        # app-level action execution
+│   ├── dialog_workflow.py      # stable workflow IDs and bindings
+│   ├── dialog_dispatch.py      # dialog result resolution
+│   ├── drag_drop.py            # capability-based dropped-path routing
+│   ├── file_operations.py      # asynchronous file operations
+│   ├── terminal_session.py     # POSIX PTY and Windows ConPTY process layer
+│   ├── ansi.py                 # ANSI parser/state machine
+│   ├── viewer.py               # file type to viewer dispatch
+│   ├── clipboard.py            # internal/system clipboard bridge
+│   ├── notifications.py        # toast lifecycle
+│   ├── ipc.py                  # window-to-window messages
+│   ├── config.py               # TOML configuration
+│   └── platform/               # platform-specific input adapters
 │
-├── ui/                     # Reusable UI widgets
-│   ├── window.py           # Base Window class — the "app protocol"
-│   ├── dialog.py           # Dialog, InputDialog, ProgressDialog
-│   ├── menu.py             # MenuBar, Menu (global), WindowMenu (per-window)
-│   ├── context_menu.py     # ContextMenu widget
-│   └── selectable_text.py  # Text selection mixin (notepad, terminal, log viewer)
+├── ui/
+│   ├── window.py               # base Window protocol
+│   ├── dialog.py               # dialog widgets
+│   ├── menu.py                 # global/window menus
+│   ├── context_menu.py         # context menu widget
+│   └── selectable_text.py      # shared selection behavior
 │
-├── apps/                   # Built-in applications
-│   ├── app_manager.py      # Desktop Icon Editor + Menu Editor
-│   ├── filemanager/        # File Manager (dual-pane)
-│   │   ├── window.py       # FileManagerWindow (main class)
-│   │   ├── core.py         # PaneState, directory listing, sorting
-│   │   ├── operations.py   # Copy, move, rename, delete helpers
-│   │   ├── bookmarks.py    # Path bookmarks
-│   │   └── preview.py      # File preview panel
-│   ├── notepad.py          # Text editor (dispatch table pattern)
-│   ├── terminal.py         # Embedded terminal emulator
-│   ├── calculator.py       # Calculator
-│   ├── hexviewer.py        # Hex viewer
-│   ├── process_manager.py  # Process manager
-│   ├── sysmon.py           # System monitor
-│   ├── logviewer.py        # Log file viewer
-│   ├── trash.py            # Trash / recycle bin
-│   ├── clipboard_viewer.py # Clipboard viewer
-│   ├── control_panel.py    # Control Panel / Settings
-│   ├── settings.py         # Settings window
-│   ├── image_viewer.py     # Image viewer implementation (also exposed by bundled plugin)
-│   ├── markdown_viewer.py  # Markdown viewer
-│   ├── retronet.py         # RetroNet implementation (also exposed by bundled plugin)
-│   └── wifi_manager.py     # WiFi manager implementation (also exposed by bundled plugin)
-│
-├── plugins/                # Plugin infrastructure
-│   ├── base.py             # RetroApp — ergonomic base class for plugins
-│   └── loader.py           # Plugin discovery (plugin.toml) + module loading
-│
-└── bundled_plugins/        # Shipped as plugins, loaded via the plugin system
-    ├── charmap/            # Character Map
-    ├── clock/              # Clock
-    ├── image-viewer/       # Image Viewer
-    ├── minesweeper/        # Minesweeper
-    ├── retronet/           # RetroNet
-    ├── snake/              # Snake
-    ├── solitaire/          # Solitaire
-    ├── tetris/             # Tetris
-    └── wifi-manager/       # WiFi Manager
+├── apps/                       # built-in application implementations
+├── bundled_plugins/            # packaged plugins
+└── plugins/                    # plugin API and loader
 ```
 
-## How the Main Loop Works
+## Authority map
 
-`core/event_loop.py` → `run_app_loop(app)` is the heart of RetroTUI. Single-threaded, runs at ~30 FPS when active.
+RetroTUI deliberately assigns each cross-cutting concern to one authority.
 
-```
-┌─────────────────────────────────────────────────────┐
-│                    Main Loop                        │
-│                                                     │
-│  1. Poll background operations (file copy/move)     │
-│  2. Tick notifications (expire old toasts)          │
-│  3. If dirty → draw_frame(app)                      │
-│  4. Adjust input timeout based on state:            │
-│     - Idle: 500ms                                   │
-│     - Live PTY session: faster polling              │
-│     - Background file op: faster polling            │
-│  5. Read input (get_wch, blocks until timeout)      │
-│  6. If no input → check signal queue, idle refresh  │
-│  7. dispatch_input(app, key) → sets dirty if changed│
-│  └── loop                                           │
-└─────────────────────────────────────────────────────┘
-```
-
-### Draw Order (back to front)
-
-1. Desktop background (theme pattern)
-2. Desktop icons
-3. Windows (bottom to top, list order = z-order)
-4. Global menu bar + dropdown
-5. Taskbar (minimized window buttons)
-6. Status bar
-7. Modal dialog (if any)
-8. Context menu
-9. Toast notifications (top-right overlay)
-
-### Input Dispatch Priority
-
-1. Context menu (modal — swallows all input when open)
-2. Mouse events → `mouse_router.handle_mouse_event()`
-3. Resize events → clamp windows to new terminal size
-4. Keyboard → `key_router.handle_key_event()`
-
-## The Facade Pattern (`core/app.py`)
-
-`RetroTUI` is a **thin facade** with ~150 methods. It holds state and delegates to specialized modules:
-
-| Concern | Module |
+| Concern | Authority |
 |---|---|
-| Window list, z-order, focus | `WindowManager` |
-| File dialogs, background ops | `FileOperationManager` |
-| Desktop icon positions | `IconPositionManager` |
-| File drag-and-drop | `DragDropManager` |
-| Dialog result routing | `DialogDispatcher` |
-| Pub/sub events | `EventBus` |
-| Window-to-window messaging | `IPCRouter` |
-| Toast notifications | `NotificationManager` |
-| Mouse routing | `mouse_router` (free functions) |
-| Keyboard routing | `key_router` (free functions) |
-| Rendering | `rendering` (free functions) |
-| Action dispatch | `action_runner` (free functions) |
-| Menu construction | `menu_builder` (free functions) |
-| Icon styling | `icon_styles` (free functions) |
-| Signal handling | `signal_handler` (free functions) |
-| Plugin lifecycle | `plugin_manager` (free functions) |
-| Terminal setup | `bootstrap` (free functions) |
+| Spawn, focus, z-order and close | `WindowManager` |
+| Permission to close a window | `Window.request_close()` |
+| One-frame visual invalidation | return value of `tick()` |
+| Tick cadence | `wants_periodic_tick` |
+| Service while hidden | `tick_when_hidden` |
+| App-level requests | `ActionResult` + dispatcher |
+| Dialog identity and ownership | `dialog_workflow` + `DialogDispatcher` |
+| Dropped-path behavior | `DragDropManager` |
+| Pub/sub lifecycle events | `EventBus` |
+| PTY ownership | `TerminalSession` |
+| Logical color IDs | `color_pairs` negotiation |
 
-Most facade methods are one-liners. This means you can mock individual module functions in tests without patching the entire class.
+Do not introduce a second authority for one of these concerns. Compatibility adapters should translate legacy behavior at a boundary rather than reintroduce competing state inside the core loop.
 
-## The Application Protocol
+## Main-thread model
 
-Every app is a subclass of `ui/window.py → Window`. The protocol:
+Curses calls, input dispatch, window lifecycle and rendering belong to the main thread.
+
+Background workers may perform file I/O, previews or other blocking tasks, but they must return state through explicit managers, locks, events, queues or `ActionResult` objects. A worker must not draw directly and must not mutate curses-owned UI state without synchronization.
+
+## Event loop
+
+`core/event_loop.py` owns the runtime loop.
+
+A logical cycle performs:
+
+1. Poll subsystem/background state.
+2. Tick eligible windows.
+3. Record whether any window reported a visual change.
+4. Render when dirty.
+5. Choose an input timeout from current service needs.
+6. Read and normalize input.
+7. Dispatch input through modal, mouse and keyboard routers.
+8. Repeat until shutdown.
+
+### Tick contract
+
+`Window.tick()` is the only punctual signal that a window changed visually.
 
 ```python
-class MyApp(Window):
-    def draw(self, stdscr):
-        """Render window content. Called every frame."""
-
-    def handle_key(self, key) -> ActionResult | None:
-        """Process a keystroke. Return ActionResult to request app-level action."""
-
-    def handle_click(self, mx, my) -> ActionResult | None:
-        """Process mouse click (coordinates relative to window)."""
-
-    def handle_right_click(self, mx, my) -> list | None:
-        """Return context menu items, or None."""
-
-    def close(self):
-        """Cleanup hook called when the window is closed."""
-
-    def on_ipc_message(self, message):
-        """Receive messages from other windows (optional)."""
-
-    def subscribe_to_bus(self, bus):
-        """Subscribe to event bus topics (optional)."""
+def tick(self) -> bool:
+    # service state
+    return visual_state_changed
 ```
 
-### The Message Contract
+Related properties have separate meanings:
 
-Windows never call app methods directly. Instead they return `ActionResult` objects:
+- `wants_periodic_tick`: this window needs recurring service even without input.
+- `tick_when_hidden`: service must continue while minimized or hidden.
+- `tick()` return value: this cycle changed something visible and should invalidate the frame.
+
+The event loop does not inspect app-specific `_animated` or `needs_redraw` flags. Legacy plugin compatibility is isolated in `RetroApp`.
+
+### Circuit breaker
+
+Each window hook has independent failure tracking.
+
+- Repeated `tick()` failures can isolate ticking without disabling drawing.
+- Repeated `draw()` failures can isolate drawing without disabling service.
+- A successful call resets that hook's consecutive-failure count.
+- Renderer-level failures use backoff and retain the first useful cause.
+
+This protects the desktop from one broken app or plugin while preserving diagnosis.
+
+## Rendering
+
+Rendering composes the frame back to front:
+
+1. Desktop background.
+2. Desktop icons.
+3. Windows by z-order.
+4. Global menu and dropdown.
+5. Taskbar.
+6. Status bar.
+7. Modal dialog.
+8. Context menu.
+9. Notifications.
+
+Curses writes should go through safe helpers that clamp coordinates and tolerate resize races. Drawing must not start network requests, read PTYs, poll files or perform other blocking service work.
+
+## Window lifecycle
+
+`core/window_manager.py` owns the window collection, active pointer and lifecycle events.
+
+### Spawn
+
+All windows must enter through the manager's spawn path. The manager:
+
+- inserts the window into the correct z-order;
+- establishes focus;
+- subscribes it to the EventBus when supported;
+- publishes `window.opened`;
+- keeps the active-window cache consistent.
+
+Directly appending to `app.windows` bypasses lifecycle and is not allowed.
+
+### Close protocol
+
+Closing is transactional.
+
+1. A caller asks `WindowManager` to close a window.
+2. The manager calls `window.request_close()` unless `force=True` is reserved for cleanup.
+3. The window may:
+   - accept immediately;
+   - veto;
+   - request a confirmation workflow.
+4. Only after authorization does the manager run cleanup, remove the window, select a new active window and publish `window.closed`.
+
+Applications with unsaved state, especially Notepad, must protect every close/open route through this protocol.
+
+### Cleanup result
+
+A window cleanup hook may release external resources. Terminal cleanup can report failure when the child process cannot be verified as stopped. The caller must not convert an unverified cleanup into a false success.
+
+## Actions and dispatch
+
+Windows request app-level behavior with `ActionResult` rather than reaching into `RetroTUI` internals.
 
 ```python
-# In your window's handle_key:
-return ActionResult(type=ActionType.OPEN_FILE, payload="/path/to/file")
+return ActionResult(type=ActionType.OPEN_FILE, payload=path)
 return ActionResult(type=ActionType.EXECUTE, payload=AppAction.NOTEPAD)
-return ActionResult(type=ActionType.REQUEST_SAVE_AS, payload={"content": text})
-return ActionResult(type=ActionType.ERROR, payload="Something went wrong")
+return ActionResult(type=ActionType.ERROR, payload="Operation failed")
 ```
 
-The `DialogDispatcher` (`core/dialog_dispatch.py`) routes these to the appropriate app-level handler — showing dialogs, spawning windows, starting file operations, etc.
+`action_runner`, `dialog_dispatch` and related managers resolve those requests.
 
-### Action Types
+The `source` window should be preserved whenever a result can complete asynchronously or after focus changes.
 
-- `ActionType` — window-to-app requests: `OPEN_FILE`, `EXECUTE`, `REQUEST_SAVE_AS`, `REQUEST_RENAME_ENTRY`, `REQUEST_DELETE_CONFIRM`, `REQUEST_COPY_ENTRY`, `REQUEST_MOVE_ENTRY`, `ERROR`, `UPDATE_CONFIG`, etc.
-- `AppAction` — app-level actions used by menus and icons: `FILE_MANAGER`, `NOTEPAD`, `TERMINAL`, `FM_COPY`, `NP_SAVE`, etc. These are the "commands" that the menu system and desktop icons trigger.
+## Dialog workflows
 
-## Window Management
+Dialog behavior is identified by stable workflow metadata, not by visible titles or button labels.
 
-`core/window_manager.py → WindowManager` manages the window list.
+A bound dialog carries:
 
-- **Z-Order**: Windows are drawn in list order. Index 0 = bottom, last = top (active).
-- **Focus**: `set_active_window(win)` deactivates all others, moves `win` to the top of its layer. Windows marked `always_on_top` stay above normal windows.
-- **Spawning**: `_spawn_window(win)` appends to the list, publishes `window.opened` on the event bus, and calls `win.subscribe_to_bus()` if available.
-- **Closing**: `close_window(win)` calls `win.close()`, removes from list, activates the next visible window, publishes `window.closed`.
+- `workflow_id`;
+- `source_window`;
+- `source_window_id`;
+- `on_accept`;
+- `on_cancel`.
 
-## Mouse Routing
+`DialogDispatcher` resolves the workflow using those fields. Before invoking a callback it verifies that the captured source window is still registered. Focus changes do not redirect the result to another window.
 
-`core/mouse_router.py` routes normalized mouse events through a priority chain:
+`dialog.callback` remains a compatibility alias for older integrations, but it is not the authoritative contract.
 
-1. **Active drag/resize** (fast-path, O(1)) — if a window is being dragged or resized, route directly.
-2. **File drag-and-drop** — handled by `DragDropManager`.
-3. **Global menu bar** — clicks on the top menu row.
-4. **Right-click** → `context_menu_handler.handle_right_click()`.
-5. **Window hit-test** — reversed loop (topmost first). Tests: close/minimize/maximize buttons → title bar → resize borders → client area.
-6. **Desktop** — icon clicks, desktop background.
+## Input routing
 
-Mouse events are normalized by `platform/mouse_backend.py` into a dict with boolean fields (`is_click_like`, `right_click`, `is_drag`, `button1_double`, etc.) to abstract away differences between GPM, SGR, and xterm mouse protocols.
+### Keyboard
 
-## Keyboard Routing
+The keyboard router normalizes raw curses values before dispatch. Modal/global UI consumes input before the active application.
 
-`core/key_router.py` processes keys in this order:
+A typical priority is:
 
-1. `normalize_app_key(key)` — converts raw `get_wch()` values to canonical control codes.
-2. Ctrl+Q — closes open menus first (context → window → global), then exits if none open.
-3. F10 / Escape — toggles menus.
-4. If global menu is active → consumes all keys for menu navigation.
-5. Tab → cycle window focus.
-6. Otherwise → delegates to `active_window.handle_key(key)`.
+1. Active modal/context UI.
+2. Global exit/menu shortcuts.
+3. Global menu navigation.
+4. Focus cycling.
+5. Active window `handle_key()`.
 
-## Signal Handling
+### Mouse
 
-`core/signal_handler.py` installs handlers for SIGINT, SIGTERM, SIGTSTP, etc. Signals are **not** acted on immediately — they enqueue synthetic key codes that the event loop consumes on the next iteration. This prevents signal delivery from corrupting curses state mid-render.
+The mouse router processes captures and top-level UI before ordinary client clicks.
 
-## Terminal Emulation
+A typical priority is:
 
-`apps/terminal.py` provides an embedded terminal using `core/terminal_session.py` as the PTY backend.
+1. Active window drag/resize capture.
+2. File drag-and-drop.
+3. Global menu.
+4. Context menu.
+5. Window chrome and client hit-test from topmost to bottom.
+6. Desktop icons/background.
 
-### PTY Backend
+Mouse events are normalized by platform adapters so applications do not depend directly on GPM or xterm bitmasks.
 
-Dual-platform, lazily resolved and cached:
+## Drag-and-drop
 
-| Platform | Backend | Shell default | Key module |
-|---|---|---|---|
-| **Linux/macOS** | `pty.fork()` + `fcntl` non-blocking | `$SHELL` or `/bin/sh` | `pty`, `fcntl`, `termios` |
-| **Windows** | `pywinpty` ConPTY | `%COMSPEC%` or `cmd.exe` | `winpty` |
+`DragDropManager` uses capability precedence:
 
-POSIX is always preferred when available. The Windows path only activates when `winpty` is importable.
+1. `accept_dropped_path(path)` for a destination-specific operation.
+2. `open_path(path)` only as a generic fallback.
 
-### ANSI Parsing
+For File Manager this distinction is critical: accepting a drop means copy/move into the current directory, while opening a path means navigation.
 
-`core/ansi.py → AnsiStateMachine` parses PTY output character by character. It yields typed tuples:
+If the specific handler raises, the generic fallback is not invoked automatically. A failure must not silently transform into a different operation.
 
-- `('TEXT', char, curses_attr)` — printable character with SGR attributes resolved to curses color pairs.
-- `('CSI', final_char, params)` — cursor movement, erase, etc.
-- `('CONTROL', char)` — `\n`, `\r`, `\b`, `\t`.
+## EventBus
 
-## Event Bus
+`EventBus` is created deterministically and dispatches synchronously on the main thread.
 
-`core/event_bus.py → EventBus` provides synchronous pub/sub. All dispatch happens on the main thread — subscribers must not block.
+Common topics include:
 
-Built-in topics: `clipboard.changed`, `file_op.started/completed/failed`, `window.opened/closed/focused`, `config.changed`, `theme.changed`, `ipc.message`, `notification`.
+- `window.opened`, `window.closed`, `window.focused`;
+- clipboard changes;
+- file operation state;
+- configuration and theme changes;
+- IPC and notifications.
 
-```python
-# Subscribe
-unsub = bus.subscribe("clipboard.changed", my_callback)
+Subscribers must not block. Publishers should use the public EventBus contract rather than probing optional private attributes.
 
-# Publish
-bus.publish("clipboard.changed", {"text": "hello"}, source="notepad")
-```
+## Color-pair negotiation
 
-## Plugin System
+RetroTUI keeps stable logical color IDs but cannot assume every terminal exposes the same number of physical pairs.
 
-### Plugin Structure
+The color layer:
 
-A plugin is a directory containing `plugin.toml` and `__init__.py`:
+- inspects `curses.COLOR_PAIRS`;
+- allocates physical pairs within the available capacity;
+- reuses identical foreground/background combinations;
+- degrades safely to pair `0` when necessary;
+- avoids corrupting logical roles that share a compacted physical pair.
 
-```text
-my-plugin/
-├── plugin.toml      # Manifest (id, name, window size)
-└── __init__.py      # Must export a class named Plugin
-```
+Code should request semantic/logical roles rather than calling `curses.init_pair()` ad hoc.
 
-`plugin.toml` example:
-```toml
-[plugin]
-id = "my-plugin"
-name = "My Plugin"
-version = "1.0.0"
-category = "plugin"
+## Terminal architecture
 
-[plugin.window]
-default_width = 40
-default_height = 20
+`apps/terminal.py` owns terminal UI state. `core/terminal_session.py` owns the child process and byte transport. `core/ansi.py` owns escape-sequence parsing.
 
-[plugin.icon]
-emoji = "🔧"
-token = "MP"
-```
+### Separation of responsibilities
 
-`__init__.py` example:
-```python
-from retrotui.plugins.base import RetroApp
+| Layer | Responsibility |
+|---|---|
+| `TerminalWindow` | UI, selection, scrolling, resize requests and service cadence |
+| `TerminalSession` | process spawn, read/write, signal, liveness and close |
+| `AnsiStateMachine` | parse terminal control sequences |
+| `TerminalScreenBuffer` | rows, cells, cursor and scrolling invariants |
 
-class Plugin(RetroApp):
-    def draw_content(self, stdscr, x, y, w, h):
-        # Draw your app here
-        pass
+PTY reads and writes occur from `tick()`, never from `draw()`.
 
-    def handle_key(self, key):
-        # Handle keyboard input
-        pass
-```
+### Hidden service
 
-### Plugin Discovery
+`TerminalWindow.tick_when_hidden = True` keeps live sessions draining while minimized. Hidden service does not imply continuous redraw; `tick()` returns true only when visible state changes.
 
-`plugins/loader.py` searches these locations (in order):
+### Read budget
 
-1. `RETROTUI_PLUGIN_DIR` env var (single forced directory)
-2. `RETROTUI_PLUGIN_PATH` env var (colon/semicolon-separated on POSIX, semicolon-separated on Windows)
-3. `retrotui/bundled_plugins/` (shipped with the package)
-4. `~/.config/retrotui/plugins/`
-5. `examples/plugins/` (only when the default user plugin directory is active, for development)
+`TerminalSession.read()` defaults to an aggregate 8 KiB budget per service call.
 
-All errors during plugin loading are isolated — a broken plugin never crashes startup. The stable base profile keeps plugins disabled by default with `plugin:*` in `hidden_icons` and `hidden_menu_items`; when both wildcards are present, runtime plugin discovery is skipped.
+- Multiple POSIX reads may occur until the total budget is reached.
+- Remaining bytes stay in the OS/PTY buffer for the next tick.
+- The incremental UTF-8 decoder preserves split multibyte sequences.
+- `max_total_bytes=None` is an explicit unbounded drain.
+- Windows performs a bounded ConPTY read under the same contract.
 
-### Bundled Plugins
+### Write queue
 
-Games and utilities that ship with RetroTUI and can load through the plugin system when enabled: Character Map, Clock, Image Viewer, Minesweeper, RetroNet, Snake, Solitaire, Tetris, WiFi Manager.
+PTY input uses a FIFO pending-byte queue.
 
-The repository also includes 21 example plugins under `examples/plugins/`. These are visible in a checkout/development run when the default plugin directory is used.
+- `write(payload)` accepts the complete payload into session ownership.
+- `flush_pending_writes()` sends up to 8 KiB per service cycle.
+- Partial writes remove only the acknowledged prefix.
+- Return `0`, `BlockingIOError` and `EAGAIN` retain the unsent suffix.
+- `TerminalWindow.tick()` flushes pending input before reading output.
+- Closing a successfully terminated session clears pending input.
+
+### Scrollback
+
+The normal screen buffer is the source of truth for visible rows. Only rows expelled by scroll operations enter the scrollback deque. Newlines that remain inside the viewport do not duplicate content.
+
+If the scrollback deque is replaced, the buffer's scroll sink must be rebound.
+
+### POSIX backend
+
+POSIX start uses `pty.fork()`.
+
+The child:
+
+- merges `extra_env` into `os.environ`;
+- applies `cwd` when supplied;
+- executes the selected shell.
+
+The parent:
+
+- stores child PID and master FD;
+- sets the master nonblocking;
+- resizes through `TIOCSWINSZ`;
+- reaps the child on exit;
+- escalates termination during close when necessary.
+
+### Windows backend
+
+Windows start creates `winpty.PTY(cols, rows)` and supports multiple API generations:
+
+1. keyword `spawn(shell, cwd=..., env=...)`;
+2. positional context arguments;
+3. legacy single bytes argument.
+
+The environment passed to ConPTY is the inherited process environment merged with `extra_env` and encoded as a CreateProcess-style null-separated block.
+
+### Verified Windows close
+
+Dropping the Python reference is not considered a close.
+
+The backend close path:
+
+1. prefers `close(force=True)` when available;
+2. falls back to `close()` for wrappers without the keyword;
+3. uses `cancel_io()` for raw backends;
+4. requests SIGTERM by PID;
+5. escalates to the platform force signal if needed;
+6. checks `isalive()` between stages.
+
+If the child is still observably alive, `close()` returns false and retains the backend and pending input so the caller cannot mistake an unverified shutdown for success.
+
+## File operations and workers
+
+File operations may run outside the main thread. Their managers own operation state and publish progress/results back to the UI.
+
+Important invariants:
+
+- metadata required for recovery must be written in a safe order;
+- UI updates are consumed on the main thread;
+- previews and operations should support cancellation or generation ownership where implemented;
+- stale worker output must not overwrite newer state.
+
+## Plugin model
+
+A plugin contains `plugin.toml` and an importable `Plugin` class, usually based on `RetroApp`.
+
+Discovery may include:
+
+1. `RETROTUI_PLUGIN_DIR`;
+2. `RETROTUI_PLUGIN_PATH`;
+3. bundled plugins;
+4. the user plugin directory;
+5. development example plugins.
+
+Loader errors are isolated. A broken plugin must not abort startup.
+
+Bundled plugins use the modern `wants_periodic_tick` contract. `RetroApp` translates selected legacy plugin flags at the plugin boundary.
 
 ## Configuration
 
-`core/config.py → AppConfig` is a frozen dataclass persisted to `~/.config/retrotui/config.toml`.
+Primary configuration is persisted in:
 
-Fields include `theme`, `show_hidden`, `word_wrap_default`, `sunday_first`, `show_welcome`, `icon_style`, `hidden_icons`, `hidden_menu_items`, and persisted desktop/menu customization state.
+```text
+~/.config/retrotui/config.toml
+```
 
-Uses `tomllib` on Python 3.11+, falls back to a hand-rolled minimal TOML parser for older versions.
+Configuration changes should flow through the public config/apply path so open windows, menus and EventBus subscribers observe a consistent value.
 
-## Themes
+When adding fields, define defaults, serialization behavior and migration/preservation policy. Do not silently discard unknown sections without an explicit schema policy.
 
-`theme.py` defines 5 built-in themes as frozen dataclasses:
+## Testing and CI
 
-| Theme | Key | Desktop Pattern |
-|---|---|---|
-| Windows 3.1 | `win31` | spaces |
-| DOS/CGA | `dos_cga` | `▒` |
-| Windows 95 | `win95` | spaces |
-| Hacker | `hacker` | `▓` |
-| Amiga | `amiga` | spaces |
+The permanent CI matrix runs on:
 
-Each theme defines color pairs for 256-color and 8-color terminals. `utils.init_colors(theme)` calls `curses.init_pair()` for every semantic role (`desktop`, `menubar`, `window_border`, etc.). `utils.theme_attr(role)` provides cached lookups.
+- Ubuntu: Python 3.10, 3.12 and 3.14.
+- Windows: Python 3.10, 3.12 and 3.14.
 
-## Clipboard
-
-`core/clipboard.py` maintains an internal clipboard and bridges to system clipboard tools:
-
-- **Windows**: `clip.exe` / `powershell Get-Clipboard`
-- **Wayland**: `wl-copy` / `wl-paste`
-- **X11**: `xclip` or `xsel`
-
-Falls back to internal-only if no system tool is found. Backend detection is cached.
-
-## Platform Support
-
-| Platform | curses | PTY | Mouse |
-|---|---|---|---|
-| **Linux/WSL** | stdlib `curses` | `pty.fork()` | GPM (TTY) or xterm protocol |
-| **Windows** | stdlib `curses` (3.14+; `windows-curses` on 3.13-) | `pywinpty` (ConPTY) | xterm protocol |
-
-### Windows-Specific
-
-- **`core/terminal_session.py`**: Dual backend — tries POSIX first, falls back to `pywinpty`. All methods (`read`, `write`, `resize`, `close`, `send_signal`, `poll_exit`) branch on `self._win_pty is not None`. Flow control on Windows is handled by the stdlib curses module (or the legacy `windows-curses` package on Python ≤ 3.13), so no shim is needed.
-
-## Testing
-
-The repo currently has 105 `tests/test_*.py` files. The current suite runs 1084 collected tests (v0.9.5). Most tests use `unittest.TestCase` + `unittest.mock`, and can run without a real terminal.
-
-### Fake Curses
-
-Tests inject a fake curses module into `sys.modules["curses"]` before importing application code. The fake provides:
-
-- All key code constants (`KEY_UP`, `KEY_MOUSE`, etc.)
-- All mouse bitmask constants (`BUTTON1_PRESSED`, etc.)
-- All attribute constants (`A_BOLD`, `A_REVERSE`, etc.)
-- No-op implementations of `init_pair`, `start_color`, `mousemask`, etc.
-- `color_pair = lambda value: int(value) * 10`
-
-The shared implementation is in `tests/_support.py`. Some test files define their own inline version following the same pattern.
-
-### Test File Conventions
-
-- `test_<module>.py` — unit tests for one module.
-- `test_<app>_<aspect>.py` — tests for a specific aspect of an app (the file manager has 15+ test files).
-- `test_core_app.py` — integration-level tests for the `RetroTUI` facade.
-
-### Running Tests
+Each combination executes:
 
 ```bash
-python -m unittest discover tests      # Standard-library runner
-python tools/qa.py                     # Project QA helper
-python tools/qa.py --module-coverage   # Optional module coverage gate
-python -m pytest tests/ -q             # Optional if pytest is installed
+python tools/qa.py --skip-tests
+python -m unittest discover -s tests -v
+python -m pytest tests -q
 ```
 
-## Common Patterns
+Both runners are intentional. A test should not be considered protected unless it is collected by the permanent gate.
 
-### Dispatch Tables
+Tests use fake curses implementations and backend doubles to exercise lifecycle and platform logic without requiring a live terminal. Real-terminal behavior belongs in the TTY matrix.
 
-Several apps use class-level dicts mapping key codes to method name strings, dispatched via `getattr()`:
+## Contribution rules for core changes
 
-```python
-_KEY_DISPATCH = {
-    curses.KEY_UP: "_key_up",
-    curses.KEY_DOWN: "_key_down",
-    "\x13": "_key_save",       # Ctrl+S
-}
+Before changing a cross-cutting contract:
 
-def handle_key(self, key):
-    handler = self._KEY_DISPATCH.get(key)
-    if handler:
-        return getattr(self, handler)()
-```
+1. Identify the current authority in the authority map.
+2. Avoid introducing parallel private flags.
+3. Preserve source-window ownership across asynchronous/dialog flows.
+4. Keep blocking work outside `draw()` and input handlers.
+5. Add focused regression coverage.
+6. Run both test runners.
+7. Update this document when ownership or public behavior changes.
 
-Used in: Notepad, File Manager (`_MENU_ACTION_MAP`).
+## Historical audits
 
-### Lazy Initialization
+The July 2026 audits document the original findings and should remain unchanged as historical evidence:
 
-The `RetroTUI` facade uses lazy init for optional subsystems:
+- [docs/TECHNICAL_AUDIT_2026-07.md](docs/TECHNICAL_AUDIT_2026-07.md)
+- [docs/CORE_AUDIT_2026-07.md](docs/CORE_AUDIT_2026-07.md)
 
-```python
-@property
-def event_bus(self):
-    if not hasattr(self, "_event_bus"):
-        self._event_bus = EventBus()
-    return self._event_bus
-```
-
-### Backend Resolution Caching
-
-Module-level caches with a sentinel object:
-
-```python
-_BACKENDS_UNSET = object()
-_CACHE = {"value": _BACKENDS_UNSET}
-
-def _resolve_backend():
-    if _CACHE["value"] is not _BACKENDS_UNSET:
-        return _CACHE["value"]
-    # ... resolve ...
-    _CACHE["value"] = result
-    return result
-
-def _reset_cache():  # For tests
-    _CACHE["value"] = _BACKENDS_UNSET
-```
-
-Used in: `terminal_session.py`, `clipboard.py`.
-
-### Safe Rendering
-
-All curses write calls go through `utils.safe_addstr()`, which clamps coordinates to terminal bounds and silently catches curses errors. This prevents crashes when windows are near screen edges or during resize transitions.
-
-## Debug / Profiling
-
-- `RETROTUI_DEBUG=1` — enables verbose mouse-trace logging.
-- `RETROTUI_PROFILE=1` — tracks loop iterations, draw time, dispatch time, and input wait time per interval.
-- `RETROTUI_MOUSE_BACKEND=gpm|sgr|fallback` — override mouse protocol detection.
-- `RETROTUI_PLUGIN_DIR=/path` — override plugin search directory.
-- `RETROTUI_PLUGIN_PATH=/path1:/path2` — additional plugin search paths.
+The completion mapping from those findings to the stabilized implementation is in [docs/STABILIZATION_PRE_0.9.6.md](docs/STABILIZATION_PRE_0.9.6.md).

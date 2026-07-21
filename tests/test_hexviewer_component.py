@@ -86,7 +86,7 @@ class HexViewerComponentTests(unittest.TestCase):
         result = win.open_path(path)
 
         self.assertIsNone(result)
-        self.assertEqual(win.filepath, path)
+        self.assertTrue(os.path.samefile(win.filepath, path))
         self.assertEqual(win.file_size, 64)
         self.assertIn("Hex Viewer -", win.title)
         row_text = win._format_row(0, data[:16])

@@ -975,6 +975,7 @@ class RetroNetWindow(Window):
         bx, by, bw, bh = self.body_rect()
         sidebar_w = self._sidebar_width(bw) if self.show_sidebar else 0
         content_x = bx + sidebar_w
+        content_w = bw - sidebar_w
 
         # Tab bar click: switch or close tabs. Only when 2+ tabs are open
         # (the bar isn't drawn for a single tab — see ``draw``).

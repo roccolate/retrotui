@@ -15,6 +15,33 @@ class RetroApp(Window):
 
     PLUGIN_ID = None  # Set by loader from manifest
 
+    @property
+    def wants_periodic_tick(self):
+        """Return the public periodic scheduling request.
+
+        Older third-party plugins may still expose ``needs_redraw``.
+        Keep that compatibility at the plugin boundary; the core loop
+        only reads ``wants_periodic_tick``.
+        """
+        explicit = self.__dict__.get("_wants_periodic_tick")
+        if explicit is not None:
+            return bool(explicit)
+        legacy = type(self).__dict__.get("needs_redraw")
+        if legacy is None:
+            return False
+        descriptor = getattr(legacy, "__get__", None)
+        if callable(descriptor):
+            return bool(descriptor(self, type(self)))
+        return bool(legacy)
+
+    @wants_periodic_tick.setter
+    def wants_periodic_tick(self, value):
+        self._wants_periodic_tick = bool(value)
+
+    def tick(self):
+        """Example plugins redraw each scheduled periodic tick."""
+        return bool(self.wants_periodic_tick)
+
     def __init__(self, title, x, y, w, h, **kwargs):
         super().__init__(title, x, y, w, h, **kwargs)
 

@@ -379,9 +379,10 @@ class CoreAppTests(unittest.TestCase):
         bad = types.SimpleNamespace(close=mock.Mock(side_effect=RuntimeError("close failed")))
         app.windows = [good, bad]
 
+        from retrotui.core import window_manager as wm_mod
         with (
             mock.patch.object(self.app_mod, "disable_mouse_support") as disable_mouse_support,
-            mock.patch.object(self.app_mod.LOGGER, "debug") as log_debug,
+            mock.patch.object(wm_mod.LOGGER, "debug") as log_debug,
         ):
             app.cleanup()
 
@@ -943,8 +944,11 @@ class CoreAppTests(unittest.TestCase):
 
     def test_resolve_dialog_result_exit_yes_stops_app(self):
         app = self._make_app()
-        app.dialog = types.SimpleNamespace(title="Exit RetroTUI", buttons=["Yes", "No"])
         app.running = True
+        app.execute_action(self.actions_mod.AppAction.EXIT)
+        # Visible copy may change without changing the workflow contract.
+        app.dialog.title = "Salir"
+        app.dialog.buttons = ["Continuar", "Volver"]
 
         app._resolve_dialog_result(0)
 
@@ -964,13 +968,14 @@ class CoreAppTests(unittest.TestCase):
                 discard_calls.append(self)
 
         win = _FakeNotepad()
+        win.id = 73
+        app.windows = [win]
         app._show_save_confirm_dialog(win, payload={'on_discard': win._do_open_path_force})
-        # Dialog must be set.
         self.assertIsNotNone(app.dialog)
         self.assertEqual(app.dialog.title, "Discard unsaved changes?")
-        # The pending callback must be wired to the payload's on_discard.
-        self.assertIsNotNone(getattr(app, "_pending_discard_callback", None))
-        # Trigger Discard via resolve_dialog_result(0).
+        self.assertEqual(app.dialog.workflow_id, "document.save_confirm")
+        self.assertIs(app.dialog.source_window, win)
+        self.assertTrue(callable(app.dialog.on_accept))
         app._resolve_dialog_result(0)
         self.assertEqual(len(discard_calls), 1)
 
@@ -1004,40 +1009,55 @@ class CoreAppTests(unittest.TestCase):
 
     def test_resolve_dialog_result_dispatches_input_callback_result(self):
         app = self._make_app()
-        dialog = self.app_mod.InputDialog("Save As", "Enter filename:")
-        dialog.value = "note.txt"
+        source = types.SimpleNamespace(id=71)
+        app.windows = [source]
         callback_result = self.actions_mod.ActionResult(
             self.actions_mod.ActionType.REQUEST_SAVE_AS
         )
-        dialog.callback = mock.Mock(return_value=callback_result)
+        callback = mock.Mock(return_value=callback_result)
+        dialog = self.app_mod.bind_dialog(
+            self.app_mod.InputDialog("Save As", "Enter filename:"),
+            workflow_id=self.app_mod.DialogWorkflowId.CALLBACK,
+            source_window=source,
+            on_accept=callback,
+        )
+        dialog.value = "note.txt"
         app.dialog = dialog
         app._dispatch_window_result = mock.Mock()
         app.get_active_window = mock.Mock(return_value="active-window")
 
         app._resolve_dialog_result(0)
 
-        dialog.callback.assert_called_once_with("note.txt")
+        callback.assert_called_once_with("note.txt")
         app._dispatch_window_result.assert_called_once_with(
-            callback_result, "active-window"
+            callback_result, source
         )
+        app.get_active_window.assert_not_called()
 
     def test_resolve_dialog_result_dispatches_dialog_callback_result(self):
         app = self._make_app()
-        dialog = self.app_mod.Dialog("Confirm", "Delete?", ["Delete", "Cancel"])
+        source = types.SimpleNamespace(id=72)
+        app.windows = [source]
         callback_result = self.actions_mod.ActionResult(
             self.actions_mod.ActionType.ERROR, "x"
         )
-        dialog.callback = mock.Mock(return_value=callback_result)
-        app.dialog = dialog
+        callback = mock.Mock(return_value=callback_result)
+        app.dialog = self.app_mod.bind_dialog(
+            self.app_mod.Dialog("Confirm", "Delete?", ["Delete", "Cancel"]),
+            workflow_id=self.app_mod.DialogWorkflowId.CALLBACK,
+            source_window=source,
+            on_accept=callback,
+        )
         app._dispatch_window_result = mock.Mock()
         app.get_active_window = mock.Mock(return_value="active-window")
 
         app._resolve_dialog_result(0)
 
-        dialog.callback.assert_called_once_with()
+        callback.assert_called_once_with()
         app._dispatch_window_result.assert_called_once_with(
-            callback_result, "active-window"
+            callback_result, source
         )
+        app.get_active_window.assert_not_called()
 
     def test_handle_key_ctrl_q_executes_exit_action(self):
         app = self._make_app()
@@ -1208,12 +1228,11 @@ class CoreAppTests(unittest.TestCase):
         app = self._make_app()
         app.windows = [types.SimpleNamespace(active=False), types.SimpleNamespace(active=False)]
         win = types.SimpleNamespace(active=False)
-        app.set_active_window = mock.Mock()
+        app.window_mgr._spawn_window = mock.Mock()
 
         self.assertEqual(app._next_window_offset(10, 5), (14, 7))
         app._spawn_window(win)
-        self.assertIn(win, app.windows)
-        app.set_active_window.assert_called_once_with(win)
+        app.window_mgr._spawn_window.assert_called_once_with(win)
 
     def test_apply_theme_updates_state_and_calls_init_colors(self):
         app = self._make_app()
@@ -1320,11 +1339,11 @@ class CoreAppTests(unittest.TestCase):
         self.assertTrue(app.config.show_hidden)
         self.assertFalse(app.config.word_wrap_default)
         self.assertTrue(app.config.sunday_first)
-        self.assertEqual(app.config.icon_style, "mini")
+        self.assertEqual(app.config.icon_style, "retro_01")
 
     def test_normalize_icon_style_maps_legacy_and_invalid_values(self):
-        self.assertEqual(self.app_mod.RetroTUI._normalize_icon_style("retro_01"), "mini")
-        self.assertEqual(self.app_mod.RetroTUI._normalize_icon_style("MINI"), "mini")
+        self.assertEqual(self.app_mod.RetroTUI._normalize_icon_style("retro_01"), "retro_01")
+        self.assertEqual(self.app_mod.RetroTUI._normalize_icon_style("MINI"), "retro_01")
         self.assertEqual(self.app_mod.RetroTUI._normalize_icon_style("codex"), "default")
         self.assertEqual(self.app_mod.RetroTUI._normalize_icon_style("weird"), "default")
 

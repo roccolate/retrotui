@@ -1,245 +1,262 @@
 # RetroTUI — Roadmap
 
-**Objetivo:** construir un entorno de escritorio estilo Windows 3.1 completamente funcional dentro de la terminal. Sin X11. Sin Wayland. Solo curses, una TTY y vibes.
+**Objetivo:** construir un entorno de escritorio estilo Windows 3.1 completamente funcional dentro de la terminal, sin X11 ni Wayland.
 
-**Meta:** llegar a **v0.9.8 feature complete**, usar **v0.9.9 solo para bugtest/estabilización**, y lanzar **v1.0.0 sin bugs críticos conocidos**.
+**Ruta de versiones:**
 
-**Regla:** después de v0.9.8 no entran features nuevas para 1.0. Todo lo nuevo pasa a post-1.0.
+- `v0.9.6`: certificación cross-terminal.
+- `v0.9.7`: experiencia de sistema.
+- `v0.9.8`: feature complete.
+- `v0.9.9`: bugtest y estabilización únicamente.
+- `v1.0.0`: primera versión estable.
 
-**Estado actual:** v0.9.5 fue publicado el 2026-06-19. La auditoría de código del 2026-07-19 reabrió el hardening antes de v0.9.6 y documentó P0-P2 en [docs/TECHNICAL_AUDIT_2026-07.md](docs/TECHNICAL_AUDIT_2026-07.md) y [docs/CORE_AUDIT_2026-07.md](docs/CORE_AUDIT_2026-07.md). La certificación cross-terminal no comienza como gate de salida hasta cerrar los P0 de ciclo de vida, PTY, redraw, colores, RetroNet y CI. El handoff operativo sigue en [docs/CODEX_NEXT_STEPS.md](docs/CODEX_NEXT_STEPS.md), la matriz viva en [docs/TTY_TEST_MATRIX.md](docs/TTY_TEST_MATRIX.md) y el checklist manual en [tools/TESTING.md](tools/TESTING.md).
+**Regla de freeze:** después de `v0.9.8` no entran features nuevas para 1.0. Todo lo demás pasa a post-1.0.
+
+## Estado actual
+
+`v0.9.5` fue publicado el 2026-06-19.
+
+La auditoría de julio de 2026 detectó problemas de ownership y contratos que debían resolverse antes de interpretar una matriz TTY como certificación. El gate pre-v0.9.6 ya está **completado**. El resultado está documentado en [docs/STABILIZATION_PRE_0.9.6.md](docs/STABILIZATION_PRE_0.9.6.md).
+
+El trabajo activo pasa ahora a **v0.9.6 — certificación cross-terminal**. No se deben agregar features nuevas durante este milestone salvo que sean estrictamente necesarias para corregir un blocker encontrado en un entorno real.
+
+Fuentes operativas:
+
+- [docs/CODEX_NEXT_STEPS.md](docs/CODEX_NEXT_STEPS.md)
+- [docs/TTY_TEST_MATRIX.md](docs/TTY_TEST_MATRIX.md)
+- [tools/TESTING.md](tools/TESTING.md)
+- [docs/RELEASE.md](docs/RELEASE.md)
 
 ---
 
-## Estado completado
+## Historial completado
 
 ### v0.1 — Escritorio y ventanas
+
 - Escritorio retro, ventanas, menús, iconos, teclado y mouse.
 
 ### v0.2 — File Manager
-- Navegación de archivos, visor de texto, binarios, ocultos y eventos por ventana.
+
+- Navegación de archivos, visores y eventos por ventana.
 
 ### v0.3 — Editor, resize y taskbar
-- Notepad, word wrap, guardado, resize, maximize/minimize, taskbar y ASCII Video Player.
+
+- Notepad, word wrap, guardado, resize, maximize/minimize, taskbar y video ASCII.
 
 ### v0.4 — Terminal embebida
-- PTY, parser ANSI, scrollback, múltiples terminales y refactor de event loop/render/input.
+
+- PTY, parser ANSI, scrollback, múltiples terminales y separación de loop/render/input.
 
 ### v0.5 — Temas y configuración
-- Temas, preview, config persistente en `~/.config/retrotui/config.toml`.
+
+- Temas, preview y configuración persistente.
 
 ### v0.6 — Clipboard e inter-app
-- Clipboard interno, sync opcional, drag-and-drop y acciones tipadas.
+
+- Clipboard interno, sincronización opcional, drag-and-drop y acciones tipadas.
 
 ### v0.7 — Utilidades
+
 - Log Viewer, Process Manager, Calculadora y Reloj/Calendario.
 
 ### v0.8 — File Manager avanzado
-- Operaciones de archivo, dual-pane, previews y bookmarks.
+
+- Operaciones de archivo, dual pane, previews y bookmarks.
 
 ### v0.9 — Media y Hex
-- Image Viewer, Hex Viewer y Video Player mejorado.
+
+- Image Viewer, Hex Viewer y mejoras del Video Player.
 
 ### v0.9.1 — Apps avanzadas y UX
-- Character Map, Markdown Viewer, System Monitor, Control Panel, Tetris, RetroNet, context menus, iconos persistentes y mejoras de terminal.
 
-### v0.9.2 — Plugin system y TTY hardening
-- Loader de plugins, `plugin.toml`, `RetroApp`, auto-discovery, registro dinámico, plugin de ejemplo y guía dev.
+- Character Map, Markdown Viewer, System Monitor, Control Panel, Tetris, RetroNet, context menus e iconos persistentes.
 
-### v0.9.3 — Refactor, bundled plugins y Windows
-- Core modular, event bus, IPC, notificaciones, plugins bundled, backend PTY POSIX/Windows, estilos de iconos y tests.
+### v0.9.2 — Plugins y TTY hardening
 
-### v0.9.4 — Hardening y pulido
-- `tick()` fuera de `draw()`, terminal sin I/O bloqueante en render, File Manager más seguro, Notepad robusto, perfil base mínimo y pulido de apps/plugins.
+- Loader, `plugin.toml`, `RetroApp`, discovery, registro dinámico y documentación de plugins.
 
----
+### v0.9.3 — Core modular y Windows
 
-# Plan de cierre hacia 1.0
+- Managers especializados, EventBus, IPC, notificaciones, bundled plugins y backend PTY POSIX/Windows.
 
-## v0.9.5 — Terminal PTY y Buffer 2D
+### v0.9.4 — Hardening y perfil base
 
-**Objetivo:** hacer que la terminal embebida sea confiable para apps TUI comunes.
+- `tick()` fuera de `draw()`, Terminal sin I/O en render, File Manager y Notepad más seguros y perfil base mínimo.
 
-- [x] Crear `TerminalScreenBuffer` normal-screen `rows x cols`.
-- [x] Separar normal-screen, alt-screen y scrollback.
-- [x] Soportar wrap, scroll, clear, insert/delete char/line y resize a nivel de buffer.
-- [x] Cablear `TerminalScreenBuffer` dentro de `TerminalWindow` como fuente principal de estado.
-- [x] Cursor real por fila/columna.
-- [x] Atributos por celda para selección/copy.
-- [x] Mouse pass-through opcional cuando el programa hijo active mouse reporting.
-- [x] Mantener compatibilidad GPM para menús/selección de RetroTUI.
-- [x] Sincronizar versión en fuentes de release.
-- [ ] Validar `nano`, `vim`, `mc`, `htop`, `less` y `top` en terminales reales.
-- [ ] Eliminar duplicación entre append manual de newline y scroll sink.
-- [ ] Garantizar que Terminal minimizado siga drenando el PTY.
-- [ ] Presupuestar bytes/reads por tick para evitar monopolizar el main loop.
-- [ ] Completar pruebas de regresión: alt-screen, resize, cursor, copy/select y atributos.
+### v0.9.5 — TerminalScreen y buffer 2D
 
-**Criterio de salida revisado:** buffer y PTY sin historial duplicado, sin bloqueo por minimización y con aplicaciones TUI comunes validadas en la matriz real.
+- [x] `TerminalScreenBuffer` normal y alterno.
+- [x] Cursor y atributos por celda.
+- [x] Wrap, scroll, clear, insert/delete y resize.
+- [x] Mouse pass-through por modos DEC.
+- [x] Compatibilidad GPM preservada cuando el hijo no solicita mouse.
+- [x] RetroNet con tabs, bookmarks y view source.
+
+Las validaciones reales de `nano`, `vim`, `mc`, `htop`, `less` y otras TUIs pertenecen a v0.9.6, no al gate automatizado de v0.9.5.
 
 ---
 
-## Gate de estabilización pre-v0.9.6 — Auditoría 2026-07
+## Gate pre-v0.9.6 — completado
 
-**Objetivo:** corregir fallos confirmados antes de interpretar la matriz TTY como certificación del producto.
+### P0 cerrados
 
-### P0 obligatorios
+- [x] Spawn único mediante `WindowManager`.
+- [x] EventBus determinístico.
+- [x] Cierre transaccional y protección de buffers dirty.
+- [x] Ticks de servicio para ventanas minimizadas.
+- [x] Contrato único de redraw.
+- [x] Circuit breaker para `tick()` y `draw()`.
+- [x] Negociación de pares de color según `curses.COLOR_PAIRS`.
+- [x] Scrollback sin duplicación.
+- [x] Geometría consistente de tabs de RetroNet.
+- [x] CI que recoge chequeos, `unittest` y pytest.
 
-- [ ] Unificar spawn a través de `WindowManager._spawn_window()` y verificar `window.opened` + `subscribe_to_bus()`.
-- [ ] Crear EventBus de forma determinista o dejar de consultar `_event_bus` directamente.
-- [ ] Implementar protocolo único de cierre y confirmación para datos sin guardar.
-- [ ] Inicializar `_open_path_confirm_pending` y cubrir el flujo dirty → Open.
-- [ ] Añadir circuit breaker/backoff al main loop.
-- [ ] Ejecutar ticks de servicio para ventanas minimizadas.
-- [ ] Unificar `_animated`, `needs_redraw`, retorno de `tick()` y `_dirty`.
-- [ ] Negociar pares de color con `curses.COLOR_PAIRS`.
-- [ ] Corregir scrollback duplicado.
-- [ ] Corregir `content_w` en click de tabs de RetroNet.
-- [ ] Hacer que CI recoja todos los tests unittest/pytest.
+### P1 de estabilización cerrados
 
-### P1 antes de feature freeze
+- [x] Workflows de diálogo tipados y ligados a la ventana fuente.
+- [x] Precedencia autoritativa de drag-and-drop.
+- [x] Presupuesto total de lectura PTY por tick.
+- [x] Cola FIFO para escrituras PTY parciales.
+- [x] Paridad del backend Windows para `cwd`, entorno y cierre verificable.
 
-- [ ] Tipar workflows de diálogo y eliminar dispatch por títulos visibles.
-- [ ] Conservar source window en callbacks de diálogo.
-- [ ] Añadir generation IDs y límite de respuesta a RetroNet.
-- [ ] Eliminar fallback TLS automático con `CERT_NONE`.
-- [ ] Hacer transaccional metadata + move de Trash.
-- [ ] Corregir prioridad `accept_dropped_path()` en drag-and-drop.
-- [ ] Añadir cancelación/ownership a background tasks.
-- [ ] Normalizar datos de NotificationManager.
-- [ ] Versionar schema de configuración y definir preservación de secciones desconocidas.
+### Gate automatizado
 
-**Criterio de salida:** cero P0 abiertos y pruebas de regresión recogidas por CI.
+- [x] Ubuntu, Python 3.10.
+- [x] Ubuntu, Python 3.12.
+- [x] Ubuntu, Python 3.14.
+- [x] Windows, Python 3.10.
+- [x] Windows, Python 3.12.
+- [x] Windows, Python 3.14.
+- [x] Chequeos del repositorio.
+- [x] Suite `unittest`.
+- [x] Suite pytest.
+
+### Diferencia entre estabilización y certificación
+
+El gate completado demuestra contratos internos y regresiones simulables. No sustituye las pruebas en terminales físicas o emuladores reales. Unicode width, mouse protocol, color capacity, resize, SSH, tmux, screen y ConPTY deben seguir registrándose en la matriz TTY.
 
 ---
 
 ## v0.9.6 — Certificación cross-terminal
 
-**Objetivo:** comprobar RetroTUI en entornos reales después del gate de estabilización.
+**Objetivo:** validar RetroTUI en entornos reales y documentar el soporte sin promesas generales que contradigan la evidencia.
 
-- [ ] Probar Linux console directa.
-- [ ] Probar terminales GUI en Linux.
-- [ ] Probar SSH remoto.
-- [ ] Probar tmux/screen.
-- [ ] Probar WSL + Windows Terminal.
-- [ ] Probar Windows nativo con `pywinpty`/ConPTY.
-- [ ] Registrar resultados por entorno en `docs/TTY_TEST_MATRIX.md`.
-- [ ] Ejecutar el checklist completo de `tools/TESTING.md` donde aplique.
-- [ ] Documentar diferencias GPM vs SGR mouse.
-- [ ] Corregir bugs de input, resize, foco, mouse y redraw encontrados en la matriz.
-- [ ] Mantener `docs/CODEX_NEXT_STEPS.md`, `docs/TTY_TEST_MATRIX.md`, `tools/TESTING.md` y README alineados con lo probado.
+### Entornos objetivo
 
-**Criterio de salida:** matriz clara de soportado, parcialmente soportado y no soportado, sin documentación que prometa soporte no certificado.
+- [ ] Linux console directa.
+- [ ] Terminales GUI en Linux.
+- [ ] SSH remoto.
+- [ ] tmux.
+- [ ] GNU screen.
+- [ ] WSL + Windows Terminal.
+- [ ] Windows nativo con `pywinpty` / ConPTY.
+
+### Superficies a certificar
+
+- [ ] Inicio y cierre limpio.
+- [ ] Teclado y atajos globales.
+- [ ] Mouse: GPM, SGR/xterm y pass-through DEC.
+- [ ] Resize y terminales pequeñas.
+- [ ] Unicode y caracteres de ancho doble.
+- [ ] Paletas y terminales con pocos pares de color.
+- [ ] File Manager, Notepad y Terminal.
+- [ ] Terminal minimizado y sesiones de salida continua.
+- [ ] `nano`, `vim`, `less`, `top`, `htop` y `mc` donde estén disponibles.
+- [ ] Plugins bundled representativos.
+
+### Entregables
+
+- [ ] Completar [docs/TTY_TEST_MATRIX.md](docs/TTY_TEST_MATRIX.md).
+- [ ] Ejecutar [tools/TESTING.md](tools/TESTING.md) por entorno.
+- [ ] Convertir fallos reproducibles en regresiones automáticas.
+- [ ] Documentar limitaciones no corregibles de cada terminal.
+- [ ] Actualizar README y release notes con resultados reales.
+
+**Criterio de salida:** cada entorno objetivo queda clasificado como soportado, parcialmente soportado, no soportado o explícitamente no probado con una razón; no quedan blockers críticos conocidos en los entornos marcados como soportados.
 
 ---
 
 ## v0.9.7 — Experiencia de sistema
 
-**Objetivo:** que RetroTUI se sienta como un escritorio completo.
+**Objetivo:** que RetroTUI se comporte como un escritorio persistente y comprensible para usuarios nuevos.
 
-- [ ] Restaurar sesión: ventanas abiertas, posiciones, tamaños y archivos recientes.
+- [ ] Restaurar ventanas, posiciones, tamaños y archivos recientes.
 - [ ] Wizard de primera ejecución.
-- [ ] Start Menu estilo Windows: categorías, apps recientes y accesos del sistema.
-- [ ] Control Panel para activar/desactivar apps y plugins.
-- [ ] Metadata visible de plugins: versión, autor, capabilities y estado.
+- [ ] Start Menu con categorías y accesos del sistema.
+- [ ] Control Panel para activar o desactivar apps y plugins.
+- [ ] Metadata visible de plugins.
 - [ ] Atajos globales documentados.
-- [ ] Manejo consistente de errores en apps y plugins.
 - [ ] Recovery seguro ante crash de plugin.
-- [ ] Documentar configuración del usuario y perfiles.
+- [ ] Política clara de migración de configuración.
 
-**Criterio de salida:** un usuario puede instalar, abrir, personalizar, cerrar y volver a abrir RetroTUI sin perder contexto básico.
-
----
-
-## v0.9.8 — Feature complete / Release candidate funcional
-
-**Objetivo:** cerrar todas las features necesarias para 1.0.
-
-- [ ] Congelar lista de apps incluidas en 1.0.
-- [ ] Congelar API pública de plugins para 1.0.
-- [ ] Congelar formato de config para 1.0.
-- [ ] Revisar documentación principal: README, roadmap, arquitectura, plugins, testing, matriz TTY, release y handoff Codex.
-- [ ] Revisar empaquetado: `pyproject.toml`, entrypoints, dependencias y extras.
-- [ ] QA completo con `python tools/qa.py` más cualquier runner adicional requerido por tests pytest.
-- [ ] Agregar smoke tests para inicio, abrir/cerrar ventanas, Terminal, File Manager y Notepad.
-- [ ] Limpiar TODOs obvios, prints de debug y warnings evitables.
-- [ ] Marcar explícitamente lo que queda fuera de 1.0 en `docs/post-1.0.md`.
-
-**Criterio de salida:** v0.9.8 es feature complete. Desde aquí solo se corrigen bugs.
+**Criterio de salida:** el usuario puede instalar, configurar, cerrar y volver a abrir RetroTUI sin perder el contexto básico.
 
 ---
 
-## v0.9.9 — Bugtest, QA y estabilización
+## v0.9.8 — Feature complete
 
-**Objetivo:** no agregar nada nuevo. Solo probar, corregir y estabilizar.
+**Objetivo:** congelar el producto funcional que llegará a 1.0.
 
-- [ ] Crear checklist de bug bash.
-- [ ] Ejecutar pruebas manuales en toda la matriz soportada.
-- [ ] Ejecutar QA automatizado completo.
-- [ ] Revisar memory leaks o loops de CPU altos.
-- [ ] Validar resize extremo, terminal pequeña y terminal grande.
-- [ ] Validar uso sin mouse.
-- [ ] Validar uso solo teclado.
-- [ ] Validar errores de permisos, archivos inexistentes y rutas raras.
-- [ ] Validar cierre limpio con ventanas, terminales y plugins abiertos.
-- [ ] Corregir bugs críticos y altos.
-- [ ] Clasificar bugs menores no bloqueantes para post-1.0.
-- [ ] No aceptar features nuevas.
+- [ ] Congelar apps incluidas.
+- [ ] Congelar API pública de plugins.
+- [ ] Congelar schema y migración de configuración.
+- [ ] Revisar empaquetado, entrypoints y dependencias.
+- [ ] Completar smoke tests de inicio, ventanas y perfil base.
+- [ ] Limpiar TODOs, debug prints y warnings evitables.
+- [ ] Mover features fuera de alcance a `docs/post-1.0.md`.
+- [ ] Revisión integral de documentación.
 
-**Criterio de salida:** cero bugs críticos conocidos, cero bugs altos reproducibles y QA verde.
+**Criterio de salida:** no quedan features requeridas para 1.0.
 
 ---
 
-## v1.0.0 — Stable release
+## v0.9.9 — Bugtest y estabilización
 
-**Objetivo:** publicar la primera versión estable.
+**Objetivo:** no agregar nada nuevo.
 
-- [ ] Actualizar versión a `1.0.0` en `pyproject.toml`, `retrotui/__init__.py`, `APP_VERSION` y `setup.sh`.
-- [ ] Crear changelog de 1.0.
-- [ ] Crear tag `v1.0.0`.
-- [ ] Publicar release notes.
-- [ ] Confirmar instalación limpia desde repo/paquete.
-- [ ] Confirmar que el README refleja la realidad de 1.0.
-
-**Criterio de salida:** release estable, documentado y reproducible.
-
----
-
-# Definition of Done para 1.0
-
-RetroTUI 1.0 está listo cuando:
-
-- toda la suite escrita es recogida por CI y pasa limpia;
-- File Manager, Notepad y Terminal funcionan sin errores críticos;
-- la terminal embebida corre apps TUI comunes de forma usable en entornos certificados;
-- el sistema de plugins está documentado y estable;
-- la matriz de compatibilidad está documentada;
-- la configuración persiste sin corromperse ni borrar extensiones no reconocidas sin una política explícita;
-- la app inicia, cierra y restaura estado básico de forma confiable;
-- no hay bugs críticos conocidos.
+- [ ] Bug bash y checklist de regresión.
+- [ ] Pruebas manuales en toda la matriz soportada.
+- [ ] QA automatizado completo.
+- [ ] Revisión de CPU alta, loops y recursos no cerrados.
+- [ ] Resize extremo y operación sin mouse.
+- [ ] Errores de permisos y rutas raras.
+- [ ] Cierre con terminales y plugins abiertos.
+- [ ] Cero bugs críticos y altos reproducibles.
 
 ---
 
-# Post-1.0
+## v1.0.0 — Stable
 
-Ideas que no deben bloquear 1.0:
+- [ ] Sincronizar versión en todas las fuentes.
+- [ ] Changelog y release notes finales.
+- [ ] Tag `v1.0.0`.
+- [ ] Instalación limpia verificada.
+- [ ] README alineado con la matriz certificada.
 
-- Más juegos.
-- Más temas.
-- Networking avanzado.
-- File Manager con operaciones remotas.
-- Mejor soporte multimedia.
-- Marketplace de plugins.
-- TUI builder/SDK visual.
-- Integraciones con shells específicas.
+**Criterio de salida:** release estable, documentado y reproducible, sin bugs críticos conocidos.
 
 ---
 
-# Política de versiones
+## Definition of Done para 1.0
 
-- `0.9.5`: base de TerminalScreen/PTY publicada; hardening reabierto por auditoría.
-- `pre-0.9.6`: cierre de P0 de auditoría.
-- `0.9.6`: compatibilidad certificada.
-- `0.9.7`: experiencia de sistema.
-- `0.9.8`: feature complete.
-- `0.9.9`: bugtest only.
-- `1.0.0`: stable release.
+RetroTUI 1.0 estará listo cuando:
+
+- CI recoja y ejecute toda la suite escrita;
+- File Manager, Notepad y Terminal no tengan errores críticos conocidos;
+- la terminal embebida sea usable en los entornos certificados;
+- la matriz de compatibilidad sea explícita;
+- plugins y configuración tengan contratos estables;
+- instalación, inicio y cierre sean reproducibles;
+- no existan bugs críticos conocidos.
+
+## Post-1.0
+
+No deben bloquear 1.0:
+
+- más juegos o temas;
+- networking avanzado;
+- operaciones remotas del File Manager;
+- multimedia ampliada;
+- marketplace de plugins;
+- builder visual de TUIs;
+- integraciones específicas con shells.

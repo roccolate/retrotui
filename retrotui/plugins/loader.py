@@ -2,7 +2,10 @@
 import os
 import sys
 import importlib.util
+import logging
 from pathlib import Path
+
+LOGGER = logging.getLogger(__name__)
 
 _PLUGIN_IMPORT_ERRORS = (
     ArithmeticError,
