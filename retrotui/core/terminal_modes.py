@@ -22,6 +22,9 @@ class TerminalCapabilities:
     origin_mode: bool = True
     cursor_save_restore: bool = True
     insert_delete: bool = True
+    esc_indexing: bool = True
+    tab_stops: bool = True
+    device_status_reports: bool = True
     sgr_mouse: bool = True
 
 

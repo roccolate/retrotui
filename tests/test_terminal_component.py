@@ -1223,6 +1223,82 @@ class TerminalComponentTests(unittest.TestCase):
         self.assertEqual((win._normal_buf.cursor_row, win._normal_buf.cursor_col), (2, 3))
         self.assertNotEqual(win._normal_buf.get_cell(0, 0)[0], "X")
 
+    def test_esc_index_next_line_reverse_index_and_cursor_restore(self):
+        win = self._make_window()
+        win._sync_screen_size()
+        active = win._screen._active
+        for row in range(active.rows):
+            active._grid[row] = [(str(row), 0) for _ in range(active.cols)]
+        active.set_scroll_region(1, 3)
+
+        active.set_cursor(3, 2)
+        win._consume_output("\x1bD")
+        self.assertEqual(active.cursor_col, 2)
+        self.assertEqual(active.get_cell(1, 0), ("2", 0))
+        self.assertEqual(active.get_cell(3, 0), (" ", 0))
+
+        active.set_cursor(1, 4)
+        win._consume_output("\x1bM")
+        self.assertEqual(active.get_cell(1, 0), (" ", 0))
+        self.assertEqual(active.get_cell(2, 0), ("2", 0))
+
+        active.set_cursor(1, 5)
+        win._consume_output("\x1bE")
+        self.assertEqual((active.cursor_row, active.cursor_col), (2, 0))
+
+        active.set_cursor(2, 6)
+        win._consume_output("\x1b7\x1b[1;1H\x1b8")
+        self.assertEqual((active.cursor_row, active.cursor_col), (2, 6))
+
+    def test_horizontal_tab_controls_move_cursor_without_overwriting_cells(self):
+        win = self._make_window()
+        win._sync_screen_size()
+        active = win._screen._active
+        active._grid[0][4] = ("X", 0)
+        active.set_cursor(0, 0)
+
+        win._consume_output("\t")
+        self.assertEqual(active.cursor_col, 8)
+        self.assertEqual(active.get_cell(0, 4), ("X", 0))
+
+        active.set_cursor(0, 3)
+        win._consume_output("\x1bH")
+        active.set_cursor(0, 0)
+        win._consume_output("\t")
+        self.assertEqual(active.cursor_col, 3)
+
+        win._consume_output("\x1b[g")
+        active.set_cursor(0, 0)
+        win._consume_output("\t")
+        self.assertEqual(active.cursor_col, 8)
+
+        win._consume_output("\x1b[3g")
+        active.set_cursor(0, 0)
+        win._consume_output("\t")
+        self.assertEqual(active.cursor_col, active.cols - 1)
+
+        win._reset_tab_stops(active.cols)
+        active.set_cursor(0, 0)
+        win._consume_output("\x1b[2I")
+        self.assertEqual(active.cursor_col, 16)
+        win._consume_output("\x1b[Z")
+        self.assertEqual(active.cursor_col, 8)
+
+    def test_dsr_and_cpr_responses_respect_origin_mode(self):
+        win = self._make_window()
+        win._sync_screen_size()
+        fake_session = _FakeSession()
+        win._session = fake_session
+        active = win._screen._active
+        active.set_cursor(2, 4)
+
+        win._consume_output("\x1b[5n\x1b[6n")
+        self.assertEqual(fake_session.writes[:2], ["\x1b[0n", "\x1b[3;5R"])
+
+        active.set_scroll_region(1, 5)
+        win._consume_output("\x1b[?6h\x1b[3;5H\x1b[?5n\x1b[?6n")
+        self.assertEqual(fake_session.writes[-2:], ["\x1b[?0n", "\x1b[?3;5R"])
+
 
 if __name__ == "__main__":
     unittest.main()
