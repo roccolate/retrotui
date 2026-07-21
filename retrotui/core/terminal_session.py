@@ -45,6 +45,9 @@ class TerminalScreenBuffer:
         "_cursor_col",
         "_default_attr",
         "_scroll_sink",
+        "_scroll_top",
+        "_scroll_bottom",
+        "_saved_cursor",
     )
 
     def __init__(self, rows, cols, default_attr=0):
@@ -57,6 +60,9 @@ class TerminalScreenBuffer:
         self._cursor_row = 0
         self._cursor_col = 0
         self._scroll_sink = None
+        self._scroll_top = 0
+        self._scroll_bottom = rows - 1
+        self._saved_cursor = (0, 0)
 
     def _blank_cell(self):
         return (" ", self._default_attr)
@@ -71,6 +77,37 @@ class TerminalScreenBuffer:
     @property
     def cursor_col(self):
         return self._cursor_col
+
+    @property
+    def scroll_top(self):
+        return self._scroll_top
+
+    @property
+    def scroll_bottom(self):
+        return self._scroll_bottom
+
+    def set_scroll_region(self, top=0, bottom=None):
+        """Set inclusive scrolling margins and report whether they are valid."""
+        if bottom is None:
+            bottom = self.rows - 1
+        top = max(0, min(self.rows - 1, int(top)))
+        bottom = max(0, min(self.rows - 1, int(bottom)))
+        if top >= bottom:
+            return False
+        self._scroll_top = top
+        self._scroll_bottom = bottom
+        return True
+
+    def reset_scroll_region(self):
+        self._scroll_top = 0
+        self._scroll_bottom = self.rows - 1
+
+    def save_cursor(self):
+        self._saved_cursor = (self._cursor_row, self._cursor_col)
+
+    def restore_cursor(self):
+        row, col = self._saved_cursor
+        self.set_cursor(row, col)
 
     def set_cursor(self, row, col):
         """Move the cursor to a physical column clamped to the grid."""
@@ -221,10 +258,26 @@ class TerminalScreenBuffer:
         self._cursor_col = 0
 
     def line_feed(self):
-        if self._cursor_row >= self.rows - 1:
-            self.scroll_up()
-        else:
+        """Advance one row, scrolling only the active DEC region."""
+        if self._scroll_top <= self._cursor_row <= self._scroll_bottom:
+            if self._cursor_row == self._scroll_bottom:
+                self.scroll_up(1)
+            else:
+                self._cursor_row += 1
+            return
+        if self._cursor_row < self.rows - 1:
             self._cursor_row += 1
+
+    def reverse_index(self):
+        """Move upward, scrolling the active DEC region downward at its top."""
+        if self._scroll_top <= self._cursor_row <= self._scroll_bottom:
+            if self._cursor_row == self._scroll_top:
+                self.scroll_down(1)
+            else:
+                self._cursor_row -= 1
+            return
+        if self._cursor_row > 0:
+            self._cursor_row -= 1
 
     def backspace(self):
         if self._cursor_col <= 0:
@@ -282,13 +335,16 @@ class TerminalScreenBuffer:
         raise ValueError(f"unknown clear_screen mode: {mode!r}")
 
     def scroll_up(self, count=1):
+        """Scroll the active DEC region upward by ``count`` rows."""
         if count <= 0 or self.rows <= 0:
             return
-        for _ in range(min(count, self.rows)):
-            scrolled_off = self._grid.pop(0)
-            self._grid.append(self._blank_row())
+        top, bottom = self._scroll_top, self._scroll_bottom
+        height = bottom - top + 1
+        for _ in range(min(count, height)):
+            scrolled_off = self._grid.pop(top)
+            self._grid.insert(bottom, self._blank_row())
             sink = self._scroll_sink
-            if sink is not None:
+            if top == 0 and bottom == self.rows - 1 and sink is not None:
                 try:
                     sink(scrolled_off)
                 except Exception:
@@ -298,25 +354,55 @@ class TerminalScreenBuffer:
         self._scroll_sink = sink
 
     def scroll_down(self, count=1):
+        """Scroll the active DEC region downward by ``count`` rows."""
         if count <= 0 or self.rows <= 0:
             return
-        for _ in range(min(count, self.rows)):
-            self._grid.insert(0, self._blank_row())
-            self._grid.pop()
+        top, bottom = self._scroll_top, self._scroll_bottom
+        height = bottom - top + 1
+        for _ in range(min(count, height)):
+            self._grid.pop(bottom)
+            self._grid.insert(top, self._blank_row())
 
     def insert_line(self, count=1):
-        if count <= 0:
+        """Insert rows at the cursor inside the active scroll region."""
+        if count <= 0 or not self._scroll_top <= self._cursor_row <= self._scroll_bottom:
             return
-        for _ in range(min(count, self.rows)):
+        available = self._scroll_bottom - self._cursor_row + 1
+        for _ in range(min(count, available)):
             self._grid.insert(self._cursor_row, self._blank_row())
-            self._grid.pop()
+            self._grid.pop(self._scroll_bottom + 1)
 
     def delete_line(self, count=1):
-        if count <= 0:
+        """Delete rows at the cursor inside the active scroll region."""
+        if count <= 0 or not self._scroll_top <= self._cursor_row <= self._scroll_bottom:
             return
-        for _ in range(min(count, self.rows)):
+        available = self._scroll_bottom - self._cursor_row + 1
+        for _ in range(min(count, available)):
             self._grid.pop(self._cursor_row)
-            self._grid.append(self._blank_row())
+            self._grid.insert(self._scroll_bottom, self._blank_row())
+
+    def insert_chars(self, count=1):
+        """Insert blank physical cells without splitting a wide glyph."""
+        count = max(1, int(count))
+        row = self._cursor_row
+        start = min(self.cols - 1, self._cursor_col)
+        line = self._grid[row]
+        if is_continuation(line[start]):
+            lead = leading_cell_index(line, start)
+            if lead is not None:
+                start = lead
+        count = min(count, self.cols - start)
+        line[start:start] = [self._blank_cell() for _ in range(count)]
+        self._grid[row] = sanitize_row(line[:self.cols], self._default_attr)
+
+    def erase_chars(self, count=1):
+        """Erase physical cells at the cursor without orphaning wide tails."""
+        count = max(1, int(count))
+        self.clear_range(
+            self._cursor_row,
+            self._cursor_col,
+            min(self.cols, self._cursor_col + count),
+        )
 
     def delete_chars(self, count=1):
         """Delete physical columns at the cursor without orphaning wide tails."""
@@ -342,9 +428,12 @@ class TerminalScreenBuffer:
         self._grid[row] = sanitize_row(line[:self.cols], self._default_attr)
 
     def resize(self, rows, cols):
+        """Resize while preserving cursor, margins and Unicode cell invariants."""
         rows = max(1, int(rows))
         cols = max(1, int(cols))
+        old_rows = self.rows
         old_cols = self.cols
+        region_was_full = self._scroll_top == 0 and self._scroll_bottom == old_rows - 1
         new_grid = [
             [(" ", self._default_attr) for _ in range(cols)] for _ in range(rows)
         ]
@@ -358,6 +447,21 @@ class TerminalScreenBuffer:
         self.cols = cols
         self._cursor_row = min(self._cursor_row, rows - 1)
         self._cursor_col = min(self._cursor_col, cols - 1)
+
+        if region_was_full:
+            self.reset_scroll_region()
+        else:
+            self._scroll_top = min(self._scroll_top, rows - 1)
+            self._scroll_bottom = min(self._scroll_bottom, rows - 1)
+            if self._scroll_top >= self._scroll_bottom:
+                self.reset_scroll_region()
+
+        saved_row, saved_col = self._saved_cursor
+        self._saved_cursor = (
+            min(saved_row, rows - 1),
+            min(saved_col, cols - 1),
+        )
+
 
 class TerminalScreen:
     """Holds the normal-screen and alt-screen buffers for one terminal.

@@ -73,6 +73,7 @@ class TerminalWindow(SelectableTextMixin, Window):
         self.ansi = AnsiStateMachine()
         self.capabilities = DEFAULT_TERMINAL_CAPABILITIES
         self.modes = TerminalModes()
+        self._normal_cursor_before_alt = None
 
         # v0.9.5: the normal-screen and alt-screen are now two TerminalScreenBuffer
         # cells inside a single ``TerminalScreen``. The normal-screen buffer
@@ -396,14 +397,40 @@ class TerminalWindow(SelectableTextMixin, Window):
     # ``put_char`` already wraps with a scroll if needed.
 
     def _append_newline(self):
-        """Advance using LF+CR and let the buffer own scrollback capture.
-
-        Rows are appended to history only when ``line_feed`` scrolls them off
-        the top. A newline inside the visible grid merely moves the cursor and
-        therefore cannot duplicate a row that is still present on screen.
-        """
+        """Advance using LF+CR and let the buffer own scrollback capture."""
         self._screen.line_feed()
         self._screen.carriage_return()
+
+    def _set_alt_screen_mode(self, mode, enabled):
+        """Apply alternate-screen modes, including ?1049 cursor restore."""
+        self.scrollback_offset = 0
+        if mode == 1049:
+            if enabled:
+                if not self._screen.alt_screen:
+                    self._normal_cursor_before_alt = (
+                        self._normal_buf.cursor_row,
+                        self._normal_buf.cursor_col,
+                    )
+                self._alt_buf.clear_screen("all")
+                self._alt_buf.reset_scroll_region()
+                self._screen.set_alt_screen(True)
+                self._screen.set_cursor(0, 0)
+            else:
+                self._screen.set_alt_screen(False)
+                if self._normal_cursor_before_alt is not None:
+                    self._normal_buf.set_cursor(*self._normal_cursor_before_alt)
+                    self._normal_cursor_before_alt = None
+            return
+        self._screen.set_alt_screen(bool(enabled))
+
+    def _cursor_vertical_bounds(self, active):
+        if self.modes.origin_mode:
+            return active.scroll_top, active.scroll_bottom
+        return 0, active.rows - 1
+
+    def _home_cursor(self, active):
+        row = active.scroll_top if self.modes.origin_mode else 0
+        active.set_cursor(row, 0)
 
     def _erase_line(self, mode):
         """Apply CSI K without splitting wide glyphs."""
@@ -428,7 +455,7 @@ class TerminalWindow(SelectableTextMixin, Window):
         self._screen.clear_screen("below")
 
     def _apply_csi(self, params, final):
-        """Handle CSI controls for layout (attributes handled by AnsiStateMachine)."""
+        """Handle CSI screen controls and DEC private modes."""
         def _num(index, default):
             if index >= len(params):
                 return default
@@ -437,31 +464,33 @@ class TerminalWindow(SelectableTextMixin, Window):
         private = getattr(params, "private", "")
         if final in ('h', 'l'):
             enabled = final == 'h'
-            # Empty marker remains accepted for direct legacy callers/tests;
-            # parser-originated DEC modes carry the authoritative ``?`` marker.
             if private not in ('', '?'):
                 return
             mode_values = list(params) or [0]
             for mode in mode_values:
                 if mode in (1049, 1047, 47):
-                    self._alt_screen = enabled
+                    self._set_alt_screen_mode(mode, enabled)
                 elif mode in _MOUSE_REPORT_MODES:
                     if enabled:
                         self._mouse_modes.add(mode)
                     else:
                         self._mouse_modes.discard(mode)
+                elif mode == 6:
+                    self.modes.set_private_mode(mode, enabled)
+                    self._home_cursor(self._screen._active)
                 else:
                     self.modes.set_private_mode(mode, enabled)
             return
 
         active = self._screen._active
         rows, cols = active.rows, active.cols
+        top, bottom = self._cursor_vertical_bounds(active)
 
         if final == 'A':
-            active.set_cursor(max(0, active.cursor_row - max(1, _num(0, 1))), active.cursor_col)
+            active.set_cursor(max(top, active.cursor_row - max(1, _num(0, 1))), active.cursor_col)
             return
         if final == 'B':
-            active.set_cursor(min(rows - 1, active.cursor_row + max(1, _num(0, 1))), active.cursor_col)
+            active.set_cursor(min(bottom, active.cursor_row + max(1, _num(0, 1))), active.cursor_col)
             return
         if final == 'D':
             active.set_cursor(active.cursor_row, max(0, active.cursor_col - max(1, _num(0, 1))))
@@ -472,16 +501,49 @@ class TerminalWindow(SelectableTextMixin, Window):
         if final == 'G':
             active.set_cursor(active.cursor_row, min(cols - 1, max(0, _num(0, 1) - 1)))
             return
+        if final == 'd':
+            row = max(0, _num(0, 1) - 1)
+            if self.modes.origin_mode:
+                row += active.scroll_top
+            active.set_cursor(min(bottom, max(top, row)), active.cursor_col)
+            return
         if final in ('H', 'f'):
-            row = max(0, min(rows - 1, _num(0, 1) - 1))
+            row = max(0, _num(0, 1) - 1)
+            if self.modes.origin_mode:
+                row += active.scroll_top
+            row = min(bottom, max(top, row))
             col = max(0, min(cols - 1, _num(1, 1) - 1))
             active.set_cursor(row, col)
+            return
+        if final == 'r' and private == '':
+            region_top = max(0, _num(0, 1) - 1)
+            region_bottom = min(rows - 1, max(0, _num(1, rows) - 1))
+            if active.set_scroll_region(region_top, region_bottom):
+                self._home_cursor(active)
+            return
+        if final == 's' and private == '':
+            active.save_cursor()
+            return
+        if final == 'u' and private == '':
+            active.restore_cursor()
             return
         if final == 'K':
             self._erase_line(_num(0, 0))
             return
+        if final == '@':
+            active.insert_chars(max(1, _num(0, 1)))
+            return
         if final == 'P':
             active.delete_chars(max(1, _num(0, 1)))
+            return
+        if final == 'X':
+            active.erase_chars(max(1, _num(0, 1)))
+            return
+        if final == 'L':
+            active.insert_line(max(1, _num(0, 1)))
+            return
+        if final == 'M':
+            active.delete_line(max(1, _num(0, 1)))
             return
         if final == 'J':
             self._erase_display(_num(0, 0))
@@ -1146,6 +1208,9 @@ class TerminalWindow(SelectableTextMixin, Window):
         self._scroll_lines = []
         self._normal_buf.clear_screen("all")
         self._alt_buf.clear_screen("all")
+        self._normal_buf.reset_scroll_region()
+        self._alt_buf.reset_scroll_region()
+        self._normal_cursor_before_alt = None
         self._screen.set_alt_screen(False)
         self._screen.set_cursor(0, 0)
         # The fresh child has not re-enabled mouse reporting yet.
