@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   diagnose:
-    if: github.event.issue.title == '[maintenance] diagnose terminal capability contract v2'
+    if: github.event.issue.title == '[maintenance] diagnose terminal capability contract v3'
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ github.token }}
@@ -31,28 +31,22 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e '.[test]'
 
-      - name: Run compact diagnostics
+      - name: Run quiet full suite
         id: diagnostics
         continue-on-error: true
         shell: bash
         run: |
-          set -o pipefail
-          {
-            echo '=== FOCUSED UNITTEST ==='
-            python -m unittest tests.test_terminal_environment -v
-            echo '=== MODULE COVERAGE ==='
-            python tools/report_module_coverage.py --quiet-tests --top 200 --fail-under 0
-          } 2>&1 | tee /tmp/terminal-capability-diagnostics.log
+          python -m unittest discover -s tests -q > /tmp/unit.log 2>&1
 
-      - name: Publish diagnostics
+      - name: Publish diagnostic tail
         if: always()
         shell: bash
         run: |
           {
-            echo 'Terminal capability diagnostic result: `${{ steps.diagnostics.outcome }}`'
+            echo 'Terminal capability full-suite result: `${{ steps.diagnostics.outcome }}`'
             echo
             echo '```text'
-            cat /tmp/terminal-capability-diagnostics.log
+            tail -n 140 /tmp/unit.log
             echo '```'
           } > /tmp/comment.md
           gh issue comment '${{ github.event.issue.number }}' --repo '${{ github.repository }}' --body-file /tmp/comment.md
