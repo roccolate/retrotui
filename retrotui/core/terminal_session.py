@@ -433,11 +433,33 @@ class TerminalSession:
         self._set_nonblocking(fcntl_mod, master_fd)
         self.resize(self.cols, self.rows)
 
+    def _windows_environment_block(self):
+        """Build the CreateProcess-style environment block for ConPTY."""
+        env = os.environ.copy()
+        env.update({str(key): str(value) for key, value in self.extra_env.items()})
+        return "\0".join(
+            f"{key}={value}" for key, value in sorted(env.items())
+        ) + "\0"
+
+    def _spawn_windows_process(self, pty, shell):
+        """Spawn with cwd/env when supported, retaining legacy fallbacks."""
+        env_block = self._windows_environment_block()
+        try:
+            return pty.spawn(shell, cwd=self.cwd, env=env_block)
+        except TypeError:
+            pass
+
+        try:
+            return pty.spawn(shell, None, self.cwd, env_block)
+        except TypeError:
+            legacy_shell = shell.encode() if isinstance(shell, str) else shell
+            return pty.spawn(legacy_shell)
+
     def _start_windows(self, winpty_mod):
         """Spawn shell process inside a Windows ConPTY."""
         shell = self.shell or os.environ.get("COMSPEC") or "cmd.exe"
         pty = winpty_mod.PTY(self.cols, self.rows)
-        pty.spawn(shell.encode() if isinstance(shell, str) else shell)
+        self._spawn_windows_process(pty, shell)
         self._win_pty = pty
         self.running = True
 
@@ -688,6 +710,66 @@ class TerminalSession:
                 return False
             time.sleep(min(_CLOSE_POLL_INTERVAL, max(0.0, deadline - time.monotonic())))
 
+    def _windows_is_alive(self):
+        """Probe ConPTY liveness without leaking backend exceptions."""
+        if self._win_pty is None:
+            return False
+        probe = getattr(self._win_pty, "isalive", None)
+        if not callable(probe):
+            return bool(self.running)
+        try:
+            return bool(probe())
+        except Exception:
+            return False
+
+    def _wait_for_windows_exit(self, timeout):
+        """Wait briefly until the Windows child is observably stopped."""
+        deadline = time.monotonic() + max(0.0, float(timeout))
+        while self._windows_is_alive():
+            if time.monotonic() >= deadline:
+                return False
+            time.sleep(min(_CLOSE_POLL_INTERVAL, max(0.0, deadline - time.monotonic())))
+        self.running = False
+        return True
+
+    def _close_windows_backend(self):
+        """Close ConPTY explicitly and verify that its child exited."""
+        backend = self._win_pty
+        if backend is None:
+            return True
+
+        close_method = getattr(backend, "close", None)
+        if callable(close_method):
+            try:
+                try:
+                    close_method(force=True)
+                except TypeError:
+                    close_method()
+            except Exception:
+                pass
+            if self._wait_for_windows_exit(_CLOSE_WAIT_SECONDS):
+                return True
+
+        cancel_io = getattr(backend, "cancel_io", None)
+        if callable(cancel_io):
+            try:
+                cancel_io()
+            except Exception:
+                pass
+
+        if self._windows_is_alive():
+            self.running = True
+            self._send_signal_windows(signal.SIGTERM)
+            if not self._wait_for_windows_exit(_CLOSE_WAIT_SECONDS):
+                force_signal = getattr(signal, "SIGKILL", signal.SIGTERM)
+                self._send_signal_windows(force_signal)
+                if not self._wait_for_windows_exit(_CLOSE_WAIT_SECONDS):
+                    self.running = True
+                    return False
+        else:
+            self.running = False
+        return True
+
     def resize(self, cols, rows):
         """Update terminal window size and notify child PTY."""
         self.cols = max(1, int(cols))
@@ -720,7 +802,7 @@ class TerminalSession:
             return False
 
         if self._win_pty is not None:
-            if not self._win_pty.isalive():
+            if not self._windows_is_alive():
                 self.running = False
                 return True
             return False
@@ -730,16 +812,14 @@ class TerminalSession:
         return self._reap_posix_child(nohang=True)
 
     def close(self):
-        """Close PTY fd and mark session stopped."""
+        """Close the PTY and report whether its backend stopped cleanly."""
         if self._win_pty is not None:
-            try:
-                del self._win_pty
-            except Exception:
-                pass
+            if not self._close_windows_backend():
+                return False
             self._win_pty = None
             self._pending_write.clear()
             self.running = False
-            return
+            return True
 
         if self.running:
             self.terminate()
@@ -757,3 +837,4 @@ class TerminalSession:
             self.master_fd = None
         self._pending_write.clear()
         self.running = False
+        return True
