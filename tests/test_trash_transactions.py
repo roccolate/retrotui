@@ -22,7 +22,9 @@ class TrashTransactionTests(unittest.TestCase):
             self.assertEqual(moved.phase, "completed")
             self.assertFalse(source.exists())
             self.assertEqual(trashed.read_text(encoding="utf-8"), "hello")
-            self.assertEqual(tx.read_trash_metadata(str(trashed)), str(source.resolve()))
+            stored_original = Path(tx.read_trash_metadata(str(trashed)))
+            self.assertEqual(stored_original.name, source.name)
+            self.assertTrue(stored_original.parent.samefile(source.parent))
 
             restored = tx.transactional_restore(str(trashed), str(source))
             self.assertEqual(restored.phase, "completed")
