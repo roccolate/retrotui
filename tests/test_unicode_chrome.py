@@ -14,11 +14,18 @@ class UnicodeChromeTests(unittest.TestCase):
         self.assertEqual(text_display_width("e\u0301"), 1)
         self.assertEqual(text_display_width("🙂"), 2)
 
+    def test_display_width_uses_safe_fallback_for_unprintable_text(self):
+        self.assertEqual(text_display_width("A\x01B"), 3)
+
     def test_clip_text_columns_preserves_physical_width_contract(self):
         self.assertEqual(clip_text_columns("你你", 3, suffix="…"), "你…")
         self.assertEqual(clip_text_columns("e\u0301x", 2, suffix="…"), "e\u0301x")
         self.assertEqual(clip_text_columns("🙂🙂", 3, suffix="…"), "🙂…")
         self.assertLessEqual(text_display_width(clip_text_columns("你你你", 4, suffix="…")), 4)
+
+    def test_clip_text_columns_handles_zero_and_suffix_only_budgets(self):
+        self.assertEqual(clip_text_columns("abc", 0, suffix="…"), "")
+        self.assertEqual(clip_text_columns("你", 1, suffix="…"), "…")
 
     def test_window_title_stays_inside_reserved_title_columns(self):
         win = Window("你你你你", 0, 1, 18, 6)
