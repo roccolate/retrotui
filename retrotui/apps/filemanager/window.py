@@ -792,88 +792,148 @@ class FileManagerWindow(Window):
              self._select_entry_by_name(clean, pane=self._active_pane_state())
         return res
 
-    def copy_selected(self, dest_path):
+    def copy_selected(self, dest_path, *, cancel_event=None, progress_callback=None):
         entry = self._selected_entry()
         if not entry:
             return ActionResult(ActionType.ERROR, 'No item selected.')
-        
+
         target, error = self._resolve_destination_path(entry, dest_path)
         if error:
             return error
 
-        res = perform_copy(entry.full_path, target)
-        self._rebuild_content()
+        if cancel_event is None and progress_callback is None:
+            res = perform_copy(entry.full_path, target)
+        else:
+            res = perform_copy(
+                entry.full_path,
+                target,
+                cancel_event=cancel_event,
+                progress_callback=progress_callback,
+            )
+        if res.type == ActionType.REFRESH:
+            self._rebuild_content()
         return res
 
-    def copy_path_to(self, source_path, dest_path):
+    def copy_path_to(
+        self,
+        source_path,
+        dest_path,
+        *,
+        cancel_event=None,
+        progress_callback=None,
+    ):
         """Copy an explicit source path into a destination path or directory."""
         if not source_path or not isinstance(source_path, str):
             return ActionResult(ActionType.ERROR, 'No source path provided.')
         name = os.path.basename(os.path.normpath(source_path))
         if not name:
             return ActionResult(ActionType.ERROR, 'Invalid source path.')
-        entry = FileEntry(
-            name,
-            os.path.isdir(source_path),
-            source_path,
-            0,
-        )
+        entry = FileEntry(name, os.path.isdir(source_path), source_path, 0)
         target, error = self._resolve_destination_path(entry, dest_path)
         if error:
             return error
 
-        res = perform_copy(source_path, target)
-        self._rebuild_content()
+        if cancel_event is None and progress_callback is None:
+            res = perform_copy(source_path, target)
+        else:
+            res = perform_copy(
+                source_path,
+                target,
+                cancel_event=cancel_event,
+                progress_callback=progress_callback,
+            )
+        if res.type == ActionType.REFRESH:
+            self._rebuild_content()
         return res
 
-    def move_selected(self, dest_path):
+    def move_selected(self, dest_path, *, cancel_event=None, progress_callback=None):
         entry = self._selected_entry()
         if not entry:
             return ActionResult(ActionType.ERROR, 'No item selected.')
-        
+
         target, error = self._resolve_destination_path(entry, dest_path)
         if error:
             return error
 
-        res = perform_move(entry.full_path, target)
-        self._rebuild_content()
+        if cancel_event is None and progress_callback is None:
+            res = perform_move(entry.full_path, target)
+        else:
+            res = perform_move(
+                entry.full_path,
+                target,
+                cancel_event=cancel_event,
+                progress_callback=progress_callback,
+            )
+        if res.type == ActionType.REFRESH:
+            self._rebuild_content()
+        return res
+
+    def move_path_to(
+        self,
+        source_path,
+        dest_path,
+        *,
+        cancel_event=None,
+        progress_callback=None,
+    ):
+        """Move an explicit source path into a destination path or directory."""
+        if not source_path or not isinstance(source_path, str):
+            return ActionResult(ActionType.ERROR, 'No source path provided.')
+        name = os.path.basename(os.path.normpath(source_path))
+        if not name:
+            return ActionResult(ActionType.ERROR, 'Invalid source path.')
+        entry = FileEntry(name, os.path.isdir(source_path), source_path, 0)
+        target, error = self._resolve_destination_path(entry, dest_path)
+        if error:
+            return error
+
+        if cancel_event is None and progress_callback is None:
+            res = perform_move(source_path, target)
+        else:
+            res = perform_move(
+                source_path,
+                target,
+                cancel_event=cancel_event,
+                progress_callback=progress_callback,
+            )
+        if res.type == ActionType.REFRESH:
+            self._rebuild_content()
         return res
 
     def _dual_copy_move_between_panes(self, move=False):
         if not self.dual_pane_enabled:
             return ActionResult(ActionType.ERROR, 'Dual pane not enabled.')
-        
+
         source = self._selected_entry()
         if not source or source.name == '..':
             return ActionResult(ActionType.ERROR, 'No item selected.')
-        
-        # Destination is the *other* pane
+
         dest_dir = self.current_path if self.active_pane == 1 else self._secondary.path
-            
+        dest_path = os.path.join(dest_dir, source.name)
+        if os.path.exists(dest_path):
+            return ActionResult(ActionType.ERROR, f'Destination exists: {source.name}')
+
+        if _is_long_file_operation(source, 10 * 1024 * 1024):
+            request_type = (
+                ActionType.REQUEST_MOVE_BETWEEN_PANES
+                if move
+                else ActionType.REQUEST_COPY_BETWEEN_PANES
+            )
+            return ActionResult(request_type, {
+                'source': source.full_path,
+                'destination': dest_dir,
+            })
+
         if move:
-            dest_path = os.path.join(dest_dir, source.name)
-            if os.path.exists(dest_path):
-                return ActionResult(ActionType.ERROR, f'Destination exists: {source.name}')
             res = perform_move(source.full_path, dest_path)
-            if res.type == ActionType.ERROR:
-                return res
-            self._rebuild_content()
-            return ActionResult(ActionType.REFRESH, f'Moved {source.name}')
+            success_message = f'Moved {source.name}'
         else:
-            if _is_long_file_operation(source, 10 * 1024 * 1024):
-                return ActionResult(ActionType.REQUEST_COPY_BETWEEN_PANES, {
-                    'source': source.full_path,
-                    'destination': dest_dir,
-                })
-            
-            dest_path = os.path.join(dest_dir, source.name)
-            if os.path.exists(dest_path):
-                 return ActionResult(ActionType.ERROR, f'Destination exists: {source.name}')
             res = perform_copy(source.full_path, dest_path)
-            if res.type == ActionType.ERROR:
-                return res
-            self._rebuild_content()
-            return ActionResult(ActionType.REFRESH, f'Copied {source.name}')
+            success_message = f'Copied {source.name}'
+        if res.type == ActionType.ERROR:
+            return res
+        self._rebuild_content()
+        return ActionResult(ActionType.REFRESH, success_message)
 
     def _dual_copy_move(self, move=False):
         """Alias for compatibility."""
