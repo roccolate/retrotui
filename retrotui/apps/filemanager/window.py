@@ -556,27 +556,49 @@ class FileManagerWindow(Window):
 
     # --- Actions ---
 
-    def delete_selected(self):
+    def delete_selected(self, *, cancel_event=None, progress_callback=None):
         entry = self._selected_entry()
         if not entry:
             return ActionResult(ActionType.ERROR, 'No item selected.')
         if entry.name == '..':
             return ActionResult(ActionType.ERROR, 'Parent directory cannot be deleted.')
-        return self.perform_delete_entry(entry.full_path)
+        return self.perform_delete_entry(
+            entry.full_path,
+            cancel_event=cancel_event,
+            progress_callback=progress_callback,
+        )
 
-    def perform_delete_entry(self, path):
+    def perform_delete_entry(
+        self,
+        path,
+        *,
+        cancel_event=None,
+        progress_callback=None,
+    ):
         trash_dir = self._trash_base_dir()
-        result_path = perform_delete(path, trash_dir=trash_dir)
+        result_path = perform_delete(
+            path,
+            trash_dir=trash_dir,
+            cancel_event=cancel_event,
+            progress_callback=progress_callback,
+        )
         if result_path:
             self._last_trash_move = {'source': path, 'trash': result_path}
             self._rebuild_content()
             return ActionResult(ActionType.REFRESH, f'Moved to trash: {os.path.basename(path)}')
         return ActionResult(ActionType.ERROR, 'Failed to delete item.')
 
-    def perform_undo_delete(self):
+    def perform_undo_delete(self, *, cancel_event=None, progress_callback=None):
         if not self._last_trash_move:
              return ActionResult(ActionType.ERROR, 'Nothing to undo.')
-        result = perform_undo(self._last_trash_move)
+        if cancel_event is None and progress_callback is None:
+            result = perform_undo(self._last_trash_move)
+        else:
+            result = perform_undo(
+                self._last_trash_move,
+                cancel_event=cancel_event,
+                progress_callback=progress_callback,
+            )
         if isinstance(result, ActionResult) and result.type != ActionType.REFRESH:
             return result
         if result is not None and not isinstance(result, ActionResult):
