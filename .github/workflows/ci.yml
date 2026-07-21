@@ -1,58 +1,43 @@
 name: CI
 
 on:
+  push:
   pull_request:
 
-permissions:
-  contents: write
+env:
+  # Keep the current module coverage floor explicit while the complete
+  # unittest + pytest gate is stabilized across supported platforms.
+  MODULE_COVERAGE_FAIL_UNDER: "75.0"
 
 jobs:
-  apply_partial_pty_writes:
-    if: github.actor != 'github-actions[bot]'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout stabilization branch
-        uses: actions/checkout@v5
-        with:
-          ref: ${{ github.event.pull_request.head.ref }}
-          fetch-depth: 0
+  quality:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python-version: ["3.10", "3.12", "3.14"]
 
-      - name: Apply queued partial-write contract
-        run: python tools/apply_partial_pty_writes.py
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
 
       - name: Setup Python
         uses: actions/setup-python@v6
         with:
-          python-version: "3.12"
+          python-version: ${{ matrix.python-version }}
 
-      - name: Install dependencies
-        run: python -m pip install -e ".[test]"
+      - name: Install package and test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[test]"
 
-      - name: Compile changed modules
-        run: python -m py_compile retrotui/core/terminal_session.py retrotui/apps/terminal.py tests/test_terminal_partial_writes.py
-
-      - name: Run focused partial-write tests
-        run: python -m unittest tests.test_terminal_partial_writes -v
-
-      - name: Run terminal session regressions
-        run: python -m unittest tests.test_terminal_session -v
-
-      - name: Run terminal component regressions
-        run: python -m unittest tests.test_terminal_component -v
+      - name: Run repository quality checks
+        run: python tools/qa.py --skip-tests
 
       - name: Run unittest suite
         run: python -m unittest discover -s tests -v
 
       - name: Run pytest suite
+        if: ${{ !cancelled() }}
         run: python -m pytest tests -q
-
-      - name: Commit validated partial-write contract
-        shell: bash
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add retrotui/core/terminal_session.py retrotui/apps/terminal.py tests/test_terminal_partial_writes.py
-          git commit -m "terminal: queue partial PTY writes"
-
-      - name: Push validated partial-write contract
-        run: git push origin HEAD:${{ github.event.pull_request.head.ref }}
