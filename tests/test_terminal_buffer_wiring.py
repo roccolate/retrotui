@@ -226,6 +226,8 @@ class TerminalBufferWiringTests(unittest.TestCase):
         win.restart_session()
         new_scrollback = win._scrollback
         self._resize_buffers(2)
+        # restart_session preserves the legacy current-line cursor placement;
+        # move to the first row so this test isolates sink ownership only.
         win._normal_buf.set_cursor(0, 0)
 
         win._consume_output("a\nb\nc\n")
