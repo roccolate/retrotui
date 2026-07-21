@@ -7,6 +7,15 @@ import apply_core_apps_hardening as implementation
 
 
 def insert_test_method(path: str, block: str) -> None:
+    if path == "tests/test_retronet.py":
+        block = block.replace(
+            '        mock_urlopen.side_effect = ssl.SSLError("certificate verify failed")\n',
+            '        self.win.close()\n'
+            '        mock_urlopen.reset_mock()\n'
+            '        mock_urlopen.side_effect = ssl.SSLError("certificate verify failed")\n',
+            1,
+        )
+
     file_path = Path(path)
     text = file_path.read_text(encoding="utf-8")
     marker = '\n\nif __name__ == "__main__":\n'
