@@ -45,6 +45,12 @@ _CURSES_IMPORT_CONTRACT = {
 }
 
 
+def _fresh_entry_module():
+    """Import the entrypoint without reusing a package-level stale submodule."""
+    sys.modules.pop("retrotui.__main__", None)
+    return importlib.import_module("retrotui.__main__")
+
+
 class TerminalEnvironmentTests(unittest.TestCase):
     def test_bundled_source_declares_conservative_profile(self):
         source = terminal_env.terminfo_source_text()
@@ -187,8 +193,7 @@ class TerminalEnvironmentTests(unittest.TestCase):
             sys.modules.pop("retrotui.core.action_runner", None)
 
     def test_cli_installs_terminfo_without_starting_curses(self):
-        from retrotui import __main__ as entry
-
+        entry = _fresh_entry_module()
         target = Path("/tmp/retrotui-terminfo")
         with (
             mock.patch.object(terminal_env, "install_terminfo", return_value=target) as installer,
@@ -204,8 +209,7 @@ class TerminalEnvironmentTests(unittest.TestCase):
         run_mock.assert_not_called()
 
     def test_cli_returns_two_when_installation_fails(self):
-        from retrotui import __main__ as entry
-
+        entry = _fresh_entry_module()
         with (
             mock.patch.object(
                 terminal_env,
