@@ -10,6 +10,15 @@ on:
       - retrotui/apps/trash.py
       - tests/test_trash_transactions.py
       - .github/workflows/prepare-transactional-trash.yml
+  pull_request:
+    branches:
+      - hardening/cooperative-file-transfers
+    paths:
+      - tools/prepare_transactional_trash.py
+      - retrotui/core/trash_transaction.py
+      - retrotui/apps/trash.py
+      - tests/test_trash_transactions.py
+      - .github/workflows/prepare-transactional-trash.yml
   workflow_dispatch:
 
 permissions:
@@ -17,6 +26,7 @@ permissions:
 
 jobs:
   prepare:
+    if: github.head_ref == 'hardening/transactional-trash' || github.ref == 'refs/heads/hardening/transactional-trash'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout branch
