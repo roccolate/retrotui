@@ -1,213 +1,247 @@
 # RetroTUI TTY Test Matrix
 
-Use this checklist to validate RetroTUI behavior across terminals/backends.
+This is the living real-environment certification document for RetroTUI v0.9.6.
 
-## v0.9.6 Certification Summary
+## Certification summary
 
-Last updated: 2026-07-09
-RetroTUI version tested: 0.9.5 / 0.9.6-dev
+**Last updated:** 2026-07-21  
+**Published package version:** `0.9.5`  
+**Certification baseline:** `main` after the completed pre-v0.9.6 stabilization gate  
+**Current state:** certification in progress; no environment is fully certified yet
+
+Automated tests validate internal contracts. They do not by themselves certify a physical TTY, terminal emulator, SSH client, multiplexer, WSL host or Windows ConPTY environment.
+
+### Automated prerequisite
+
+| OS | Python | Repository QA | unittest | pytest |
+|---|---:|---:|---:|---:|
+| Ubuntu | 3.10 | ✅ | ✅ | ✅ |
+| Ubuntu | 3.12 | ✅ | ✅ | ✅ |
+| Ubuntu | 3.14 | ✅ | ✅ | ✅ |
+| Windows | 3.10 | ✅ | ✅ | ✅ |
+| Windows | 3.12 | ✅ | ✅ | ✅ |
+| Windows | 3.14 | ✅ | ✅ | ✅ |
 
 ### Legend
 
-- ✅ Supported
-- ⚠️ Partially supported
-- ❌ Not supported
-- 🧪 Not tested yet
+- ✅ Supported: required checks completed without unresolved critical or high defects.
+- ⚠️ Partially supported: usable with documented limitations or incomplete coverage.
+- ❌ Not supported: a blocking limitation prevents supported use.
+- 🧪 Not tested yet.
 
-### Summary
+### Environment summary
 
 | Environment | Startup | Keyboard | Mouse | Resize | Unicode | Colors | Embedded Terminal | Status |
 |---|---:|---:|---:|---:|---:|---:|---:|---|
-| Linux TTY | 🧪 | 🧪 | 🧪 | 🧪 | 🧪 | 🧪 | 🧪 | Pending |
+| Linux physical TTY | 🧪 | 🧪 | 🧪 | 🧪 | 🧪 | 🧪 | 🧪 | Pending |
 | Linux GUI terminal | 🧪 | 🧪 | 🧪 | 🧪 | 🧪 | 🧪 | 🧪 | Pending |
-| SSH | ⚠️ | 🧪 | 🧪 | 🧪 | 🧪 | ⚠️ | 🧪 | Partial: MobaXterm SSH signal stress recorded only |
+| SSH | ⚠️ | 🧪 | 🧪 | 🧪 | 🧪 | ⚠️ | 🧪 | Historical signal-only evidence |
 | tmux | 🧪 | 🧪 | 🧪 | 🧪 | 🧪 | 🧪 | 🧪 | Pending |
-| screen | 🧪 | 🧪 | 🧪 | 🧪 | 🧪 | 🧪 | 🧪 | Pending |
+| GNU screen | 🧪 | 🧪 | 🧪 | 🧪 | 🧪 | 🧪 | 🧪 | Pending |
 | WSL + Windows Terminal | 🧪 | 🧪 | 🧪 | 🧪 | 🧪 | 🧪 | 🧪 | Pending |
-| Windows native | 🧪 | 🧪 | 🧪 | 🧪 | 🧪 | 🧪 | 🧪 | Pending |
+| Windows native / ConPTY | 🧪 | 🧪 | 🧪 | 🧪 | 🧪 | 🧪 | 🧪 | Pending |
 
-### v0.9.6 rules
+## Certification rules
 
-- Record every environment in the result log below.
-- Do not mark an environment ✅ unless startup, keyboard, mouse, resize, Unicode, colors, and embedded terminal behavior have all been checked.
-- If a terminal cannot support a behavior reliably, mark it ⚠️ or ❌ and document the limitation.
-- Keep README and ROADMAP aligned with the support level shown here.
+- Record every tested environment in the result log.
+- Record the exact RetroTUI commit, Python version, terminal host, locale and nesting layer.
+- Do not mark an environment supported until startup, shutdown, keyboard, mouse, resize, Unicode, colors, File Manager, Notepad and Terminal have been checked.
+- Test representative bundled plugins before assigning full support.
+- Convert reproducible RetroTUI defects into automated regressions when simulation is possible.
+- Document terminal limitations that cannot be corrected reliably.
+- Keep README, ROADMAP, PROJECT_STATUS and release notes aligned with this matrix.
 
-## 1) Test Environments
+## Target environments
 
-Mark each environment you ran:
+- [ ] Linux physical TTY.
+- [ ] Linux GUI terminal emulator.
+- [ ] tmux over a GUI terminal.
+- [ ] tmux over a physical TTY.
+- [ ] GNU screen.
+- [ ] Linux or BSD SSH client to a remote host.
+- [x] Windows with MobaXterm SSH to VPS — historical signal-only evidence, not full certification.
+- [ ] Windows Terminal with OpenSSH.
+- [ ] Windows Terminal with WSL2.
+- [ ] Native Windows Python with `windows-curses` and `pywinpty` / ConPTY.
 
-- [ ] Linux Mint `tty` real (`Ctrl+Alt+F3`, `TERM=linux`)
-- [ ] Linux Mint `tmux` over real `tty`
-- [ ] Linux Mint GUI terminal (GNOME Terminal/Konsole)
-- [ ] Linux Mint `ssh` -> VPS
-- [x] Windows + MobaXterm `ssh` -> VPS
-- [ ] Windows Terminal (PowerShell/OpenSSH) `ssh` -> VPS
-- [ ] Windows Terminal + WSL2
-- [ ] Windows native Python + `pywinpty` / ConPTY
-- [ ] `screen`
+## Information to record
 
-## 2) Baseline Info (per environment)
+For each run capture:
 
-Record before running checks:
+- operating system and version;
+- terminal emulator or physical TTY;
+- local, SSH, tmux, screen or WSL nesting;
+- RetroTUI version and commit;
+- Python version;
+- `TERM`, `COLORTERM`, locale and encoding where applicable;
+- reported color capacity;
+- mouse backend;
+- Windows Terminal, PowerShell and ConPTY information when applicable.
 
-```bash
-echo "TERM=$TERM"
-echo "TMUX=$TMUX"
-echo "STY=$STY"
-tput colors
-python -V
-uname -a
-```
+## Automated prerequisite per environment
 
-For Windows native, also record:
-
-```powershell
-python -V
-$PSVersionTable.PSVersion
-```
-
-## 3) Automated Stress
-
-### A. Signal stress (required)
+Run the permanent gate from a clean development installation:
 
 ```bash
-python tools/tty_signal_stress.py --iterations 5
+python -m pip install -e ".[test]"
+python tools/qa.py --skip-tests
+python -m unittest discover -s tests -v
+python -m pytest tests -q
 ```
 
 Mark:
 
-- [x] PASS (MobaXterm SSH -> VPS, 2026-02-24, `python3 tools/tty_signal_stress.py --iterations 5`)
-- [ ] FAIL (attach output)
+- [ ] Repository QA passed.
+- [ ] unittest passed.
+- [ ] pytest passed.
+- [ ] Correct platform dependencies were installed.
 
-### B. QA suite (recommended)
+A failure here blocks manual certification for that environment.
 
-```bash
-python tools/qa.py
-```
+## Desktop smoke test
 
-Mark:
+- [ ] Launch and exit RetroTUI cleanly five times.
+- [ ] Open and close windows repeatedly.
+- [ ] Drag, resize, minimize, restore and maximize windows.
+- [ ] Cycle focus with keyboard and mouse.
+- [ ] Open and close global, window and context menus.
+- [ ] Confirm `Ctrl+Q` closes menu layers before requesting application exit.
+- [ ] Confirm `Esc` closes the active menu layer and otherwise reaches the focused app.
+- [ ] Test clipboard copy and paste.
+- [ ] Resize the host terminal repeatedly, including small dimensions.
+- [ ] Confirm terminal modes and the host shell are restored after exit.
 
-- [ ] PASS
-- [ ] FAIL (attach output)
+## File Manager
 
-## 4) Interactive Smoke Stress (required)
+- [ ] Directory navigation.
+- [ ] Dual-pane mode and pane focus.
+- [ ] Copy, move, rename, new file and new directory.
+- [ ] Drag-and-drop copies into File Manager instead of navigating unexpectedly.
+- [ ] Permission-denied and missing-path errors are surfaced without crashing.
+- [ ] Trash and undo behavior where supported.
 
-Run RetroTUI:
+## Notepad
 
-```bash
-python -m retrotui
-```
+- [ ] Open and save UTF-8 files.
+- [ ] Edit wide and combining characters.
+- [ ] Word wrap remains stable after resize.
+- [ ] Dirty close requests confirmation.
+- [ ] Dirty Open does not discard content without confirmation.
+- [ ] Cancel preserves the window and content.
 
-Optional mouse diagnostics (recommended when drag/click behavior differs by terminal):
+## Embedded Terminal
 
-```bash
-python tools/debug_mouse.py
-```
+Exercise available tools such as `less`, `nano`, `vim`, `top`, `htop` and `mc`.
 
-Perform each test for 2-3 minutes and mark PASS/FAIL:
+- [ ] Shell starts and accepts input.
+- [ ] Cursor remains accurate after wraps and resize.
+- [ ] Alternate-screen applications return to the normal screen.
+- [ ] Scrollback does not duplicate or corrupt visible rows.
+- [ ] Selection and copy work.
+- [ ] `Ctrl+C` copies a selection when one exists.
+- [ ] `Ctrl+C` interrupts the child when no selection exists.
+- [ ] Large paste/input preserves FIFO byte order.
+- [ ] Continuous output does not freeze the desktop.
+- [ ] Output continues to drain while Terminal is minimized.
+- [ ] DEC mouse pass-through works when requested by the child.
+- [ ] RetroTUI retains mouse ownership when the child does not request it.
+- [ ] Closing Terminal terminates the child or visibly reports a failed close.
 
-- [ ] Open/close windows repeatedly (10+ cycles)
-- [ ] Drag and resize windows continuously
-- [ ] Right click menus (desktop + window body)
-- [ ] Text selection + click outside clears selection
-- [ ] `Ctrl+C` in Terminal:
-  - [ ] With selection: copies selection
-  - [ ] Without selection: interrupts foreground process only
-- [ ] `Ctrl+Q` policy:
-  - [ ] With context/menu layers open: closes layer first, does not exit app
-  - [ ] With clean session: opens global exit flow
-- [ ] `Esc` policy:
-  - [ ] With menu layer open: closes active layer
-  - [ ] Without menu layer: reaches focused app (not globally swallowed)
-- [ ] Paste paths/text (`Ctrl+V`) in Terminal and Notepad
-- [ ] Terminal resize redraw is stable (no corruption)
-- [ ] Exit and relaunch RetroTUI cleanly 5 times
-- [ ] Mouse debugger reports expected raw flags and normalized semantics during click/drag
+### Windows-native ConPTY
 
-## 5) Embedded Terminal Focus Tests
+- [ ] Shell starts in the requested working directory.
+- [ ] Inherited environment variables remain available.
+- [ ] Extra environment values override or extend inherited values.
+- [ ] Resize reaches ConPTY.
+- [ ] Interrupt and terminate behavior is observable.
+- [ ] Closing the window does not leave the child process alive.
+- [ ] A failed close is reported instead of silently discarding backend state.
 
-Run these from a RetroTUI Terminal window where the tools are available:
+## Unicode, color and layout
 
-```bash
-nano
-vim
-less README.md
-top
-htop
-mc
-printf '\033[31mred\033[0m normal\n'
-printf '\033[?1049hALT SCREEN\033[?1049lNORMAL\n'
-```
+- [ ] ASCII and box-drawing characters align.
+- [ ] CJK and other wide characters do not split borders or cursor positions.
+- [ ] Combining characters do not crash drawing paths.
+- [ ] Emoji behavior is acceptable or documented.
+- [ ] Eight-color mode remains readable.
+- [ ] Higher-color modes map themes correctly.
+- [ ] Limited color-pair capacity degrades without invalid pair access.
+- [ ] Small host terminal dimensions do not crash rendering.
 
-Check:
-
-- [ ] Cursor position is accurate
-- [ ] Alt-screen returns to normal screen
-- [ ] Scrollback does not corrupt live screen
-- [ ] Mouse pass-through works when the child app enables DEC mouse reporting
-- [ ] RetroTUI keeps mouse control when the child app does not request mouse reporting
-- [ ] Resize updates terminal dimensions without corrupting buffers
-
-## 6) Result Log Template
-
-Copy/paste one block per environment:
+## Result log template
 
 ```text
 Environment:
-Host:
+Host OS/version:
+Terminal host/emulator:
+Connection/nesting:
 Date:
-TERM:
-TMUX:
-STY:
-Colors (tput):
+RetroTUI version:
+RetroTUI commit:
 Python:
-RetroTUI commit/version:
+TERM/COLORTERM:
+Locale/encoding:
+Color capacity:
+Mouse backend:
 
-Startup:
+Repository QA:
+unittest:
+pytest:
+Signal/lifecycle stress:
+
+Startup/shutdown:
 Keyboard:
 Mouse:
 Resize:
 Unicode:
 Colors:
+File Manager:
+Notepad:
 Embedded Terminal:
-Signal stress:
-QA:
-Smoke:
+Bundled plugins:
+
+Classification: Supported | Partially supported | Not supported | Incomplete
 
 Observed issues:
+- 
+
+Limitations/exclusions:
 - 
 
 Notes:
 - 
 ```
 
-Latest recorded run:
+## Recorded results
+
+### Windows + MobaXterm SSH to VPS — historical partial result
 
 ```text
-Environment: Windows + MobaXterm ssh -> VPS
+Environment: Windows + MobaXterm SSH to VPS
 Host: instance-20260202-1816
 Date: 2026-02-24
 TERM: xterm
-TMUX:
-Colors (tput): 8 (xterm), 256 available via xterm-256color terminfo
+Colors: 8 reported; 256-color terminfo available
 
-Signal stress: PASS (SIGINT/SIGTERM/SIGHUP x5 all OK)
-QA: N/A on remote capture
-Smoke: Pending
+Signal/lifecycle stress: PASS for repeated SIGINT, SIGTERM and SIGHUP
+Automated QA: not captured
+Interactive smoke: not completed
+Classification: Incomplete / historical signal-only evidence
 
-Observed issues:
-- Moba session negotiates TERM=xterm by default; limits color depth to 8.
-
-Notes:
-- Use `export TERM=xterm-256color` for current session when testing palette behavior.
+Observed issue:
+- MobaXterm negotiated TERM=xterm by default, limiting advertised color depth.
 ```
 
-## 7) Pass Criteria
+## Pass criteria for v0.9.6
 
-- No terminal corruption after stress runs.
-- No accidental exit to host shell from `Ctrl+C` in normal session.
-- Mouse behavior consistent enough for daily workflow (click/drag/right-click).
-- Selection behavior consistent (outside click clears selection).
-- Embedded terminal supports common TUI apps well enough for daily use.
-- Support claims in README and ROADMAP match this matrix.
+An environment can be marked supported only when:
+
+- startup and shutdown are reproducible;
+- keyboard, mouse and resize are usable;
+- Unicode and color behavior are documented;
+- File Manager, Notepad and Terminal complete the required checks;
+- the embedded terminal is usable for the declared common TUI applications;
+- no unresolved critical or high defect contradicts the support claim;
+- limitations and skipped checks are explicit.
+
+The milestone closes when every target environment is supported, partially supported, not supported, or explicitly untested with a reason, and all public support claims match those classifications.
