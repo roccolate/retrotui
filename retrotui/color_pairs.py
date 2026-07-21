@@ -32,6 +32,7 @@ class ColorPairNegotiator:
         self._logical_definitions: dict[int, tuple[int, int]] = {}
         self._combo_to_actual: dict[tuple[int, int], int] = {}
         self._actual_definitions: dict[int, tuple[int, int]] = {}
+        self._actual_users: dict[int, set[int]] = {}
 
     def color_pair_capacity(self) -> int:
         """Return the backend pair count, including reserved pair zero."""
@@ -58,12 +59,51 @@ class ColorPairNegotiator:
                 return pair_id
         return 0
 
+    def _release_logical(self, logical: int) -> int:
+        """Detach a logical mapping and release an actual pair when unused."""
+        actual = self._logical_to_actual.pop(logical, 0)
+        combo = self._logical_definitions.pop(logical, None)
+        if actual <= 0:
+            return actual
+
+        users = self._actual_users.get(actual)
+        if users is not None:
+            users.discard(logical)
+            if users:
+                return actual
+            self._actual_users.pop(actual, None)
+
+        actual_combo = self._actual_definitions.pop(actual, None)
+        if (
+            actual_combo is not None
+            and self._combo_to_actual.get(actual_combo) == actual
+        ):
+            self._combo_to_actual.pop(actual_combo, None)
+        elif combo is not None and self._combo_to_actual.get(combo) == actual:
+            self._combo_to_actual.pop(combo, None)
+        return actual
+
+    def _bind_logical(
+        self,
+        logical: int,
+        combo: tuple[int, int],
+        actual: int,
+    ) -> None:
+        self._logical_definitions[logical] = combo
+        self._logical_to_actual[logical] = actual
+        if actual <= 0:
+            return
+        self._actual_definitions[actual] = combo
+        self._actual_users.setdefault(actual, set()).add(logical)
+        self._combo_to_actual.setdefault(combo, actual)
+
     def init_pair(self, logical_pair_id, fg, bg):
-        """Initialize a logical pair without ever exceeding ``COLOR_PAIRS``.
+        """Initialize a logical pair without exceeding ``COLOR_PAIRS``.
 
         On constrained terminals equal foreground/background combinations share
-        one actual pair. When all slots are exhausted, the logical pair maps to
-        pair zero and rendering degrades to the default terminal attributes.
+        one actual pair. Redefining a logical pair preserves legacy curses
+        semantics without mutating an actual pair shared by another logical ID.
+        When all slots are exhausted, the pair degrades to pair zero.
         """
         try:
             logical = int(logical_pair_id)
@@ -74,52 +114,65 @@ class ColorPairNegotiator:
         if logical <= 0:
             return None
 
-        previous = self._logical_definitions.get(logical)
-        if previous is not None:
-            # First definition wins within one init_colors generation. This
-            # prevents app-local fixed IDs from overwriting ANSI/theme pairs.
+        previous_combo = self._logical_definitions.get(logical)
+        if previous_combo == combo:
             return None
 
         capacity = self.color_pair_capacity()
         if capacity <= 1 or not callable(self._original_init_pair):
-            self._logical_definitions[logical] = combo
-            self._logical_to_actual[logical] = 0
+            self._release_logical(logical)
+            self._bind_logical(logical, combo, 0)
             return None
 
         compact = capacity < LEGACY_COLOR_PAIR_CAPACITY
+        previous_actual = self._logical_to_actual.get(logical, 0)
         actual = 0
+        needs_init = True
 
         if compact:
-            actual = self._combo_to_actual.get(combo, 0)
-
-        if (
-            not actual
-            and 0 < logical < capacity
-            and logical not in self._actual_definitions
-        ):
-            actual = logical
-
-        if not actual:
+            shared_combo_actual = self._combo_to_actual.get(combo, 0)
+            if shared_combo_actual:
+                actual = shared_combo_actual
+                needs_init = False
+            elif (
+                previous_actual > 0
+                and len(self._actual_users.get(previous_actual, ())) <= 1
+            ):
+                actual = previous_actual
+            elif (
+                0 < logical < capacity
+                and logical not in self._actual_definitions
+            ):
+                actual = logical
+            else:
+                actual = self._first_free_actual(capacity)
+        elif 0 < logical < capacity:
+            users = self._actual_users.get(logical, set())
+            if not users or users == {logical}:
+                actual = logical
+            else:
+                actual = self._first_free_actual(capacity)
+        else:
             actual = self._first_free_actual(capacity)
 
+        self._release_logical(logical)
+
         if not actual:
-            self._logical_definitions[logical] = combo
-            self._logical_to_actual[logical] = 0
+            self._bind_logical(logical, combo, 0)
             return None
 
-        try:
-            result = self._original_init_pair(actual, combo[0], combo[1])
-        except Exception:
-            # Curses errors are backend-boundary failures; degrading one pair
-            # must not abort application startup.
-            self._logical_definitions[logical] = combo
-            self._logical_to_actual[logical] = 0
-            return None
+        if needs_init:
+            try:
+                result = self._original_init_pair(actual, combo[0], combo[1])
+            except Exception:
+                # Curses errors are backend-boundary failures; degrading one
+                # pair must not abort application startup.
+                self._bind_logical(logical, combo, 0)
+                return None
+        else:
+            result = None
 
-        self._logical_definitions[logical] = combo
-        self._logical_to_actual[logical] = actual
-        self._actual_definitions[actual] = combo
-        self._combo_to_actual.setdefault(combo, actual)
+        self._bind_logical(logical, combo, actual)
         return result
 
     def resolve_pair_id(self, logical_pair_id) -> int:
@@ -134,7 +187,7 @@ class ColorPairNegotiator:
             return mapped
 
         capacity = self.color_pair_capacity()
-        if 0 <= logical < capacity:
+        if capacity >= LEGACY_COLOR_PAIR_CAPACITY and 0 <= logical < capacity:
             return logical
         return 0
 
