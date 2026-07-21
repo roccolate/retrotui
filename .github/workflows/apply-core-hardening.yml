@@ -66,8 +66,26 @@ jobs:
         shell: bash
         run: test "${RUFF_STATUS}" -eq 0
 
-      - name: unittest
-        run: python -m unittest discover -s tests -v
+      - name: Capture unittest report
+        shell: bash
+        run: |
+          set +e
+          python -m unittest discover -s tests -v > unittest-report.txt 2>&1
+          status=$?
+          tail -n 120 unittest-report.txt
+          echo "UNITTEST_STATUS=$status" >> "$GITHUB_ENV"
+          exit 0
+
+      - name: Upload unittest report
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: unittest-report
+          path: unittest-report.txt
+
+      - name: Enforce unittest
+        shell: bash
+        run: test "${UNITTEST_STATUS}" -eq 0
 
       - name: pytest
         run: python -m pytest tests -q
