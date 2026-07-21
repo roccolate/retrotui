@@ -19,8 +19,8 @@ from ..utils import check_unicode_support, init_colors
 from ..theme import get_theme
 from ..ui.dialog import Dialog, InputDialog, ProgressDialog
 from ..ui.window import Window
-from .config import AppConfig, load_config, save_config
-from .actions import ActionResult, ActionType, AppAction
+from .config import AppConfig, CONFIG_SCHEMA_VERSION, load_config, save_config
+from .actions import ActionResult, ActionType, AppAction, SaveConfirmPayload
 from .action_runner import execute_app_action
 from .drag_drop import DragDropManager
 from .file_operations import FileOperationManager
@@ -168,18 +168,11 @@ class RetroTUI:
             f"{title} has unsaved changes.\n"
             "Discard them and continue?"
         )
-        on_discard = None
-        on_cancel = None
-        if isinstance(payload, dict):
-            candidate = payload.get("on_discard")
-            if callable(candidate):
-                on_discard = candidate
-            candidate = payload.get("on_cancel")
-            if callable(candidate):
-                on_cancel = candidate
-            custom_message = payload.get("message")
-            if isinstance(custom_message, str) and custom_message.strip():
-                message = custom_message
+        request = SaveConfirmPayload.from_value(payload)
+        on_discard = request.on_discard
+        on_cancel = request.on_cancel
+        if request.message.strip():
+            message = request.message
         if on_discard is None:
             fallback = getattr(win, "_do_open_path_force", None)
             if callable(fallback):
@@ -696,6 +689,11 @@ class RetroTUI:
                 self.default_sunday_first = win.week_starts_sunday
                 break
         self.config = AppConfig(
+            schema_version=getattr(
+                self.config,
+                "schema_version",
+                CONFIG_SCHEMA_VERSION,
+            ),
             theme=self.theme_name,
             show_hidden=self.default_show_hidden,
             word_wrap_default=self.default_word_wrap,

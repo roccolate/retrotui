@@ -7,7 +7,7 @@ processes dialog button results, keeping the core App class leaner.
 import logging
 
 from ..ui.dialog import Dialog
-from .actions import ActionType, AppAction
+from .actions import ActionType, AppAction, ConfigUpdatePayload, FileTransferPayload
 
 LOGGER = logging.getLogger(__name__)
 
@@ -97,7 +97,8 @@ class DialogDispatcher:
                 if result_type == ActionType.REQUEST_COPY_BETWEEN_PANES
                 else 'move'
             )
-            destination = self._app._resolve_between_panes_destination(source_win, result_payload)
+            transfer = FileTransferPayload.from_value(result_payload)
+            destination = self._app._resolve_between_panes_destination(source_win, transfer)
             if not source_win:
                 self._app.dialog = Dialog(
                     'Operation Error',
@@ -114,9 +115,7 @@ class DialogDispatcher:
                     width=62,
                 )
                 return True
-            source_path = None
-            if isinstance(result_payload, dict):
-                source_path = result_payload.get('source')
+            source_path = transfer.source or None
             op_result = self._app._run_file_operation_with_progress(
                 source_win,
                 operation=operation,
@@ -152,8 +151,11 @@ class DialogDispatcher:
             return True
 
         if result_type == ActionType.UPDATE_CONFIG:
-            payload = result_payload or {}
-            self._app.apply_preferences(**payload, apply_to_open_windows=False)
+            update = ConfigUpdatePayload.from_value(result_payload)
+            self._app.apply_preferences(
+                **update.as_kwargs(),
+                apply_to_open_windows=False,
+            )
             self._app.persist_config()
             return True
 

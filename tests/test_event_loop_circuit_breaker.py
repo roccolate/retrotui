@@ -158,6 +158,51 @@ class EventLoopCircuitBreakerTests(unittest.TestCase):
         self.assertFalse(hasattr(app, "_event_loop_abort_reason"))
         app.cleanup.assert_called_once_with()
 
+    def test_slotted_plugin_is_isolated_without_dynamic_attributes(self):
+        class SlottedWindow:
+            __slots__ = (
+                "title",
+                "visible",
+                "tick_when_hidden",
+                "wants_periodic_tick",
+                "tick",
+            )
+
+            def __init__(self):
+                self.title = "Slotted plugin"
+                self.visible = True
+                self.tick_when_hidden = True
+                self.wants_periodic_tick = True
+                self.tick = mock.Mock(side_effect=RuntimeError("slotted failure"))
+
+        window = SlottedWindow()
+        app = types.SimpleNamespace(windows=[window], event_loop_failure_limit=3)
+
+        for _ in range(4):
+            self.event_loop._tick_and_probe_windows(app)
+
+        snapshot = self.event_loop._component_failure_snapshot(app, window, "tick")
+        self.assertEqual(window.tick.call_count, 3)
+        self.assertTrue(snapshot["disabled"])
+        self.assertEqual(snapshot["failure_count"], 3)
+        self.assertIsInstance(snapshot["first_error"], RuntimeError)
+        self.assertFalse(hasattr(window, "_retrotui_tick_disabled"))
+
+    def test_failure_registry_prunes_closed_windows(self):
+        window = types.SimpleNamespace(
+            visible=True,
+            tick_when_hidden=False,
+            wants_periodic_tick=True,
+            tick=mock.Mock(side_effect=RuntimeError("once")),
+        )
+        app = types.SimpleNamespace(windows=[window], event_loop_failure_limit=3)
+        self.event_loop._tick_and_probe_windows(app)
+        self.assertTrue(app._component_failure_states)
+
+        app.windows = []
+        self.event_loop._prune_component_failure_states(app)
+
+        self.assertEqual(app._component_failure_states, {})
 
 if __name__ == "__main__":
     unittest.main()

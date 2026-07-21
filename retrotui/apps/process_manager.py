@@ -6,7 +6,7 @@ import signal
 import time
 from dataclasses import dataclass
 
-from ..core.actions import ActionResult, ActionType, AppAction
+from ..core.actions import ActionResult, ActionType, AppAction, ProcessSignalPayload
 from ..ui.menu import WindowMenu
 from ..ui.window import Window
 from ..utils import normalize_key_code, safe_addstr, theme_attr
@@ -307,14 +307,18 @@ class ProcessManagerWindow(Window):
         row = self._selected_row()
         if row is None:
             return ActionResult(ActionType.ERROR, "No process selected.")
-        payload = {"pid": row.pid, "command": row.command, "signal": signal.SIGTERM}
+        payload = ProcessSignalPayload(
+            pid=row.pid,
+            command=row.command,
+            signal=signal.SIGTERM,
+        )
         return ActionResult(ActionType.REQUEST_KILL_CONFIRM, payload)
 
     def kill_process(self, payload):
         """Send requested signal to one process."""
-        data = payload or {}
-        pid = int(data.get("pid", 0))
-        sig = int(data.get("signal", signal.SIGTERM))
+        data = ProcessSignalPayload.from_value(payload)
+        pid = data.pid
+        sig = data.signal
         if pid <= 0:
             return ActionResult(ActionType.ERROR, "Invalid PID.")
         try:

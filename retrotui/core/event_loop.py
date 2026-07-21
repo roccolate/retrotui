@@ -5,6 +5,7 @@ import inspect
 import logging
 import os
 import time
+from dataclasses import dataclass
 
 from ..constants import (
     BOTTOM_BARS_HEIGHT,
@@ -55,50 +56,129 @@ def _event_loop_backoff_s(app, failure_count):
     return min(0.5, max(0.0, base) * max(1, int(failure_count)))
 
 
-def _component_failure_attr(phase, suffix):
-    return f"_retrotui_{phase}_{suffix}"
+@dataclass
+class _ComponentFailureState:
+    """Runtime-owned failure state for one component hook."""
+
+    component: object
+    phase: str
+    failure_count: int = 0
+    first_error: BaseException | None = None
+    disabled: bool = False
 
 
-def _reset_component_failure(component, phase):
-    """Reset one component failure streak after a successful call."""
+def _component_failure_states(app):
+    """Return the app-owned component failure registry."""
+    states = getattr(app, "_component_failure_states", None)
+    if isinstance(states, dict):
+        return states
+    states = {}
+    app._component_failure_states = states
+    return states
+
+
+def _component_failure_state(app, component, phase, *, create=True):
+    states = _component_failure_states(app)
+    key = (id(component), str(phase))
+    state = states.get(key)
+    if state is not None and state.component is component:
+        return state
+    if not create:
+        return None
+    state = _ComponentFailureState(component=component, phase=str(phase))
+    states[key] = state
+    return state
+
+
+def _component_failure_snapshot(app, component, phase):
+    """Return a diagnostics snapshot without exposing mutable registry state."""
+    state = _component_failure_state(app, component, phase, create=False)
+    if state is None:
+        return {
+            "failure_count": 0,
+            "first_error": None,
+            "disabled": False,
+        }
+    return {
+        "failure_count": state.failure_count,
+        "first_error": state.first_error,
+        "disabled": state.disabled,
+    }
+
+
+def _mirror_component_failure(component, phase, state):
+    """Best-effort compatibility mirror for old diagnostics and tests."""
+    values = {
+        f"_retrotui_{phase}_failure_count": state.failure_count,
+        f"_retrotui_{phase}_first_error": state.first_error,
+        f"_retrotui_{phase}_disabled": state.disabled,
+    }
+    for name, value in values.items():
+        try:
+            setattr(component, name, value)
+        except (AttributeError, TypeError):
+            continue
+
+
+def _component_hook_disabled(app, component, phase):
+    state = _component_failure_state(app, component, phase, create=False)
+    return bool(state is not None and state.disabled)
+
+
+def _prune_component_failure_states(app):
+    """Drop registry entries for windows that are no longer registered."""
+    states = getattr(app, "_component_failure_states", None)
+    if not isinstance(states, dict) or not states:
+        return
     try:
-        setattr(component, _component_failure_attr(phase, "failure_count"), 0)
-        setattr(component, _component_failure_attr(phase, "first_error"), None)
+        live_windows = tuple(app.windows)
     except (AttributeError, TypeError):
-        pass
+        return
+    live_by_id = {id(window): window for window in live_windows}
+    for key, state in tuple(states.items()):
+        if live_by_id.get(key[0]) is not state.component:
+            states.pop(key, None)
+
+
+def _reset_component_failure(app, component, phase):
+    """Reset one component failure streak after a successful call."""
+    state = _component_failure_state(app, component, phase, create=False)
+    if state is None or state.disabled:
+        return
+    state.failure_count = 0
+    state.first_error = None
+    _mirror_component_failure(component, phase, state)
 
 
 def _record_component_failure(app, component, phase, exc):
     """Record and eventually isolate a repeatedly failing window hook."""
-    count_attr = _component_failure_attr(phase, "failure_count")
-    first_attr = _component_failure_attr(phase, "first_error")
-    disabled_attr = _component_failure_attr(phase, "disabled")
-    count = int(getattr(component, count_attr, 0) or 0) + 1
-    try:
-        setattr(component, count_attr, count)
-        if getattr(component, first_attr, None) is None:
-            setattr(component, first_attr, exc)
-    except (AttributeError, TypeError):
-        pass
+    state = _component_failure_state(app, component, phase)
+    state.failure_count += 1
+    if state.first_error is None:
+        state.first_error = exc
+    _mirror_component_failure(component, phase, state)
 
     title = getattr(component, "title", component.__class__.__name__)
-    if count == 1:
+    if state.failure_count == 1:
         LOGGER.exception("window %s failed during %s", title, phase)
     else:
         LOGGER.warning(
             "window %s repeated %s failure (%d/%d): %s",
             title,
             phase,
-            count,
+            state.failure_count,
             _event_loop_failure_limit(app),
             exc,
         )
 
-    if count < _event_loop_failure_limit(app):
+    if state.failure_count < _event_loop_failure_limit(app):
         return False
 
+    state.disabled = True
+    _mirror_component_failure(component, phase, state)
+    # Existing scheduling/visibility fields are adjusted when writable, but
+    # isolation no longer depends on adding private attributes to the plugin.
     try:
-        setattr(component, disabled_attr, True)
         if phase == "tick":
             setattr(component, "tick_when_hidden", False)
             setattr(component, "wants_periodic_tick", False)
@@ -149,14 +229,17 @@ def _draw_component(component, stdscr, frame_size):
 
 def _draw_window_component(app, component, stdscr, frame_size):
     """Draw one window and isolate it after repeated deterministic failures."""
-    if getattr(component, "_retrotui_draw_disabled", False):
+    if (
+        _component_hook_disabled(app, component, "draw")
+        or getattr(component, "_retrotui_draw_disabled", False)
+    ):
         return
     try:
         _draw_component(component, stdscr, frame_size)
     except Exception as exc:  # Window/plugin boundary: isolate third-party code.
         _record_component_failure(app, component, "draw", exc)
         return
-    _reset_component_failure(component, "draw")
+    _reset_component_failure(app, component, "draw")
 
 
 def clamp_windows_to_terminal(app):
@@ -169,6 +252,7 @@ def clamp_windows_to_terminal(app):
 
 def draw_frame(app):
     """Render a full frame before reading input."""
+    _prune_component_failure_states(app)
     frame_size = app.stdscr.getmaxyx()
     app._render_cycle_id = int(getattr(app, "_render_cycle_id", 0)) + 1
     app._frame_size = frame_size
@@ -280,6 +364,8 @@ def dispatch_input(app, key):
 def _has_live_terminals(app):
     """Return True if a visible or service-ticked window has a live PTY."""
     for w in app.windows:
+        if _component_hook_disabled(app, w, "tick"):
+            continue
         visible = getattr(w, "visible", True)
         if not visible and not getattr(w, "tick_when_hidden", False):
             continue
@@ -292,6 +378,8 @@ def _has_live_terminals(app):
 def _has_periodic_windows(app):
     """Return True if any visible window requests periodic scheduling."""
     for window in app.windows:
+        if _component_hook_disabled(app, window, "tick"):
+            continue
         if not getattr(window, "visible", True):
             continue
         if bool(getattr(window, "wants_periodic_tick", False)):
@@ -306,6 +394,7 @@ def _tick_and_probe_windows(app):
     visible state changed. ``wants_periodic_tick`` only selects a shorter
     polling cadence, while ``tick_when_hidden`` allows service progression.
     """
+    _prune_component_failure_states(app)
     changed = False
     has_live = False
     has_periodic = False
@@ -316,13 +405,17 @@ def _tick_and_probe_windows(app):
             continue
 
         tick = getattr(window, "tick", None)
-        if callable(tick) and not getattr(window, "_retrotui_tick_disabled", False):
+        if (
+            callable(tick)
+            and not _component_hook_disabled(app, window, "tick")
+            and not getattr(window, "_retrotui_tick_disabled", False)
+        ):
             try:
                 tick_changed = bool(tick())
             except Exception as exc:  # Window/plugin boundary.
                 _record_component_failure(app, window, "tick", exc)
             else:
-                _reset_component_failure(window, "tick")
+                _reset_component_failure(app, window, "tick")
                 if visible:
                     changed = tick_changed or changed
 
@@ -343,20 +436,25 @@ def _tick_visible_windows(app):
     Window ``tick`` methods may poll background state or collect pending output,
     but must not call curses drawing APIs.
     """
+    _prune_component_failure_states(app)
     changed = False
     for w in app.windows:
         visible = getattr(w, "visible", True)
         if not visible and not getattr(w, "tick_when_hidden", False):
             continue
         tick = getattr(w, "tick", None)
-        if not callable(tick) or getattr(w, "_retrotui_tick_disabled", False):
+        if (
+            not callable(tick)
+            or _component_hook_disabled(app, w, "tick")
+            or getattr(w, "_retrotui_tick_disabled", False)
+        ):
             continue
         try:
             tick_changed = bool(tick())
         except Exception as exc:  # Window/plugin boundary.
             _record_component_failure(app, w, "tick", exc)
         else:
-            _reset_component_failure(w, "tick")
+            _reset_component_failure(app, w, "tick")
             if visible:
                 changed = tick_changed or changed
     return changed

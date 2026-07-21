@@ -7,7 +7,7 @@ import time
 from types import SimpleNamespace
 
 from ..ui.dialog import Dialog, InputDialog, ProgressDialog
-from .actions import ActionResult, ActionType
+from .actions import ActionResult, ActionType, FileTransferPayload, ProcessSignalPayload
 from .file_transfer import TransferCancelled
 from .trash_transaction import list_trash_items
 from .dialog_workflow import DialogWorkflowId, bind_dialog
@@ -252,10 +252,10 @@ class FileOperationManager:
 
     def show_kill_confirm_dialog(self, win, payload):
         """Show confirmation dialog before sending signal to a process."""
-        data = payload or {}
-        pid = data.get('pid')
-        command = data.get('command', '')
-        if not pid:
+        data = ProcessSignalPayload.from_value(payload)
+        pid = data.pid
+        command = data.command
+        if pid <= 0:
             self._notify_error('No process selected.')
             return
 
@@ -263,14 +263,14 @@ class FileOperationManager:
         message = (
             f"Kill process PID {pid}?\n"
             f"{command[:40]}\n\n"
-            "Signal: SIGTERM (15)"
+            f"Signal: {data.signal}"
         )
         self._app.dialog = bind_dialog(
             Dialog(title, message, ['Kill', 'Cancel'], width=58),
             workflow_id=DialogWorkflowId.CALLBACK,
             source_window=win,
             on_accept=(
-                lambda target=win, data=data: target.kill_process(data)
+                lambda target=win, request=payload: target.kill_process(request)
                 if callable(getattr(target, 'kill_process', None))
                 else ActionResult(ActionType.ERROR, 'Window does not support process kill.')
             ),
@@ -294,10 +294,9 @@ class FileOperationManager:
     @staticmethod
     def _resolve_between_panes_destination(win, payload):
         """Resolve destination path for copy/move between panes requests."""
-        if isinstance(payload, dict):
-            destination = str(payload.get('destination') or payload.get('dest') or '').strip()
-            if destination:
-                return destination
+        request = FileTransferPayload.from_value(payload)
+        if request.destination:
+            return request.destination
 
         if not win or not getattr(win, 'dual_pane_enabled', False):
             return None
