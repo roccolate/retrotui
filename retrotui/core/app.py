@@ -360,6 +360,8 @@ class RetroTUI:
         self._prev_signal_handlers = {}
         self._sigint_handler_installed = False
         self._shutdown_signal = None
+        self._cleanup_started = False
+        self._cleanup_complete = False
         # Create the lifecycle bus before managers so events and
         # subscriptions never depend on accidental access order.
         self._event_bus = self.event_bus
@@ -767,25 +769,64 @@ class RetroTUI:
         return h < self.MIN_TERM_HEIGHT or w < self.MIN_TERM_WIDTH
 
     def cleanup(self):
-        """Restore terminal state."""
-        self._restore_runtime_signal_handlers()
-        op_state = getattr(self, '_background_operation', None)
-        if op_state:
-            thread = op_state.get('thread')
-            if thread and thread.is_alive():
-                thread.join(timeout=self.BACKGROUND_OPERATION_JOIN_TIMEOUT)
-                if thread.is_alive():
+        """Run one idempotent, ordered shutdown pass.
+
+        Returns True when every side-effecting global worker and window cleanup
+        hook confirmed completion. Terminal restoration still runs on failures.
+        """
+        if getattr(self, "_cleanup_complete", False):
+            return True
+        if getattr(self, "_cleanup_started", False):
+            LOGGER.warning("Ignoring re-entrant RetroTUI cleanup request.")
+            return False
+
+        self._cleanup_started = True
+        self.running = False
+        success = True
+        try:
+            self._restore_runtime_signal_handlers()
+
+            file_ops = getattr(self, "_file_ops", None)
+            if file_ops is not None:
+                stopped = file_ops.shutdown(
+                    timeout=self.BACKGROUND_OPERATION_JOIN_TIMEOUT
+                )
+                if not stopped:
+                    success = False
                     LOGGER.warning(
-                        'Background operation did not finish within %.1fs during shutdown.',
+                        "File operation worker did not stop within %.1fs during shutdown.",
                         self.BACKGROUND_OPERATION_JOIN_TIMEOUT,
                     )
-        for win in list(self.windows):
-            self.window_mgr.close_window(win, force=True)
-        if hasattr(self, '_notifications'):
-            self._notifications.cleanup()
-        if hasattr(self, '_event_bus'):
-            self._event_bus.clear()
-        disable_mouse_support()
+            else:
+                # Compatibility for partially constructed app instances and
+                # pre-WorkerScope background-operation state.
+                op_state = getattr(self, "_background_operation", None)
+                thread = op_state.get("thread") if isinstance(op_state, dict) else None
+                if thread is not None and thread.is_alive():
+                    thread.join(timeout=self.BACKGROUND_OPERATION_JOIN_TIMEOUT)
+                    if thread.is_alive():
+                        success = False
+                        LOGGER.warning(
+                            "Legacy background operation did not finish within %.1fs during shutdown.",
+                            self.BACKGROUND_OPERATION_JOIN_TIMEOUT,
+                        )
+
+            for win in list(self.windows):
+                if not self.window_mgr.close_window(win, force=True):
+                    success = False
+                    LOGGER.warning("Window cleanup was not verified for %r", win)
+
+            self.dialog = None
+            self.context_menu = None
+            if hasattr(self, "_notifications"):
+                self._notifications.cleanup()
+            if hasattr(self, "_event_bus"):
+                self._event_bus.clear()
+        finally:
+            disable_mouse_support()
+            self._cleanup_complete = True
+            self._cleanup_started = False
+        return success
 
     # ------------------------------------------------------------------
     # Signal handling (delegates to signal_handler module)

@@ -95,11 +95,14 @@ class WifiManagerWindow(Window):
             self._scan_error = None
             self._scan_result_ready = False
         self._status_msg = "Rescanning..."
-        # Daemon thread; we don't need a reference (the in-progress
-        # flag above already serialises scans). Storing the previous
-        # thread reference only to overwrite it was leaking the live
-        # thread (it kept running NMCLI subprocesses until timeout).
-        threading.Thread(target=self._scan_worker, daemon=True).start()
+        thread = self._start_worker(
+            self._scan_worker,
+            name='retrotui-wifi-scan',
+        )
+        if thread is None:
+            with self._scan_lock:
+                self._scan_in_progress = False
+            self._status_msg = "Scan cancelled."
 
     @staticmethod
     def _split_nmcli_fields(line, expected=5):
@@ -138,10 +141,16 @@ class WifiManagerWindow(Window):
         fields.append("".join(current))
         return fields
 
-    def _scan_worker(self):
+    def _scan_worker(self, cancel_event=None):
+        # Preserve direct helper calls used by integrations/tests while the
+        # runtime path receives the owner scope's cancellation event.
+        if cancel_event is None:
+            cancel_event = threading.Event()
         new_networks = []
         error_message = None
         try:
+            if cancel_event.is_set():
+                return
             subprocess.run(
                 [self.nmcli, "dev", "wifi", "rescan"],
                 check=False,
@@ -149,6 +158,8 @@ class WifiManagerWindow(Window):
                 stderr=subprocess.DEVNULL,
                 timeout=NMCLI_SCAN_TIMEOUT,
             )
+            if cancel_event.is_set():
+                return
             result = subprocess.run(
                 [self.nmcli, "-t", "-f", "SSID,SIGNAL,SECURITY,IN-USE,BSSID", "dev", "wifi"],
                 text=True,
@@ -190,6 +201,9 @@ class WifiManagerWindow(Window):
 
         with self._scan_lock:
             self._scan_in_progress = False
+            if cancel_event.is_set():
+                self._scan_result_ready = False
+                return
             if error_message is not None:
                 self._scan_error = error_message
                 self._status_msg = "Scan failed."
@@ -304,16 +318,26 @@ class WifiManagerWindow(Window):
             self._connect_result = None
         self._connecting_ssid = ssid
         self._status_msg = f"Connecting to {ssid}..."
-        # See note on ``self._scan_thread`` in ``refresh`` — we don't
-        # keep a reference to the live thread; the ``_connect_in_progress``
-        # flag above serialises concurrent connect calls.
-        threading.Thread(
-            target=self._connect_worker,
-            args=(ssid, password),
-            daemon=True,
-        ).start()
+        thread = self._start_worker(
+            self._connect_worker,
+            ssid,
+            password,
+            name='retrotui-wifi-connect',
+        )
+        if thread is None:
+            with self._connect_lock:
+                self._connect_in_progress = False
+                self._connect_result = None
+            self._connecting_ssid = None
+            self._status_msg = "Connection cancelled."
 
-    def _finish_connect(self, success, error_message):
+    def _finish_connect(self, success, error_message, cancel_event=None):
+        if cancel_event is not None and cancel_event.is_set():
+            with self._connect_lock:
+                self._connect_in_progress = False
+                self._connect_result = None
+                self._connecting_ssid = None
+            return
         with self._connect_lock:
             self._connect_in_progress = False
             self._connect_result = (success, error_message)
@@ -321,7 +345,15 @@ class WifiManagerWindow(Window):
         if success:
             self.refresh()
 
-    def _connect_worker(self, ssid, password):
+    def _connect_worker(self, cancel_event, ssid=None, password=None):
+        # Legacy direct call: _connect_worker(ssid, password).
+        if not callable(getattr(cancel_event, "is_set", None)):
+            password = ssid
+            ssid = cancel_event
+            cancel_event = threading.Event()
+        if cancel_event.is_set():
+            self._finish_connect(False, "Connection cancelled.", cancel_event)
+            return
         cmd = [self.nmcli, "dev", "wifi", "connect", ssid]
         if password:
             # Prefer stdin (--ask) so the password does not appear in
@@ -342,10 +374,10 @@ class WifiManagerWindow(Window):
                 success = res.returncode == 0
                 if not success:
                     error_message = (res.stderr or res.stdout or "").strip() or "Connection failed."
-                self._finish_connect(success, error_message)
+                self._finish_connect(success, error_message, cancel_event)
                 return
             except subprocess.TimeoutExpired:
-                self._finish_connect(False, "Connection timed out.")
+                self._finish_connect(False, "Connection timed out.", cancel_event)
                 return
             except OSError as exc:
                 # The --ask path is unavailable (e.g. ``nmcli`` not on
@@ -356,6 +388,7 @@ class WifiManagerWindow(Window):
                     False,
                     f"Could not run nmcli --ask: {exc}. "
                     "Password was not sent insecurely; please report the error.",
+                    cancel_event,
                 )
                 return
             cmd.extend(["password", password])
@@ -376,7 +409,21 @@ class WifiManagerWindow(Window):
             error_message = "Connection timed out."
         except OSError as exc:
             error_message = str(exc) or "Execution failed."
-        self._finish_connect(success, error_message)
+        self._finish_connect(success, error_message, cancel_event)
+
+    def close(self):
+        """Cancel scan/connect ownership and clear pending UI state."""
+        result = super().close()
+        with self._scan_lock:
+            self._scan_in_progress = False
+            self._scan_result_ready = False
+            self._scan_error = None
+        with self._connect_lock:
+            self._connect_in_progress = False
+            self._connect_result = None
+            self._connecting_ssid = None
+        self._dialog = None
+        return result
 
     def tick(self):
         """Apply background scan/connect results outside the render path."""

@@ -234,20 +234,24 @@ class ImageViewerWindow(Window):
                 self._cancel_event = threading.Event()
                 self._render_request = cache_key
                 self._render_pending = True
-                thread = threading.Thread(
-                    target=self._render_worker,
-                    args=(cols, rows, cache_key, self._cancel_event),
-                    daemon=True,
+                thread = self._start_worker(
+                    self._render_worker,
+                    cols,
+                    rows,
+                    cache_key,
+                    self._cancel_event,
+                    name='retrotui-image-render',
                 )
                 self._render_thread = thread
-                thread.start()
+                if thread is None:
+                    self._render_pending = False
         if self.is_video:
             return self._render_image(cols, rows)
         return ["[rendering...]"]
 
-    def _render_worker(self, cols, rows, cache_key, cancel_event):
-        # If a newer render was scheduled before we even started, bail.
-        if cancel_event.is_set():
+    def _render_worker(self, owner_cancel_event, cols, rows, cache_key, cancel_event):
+        # If the window closed or a newer render superseded us, bail.
+        if owner_cancel_event.is_set() or cancel_event.is_set():
             return
         try:
             lines = self._render_image(cols, rows)
@@ -257,12 +261,20 @@ class ImageViewerWindow(Window):
                     self._render_pending = False
         # Only store the result if it is still the current request and
         # we were not cancelled mid-render by a newer zoom/resize.
-        if cancel_event.is_set():
+        if owner_cancel_event.is_set() or cancel_event.is_set():
             return
         with self._render_lock:
             if self._render_request != cache_key:
                 return
-        self._render_cache = {"key": cache_key, "lines": list(lines)}
+            self._render_cache = {"key": cache_key, "lines": list(lines)}
+
+    def close(self):
+        """Cancel render ownership and reject late cache publication."""
+        self._cancel_event.set()
+        with self._render_lock:
+            self._render_request = None
+            self._render_pending = False
+        return super().close()
 
     def tick(self):
         """Mark dirty when a background render completes or status expires."""
