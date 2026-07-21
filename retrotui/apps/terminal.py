@@ -19,13 +19,10 @@ from ..utils import normalize_key_code, safe_addstr, theme_attr
 class _ScrollbackBuffer(TerminalScreenBuffer):
     """TerminalScreenBuffer variant that captures rows into a shared deque.
 
-    In v0.9.5 the terminal captures the cursor row into scrollback from
-    :meth:`TerminalWindow._append_newline` (so every newline lands in the
-    scrollback regardless of buffer overflow). In addition, this subclass
-    hooks the buffer's own ``scroll_up`` so rows that scroll off during
-    word-wrap (i.e. without a newline) also land in scrollback. Without
-    this hook long un-newlined output would lose the wrapped rows that
-    any normal terminal would scroll into history.
+    The normal-screen buffer is the live source of truth. Rows enter scrollback
+    only when they actually scroll off the top, whether overflow was caused by
+    an explicit newline or by word-wrap. Newlines that merely advance within
+    the visible grid must not copy a row that the grid still owns.
     """
 
     __slots__ = ("_scrollback",)
@@ -48,8 +45,10 @@ _MOUSE_REPORT_MODES = frozenset({1000, 1002, 1003, 1005, 1006, 1015})
 class TerminalWindow(SelectableTextMixin, Window):
     """PTY-backed terminal window with ANSI color support and scrollback."""
 
+    # PTY sessions are services: minimizing the window must not suspend reads.
+    tick_when_hidden = True
     DEFAULT_SCROLLBACK = 2000
-    MAX_OUTPUT_PER_FRAME = 8192  # Throttle: max bytes processed per render tick.
+    MAX_OUTPUT_PER_FRAME = 8192  # Compatibility name: max chars processed per service tick.
     MENU_CLEAR = 'term_clear'
     MENU_COPY = 'term_copy'
     MENU_INTERRUPT = 'term_interrupt'
@@ -195,18 +194,30 @@ class TerminalWindow(SelectableTextMixin, Window):
 
     @property
     def _scroll_lines(self) -> list:
-        """Return the captured scrollback (lines that scrolled off the top).
+        """Return the legacy committed-line view without duplicate storage.
 
-        Does not include the rows still in the normal buffer; those are
-        reachable via ``self._normal_buf.get_row(r)``.
+        ``self._scrollback`` owns only rows that have left the visible grid.
+        Older callers expected this property to also expose completed rows that
+        are still visible, so they are appended as a transient view and capped
+        to ``max_scrollback``. Rendering never consumes this compatibility view.
         """
-        return list(self._scrollback)
+        lines = list(self._scrollback)
+        if not self._alt_screen:
+            lines.extend(
+                self._normal_buf.get_row(row)
+                for row in range(self._normal_buf.cursor_row)
+            )
+        if self.max_scrollback > 0 and len(lines) > self.max_scrollback:
+            lines = lines[-self.max_scrollback:]
+        return lines
 
     @_scroll_lines.setter
     def _scroll_lines(self, value: list):
-        # Replace the scrollback deque contents (keeping the maxlen cap).
+        # Replace the scrollback deque contents (keeping the maxlen cap) and
+        # rebind the sink so future overflow cannot append into the old deque.
         self._scrollback = deque(list(value), maxlen=self.max_scrollback)
         self._normal_buf._scrollback = self._scrollback
+        self._normal_buf.set_scroll_sink(self._scrollback.append)
 
     @property
     def _alt_lines(self) -> list:
@@ -332,9 +343,18 @@ class TerminalWindow(SelectableTextMixin, Window):
             self._session_error = message
             self._reported_session_error = False
 
+    def _drain_pending_output(self):
+        """Process one bounded output chunk without using curses APIs."""
+        if not self._pending_output:
+            return False
+        to_process = self._pending_output[:self.MAX_OUTPUT_PER_FRAME]
+        self._pending_output = self._pending_output[self.MAX_OUTPUT_PER_FRAME:]
+        self._consume_output(to_process)
+        return True
+
     def tick(self):
-        """Poll PTY state outside the render path."""
-        before = len(self._pending_output)
+        """Poll and consume PTY output outside the render path."""
+        changed = False
         self._ensure_session()
         text_cols, text_rows = self._text_area_size()
         if self._session is not None:
@@ -343,16 +363,21 @@ class TerminalWindow(SelectableTextMixin, Window):
                 if size != self._last_pty_size:
                     self._session.resize(text_cols, text_rows)
                     self._last_pty_size = size
+                flush_writes = getattr(self._session, 'flush_pending_writes', None)
+                if callable(flush_writes):
+                    flush_writes()
                 chunk = self._session.read()
                 if chunk:
                     self._pending_output += chunk
+                    changed = True
                 self._session.poll_exit()
             except (OSError, RuntimeError) as exc:
                 self._set_session_error(exc)
         if self._session_error and not self._reported_session_error:
             self._pending_output += self._session_error + '\n'
             self._reported_session_error = True
-        return len(self._pending_output) != before
+            changed = True
+        return self._drain_pending_output() or changed
 
     # OLD _strip_ansi removed, replaced by self.ansi usage
 
@@ -366,25 +391,12 @@ class TerminalWindow(SelectableTextMixin, Window):
     # ``put_char`` already wraps with a scroll if needed.
 
     def _append_newline(self):
-        """Commit the current row to scrollback and move the cursor down.
+        """Advance using LF+CR and let the buffer own scrollback capture.
 
-        Emulates the LF+CR sequence shells typically emit: line feed moves
-        the row down, and the carriage return snaps the column back to 0.
-        Every newline is captured into scrollback (matching the legacy
-        behaviour where the visible window was always 1 line and the
-        scrollback held the full history); the buffer's own scroll_up
-        happens on top of that when the buffer overflows.
+        Rows are appended to history only when ``line_feed`` scrolls them off
+        the top. A newline inside the visible grid merely moves the cursor and
+        therefore cannot duplicate a row that is still present on screen.
         """
-        if not self._alt_screen:
-            self._scrollback.append(self._normal_buf.get_row(self._normal_buf.cursor_row))
-            # Enforce the maxlen cap even when the caller changed
-            # ``max_scrollback`` after the deque was created.
-            if len(self._scrollback) > self.max_scrollback:
-                self._scrollback = deque(
-                    list(self._scrollback)[-self.max_scrollback:],
-                    maxlen=self.max_scrollback,
-                )
-                self._normal_buf._scrollback = self._scrollback
         self._screen.line_feed()
         self._screen.carriage_return()
 
@@ -669,11 +681,8 @@ class TerminalWindow(SelectableTextMixin, Window):
                 for r in range(alt.rows):
                     alt._grid[r] = [blank_cell] * alt.cols
 
-        # Throttle: process at most MAX_OUTPUT_PER_FRAME per render tick.
-        if self._pending_output:
-            to_process = self._pending_output[:self.MAX_OUTPUT_PER_FRAME]
-            self._pending_output = self._pending_output[self.MAX_OUTPUT_PER_FRAME:]
-            self._consume_output(to_process)
+        # PTY output is consumed by ``tick`` so minimized windows continue
+        # draining without entering the curses render path.
 
         visible, start_idx, total_lines = self._visible_slice(text_rows)
 
@@ -1105,8 +1114,10 @@ class TerminalWindow(SelectableTextMixin, Window):
         self._pending_output = ''
         self.ansi = AnsiStateMachine()
         self._scroll_lines = []
-        self._line_cells = []
-        self._cursor_col = 0
+        self._normal_buf.clear_screen("all")
+        self._alt_buf.clear_screen("all")
+        self._screen.set_alt_screen(False)
+        self._screen.set_cursor(0, 0)
         # The fresh child has not re-enabled mouse reporting yet.
         self._mouse_modes = set()
         self.scrollback_offset = 0

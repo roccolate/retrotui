@@ -51,6 +51,7 @@ from .rendering import (
 )
 from .event_loop import run_app_loop
 from .dialog_dispatch import DialogDispatcher
+from .dialog_workflow import DialogWorkflowId, bind_dialog
 from .bootstrap import (
     configure_terminal,
     disable_flow_control,
@@ -156,41 +157,46 @@ class RetroTUI:
         return self.file_ops.show_open_dialog(win)
 
     def _show_save_confirm_dialog(self, win, payload=None):
-        """Prompt the user before discarding unsaved work in *win*."""
-        # The ``on_discard`` callback is attached via the ActionResult payload
-        # at the call site (notepad.py emits it when open_path hits a dirty
-        # buffer). Prefer the payload; fall back to a window method for tests
-        # or direct callers.
+        """Prompt before a destructive operation on unsaved work."""
         from ..ui.dialog import Dialog
+
         try:
             title = getattr(win, "title", "Notepad")
         except Exception:
             title = "Notepad"
         message = (
             f"{title} has unsaved changes.\n"
-            "Discard them and open the new file?"
+            "Discard them and continue?"
         )
         on_discard = None
+        on_cancel = None
         if isinstance(payload, dict):
             candidate = payload.get("on_discard")
             if callable(candidate):
                 on_discard = candidate
+            candidate = payload.get("on_cancel")
+            if callable(candidate):
+                on_cancel = candidate
+            custom_message = payload.get("message")
+            if isinstance(custom_message, str) and custom_message.strip():
+                message = custom_message
         if on_discard is None:
             fallback = getattr(win, "_do_open_path_force", None)
             if callable(fallback):
                 on_discard = fallback
 
-        def _on_discard():
-            if on_discard is not None:
-                on_discard()
-
-        self.dialog = Dialog(
-            title="Discard unsaved changes?",
-            message=message,
-            buttons=["Discard", "Cancel"],
-            width=58,
+        self.dialog = bind_dialog(
+            Dialog(
+                title="Discard unsaved changes?",
+                message=message,
+                buttons=["Discard", "Cancel"],
+                width=58,
+            ),
+            workflow_id=DialogWorkflowId.SAVE_CONFIRM,
+            source_window=win,
+            on_accept=on_discard,
+            on_cancel=on_cancel,
         )
-        self._pending_discard_callback = _on_discard
 
     def show_rename_dialog(self, win):
         return self.file_ops.show_rename_dialog(win)
@@ -354,6 +360,9 @@ class RetroTUI:
         self._prev_signal_handlers = {}
         self._sigint_handler_installed = False
         self._shutdown_signal = None
+        # Create the lifecycle bus before managers so events and
+        # subscriptions never depend on accidental access order.
+        self._event_bus = self.event_bus
         self.window_mgr = WindowManager(self)
         self.use_unicode = check_unicode_support()
         self.config = load_config()
@@ -467,8 +476,7 @@ class RetroTUI:
 
             win.handle_key = _welcome_handle_key
             win.handle_click = _welcome_handle_click
-            win.active = True
-            self.windows.append(win)
+            self._spawn_window(win)
         # load persisted icon positions (if any)
         try:
             self._load_icon_positions()
@@ -772,7 +780,7 @@ class RetroTUI:
                         self.BACKGROUND_OPERATION_JOIN_TIMEOUT,
                     )
         for win in list(self.windows):
-            self._close_window_safely(win)
+            self.window_mgr.close_window(win, force=True)
         if hasattr(self, '_notifications'):
             self._notifications.cleanup()
         if hasattr(self, '_event_bus'):
@@ -856,9 +864,9 @@ class RetroTUI:
         """Keep always-on-top windows above regular windows preserving order."""
         self.window_mgr.normalize_window_layers()
 
-    def close_window(self, win):
-        """Close a window."""
-        self.window_mgr.close_window(win)
+    def close_window(self, win, *, force=False):
+        """Request that a window close, or force it during shutdown."""
+        return self.window_mgr.close_window(win, force=force)
 
     def _activate_last_visible_window(self):
         """Activate topmost visible window after z-order/window-list changes."""
@@ -877,9 +885,8 @@ class RetroTUI:
         return action
 
     def _spawn_window(self, win):
-        """Append a window and make it active."""
-        self.windows.append(win)
-        self.set_active_window(win)
+        """Open *win* through the authoritative lifecycle manager."""
+        return self.window_mgr._spawn_window(win)
 
     def _next_window_offset(self, base_x, base_y, step_x=2, step_y=1):
         """Return staggered window coordinates based on open window count."""

@@ -21,6 +21,8 @@ _CLOCK_CHIME_ERRORS = (
 class ClockCalendarWindow(Window):
     """Small widget with digital clock and ASCII month calendar."""
 
+    wants_periodic_tick = True
+
     def __init__(self, x, y, w, h):
         super().__init__("Clock / Calendar", x, y, max(32, w), max(13, h), content=[], resizable=False)
         self.always_on_top = True

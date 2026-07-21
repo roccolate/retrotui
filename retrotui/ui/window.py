@@ -20,7 +20,9 @@ from .menu import WindowMenu
 class Window:
     """A draggable window with title bar and content area."""
 
-    needs_redraw = False
+    # Public runtime scheduling contract.
+    wants_periodic_tick = False
+    tick_when_hidden = False
 
     _next_id = 0
     TITLE_CONTROLS = '[─][□][×]'
@@ -75,6 +77,10 @@ class Window:
 
     def on_ipc_message(self, message):
         """Handle an IPC message from another window.  Override in subclasses."""
+
+    def request_close(self):
+        """Return True when the window may be closed immediately."""
+        return True
 
     def close_button_pos(self):
         """Return (x, y) of the close button."""

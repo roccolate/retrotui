@@ -1,7 +1,9 @@
 import unittest
 from types import SimpleNamespace
-from retrotui.core.dialog_dispatch import DialogDispatcher
+
 from retrotui.core.actions import ActionResult, ActionType, AppAction
+from retrotui.core.dialog_dispatch import DialogDispatcher
+from retrotui.core.dialog_workflow import DialogWorkflowId, bind_dialog
 
 
 class DummyApp:
@@ -11,7 +13,7 @@ class DummyApp:
         self.running = True
 
     def show_open_dialog(self, src):
-        self.called['show_open_dialog'] = True
+        self.called['show_open_dialog'] = src
 
     def open_file_viewer(self, payload):
         self.called['open_file_viewer'] = payload
@@ -25,7 +27,7 @@ class DummyApp:
         return payload
 
     def close_window(self, src):
-        self.called['close_window'] = True
+        self.called['close_window'] = src
 
     def execute_action(self, action):
         self.called.setdefault('execute_action', []).append(action)
@@ -46,157 +48,158 @@ class DummyApp:
         self.called['persist_config'] = True
 
     def get_active_window(self):
-        return 'active'
+        return self.called.get('active')
+
+    def _dispatch_window_result(self, result, source):
+        self.called['dispatched'] = (result, source)
 
 
 class DialogDispatchTests(unittest.TestCase):
     def test_dispatch_basic_branches(self):
         app = DummyApp()
-        dd = DialogDispatcher(app)
+        dispatcher = DialogDispatcher(app)
+        source = SimpleNamespace()
 
-        # Non-ActionResult ignored
-        dd.dispatch_window_result('not an action', None)
+        dispatcher.dispatch_window_result('not an action', None)
+        dispatcher.dispatch_window_result(ActionResult(ActionType.REQUEST_OPEN_PATH), source)
+        self.assertIs(app.called.get('show_open_dialog'), source)
 
-        # REQUEST_OPEN_PATH -> calls show_open_dialog when source_win provided
-        res = ActionResult(ActionType.REQUEST_OPEN_PATH)
-        dd.dispatch_window_result(res, SimpleNamespace())
-        self.assertTrue(app.called.get('show_open_dialog'))
-
-        # OPEN_FILE -> calls open_file_viewer
-        res2 = ActionResult(ActionType.OPEN_FILE, payload='/tmp/file')
-        dd.dispatch_window_result(res2, None)
+        dispatcher.dispatch_window_result(ActionResult(ActionType.OPEN_FILE, '/tmp/file'), None)
         self.assertEqual(app.called.get('open_file_viewer'), '/tmp/file')
 
-        # REQUEST_URL -> calls show_url_dialog
-        res3 = ActionResult(ActionType.REQUEST_URL, payload='http://x')
-        dd.dispatch_window_result(res3, SimpleNamespace())
+        dispatcher.dispatch_window_result(ActionResult(ActionType.REQUEST_URL, 'http://x'), source)
         self.assertEqual(app.called.get('show_url_dialog'), 'http://x')
 
-        # EXECUTE -> normalized to CLOSE_WINDOW and closes when source_win
-        res4 = ActionResult(ActionType.EXECUTE, payload='close')
-        dd.dispatch_window_result(res4, SimpleNamespace())
-        self.assertTrue(app.called.get('close_window'))
+        dispatcher.dispatch_window_result(ActionResult(ActionType.EXECUTE, 'close'), source)
+        self.assertIs(app.called.get('close_window'), source)
 
-        # REQUEST_COPY_BETWEEN_PANES with no source_win sets dialog
-        res5 = ActionResult(ActionType.REQUEST_COPY_BETWEEN_PANES, payload={'a': 'b'})
-        dd.dispatch_window_result(res5, None)
+        dispatcher.dispatch_window_result(
+            ActionResult(ActionType.REQUEST_COPY_BETWEEN_PANES, {'a': 'b'}),
+            None,
+        )
         self.assertIsNotNone(app.dialog)
 
-        # SAVE_ERROR sets dialog
         app.dialog = None
-        res6 = ActionResult(ActionType.SAVE_ERROR, payload='boom')
-        dd.dispatch_window_result(res6, None)
+        dispatcher.dispatch_window_result(ActionResult(ActionType.SAVE_ERROR, 'boom'), None)
         self.assertIsNotNone(app.dialog)
 
-        # UPDATE_CONFIG should call apply_preferences and persist_config
-        app.called.pop('apply_preferences', None)
-        app.called.pop('persist_config', None)
-        res7 = ActionResult(ActionType.UPDATE_CONFIG, payload={'show_hidden': True})
-        dd.dispatch_window_result(res7, None)
+        dispatcher.dispatch_window_result(
+            ActionResult(ActionType.UPDATE_CONFIG, {'show_hidden': True}),
+            None,
+        )
         self.assertIsNotNone(app.called.get('apply_preferences'))
         self.assertTrue(app.called.get('persist_config'))
 
-    def test_resolve_dialog_result_exit(self):
+    def test_exit_workflow_does_not_depend_on_visible_copy(self):
         app = DummyApp()
-        dd = DialogDispatcher(app)
+        app.dialog = bind_dialog(
+            SimpleNamespace(title='Salir', buttons=['Continuar', 'Volver']),
+            workflow_id=DialogWorkflowId.EXIT,
+            on_accept=lambda: setattr(app, 'running', False),
+        )
 
-        # Fake dialog with Exit title and Yes button
-        dialog = SimpleNamespace()
-        dialog.title = 'Exit RetroTUI'
-        dialog.buttons = ['Yes']
-        dialog.callback = None
-        app.dialog = dialog
+        DialogDispatcher(app).resolve_dialog_result(0)
 
-        dd.resolve_dialog_result(0)
         self.assertFalse(app.running)
+        self.assertIsNone(app.dialog)
 
-    def test_dispatch_save_confirm_forwards_payload_on_discard(self):
-        """REQUEST_SAVE_CONFIRM must pass the payload's on_discard callback
-        through to _show_save_confirm_dialog so the Discard button actually
-        runs the discard handler. Regression test for B3 (HIGH)."""
+    def test_callback_result_is_delivered_to_captured_source(self):
+        app = DummyApp()
+        source = SimpleNamespace(id=7)
+        active = SimpleNamespace(id=8)
+        app.windows = [source, active]
+        app.called['active'] = active
+        result = ActionResult(ActionType.REFRESH)
+        app.dialog = bind_dialog(
+            SimpleNamespace(buttons=['OK'], value='new value'),
+            workflow_id=DialogWorkflowId.CALLBACK,
+            source_window=source,
+            on_accept=lambda value: result,
+        )
+
+        DialogDispatcher(app).resolve_dialog_result(0)
+
+        self.assertEqual(app.called.get('dispatched'), (result, source))
+
+    def test_closed_source_cancels_callback_instead_of_using_active_window(self):
+        app = DummyApp()
+        source = SimpleNamespace(id=7)
+        app.windows = []
+        app.called['active'] = SimpleNamespace(id=8)
+        calls = []
+        app.dialog = bind_dialog(
+            SimpleNamespace(buttons=['OK']),
+            workflow_id=DialogWorkflowId.CALLBACK,
+            source_window=source,
+            on_accept=lambda: calls.append(True),
+        )
+
+        DialogDispatcher(app).resolve_dialog_result(0)
+
+        self.assertEqual(calls, [])
+        self.assertNotIn('dispatched', app.called)
+        self.assertIsNone(app.dialog)
+
+    def test_save_confirm_uses_callbacks_not_visible_copy(self):
+        app = DummyApp()
+        source = SimpleNamespace(id=3)
+        app.windows = [source]
+        calls = []
+        dispatcher = DialogDispatcher(app)
+
+        app.dialog = bind_dialog(
+            SimpleNamespace(title='Cambios pendientes', buttons=['Descartar', 'Volver']),
+            workflow_id=DialogWorkflowId.SAVE_CONFIRM,
+            source_window=source,
+            on_accept=lambda: calls.append('accept'),
+            on_cancel=lambda: calls.append('cancel'),
+        )
+        dispatcher.resolve_dialog_result(0)
+
+        app.dialog = bind_dialog(
+            SimpleNamespace(title='Otro texto', buttons=['No', 'Sí']),
+            workflow_id=DialogWorkflowId.SAVE_CONFIRM,
+            source_window=source,
+            on_accept=lambda: calls.append('accept-2'),
+            on_cancel=lambda: calls.append('cancel'),
+        )
+        dispatcher.resolve_dialog_result(1)
+
+        self.assertEqual(calls, ['accept', 'cancel'])
+
+    def test_legacy_callback_remains_supported(self):
+        app = DummyApp()
+        calls = []
+        app.dialog = SimpleNamespace(
+            buttons=['OK'],
+            value='abc',
+            callback=lambda value: calls.append(value),
+        )
+
+        DialogDispatcher(app).resolve_dialog_result(0)
+
+        self.assertEqual(calls, ['abc'])
+
+    def test_dispatch_save_confirm_forwards_payload(self):
         app = DummyApp()
         captured = {}
 
         def fake_show(win, payload=None):
             captured['win'] = win
             captured['payload'] = payload
-            app.dialog = SimpleNamespace(
-                title='Discard unsaved changes?',
-                buttons=['Discard', 'Cancel'],
-                callback=None,
-            )
-            # Mirror what the real _show_save_confirm_dialog does: stash the
-            # discard callback on the app so resolve_dialog_result can find it.
-            on_discard = None
-            if isinstance(payload, dict):
-                cand = payload.get('on_discard')
-                if callable(cand):
-                    on_discard = cand
-            if on_discard is None:
-                fb = getattr(win, '_do_open_path_force', None)
-                if callable(fb):
-                    on_discard = fb
-
-            def _wrapper():
-                if on_discard is not None:
-                    on_discard()
-
-            app._pending_discard_callback = _wrapper
 
         app._show_save_confirm_dialog = fake_show
+        source = SimpleNamespace()
+        payload = {'on_discard': lambda: None}
 
-        discard_called = []
-
-        def on_discard():
-            discard_called.append(True)
-
-        notepad = SimpleNamespace()
-        dd = DialogDispatcher(app)
-        result = ActionResult(
-            ActionType.REQUEST_SAVE_CONFIRM,
-            payload={'on_discard': on_discard},
+        DialogDispatcher(app).dispatch_window_result(
+            ActionResult(ActionType.REQUEST_SAVE_CONFIRM, payload),
+            source,
         )
-        dd.dispatch_window_result(result, notepad)
-        self.assertIs(captured.get('win'), notepad)
-        self.assertIs(captured.get('payload'), result.payload)
 
-        # Now resolve Discard: the payload's on_discard should fire.
-        dd.resolve_dialog_result(0)
-        self.assertEqual(discard_called, [True])
-
-    def test_dispatch_save_confirm_without_payload_is_noop(self):
-        """If the payload is missing/malformed, Discard must NOT crash; it
-        must silently no-op (matching the previous safe behaviour)."""
-        app = DummyApp()
-
-        def fake_show(win, payload=None):
-            app.dialog = SimpleNamespace(
-                title='Discard unsaved changes?',
-                buttons=['Discard', 'Cancel'],
-                callback=None,
-            )
-            # No on_discard in payload, no fallback on win → wrapper no-ops.
-            app._pending_discard_callback = lambda: None
-
-        app._show_save_confirm_dialog = fake_show
-        dd = DialogDispatcher(app)
-        notepad = SimpleNamespace()
-
-        # No payload at all.
-        dd.dispatch_window_result(
-            ActionResult(ActionType.REQUEST_SAVE_CONFIRM), notepad,
-        )
-        dd.resolve_dialog_result(0)  # must not raise
-
-        # Payload without on_discard key.
-        app.dialog = None
-        dd.dispatch_window_result(
-            ActionResult(ActionType.REQUEST_SAVE_CONFIRM, payload={'foo': 1}),
-            notepad,
-        )
-        dd.resolve_dialog_result(0)  # must not raise
+        self.assertIs(captured.get('win'), source)
+        self.assertIs(captured.get('payload'), payload)
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     unittest.main()
-

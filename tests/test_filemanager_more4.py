@@ -48,7 +48,9 @@ class FileManagerMore4Tests(unittest.TestCase):
         os.mkdir(subdir)
         self.win.navigate_to(subdir)
         self.win.navigate_parent()
-        self.assertEqual(self.win.current_path, self.td)
+        # Windows may return the same directory through an 8.3 short path.
+        # Compare filesystem identity instead of path spelling.
+        self.assertTrue(os.path.samefile(self.win.current_path, self.td))
         self.assertTrue(self.win._select_entry_by_name('sub'))
 
     def test_bookmark_set_and_navigate(self):

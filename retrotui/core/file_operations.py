@@ -7,6 +7,7 @@ from types import SimpleNamespace
 
 from ..ui.dialog import Dialog, InputDialog, ProgressDialog
 from .actions import ActionResult, ActionType
+from .dialog_workflow import DialogWorkflowId, bind_dialog
 
 LOGGER = logging.getLogger(__name__)
 _BACKGROUND_WORKER_ERRORS = (
@@ -61,9 +62,12 @@ class FileOperationManager:
 
     def _show_input_dialog(self, win, title, prompt, width, callback_method, **dialog_kwargs):
         """Show an input dialog that calls a window method with the entered value."""
-        dialog = InputDialog(title, prompt, width=width, **dialog_kwargs)
-        dialog.callback = lambda value, target=win: getattr(target, callback_method)(value)
-        self._app.dialog = dialog
+        self._app.dialog = bind_dialog(
+            InputDialog(title, prompt, width=width, **dialog_kwargs),
+            workflow_id=DialogWorkflowId.CALLBACK,
+            source_window=win,
+            on_accept=lambda value, target=win: getattr(target, callback_method)(value),
+        )
 
     def show_save_as_dialog(self, win):
         """Show dialog to get filename for saving."""
@@ -84,9 +88,12 @@ class FileOperationManager:
             return
 
         prompt = f"Rename:\n{entry.name}"
-        dialog = InputDialog('Rename', prompt, initial_value=entry.name, width=56)
-        dialog.callback = lambda new_name, target=win: target.rename_selected(new_name)
-        self._app.dialog = dialog
+        self._app.dialog = bind_dialog(
+            InputDialog('Rename', prompt, initial_value=entry.name, width=56),
+            workflow_id=DialogWorkflowId.CALLBACK,
+            source_window=win,
+            on_accept=lambda new_name, target=win: target.rename_selected(new_name),
+        )
 
     def show_delete_confirm_dialog(self, win):
         """Show confirmation dialog before deleting selected File Manager entry."""
@@ -104,12 +111,15 @@ class FileOperationManager:
             "Item will be moved to Trash.\n"
             "Use Undo Delete (U) to restore."
         )
-        dialog = Dialog('Confirm Delete', message, ['Delete', 'Cancel'], width=58)
-        dialog.callback = lambda target=win: self._app._run_file_operation_with_progress(
-            target,
-            operation='delete',
+        self._app.dialog = bind_dialog(
+            Dialog('Confirm Delete', message, ['Delete', 'Cancel'], width=58),
+            workflow_id=DialogWorkflowId.CALLBACK,
+            source_window=win,
+            on_accept=lambda target=win: self._app._run_file_operation_with_progress(
+                target,
+                operation='delete',
+            ),
         )
-        self._app.dialog = dialog
 
     def show_empty_trash_confirm_dialog(self, win):
         """Show confirmation dialog before permanently emptying the trash."""
@@ -136,11 +146,13 @@ class FileOperationManager:
             f"{sample}\n\n"
             "This cannot be undone."
         )
-        dialog = Dialog('Empty Trash', message, ['Empty', 'Cancel'], width=64)
         empty = getattr(win, 'empty_trash', None)
-        if callable(empty):
-            dialog.callback = lambda target=win: target.empty_trash()
-        self._app.dialog = dialog
+        self._app.dialog = bind_dialog(
+            Dialog('Empty Trash', message, ['Empty', 'Cancel'], width=64),
+            workflow_id=DialogWorkflowId.CALLBACK,
+            source_window=win,
+            on_accept=(lambda target=win: target.empty_trash()) if callable(empty) else None,
+        )
 
     def show_copy_dialog(self, win):
         """Show destination input for copy operation in File Manager."""
@@ -150,13 +162,16 @@ class FileOperationManager:
             return
 
         prompt = f"Copy:\n{entry.name}\n\nDestination path:"
-        dialog = InputDialog('Copy To', prompt, initial_value=win.current_path, width=62)
-        dialog.callback = lambda dest, target=win: self._app._run_file_operation_with_progress(
-            target,
-            operation='copy',
-            destination=dest,
+        self._app.dialog = bind_dialog(
+            InputDialog('Copy To', prompt, initial_value=win.current_path, width=62),
+            workflow_id=DialogWorkflowId.CALLBACK,
+            source_window=win,
+            on_accept=lambda dest, target=win: self._app._run_file_operation_with_progress(
+                target,
+                operation='copy',
+                destination=dest,
+            ),
         )
-        self._app.dialog = dialog
 
     def show_move_dialog(self, win):
         """Show destination input for move operation in File Manager."""
@@ -166,13 +181,16 @@ class FileOperationManager:
             return
 
         prompt = f"Move:\n{entry.name}\n\nDestination path:"
-        dialog = InputDialog('Move To', prompt, initial_value=win.current_path, width=62)
-        dialog.callback = lambda dest, target=win: self._app._run_file_operation_with_progress(
-            target,
-            operation='move',
-            destination=dest,
+        self._app.dialog = bind_dialog(
+            InputDialog('Move To', prompt, initial_value=win.current_path, width=62),
+            workflow_id=DialogWorkflowId.CALLBACK,
+            source_window=win,
+            on_accept=lambda dest, target=win: self._app._run_file_operation_with_progress(
+                target,
+                operation='move',
+                destination=dest,
+            ),
         )
-        self._app.dialog = dialog
 
     def show_new_dir_dialog(self, win):
         """Show input dialog to create a new directory in current path."""
@@ -197,13 +215,16 @@ class FileOperationManager:
             f"{command[:40]}\n\n"
             "Signal: SIGTERM (15)"
         )
-        dialog = Dialog(title, message, ['Kill', 'Cancel'], width=58)
-        dialog.callback = (
-            lambda target=win, data=data: target.kill_process(data)
-            if callable(getattr(target, 'kill_process', None))
-            else ActionResult(ActionType.ERROR, 'Window does not support process kill.')
+        self._app.dialog = bind_dialog(
+            Dialog(title, message, ['Kill', 'Cancel'], width=58),
+            workflow_id=DialogWorkflowId.CALLBACK,
+            source_window=win,
+            on_accept=(
+                lambda target=win, data=data: target.kill_process(data)
+                if callable(getattr(target, 'kill_process', None))
+                else ActionResult(ActionType.ERROR, 'Window does not support process kill.')
+            ),
         )
-        self._app.dialog = dialog
 
     # ------------------------------------------------------------------
     # Static helpers

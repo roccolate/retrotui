@@ -133,7 +133,7 @@ class ThemeAndConfigTests(unittest.TestCase):
         self.assertEqual(loaded.theme, "hacker")
         self.assertTrue(loaded.show_hidden)
         self.assertFalse(loaded.word_wrap_default)
-        self.assertEqual(loaded.icon_style, "mini")
+        self.assertEqual(loaded.icon_style, "retro_01")
 
     def test_default_config_hides_non_core_apps_and_plugins(self):
         config = self.config.AppConfig()
