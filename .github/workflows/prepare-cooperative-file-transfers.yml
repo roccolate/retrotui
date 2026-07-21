@@ -43,8 +43,26 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e ".[test]"
 
-      - name: Repository QA
-        run: python tools/qa.py --skip-tests
+      - name: Capture repository QA report
+        shell: bash
+        run: |
+          set +e
+          python tools/qa.py --skip-tests > cooperative-qa.txt 2>&1
+          status=$?
+          echo "$status" > cooperative-qa-status.txt
+          exit 0
+
+      - name: Upload repository QA report
+        uses: actions/upload-artifact@v5
+        with:
+          name: cooperative-file-transfer-qa-report
+          path: |
+            cooperative-qa.txt
+            cooperative-qa-status.txt
+
+      - name: Enforce repository QA
+        shell: bash
+        run: test "$(cat cooperative-qa-status.txt)" = "0"
 
       - name: Reject undefined names
         run: python -m ruff check --select F821 retrotui tests tools/prepare_cooperative_file_transfers_fixed.py
