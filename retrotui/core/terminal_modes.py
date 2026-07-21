@@ -18,6 +18,10 @@ class TerminalCapabilities:
     application_cursor_keys: bool = True
     bracketed_paste: bool = True
     cursor_visibility: bool = True
+    scroll_regions: bool = True
+    origin_mode: bool = True
+    cursor_save_restore: bool = True
+    insert_delete: bool = True
     sgr_mouse: bool = True
 
 
@@ -32,6 +36,7 @@ class TerminalModes:
     application_cursor_keys: bool = False
     bracketed_paste: bool = False
     autowrap: bool = True
+    origin_mode: bool = False
 
     def reset(self) -> None:
         """Restore terminal modes to their power-on defaults."""
@@ -39,6 +44,7 @@ class TerminalModes:
         self.application_cursor_keys = False
         self.bracketed_paste = False
         self.autowrap = True
+        self.origin_mode = False
 
     def set_private_mode(self, mode: int, enabled: bool) -> bool:
         """Apply one supported DEC private mode.
@@ -58,5 +64,8 @@ class TerminalModes:
             return True
         if mode == 7:
             self.autowrap = enabled
+            return True
+        if mode == 6:
+            self.origin_mode = enabled
             return True
         return False
