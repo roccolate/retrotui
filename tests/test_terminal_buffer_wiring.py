@@ -139,6 +139,9 @@ class TerminalBufferWiringTests(unittest.TestCase):
         return ["".join(ch for ch, _ in line).rstrip() for line in lines]
 
     def _resize_buffers(self, rows, cols=20):
+        # Keep the mocked viewport in sync so _consume_output() does not
+        # immediately resize the buffers back to the constructor dimensions.
+        self.win.body_rect.return_value = (4, 5, cols + 1, rows + 1)
         self.win._normal_buf.resize(rows, cols)
         self.win._alt_buf.resize(rows, cols)
 

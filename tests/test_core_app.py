@@ -1320,11 +1320,11 @@ class CoreAppTests(unittest.TestCase):
         self.assertTrue(app.config.show_hidden)
         self.assertFalse(app.config.word_wrap_default)
         self.assertTrue(app.config.sunday_first)
-        self.assertEqual(app.config.icon_style, "mini")
+        self.assertEqual(app.config.icon_style, "retro_01")
 
     def test_normalize_icon_style_maps_legacy_and_invalid_values(self):
-        self.assertEqual(self.app_mod.RetroTUI._normalize_icon_style("retro_01"), "mini")
-        self.assertEqual(self.app_mod.RetroTUI._normalize_icon_style("MINI"), "mini")
+        self.assertEqual(self.app_mod.RetroTUI._normalize_icon_style("retro_01"), "retro_01")
+        self.assertEqual(self.app_mod.RetroTUI._normalize_icon_style("MINI"), "retro_01")
         self.assertEqual(self.app_mod.RetroTUI._normalize_icon_style("codex"), "default")
         self.assertEqual(self.app_mod.RetroTUI._normalize_icon_style("weird"), "default")
 

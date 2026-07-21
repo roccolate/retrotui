@@ -6,7 +6,7 @@ from retrotui.apps.charmap import CharacterMapWindow, UNICODE_BLOCKS
 def test_load_block_and_grid_dims():
     w = CharacterMapWindow(0, 0, 80, 24)
     # ensure initial block loaded
-    assert w.status_message.startswith("Block:")
+    assert w._status_message.startswith("Block:")
     cols, rows = w._get_grid_dims(80, 24)
     assert cols >= 1 and rows >= 1
 

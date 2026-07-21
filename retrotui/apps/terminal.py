@@ -1111,8 +1111,10 @@ class TerminalWindow(SelectableTextMixin, Window):
         self._pending_output = ''
         self.ansi = AnsiStateMachine()
         self._scroll_lines = []
-        self._line_cells = []
-        self._cursor_col = 0
+        self._normal_buf.clear_screen("all")
+        self._alt_buf.clear_screen("all")
+        self._screen.set_alt_screen(False)
+        self._screen.set_cursor(0, 0)
         # The fresh child has not re-enabled mouse reporting yet.
         self._mouse_modes = set()
         self.scrollback_offset = 0
