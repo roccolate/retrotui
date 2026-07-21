@@ -4,10 +4,11 @@ on:
   pull_request:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  diagnose_dialog_patch:
+  apply_dialog_workflow_fix:
+    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout branch
@@ -15,15 +16,82 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.ref }}
 
-      - name: Capture patch mismatch
-        continue-on-error: true
+      - name: Preserve source indentation in patch helper
         shell: bash
         run: |
-          python tools/apply_dialog_workflow_fix.py > dialog-patch.log 2>&1
-          echo "status=$?" >> dialog-patch.log
+          python - <<'PY'
+          from pathlib import Path
 
-      - name: Upload patch diagnostics
-        uses: actions/upload-artifact@v4
+          path = Path("tools/apply_dialog_workflow_fix.py")
+          text = path.read_text(encoding="utf-8")
+          old = '''def replace_once(path: str, old: str, new: str) -> None:
+              file_path = Path(path)
+              text = file_path.read_text(encoding="utf-8")
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"{path}: expected one match, found {count}")
+              file_path.write_text(text.replace(old, new), encoding="utf-8")
+          '''
+          new = '''def replace_once(path: str, old: str, new: str) -> None:
+              file_path = Path(path)
+              text = file_path.read_text(encoding="utf-8")
+              matches = []
+              for prefix in ("", "    ", "        ", "            "):
+                  candidate = indent(old, prefix) if prefix else old
+                  count = text.count(candidate)
+                  if count:
+                      replacement = indent(new, prefix) if prefix else new
+                      matches.append((candidate, replacement, count))
+              total = sum(count for _, _, count in matches)
+              if total != 1:
+                  raise SystemExit(f"{path}: expected one indented match, found {total}")
+              candidate, replacement, _ = matches[0]
+              file_path.write_text(text.replace(candidate, replacement, 1), encoding="utf-8")
+          '''
+          if text.count(old) != 1:
+              raise SystemExit("replace_once helper mismatch")
+          path.write_text(text.replace(old, new), encoding="utf-8")
+          PY
+
+      - name: Apply dialog workflow patch
+        run: python tools/apply_dialog_workflow_fix.py
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
         with:
-          name: dialog-patch-diagnostics
-          path: dialog-patch.log
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: python -m pip install -e ".[test]"
+
+      - name: Compile changed Python files
+        run: |
+          python -m py_compile \
+            retrotui/core/dialog_workflow.py \
+            retrotui/core/dialog_dispatch.py \
+            retrotui/core/action_runner.py \
+            retrotui/core/app.py \
+            retrotui/core/file_operations.py \
+            retrotui/core/viewer.py \
+            tests/test_dialog_dispatch.py
+
+      - name: Run focused dialog tests
+        run: python -m unittest tests.test_dialog_dispatch -v
+
+      - name: Run unittest suite
+        run: python -m unittest discover -s tests -v
+
+      - name: Run pytest suite
+        run: python -m pytest tests -q
+
+      - name: Remove temporary patch machinery
+        run: git rm tools/apply_dialog_workflow_fix.py .github/workflows/dialog-workflow-fix.yml
+
+      - name: Commit validated dialog workflows
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "core: bind dialogs to typed workflows"
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
