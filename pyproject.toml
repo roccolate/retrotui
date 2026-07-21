@@ -13,6 +13,7 @@ authors = [
 ]
 dependencies = [
     "tomli>=2.0; python_version < '3.11'",
+    "wcwidth>=0.8.2,<1",
     "pywinpty>=2.0; sys_platform == 'win32'",
     "windows-curses>=2.4; sys_platform == 'win32'",
 ]
