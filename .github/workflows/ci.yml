@@ -55,6 +55,18 @@ jobs:
             tests/test_process_manager_component.py \
             2>&1 | tee core-second-cut-focused.log
 
+      - name: Run repository quality checks
+        run: python tools/qa.py --skip-tests
+
+      - name: Reject undefined Python names
+        run: python -m ruff check --select F821 retrotui tests tools
+
+      - name: Run unittest suite
+        shell: bash
+        run: |
+          set -o pipefail
+          python -m unittest discover -s tests -v 2>&1 | tee core-second-cut-unittest.log
+
       - name: Upload second-cut diagnostics
         if: always()
         uses: actions/upload-artifact@v4
@@ -63,16 +75,8 @@ jobs:
           path: |
             core-second-cut-apply.log
             core-second-cut-focused.log
+            core-second-cut-unittest.log
           if-no-files-found: warn
-
-      - name: Run repository quality checks
-        run: python tools/qa.py --skip-tests
-
-      - name: Reject undefined Python names
-        run: python -m ruff check --select F821 retrotui tests tools
-
-      - name: Run unittest suite
-        run: python -m unittest discover -s tests -v
 
       - name: Run pytest suite
         run: python -m pytest tests -q
@@ -82,7 +86,7 @@ jobs:
           git checkout origin/main -- .github/workflows/ci.yml
           rm -f tools/apply_core_second_cut.py
           rm -f tools/.core_second_cut_*.part
-          rm -f core-second-cut-apply.log core-second-cut-focused.log
+          rm -f core-second-cut-apply.log core-second-cut-focused.log core-second-cut-unittest.log
           rm -f .core-second-cut-trigger
 
       - name: Commit verified second cut
