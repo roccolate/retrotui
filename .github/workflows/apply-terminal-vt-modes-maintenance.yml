@@ -34,20 +34,23 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Apply asserted patch
-        run: python tools/apply_terminal_vt_modes.py
-
-      - name: Install dependencies
-        run: python -m pip install -e ".[test]"
-
-      - name: Validate focused slice
+      - name: Apply and validate asserted patch
+        id: validate
+        continue-on-error: true
+        shell: bash
         run: |
-          python tools/qa.py --skip-tests
-          python -m ruff check --select F821 retrotui tests tools
-          python -m unittest tests.test_terminal_component -v
-          python -m pytest tests/test_terminal_component.py -q
+          set -o pipefail
+          {
+            python tools/apply_terminal_vt_modes.py
+            python -m pip install -e ".[test]"
+            python tools/qa.py --skip-tests
+            python -m ruff check --select F821 retrotui tests tools
+            python -m unittest discover -s tests -p 'test_terminal_component.py' -v
+            python -m pytest tests/test_terminal_component.py -q
+          } 2>&1 | tee /tmp/terminal-vt-maintenance.log
 
       - name: Commit implementation
+        if: steps.validate.outcome == 'success'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -56,9 +59,19 @@ jobs:
           git push origin HEAD:${TARGET_BRANCH}
 
       - name: Report success
-        if: success()
+        if: steps.validate.outcome == 'success'
         run: gh issue comment "${{ github.event.issue.number }}" --repo "${{ github.repository }}" --body "Terminal VT mode hardening passed focused validation and was committed to agent/terminal-vt-modes."
 
-      - name: Report failure
-        if: failure()
-        run: gh issue comment "${{ github.event.issue.number }}" --repo "${{ github.repository }}" --body "Terminal VT mode hardening failed before commit. Inspect the maintenance workflow logs; no partial implementation commit was pushed."
+      - name: Report failure details
+        if: steps.validate.outcome != 'success'
+        shell: bash
+        run: |
+          {
+            echo 'Terminal VT mode hardening failed before commit. No partial implementation commit was pushed.'
+            echo
+            echo '```text'
+            tail -n 80 /tmp/terminal-vt-maintenance.log
+            echo '```'
+          } > /tmp/terminal-vt-comment.md
+          gh issue comment "${{ github.event.issue.number }}" --repo "${{ github.repository }}" --body-file /tmp/terminal-vt-comment.md
+          exit 1
