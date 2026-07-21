@@ -9,6 +9,7 @@ from ..constants import C_SCROLLBAR, C_STATUS
 from ..core.actions import ActionResult, ActionType, AppAction
 from ..core.clipboard import copy_text, paste_text
 from ..core.terminal_session import TerminalScreen, TerminalScreenBuffer, TerminalSession
+from ..core.terminal_modes import DEFAULT_TERMINAL_CAPABILITIES, TerminalModes
 from ..core.ansi import AnsiStateMachine
 from ..ui.menu import WindowMenu
 from ..ui.selectable_text import SelectableTextMixin
@@ -69,6 +70,8 @@ class TerminalWindow(SelectableTextMixin, Window):
         self._pending_output = ''
 
         self.ansi = AnsiStateMachine()
+        self.capabilities = DEFAULT_TERMINAL_CAPABILITIES
+        self.modes = TerminalModes()
 
         # v0.9.5: the normal-screen and alt-screen are now two TerminalScreenBuffer
         # cells inside a single ``TerminalScreen``. The normal-screen buffer
@@ -432,19 +435,24 @@ class TerminalWindow(SelectableTextMixin, Window):
                 return default
             return params[index]
 
-        if final == 'h':
-            mode = _num(0, 0)
-            if mode in (1049, 1047, 47):
-                self._alt_screen = True
-            elif mode in _MOUSE_REPORT_MODES:
-                self._mouse_modes.add(mode)
-            return
-        if final == 'l':
-            mode = _num(0, 0)
-            if mode in (1049, 1047, 47):
-                self._alt_screen = False
-            elif mode in _MOUSE_REPORT_MODES:
-                self._mouse_modes.discard(mode)
+        private = getattr(params, "private", "")
+        if final in ('h', 'l'):
+            enabled = final == 'h'
+            # Empty marker remains accepted for direct legacy callers/tests;
+            # parser-originated DEC modes carry the authoritative ``?`` marker.
+            if private not in ('', '?'):
+                return
+            mode_values = list(params) or [0]
+            for mode in mode_values:
+                if mode in (1049, 1047, 47):
+                    self._alt_screen = enabled
+                elif mode in _MOUSE_REPORT_MODES:
+                    if enabled:
+                        self._mouse_modes.add(mode)
+                    else:
+                        self._mouse_modes.discard(mode)
+                else:
+                    self.modes.set_private_mode(mode, enabled)
             return
 
         active = self._screen._active
@@ -571,7 +579,7 @@ class TerminalWindow(SelectableTextMixin, Window):
             safe_addstr(stdscr, y + i, x, ch, theme_attr('scrollbar'))
 
     def _draw_live_cursor(self, stdscr, x, y, text_cols, text_rows, start_idx, total_lines, body_attr):
-        if not self.active or self.scrollback_offset != 0:
+        if not self.active or self.scrollback_offset != 0 or not self.modes.cursor_visible:
             return
         if total_lines <= 0:
             return
@@ -728,13 +736,26 @@ class TerminalWindow(SelectableTextMixin, Window):
 
     def _key_to_input(self, key, key_code):
         """Translate curses key events to terminal input bytes."""
+        if self.modes.application_cursor_keys:
+            cursor_keys = {
+                getattr(curses, 'KEY_UP', None): '\x1bOA',
+                getattr(curses, 'KEY_DOWN', None): '\x1bOB',
+                getattr(curses, 'KEY_RIGHT', None): '\x1bOC',
+                getattr(curses, 'KEY_LEFT', None): '\x1bOD',
+                getattr(curses, 'KEY_HOME', None): '\x1bOH',
+                getattr(curses, 'KEY_END', None): '\x1bOF',
+            }
+        else:
+            cursor_keys = {
+                getattr(curses, 'KEY_UP', None): '\x1b[A',
+                getattr(curses, 'KEY_DOWN', None): '\x1b[B',
+                getattr(curses, 'KEY_RIGHT', None): '\x1b[C',
+                getattr(curses, 'KEY_LEFT', None): '\x1b[D',
+                getattr(curses, 'KEY_HOME', None): '\x1b[H',
+                getattr(curses, 'KEY_END', None): '\x1b[F',
+            }
         special = {
-            getattr(curses, 'KEY_UP', None): '\x1b[A',
-            getattr(curses, 'KEY_DOWN', None): '\x1b[B',
-            getattr(curses, 'KEY_RIGHT', None): '\x1b[C',
-            getattr(curses, 'KEY_LEFT', None): '\x1b[D',
-            getattr(curses, 'KEY_HOME', None): '\x1b[H',
-            getattr(curses, 'KEY_END', None): '\x1b[F',
+            **cursor_keys,
             getattr(curses, 'KEY_PPAGE', None): '\x1b[5~',
             getattr(curses, 'KEY_NPAGE', None): '\x1b[6~',
             getattr(curses, 'KEY_IC', None): '\x1b[2~',
@@ -852,6 +873,27 @@ class TerminalWindow(SelectableTextMixin, Window):
             self._session_error = str(exc)
             self._reported_session_error = False
 
+    @staticmethod
+    def _sanitize_bracketed_paste(text):
+        """Prevent pasted data from terminating bracketed-paste framing early."""
+        return str(text).replace('\x1b[201~', '\x1b[201;~')
+
+    def _paste_payload(self, text):
+        """Forward clipboard text using bracketed paste when requested."""
+        if text is None or text == '':
+            return
+        payload = str(text)
+        if self.modes.bracketed_paste:
+            payload = (
+                '\x1b[200~'
+                + self._sanitize_bracketed_paste(payload)
+                + '\x1b[201~'
+            )
+        self._forward_payload(payload)
+
+    def _paste_clipboard(self):
+        self._paste_payload(paste_text())
+
     def accept_dropped_path(self, path):
         """Accept file drop payload by inserting a shell-safe path token."""
         if path is None:
@@ -906,7 +948,7 @@ class TerminalWindow(SelectableTextMixin, Window):
             return None
 
         if key_code == 22:
-            self._forward_payload(paste_text())
+            self._paste_clipboard()
             return None
 
         payload = self._key_to_input(key, key_code)
@@ -978,7 +1020,7 @@ class TerminalWindow(SelectableTextMixin, Window):
         if self.has_selection():
             items.append({'label': 'Copy Selection', 'action': self.MENU_COPY})
 
-        items.append({'label': 'Paste', 'action': lambda: self._forward_payload(paste_text())})
+        items.append({'label': 'Paste', 'action': self._paste_clipboard})
         items.append({'separator': True})
         items.append({'label': 'Clear Scrollback', 'action': self.MENU_CLEAR})
         items.append({'label': 'Restart Shell', 'action': self.MENU_RESTART})
@@ -1114,6 +1156,7 @@ class TerminalWindow(SelectableTextMixin, Window):
         self._last_pty_size = None
         self._pending_output = ''
         self.ansi = AnsiStateMachine()
+        self.modes.reset()
         self._scroll_lines = []
         self._normal_buf.clear_screen("all")
         self._alt_buf.clear_screen("all")
