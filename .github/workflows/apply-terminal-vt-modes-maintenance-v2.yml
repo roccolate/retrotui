@@ -38,6 +38,16 @@ jobs:
           set -o pipefail
           {
             python tools/apply_terminal_vt_modes.py
+            python - <<'PY'
+          from pathlib import Path
+          path = Path('tests/test_terminal_component.py')
+          text = path.read_text(encoding='utf-8')
+          old = 'win._consume_output("\\x1b[?25;1;2004l")'
+          new = 'win._consume_output("\\x1b[?25h\\x1b[?1;2004l")'
+          if text.count(old) != 1:
+              raise RuntimeError('DEC reset test sequence marker missing')
+          path.write_text(text.replace(old, new, 1), encoding='utf-8')
+          PY
             python -m pip install -e ".[test]"
             python tools/qa.py --skip-tests
             python -m ruff check --select F821 retrotui tests tools
