@@ -8,6 +8,7 @@ on:
       - tools/prepare_cooperative_file_transfers.py
       - tools/repair_cooperative_preparer.py
       - tools/refine_cooperative_file_transfers.py
+      - tools/refine_cooperative_file_transfers_strict.py
       - .github/workflows/prepare-cooperative-file-transfers.yml
   pull_request:
     branches:
@@ -39,11 +40,13 @@ jobs:
           python -m py_compile tools/prepare_cooperative_file_transfers_fixed.py
           python tools/prepare_cooperative_file_transfers_fixed.py
           python tools/refine_cooperative_file_transfers.py
+          python tools/refine_cooperative_file_transfers_strict.py
           rm -f \
             tools/prepare_cooperative_file_transfers.py \
             tools/prepare_cooperative_file_transfers_fixed.py \
             tools/repair_cooperative_preparer.py \
-            tools/refine_cooperative_file_transfers.py
+            tools/refine_cooperative_file_transfers.py \
+            tools/refine_cooperative_file_transfers_strict.py
 
       - name: Install test dependencies
         run: |
