@@ -28,7 +28,13 @@ def _replace_once(path: str, old: str, new: str) -> None:
 
 def _regex_replace_once(path: str, pattern: str, replacement: str) -> None:
     text = _read(path)
-    updated, count = re.subn(pattern, replacement, text, count=1, flags=re.DOTALL)
+    updated, count = re.subn(
+        pattern,
+        lambda _match: replacement,
+        text,
+        count=1,
+        flags=re.DOTALL,
+    )
     if count != 1:
         raise RuntimeError(f"{path}: expected one regex match, found {count}")
     _write(path, updated)
@@ -56,7 +62,7 @@ def harden_ansi_parser() -> None:
         path,
         r"            elif self\.state == 'ESC':\n"
         r"                if getattr\(self, '_osc_in_esc', False\):.*?"
-        r"                if ch == '\\[':\n",
+        r"                if ch == '\[':\n",
         "            elif self.state == 'ESC':\n"
         "                if ch == '[':\n",
     )
