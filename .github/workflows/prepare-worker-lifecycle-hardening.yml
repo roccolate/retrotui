@@ -14,7 +14,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   prepare:
@@ -26,6 +26,7 @@ jobs:
         uses: actions/checkout@v5
         with:
           ref: hardening/core-worker-lifecycle
+          fetch-depth: 1
 
       - name: Setup Python
         uses: actions/setup-python@v6
@@ -98,3 +99,100 @@ jobs:
         with:
           name: worker-lifecycle-hardening
           path: worker-lifecycle-hardening.tar.gz
+
+      - name: Create validated Git commit object
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPOSITORY: ${{ github.repository }}
+        run: |
+          python - <<'PY'
+          import base64
+          import json
+          import os
+          import subprocess
+          import urllib.request
+
+          repository = os.environ["GH_REPOSITORY"]
+          token = os.environ["GH_TOKEN"]
+          api_base = f"https://api.github.com/repos/{repository}"
+          paths = [
+              "retrotui/core/worker_scope.py",
+              "retrotui/ui/window.py",
+              "retrotui/core/app.py",
+              "retrotui/core/file_operations.py",
+              "retrotui/apps/terminal.py",
+              "retrotui/apps/image_viewer.py",
+              "retrotui/apps/filemanager/window.py",
+              "retrotui/apps/wifi_manager.py",
+              "retrotui/apps/retronet.py",
+              "tests/test_worker_lifecycle.py",
+          ]
+
+          def request(method, path, payload):
+              body = json.dumps(payload).encode("utf-8")
+              req = urllib.request.Request(
+                  api_base + path,
+                  data=body,
+                  method=method,
+                  headers={
+                      "Authorization": f"Bearer {token}",
+                      "Accept": "application/vnd.github+json",
+                      "X-GitHub-Api-Version": "2022-11-28",
+                      "Content-Type": "application/json",
+                  },
+              )
+              with urllib.request.urlopen(req, timeout=60) as response:
+                  return json.load(response)
+
+          parent = subprocess.check_output(
+              ["git", "rev-parse", "HEAD"], text=True
+          ).strip()
+          base_tree = subprocess.check_output(
+              ["git", "rev-parse", "HEAD^{tree}"], text=True
+          ).strip()
+
+          tree = []
+          for path in paths:
+              with open(path, "rb") as stream:
+                  encoded = base64.b64encode(stream.read()).decode("ascii")
+              blob = request("POST", "/git/blobs", {
+                  "content": encoded,
+                  "encoding": "base64",
+              })
+              tree.append({
+                  "path": path,
+                  "mode": "100644",
+                  "type": "blob",
+                  "sha": blob["sha"],
+              })
+
+          for temporary_path in (
+              "tools/prepare_worker_lifecycle_hardening.py",
+              "tools/refine_worker_lifecycle_hardening.py",
+          ):
+              tree.append({
+                  "path": temporary_path,
+                  "mode": "100644",
+                  "type": "blob",
+                  "sha": None,
+              })
+
+          new_tree = request("POST", "/git/trees", {
+              "base_tree": base_tree,
+              "tree": tree,
+          })
+          commit = request("POST", "/git/commits", {
+              "message": "Harden global shutdown and worker ownership",
+              "tree": new_tree["sha"],
+              "parents": [parent],
+          })
+          with open("prepared-commit.txt", "w", encoding="utf-8") as stream:
+              stream.write(commit["sha"] + "\n")
+          print(f"Prepared commit object: {commit['sha']}")
+          PY
+
+      - name: Upload prepared commit SHA
+        uses: actions/upload-artifact@v5
+        with:
+          name: worker-lifecycle-prepared-commit
+          path: prepared-commit.txt
