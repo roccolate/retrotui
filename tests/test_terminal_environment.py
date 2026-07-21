@@ -45,10 +45,13 @@ _CURSES_IMPORT_CONTRACT = {
 }
 
 
-def _fresh_entry_module():
-    """Import the entrypoint without reusing a package-level stale submodule."""
+def _fresh_cli_modules():
+    """Import the entrypoint and its environment dependency as one generation."""
     sys.modules.pop("retrotui.__main__", None)
-    return importlib.import_module("retrotui.__main__")
+    sys.modules.pop("retrotui.core.terminal_environment", None)
+    current_env = importlib.import_module("retrotui.core.terminal_environment")
+    entry = importlib.import_module("retrotui.__main__")
+    return entry, current_env
 
 
 class TerminalEnvironmentTests(unittest.TestCase):
@@ -193,10 +196,10 @@ class TerminalEnvironmentTests(unittest.TestCase):
             sys.modules.pop("retrotui.core.action_runner", None)
 
     def test_cli_installs_terminfo_without_starting_curses(self):
-        entry = _fresh_entry_module()
+        entry, current_env = _fresh_cli_modules()
         target = Path("/tmp/retrotui-terminfo")
         with (
-            mock.patch.object(terminal_env, "install_terminfo", return_value=target) as installer,
+            mock.patch.object(current_env, "install_terminfo", return_value=target) as installer,
             mock.patch.object(entry, "run", return_value=99) as run_mock,
             mock.patch("builtins.print"),
         ):
@@ -209,12 +212,12 @@ class TerminalEnvironmentTests(unittest.TestCase):
         run_mock.assert_not_called()
 
     def test_cli_returns_two_when_installation_fails(self):
-        entry = _fresh_entry_module()
+        entry, current_env = _fresh_cli_modules()
         with (
             mock.patch.object(
-                terminal_env,
+                current_env,
                 "install_terminfo",
-                side_effect=terminal_env.TerminfoInstallError("missing tic"),
+                side_effect=current_env.TerminfoInstallError("missing tic"),
             ),
             mock.patch.object(entry, "run", return_value=99) as run_mock,
             mock.patch("builtins.print"),
