@@ -15,6 +15,7 @@ _BACKENDS_CACHE = {"value": _BACKENDS_UNSET}
 _WIN_BACKEND_CACHE = {"value": _BACKENDS_UNSET}
 _CLOSE_WAIT_SECONDS = 0.2
 _CLOSE_POLL_INTERVAL = 0.01
+_DEFAULT_READ_BUDGET = 8192
 
 
 class TerminalScreenBuffer:
@@ -455,18 +456,34 @@ class TerminalSession:
 
         raise RuntimeError("No PTY backend available (need POSIX pty or pywinpty).")
 
-    def read(self, max_bytes=4096):
-        """Read available PTY output (non-blocking)."""
+    def read(self, max_bytes=4096, max_total_bytes=_DEFAULT_READ_BUDGET):
+        """Read available PTY output without exceeding an optional total budget.
+
+        ``max_bytes`` limits each backend read. ``max_total_bytes`` limits the
+        aggregate bytes admitted by this call and defaults to 8 KiB; unread
+        data remains buffered by the PTY for the next service tick. Pass
+        ``None`` only for an explicit unbounded drain.
+        """
+        max_bytes = max(1, int(max_bytes))
+        if max_total_bytes is None:
+            remaining = None
+        else:
+            remaining = max(0, int(max_total_bytes))
+            if remaining == 0:
+                return ""
+
         if self._win_pty is not None:
-            return self._read_windows(max_bytes)
+            read_size = max_bytes if remaining is None else min(max_bytes, remaining)
+            return self._read_windows(read_size)
 
         if self.master_fd is None:
             return ""
 
         chunks = []
-        while True:
+        while remaining is None or remaining > 0:
+            read_size = max_bytes if remaining is None else min(max_bytes, remaining)
             try:
-                chunk = os.read(self.master_fd, max_bytes)
+                chunk = os.read(self.master_fd, read_size)
             except BlockingIOError:
                 break
             except OSError as exc:
@@ -482,12 +499,18 @@ class TerminalSession:
                 break
 
             chunks.append(chunk)
-            if len(chunk) < max_bytes:
+            if remaining is not None:
+                remaining -= len(chunk)
+            if len(chunk) < read_size:
                 break
 
         if not chunks:
             return ""
         return self._decoder.decode(b"".join(chunks))
+
+    def read_budgeted(self, max_total_bytes, max_bytes=4096):
+        """Read at most ``max_total_bytes`` for one main-loop service tick."""
+        return self.read(max_bytes=max_bytes, max_total_bytes=max_total_bytes)
 
     def _read_windows(self, max_bytes=4096):
         """Read available output from Windows ConPTY."""
