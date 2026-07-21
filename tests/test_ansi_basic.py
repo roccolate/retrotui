@@ -120,6 +120,29 @@ class AnsiBasicTests(unittest.TestCase):
         self.assertEqual(list(split.parse_chunk("\x1b")), [])
         self.assertEqual(list(split.parse_chunk("M")), [("ESC", "M", 0)])
 
+    def test_osc_backslashes_remain_payload_until_bel_or_st(self):
+        state = AnsiStateMachine()
+        events = list(state.parse_chunk("\x1b]0;C:\\Users\\rocco\x07X"))
+        self.assertEqual(
+            [data for kind, data, _attr in events if kind == "TEXT"],
+            ["X"],
+        )
+
+        split = AnsiStateMachine()
+        self.assertEqual(list(split.parse_chunk("\x1b]0;title\x1b")), [])
+        self.assertEqual(split.state, "OSC_ESC")
+        self.assertEqual(list(split.parse_chunk("\\")), [])
+        self.assertEqual(split.state, "TEXT")
+        self.assertEqual(list(split.parse_chunk("Y")), [("TEXT", "Y", 0)])
+
+        continued = AnsiStateMachine()
+        events = list(continued.parse_chunk("\x1b]0;part\x1bXstill\x07Z"))
+        self.assertEqual(
+            [data for kind, data, _attr in events if kind == "TEXT"],
+            ["Z"],
+        )
+        self.assertEqual(continued.state, "TEXT")
+
 
 if __name__ == '__main__':
     unittest.main()

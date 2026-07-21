@@ -153,5 +153,31 @@ class WindowManagerTests(unittest.TestCase):
         self.assertEqual(wm.windows.iter_calls, 1)
 
 
+    def test_custom_request_close_exception_is_isolated(self):
+        class PluginCloseError(Exception):
+            pass
+
+        wm = WindowManager(None)
+        win = make_win("plugin")
+        win.request_close = lambda: (_ for _ in ()).throw(PluginCloseError("boom"))
+        wm.windows = [win]
+
+        self.assertFalse(wm.close_window(win))
+        self.assertIn(win, wm.windows)
+        self.assertFalse(getattr(win, "closed", False))
+
+    def test_custom_close_exception_is_isolated(self):
+        class PluginCloseError(Exception):
+            pass
+
+        wm = WindowManager(None)
+        win = make_win("plugin")
+        win.close = lambda: (_ for _ in ()).throw(PluginCloseError("boom"))
+        wm.windows = [win]
+
+        self.assertFalse(wm.close_window(win))
+        self.assertIn(win, wm.windows)
+
+
 if __name__ == "__main__":
     unittest.main()
