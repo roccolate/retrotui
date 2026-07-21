@@ -10,7 +10,7 @@ def insert_test_method(path: str, block: str) -> None:
     if path == "tests/test_retronet.py":
         block = block.replace(
             '        mock_urlopen.side_effect = ssl.SSLError("certificate verify failed")\n',
-            '        self.win.close()\n'
+            '        self.win._worker_scope.cancel()\n'
             '        mock_urlopen.reset_mock()\n'
             '        mock_urlopen.side_effect = ssl.SSLError("certificate verify failed")\n',
             1,
