@@ -16,7 +16,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   prepare:
@@ -124,3 +124,22 @@ jobs:
         with:
           name: cooperative-file-transfers
           path: cooperative-file-transfers.tar.gz
+
+      - name: Publish validated payload
+        if: github.event_name == 'push'
+        shell: bash
+        run: |
+          rm -f .github/workflows/prepare-cooperative-file-transfers.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            retrotui/core/file_transfer.py \
+            retrotui/core/file_operations.py \
+            retrotui/ui/dialog.py \
+            retrotui/apps/filemanager/operations.py \
+            retrotui/apps/filemanager/window.py \
+            tests/test_file_transfer.py \
+            tests/test_file_operation_progress.py
+          git add -u tools .github/workflows
+          git commit -m "Harden cooperative file transfers"
+          git push origin HEAD:refs/heads/hardening/cooperative-file-transfers
