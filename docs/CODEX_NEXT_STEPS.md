@@ -1,222 +1,276 @@
 # RetroTUI — Codex Next Steps
 
-This document is an operational handoff for Codex. The goal is to close the next milestone without destabilizing the project.
+This is the operational handoff for the next active milestone.
 
-## Current milestone
+## Current state
 
-Target milestone: **v0.9.6 — cross-terminal certification**.
+The pre-v0.9.6 automated stabilization is complete.
 
-RetroTUI is already in the late `0.9.x` stabilization phase. Do not add new user-facing features while working on this milestone. The current roadmap reserves v0.9.6 for real-environment validation, compatibility documentation, and fixes for bugs discovered during that validation.
+Do not reopen the closed P0/P1 contracts unless a regression or real-terminal failure demonstrates that the contract is insufficient. The completion record is in [STABILIZATION_PRE_0.9.6.md](STABILIZATION_PRE_0.9.6.md).
+
+The active milestone is:
+
+**v0.9.6 — cross-terminal certification**
 
 ## Prime directive
 
-Stabilize RetroTUI across real terminals.
+Validate RetroTUI in real terminal environments and document what is actually supported.
 
-Do not redesign the architecture. Do not expand the app list. Do not change the plugin API unless a discovered compatibility bug absolutely requires it. Prefer small, testable fixes over broad refactors.
+This milestone is not a feature milestone. Prefer small fixes, regression tests and explicit compatibility notes.
 
 ## Source of truth
 
-Use these files as the main references:
+Use these files together:
 
-- `ROADMAP.md`
-- `ARCHITECTURE.md`
-- `CHANGELOG.md`
-- `docs/IMPROVEMENTS.md`
-- `docs/TTY_TEST_MATRIX.md`
-- `tools/TESTING.md`
-- `docs/RELEASE.md`
-- `docs/SHORTCUT_POLICY_PLAN.md`
-- `pyproject.toml`
-- `retrotui/__init__.py`
-- `setup.sh`
+- `README.md` — public project overview and support policy.
+- `ARCHITECTURE.md` — current ownership and runtime contracts.
+- `ROADMAP.md` — milestone boundaries.
+- `docs/STABILIZATION_PRE_0.9.6.md` — completed hardening record.
+- `docs/TTY_TEST_MATRIX.md` — live certification results.
+- `tools/TESTING.md` — manual test checklist.
+- `docs/RELEASE.md` — release gate.
+- `CHANGELOG.md` — release notes.
+- `pyproject.toml`, `retrotui/__init__.py`, `retrotui/core/app.py`, `setup.sh` — version sources.
 
-When in doubt, follow the roadmap milestone boundaries.
+The July audit documents are historical evidence, not current task lists:
+
+- `docs/TECHNICAL_AUDIT_2026-07.md`
+- `docs/CORE_AUDIT_2026-07.md`
+
+## Contracts already closed
+
+Do not create parallel mechanisms for these concerns:
+
+- `WindowManager` owns spawn, focus and close.
+- `Window.request_close()` owns close authorization.
+- `tick()` reports visual changes.
+- `wants_periodic_tick` controls cadence.
+- `tick_when_hidden` controls hidden service.
+- EventBus creation and lifecycle events are deterministic.
+- Dialogs use stable workflow IDs and captured source windows.
+- Drag-and-drop prefers `accept_dropped_path()` over `open_path()`.
+- Logical colors are mapped according to terminal capacity.
+- Terminal PTY reads and writes are budgeted.
+- Terminal writes use a FIFO pending queue.
+- ConPTY receives `cwd` and merged environment where supported.
+- Windows PTY close is explicit and verified.
+- CI runs repository checks, `unittest` and pytest across six OS/Python combinations.
+
+If a certification bug touches one of these, patch the existing authority and add a focused regression. Do not add a second flag, dispatcher or process owner.
 
 ## v0.9.6 scope
 
-The v0.9.6 milestone exists to certify RetroTUI in real terminal environments:
+Test and document:
 
-- Linux console / TTY
-- Linux GUI terminal emulators
-- SSH remote sessions
-- tmux
-- screen
-- WSL + Windows Terminal
-- Windows native with `pywinpty` / ConPTY
+- Linux console / TTY.
+- Linux GUI terminal emulators.
+- SSH sessions.
+- tmux.
+- GNU screen.
+- WSL + Windows Terminal.
+- Native Windows with `pywinpty` / ConPTY.
 
-Expected deliverable:
+For each environment cover:
 
-- Updated `docs/TTY_TEST_MATRIX.md`
-- Compatibility notes for keyboard, mouse, resize, redraw, Unicode, color, terminal PTY, and app behavior
-- Fixes for critical or high-impact issues found during testing
-- Regression tests for bugs that can be reproduced without a real terminal
+- startup and clean shutdown;
+- keyboard and global shortcuts;
+- mouse routing and capture;
+- resize behavior;
+- Unicode and wide characters;
+- color capacity and theme degradation;
+- File Manager;
+- Notepad;
+- embedded Terminal;
+- representative bundled plugins.
 
 ## Hard boundaries
 
-Do not work on the following during v0.9.6 unless needed to fix a certification blocker:
+Do not start these during v0.9.6 unless required to fix a certification blocker:
 
-- Start Menu redesign
-- Session restore
-- First-run wizard
-- Marketplace or plugin discovery UX
-- New games
-- New themes
-- New bundled apps
-- Network features beyond existing RetroNet behavior
-- Visual redesigns
-- Large architectural rewrites
+- session restore;
+- first-run wizard;
+- Start Menu redesign;
+- new games, themes or bundled apps;
+- marketplace/discovery UX;
+- broad plugin API redesign;
+- networking expansion;
+- visual redesign;
+- large refactor of the core.
 
-These belong to v0.9.7, v0.9.8, or post-1.0.
+These belong to later roadmap milestones.
 
-## Compatibility matrix document
+## Required workflow per environment
 
-`docs/TTY_TEST_MATRIX.md` is the living v0.9.6 terminal compatibility matrix. Do not create a parallel `docs/testing-matrix.md` unless the matrix is intentionally renamed in a dedicated documentation-only commit and every reference is updated.
+### 1. Record the environment
 
-During v0.9.6, update `docs/TTY_TEST_MATRIX.md` so it includes:
+Capture at least:
 
-```markdown
-## v0.9.6 Certification Summary
+- operating system and version;
+- Python version;
+- terminal emulator or physical TTY;
+- `$TERM` or Windows terminal host;
+- tmux/screen/SSH layer if present;
+- locale and encoding;
+- color capability if known;
+- mouse backend used.
 
-Last updated: YYYY-MM-DD
-RetroTUI version tested: 0.9.5 / 0.9.6-dev
-
-### Legend
-
-- ✅ Supported
-- ⚠️ Partially supported
-- ❌ Not supported
-- 🧪 Not tested yet
-
-### Summary
-
-| Environment | Startup | Keyboard | Mouse | Resize | Unicode | Colors | Embedded Terminal | Status |
-|---|---:|---:|---:|---:|---:|---:|---:|---|
-| Linux TTY | 🧪 | 🧪 | 🧪 | 🧪 | 🧪 | 🧪 | 🧪 | Pending |
-| Linux GUI terminal | 🧪 | 🧪 | 🧪 | 🧪 | 🧪 | 🧪 | 🧪 | Pending |
-| SSH | 🧪 | 🧪 | 🧪 | 🧪 | 🧪 | 🧪 | 🧪 | Pending |
-| tmux | 🧪 | 🧪 | 🧪 | 🧪 | 🧪 | 🧪 | 🧪 | Pending |
-| screen | 🧪 | 🧪 | 🧪 | 🧪 | 🧪 | 🧪 | 🧪 | Pending |
-| WSL + Windows Terminal | 🧪 | 🧪 | 🧪 | 🧪 | 🧪 | 🧪 | 🧪 | Pending |
-| Windows native | 🧪 | 🧪 | 🧪 | 🧪 | 🧪 | 🧪 | 🧪 | Pending |
-```
-
-Keep the existing per-environment checklist and result log format in `docs/TTY_TEST_MATRIX.md`; extend it rather than replacing it.
-
-## Manual certification procedure
-
-For each environment:
-
-1. Install from a clean checkout:
-
-   ```bash
-   python -m pip install -e .
-   ```
-
-2. Run QA first:
-
-   ```bash
-   python tools/qa.py
-   ```
-
-3. Launch RetroTUI:
-
-   ```bash
-   retrotui
-   ```
-
-4. Test the base profile first:
-
-   - File Manager
-   - Notepad
-   - Terminal
-
-5. Run the relevant portions of `tools/TESTING.md`.
-
-6. Record results in `docs/TTY_TEST_MATRIX.md`.
-
-7. Convert any reproducible failure into either:
-
-   - a small fix with a regression test, or
-   - a documented limitation if the terminal cannot support the behavior reliably.
-
-## Embedded terminal focus tests
-
-The embedded terminal is a major blocker for v1.0 quality. During v0.9.6, explicitly test:
+### 2. Install cleanly
 
 ```bash
+python -m pip install -e ".[test]"
+```
+
+On Windows confirm that `windows-curses` and `pywinpty` are installed by the package markers.
+
+### 3. Run the automated gate
+
+```bash
+python tools/qa.py --skip-tests
+python -m unittest discover -s tests -v
+python -m pytest tests -q
+```
+
+A failure here is a release blocker before manual certification continues.
+
+### 4. Launch RetroTUI
+
+```bash
+retrotui
+```
+
+### 5. Test the base profile
+
+Prioritize:
+
+1. File Manager.
+2. Notepad.
+3. Terminal.
+
+Then test representative menus, dialogs and plugins.
+
+### 6. Execute the manual checklist
+
+Use `tools/TESTING.md`. Record only actions relevant to that environment, but explain skipped items.
+
+### 7. Update the matrix
+
+Write results directly to `docs/TTY_TEST_MATRIX.md`. Do not create a parallel compatibility document.
+
+### 8. Convert failures into evidence
+
+For every failure:
+
+- record exact environment and reproduction steps;
+- classify severity;
+- decide whether it is a RetroTUI bug or terminal limitation;
+- add an automated regression when simulation is possible;
+- document the limitation when it cannot be fixed reliably.
+
+## Embedded terminal certification
+
+Run available commands such as:
+
+```bash
+printf '\033[31mred\033[0m normal\n'
+printf '\033[?1049hALT SCREEN\033[?1049lNORMAL\n'
+less README.md
 nano
 vim
-less README.md
 top
 htop
 mc
-printf '\033[31mred\033[0m normal\n'
-printf '\033[?1049hALT SCREEN\033[?1049lNORMAL\n'
 ```
 
-Check these behaviors:
+Check:
 
-- Cursor position is accurate.
-- Alt-screen returns to normal screen.
-- Scrollback does not corrupt live screen.
-- Mouse pass-through works when the child app enables DEC mouse reporting.
-- RetroTUI keeps mouse control when the child app does not request mouse reporting.
-- Resize updates terminal dimensions without corrupting buffers.
+- cursor position after wraps and resize;
+- normal/alternate-screen transitions;
+- scrollback without duplicated rows;
+- copy and selection;
+- DEC mouse pass-through when requested;
+- RetroTUI mouse ownership when not requested;
+- output continues to drain while minimized;
+- continuous output does not freeze the desktop;
+- large paste/input is delivered in FIFO order;
+- child process closes cleanly when the window closes.
 
-## Bug fix policy
+### Windows-specific terminal checks
 
-When fixing v0.9.6 issues:
+Verify:
 
-1. Prefer the smallest localized patch.
-2. Add a regression test when the bug can be simulated.
-3. Avoid broad cleanup unless the bug cannot be fixed safely otherwise.
-4. Preserve existing public behavior.
-5. Update documentation if the behavior is intentionally limited.
+- shell starts in the requested `cwd`;
+- inherited environment remains available;
+- `extra_env` overrides/extends it;
+- resize reaches ConPTY;
+- interrupt/terminate behavior is observable;
+- close does not leave a child process running;
+- a failed close is surfaced instead of silently dropping the backend.
 
-## Regression test targets
+## Severity policy
 
-Prioritize tests around these areas:
+### Critical
 
-- Terminal buffer resize
-- Alt-screen transitions
-- Cursor row/column after line wrap
-- Mouse pass-through mode detection
-- No-pass-through mouse behavior
-- WindowManager active window consistency
-- Shutdown with open PTY sessions
-- File Manager operations on missing or permission-denied paths
-- Notepad save/open dirty-buffer behavior
+- data loss;
+- persistent config corruption;
+- process left running after a reported successful close;
+- app cannot exit cleanly;
+- main loop becomes unusable.
+
+### High
+
+- base app unusable in a target environment;
+- common terminal input or resize consistently broken;
+- dialog result affects the wrong window;
+- terminal traffic starves the desktop.
+
+### Medium/Low
+
+- environment-specific visual defects;
+- recoverable feature limitations;
+- optional plugin issues.
+
+Critical and high issues in environments intended to be marked supported must be fixed or the environment must be downgraded in the matrix.
+
+## Fix policy
+
+1. Reproduce first.
+2. Patch the existing authority.
+3. Add a focused regression.
+4. Run both test runners.
+5. Re-run the affected real environment.
+6. Update the matrix and changelog.
+7. Avoid unrelated cleanup.
 
 ## Definition of done for v0.9.6
 
-v0.9.6 is done when:
+v0.9.6 is ready when:
 
-- `docs/TTY_TEST_MATRIX.md` covers all target environments.
-- Each target environment is marked supported, partially supported, unsupported, or explicitly untested with a reason.
-- Base profile behavior is documented for each environment.
-- Critical and high-impact bugs discovered during certification are fixed or explicitly deferred with justification.
-- `python tools/qa.py` passes cleanly.
-- README and ROADMAP do not claim support that the matrix contradicts.
+- every target environment has a recorded classification or an explicit reason it could not be tested;
+- the base profile is documented per environment;
+- critical/high certification failures are fixed or clearly excluded from support;
+- the permanent six-combination CI matrix is green;
+- README claims agree with the TTY matrix;
+- `CHANGELOG.md` and release notes describe the certified scope;
+- all version sources are synchronized for the release commit.
 
 ## Suggested commit sequence
 
-Use small commits in this order:
+Use small commits:
 
-1. `docs: update terminal compatibility matrix`
-2. `test: add terminal regression coverage for v0.9.6 blockers`
-3. `fix: handle <specific terminal/input/resize issue>`
-4. `docs: document v0.9.6 compatibility findings`
-5. `chore: prepare v0.9.6 release notes`
+1. `docs: record <environment> certification`
+2. `test: reproduce <specific compatibility bug>`
+3. `fix: handle <specific compatibility bug>`
+4. `docs: update compatibility status`
+5. `release: prepare v0.9.6`
 
-## Notes for future milestones
+## After v0.9.6
 
-After v0.9.6 is closed, move to v0.9.7 system experience work:
+Only after certification is closed, move to v0.9.7:
 
-- Session restore
-- First-run wizard
-- Start Menu categories
-- Control Panel plugin toggles
-- Global shortcut documentation
-- Safe plugin crash recovery
-
-Do not start those until cross-terminal behavior is documented and stable.
+- session restore;
+- first-run experience;
+- Start Menu categories;
+- plugin/app toggles in Control Panel;
+- shortcut documentation;
+- plugin crash recovery;
+- config migration policy.
