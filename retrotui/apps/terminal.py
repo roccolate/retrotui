@@ -194,12 +194,22 @@ class TerminalWindow(SelectableTextMixin, Window):
 
     @property
     def _scroll_lines(self) -> list:
-        """Return the captured scrollback (lines that scrolled off the top).
+        """Return the legacy committed-line view without duplicate storage.
 
-        Does not include the rows still in the normal buffer; those are
-        reachable via ``self._normal_buf.get_row(r)``.
+        ``self._scrollback`` owns only rows that have left the visible grid.
+        Older callers expected this property to also expose completed rows that
+        are still visible, so they are appended as a transient view and capped
+        to ``max_scrollback``. Rendering never consumes this compatibility view.
         """
-        return list(self._scrollback)
+        lines = list(self._scrollback)
+        if not self._alt_screen:
+            lines.extend(
+                self._normal_buf.get_row(row)
+                for row in range(self._normal_buf.cursor_row)
+            )
+        if self.max_scrollback > 0 and len(lines) > self.max_scrollback:
+            lines = lines[-self.max_scrollback:]
+        return lines
 
     @_scroll_lines.setter
     def _scroll_lines(self, value: list):
