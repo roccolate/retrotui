@@ -6,6 +6,11 @@ on:
       - hardening/transactional-trash
     paths:
       - .github/workflows/diagnose-transactional-trash-windows.yml
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/diagnose-transactional-trash-windows.yml
 
 permissions:
   contents: read
