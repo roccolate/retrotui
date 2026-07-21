@@ -65,3 +65,5 @@ jobs:
           fi
           git commit -m "Implement DEC screen regions and editing controls"
           git push
+
+# Trigger after workflow registration.
