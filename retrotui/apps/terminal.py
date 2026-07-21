@@ -9,6 +9,7 @@ from ..constants import C_SCROLLBAR, C_STATUS
 from ..core.actions import ActionResult, ActionType, AppAction
 from ..core.clipboard import copy_text, paste_text
 from ..core.terminal_session import TerminalScreen, TerminalScreenBuffer, TerminalSession
+from ..core.terminal_cells import is_continuation, leading_cell_index, row_text
 from ..core.terminal_modes import DEFAULT_TERMINAL_CAPABILITIES, TerminalModes
 from ..core.ansi import AnsiStateMachine
 from ..ui.menu import WindowMenu
@@ -194,6 +195,7 @@ class TerminalWindow(SelectableTextMixin, Window):
         elif len(row_cells) > active.cols:
             row_cells = row_cells[:active.cols]
         active._grid[row] = row_cells
+        active.normalize_row(row)
 
     @property
     def _scroll_lines(self) -> list:
@@ -242,6 +244,7 @@ class TerminalWindow(SelectableTextMixin, Window):
                 if len(row) < alt.cols:
                     row.extend([(" ", alt._default_attr)] * (alt.cols - len(row)))
                 alt._grid[r] = row[:alt.cols]
+                alt.normalize_row(r)
             else:
                 alt._grid[r] = [(" ", alt._default_attr) for _ in range(alt.cols)]
 
@@ -258,11 +261,11 @@ class TerminalWindow(SelectableTextMixin, Window):
         self._alt_buf.resize(text_rows, text_cols)
 
     def _get_line_text(self, line_cells):
-        """Helper to convert cell list to plain string."""
-        return ''.join(c[0] for c in line_cells)
+        """Convert physical cells to plain text."""
+        return row_text(line_cells)
 
     def _selected_text(self):
-        """Return selected text as plain string."""
+        """Return selected text from physical cell coordinates."""
         bounds = self._selection_bounds()
         if not bounds:
             return ''
@@ -277,18 +280,17 @@ class TerminalWindow(SelectableTextMixin, Window):
             return ''
 
         if start_line == end_line:
-            line_str = self._get_line_text(lines[start_line])
-            return line_str[max(0, start_col):max(0, end_col)]
+            cells = lines[start_line]
+            return self._get_line_text(cells[max(0, start_col):max(0, end_col)])
 
         chunks = []
-        first_str = self._get_line_text(lines[start_line])
-        chunks.append(first_str[max(0, start_col):])
+        first_cells = lines[start_line]
+        chunks.append(self._get_line_text(first_cells[max(0, start_col):]))
         for idx in range(start_line + 1, end_line):
             chunks.append(self._get_line_text(lines[idx]))
-        last_str = self._get_line_text(lines[end_line])
-        chunks.append(last_str[:max(0, end_col)])
+        last_cells = lines[end_line]
+        chunks.append(self._get_line_text(last_cells[:max(0, end_col)]))
         return '\n'.join(chunks)
-
     def _cursor_from_screen(self, mx, my):
         """Convert body coordinates to terminal line/column cursor."""
         bx, by, bw, bh = self.body_rect()
@@ -387,7 +389,7 @@ class TerminalWindow(SelectableTextMixin, Window):
     def _write_char(self, ch, attr):
         """Write one character with attribute at current cursor via the buffer."""
         self._sync_screen_size()
-        self._screen.put_char(ch, attr=attr)
+        self._screen.put_char(ch, attr=attr, autowrap=self.modes.autowrap)
 
     # _advance_alt_cursor used to be a vestigial helper kept for legacy
     # call sites; nothing references it any more, and the buffer's
@@ -404,18 +406,15 @@ class TerminalWindow(SelectableTextMixin, Window):
         self._screen.carriage_return()
 
     def _erase_line(self, mode):
-        """Apply CSI K (erase in line) mode using the active buffer."""
+        """Apply CSI K without splitting wide glyphs."""
         active = self._screen._active
         if mode == 2:
             active.clear_line()
             return
         if mode == 1:
-            for c in range(0, active.cursor_col + 1):
-                active._grid[active.cursor_row][c] = (" ", active._default_attr)
+            active.clear_range(active.cursor_row, 0, active.cursor_col + 1)
             return
-        for c in range(active.cursor_col, active.cols):
-            active._grid[active.cursor_row][c] = (" ", active._default_attr)
-
+        active.clear_range(active.cursor_row, active.cursor_col, active.cols)
     def _erase_display(self, mode):
         """Apply CSI J (erase in display) for the active buffer."""
         active = self._screen._active
@@ -482,17 +481,7 @@ class TerminalWindow(SelectableTextMixin, Window):
             self._erase_line(_num(0, 0))
             return
         if final == 'P':
-            count = max(1, _num(0, 1))
-            row = active.cursor_row
-            col = active.cursor_col
-            line = active._grid[row]
-            if col < len(line):
-                # Only consume characters that exist inside the row; pad
-                # the rest so the row never grows past ``cols`` and the
-                # ``TerminalScreenBuffer`` invariant stays intact.
-                removable = min(count, max(0, len(line) - col))
-                del line[col:col + removable]
-                line.extend([(" ", active._default_attr)] * removable)
+            active.delete_chars(max(1, _num(0, 1)))
             return
         if final == 'J':
             self._erase_display(_num(0, 0))
@@ -586,45 +575,38 @@ class TerminalWindow(SelectableTextMixin, Window):
 
         active = self._screen._active
         cursor_line_idx = active.cursor_row
-        col = active.cursor_col
+        col = min(active.cursor_col, text_cols - 1)
 
         if self._alt_screen:
             row = y + cursor_line_idx
             if row >= y + text_rows:
                 return
-            if cursor_line_idx < active.rows:
-                line = active.get_row(cursor_line_idx)
-                if col < len(line):
-                    ch, attr = line[col]
-                else:
-                    ch, attr = ' ', 0
-            else:
-                ch, attr = ' ', 0
+            line = active.get_row(cursor_line_idx) if cursor_line_idx < active.rows else []
         else:
-            # In normal mode the cursor lives on the bottom row of the buffer;
-            # map that to the position in ``total_lines`` (scrollback + buffer).
             buffer_first_line_idx = total_lines - active.rows
             line_idx = buffer_first_line_idx + cursor_line_idx
             if not (start_idx <= line_idx < start_idx + text_rows):
                 return
             row = y + (line_idx - start_idx)
             line = active.get_row(cursor_line_idx)
-            if col < len(line):
-                ch, attr = line[col]
-            else:
-                ch, attr = ' ', 0
 
-        if col >= text_cols:
-            col = text_cols - 1
+        if col < len(line) and is_continuation(line[col]):
+            lead = leading_cell_index(line, col)
+            if lead is not None:
+                col = lead
+
+        if col < len(line):
+            ch, attr = line[col]
+        else:
+            ch, attr = ' ', 0
+        if not ch:
+            ch = ' '
 
         effective_attr = attr if attr else body_attr
-
         if ch == ' ':
             safe_addstr(stdscr, row, x + col, '_', effective_attr | curses.A_BOLD)
             return
-
         safe_addstr(stdscr, row, x + col, ch, effective_attr | curses.A_REVERSE | curses.A_BOLD)
-
     def _draw_selection(self, stdscr, x, y, text_cols, start_idx, visible_lines, body_attr):
         """Draw reverse-video overlay for selected text (run-batched)."""
         if not self.has_selection():
@@ -637,6 +619,10 @@ class TerminalWindow(SelectableTextMixin, Window):
             start, end = span
             start = max(0, start)
             end = min(end, text_cols)
+            if start < len(line_cells) and is_continuation(line_cells[start]):
+                lead = leading_cell_index(line_cells, start)
+                if lead is not None:
+                    start = lead
             if end <= start:
                 continue
             # Run-based batching: group consecutive cells with same attr

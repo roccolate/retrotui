@@ -1127,5 +1127,46 @@ class TerminalComponentTests(unittest.TestCase):
         self.assertFalse(win.modes.bracketed_paste)
 
 
+    def test_dec_autowrap_mode_controls_physical_columns(self):
+        win = self._make_window()
+        win.body_rect = mock.Mock(return_value=(4, 5, 5, 4))
+
+        win._consume_output("\x1b[?7lABCDE")
+
+        self.assertFalse(win.modes.autowrap)
+        self.assertEqual("".join(ch for ch, _ in win._normal_buf.get_row(0)), "ABCE")
+        self.assertEqual((win._cursor_row, win._cursor_col), (0, 3))
+
+        win._consume_output("\x1b[?7hFG")
+
+        self.assertTrue(win.modes.autowrap)
+        self.assertEqual("".join(ch for ch, _ in win._normal_buf.get_row(0)), "ABCF")
+        self.assertEqual(win._normal_buf.get_cell(1, 0), ("G", 0))
+
+    def test_selected_text_uses_physical_unicode_cells(self):
+        win = self._make_window()
+        win._scroll_lines = [(("你", 0), ("", 0), ("x", 0))]
+        win._line_cells = []
+        win.selection_anchor = (0, 0)
+        win.selection_cursor = (0, 2)
+
+        self.assertEqual(win._selected_text(), "你")
+
+    def test_cursor_on_wide_tail_draws_the_leading_glyph(self):
+        win = self._make_window()
+        win.active = True
+        win._line_cells = [("你", 0), ("", 0)]
+        win._cursor_col = 1
+        total = win._all_lines_count()
+        start = max(0, total - 7)
+
+        with mock.patch.object(self.terminal_mod, "safe_addstr") as safe_addstr:
+            win._draw_live_cursor(None, 4, 5, 29, 7, start, total, 0)
+
+        self.assertTrue(safe_addstr.called)
+        draw_call = safe_addstr.call_args
+        self.assertEqual(draw_call.args[2], 4)
+        self.assertEqual(draw_call.args[3], "你")
+
 if __name__ == "__main__":
     unittest.main()
