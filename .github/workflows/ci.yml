@@ -46,18 +46,12 @@ jobs:
       - name: Run pytest suite
         run: python -m pytest tests -q
 
-      - name: Restore permanent CI and remove patcher
-        run: |
-          git show a6f7abca0b97e2fb0f681b8a1d2a270fadbc6934:.github/workflows/ci.yml > .github/workflows/ci.yml
-          git rm tools/apply_partial_pty_writes.py
-
       - name: Commit validated partial-write contract
         shell: bash
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
-          git status --short
+          git add retrotui/core/terminal_session.py retrotui/apps/terminal.py tests/test_terminal_partial_writes.py
           git commit -m "terminal: queue partial PTY writes"
 
       - name: Push validated partial-write contract
