@@ -2,6 +2,7 @@
 
 import curses
 import logging
+import math
 import time
 from dataclasses import dataclass, field
 
@@ -26,6 +27,7 @@ TOAST_MAX_VISIBLE = 3
 TOAST_RIGHT_MARGIN = 2
 TOAST_TOP_MARGIN = 2  # below menu bar
 TOAST_MAX_QUEUE = 20
+VALID_TOAST_LEVELS = frozenset({"info", "success", "warning", "error"})
 
 
 @dataclass
@@ -75,7 +77,25 @@ class NotificationManager:
             )
 
     def notify(self, message, title="", level="info", duration=TOAST_DISPLAY_SECONDS):
-        """Add a toast notification."""
+        """Add a normalized toast notification.
+
+        Notification events are an extension boundary: plugins and IPC callers may
+        provide arbitrary payload values. Normalize them before they enter the tick
+        loop so one malformed toast cannot repeatedly poison expiry checks.
+        """
+        message = "" if message is None else str(message)
+        title = "" if title is None else str(title)
+        level = str(level or "info").strip().lower()
+        if level not in VALID_TOAST_LEVELS:
+            level = "info"
+        try:
+            duration = float(duration)
+        except (TypeError, ValueError, OverflowError):
+            duration = TOAST_DISPLAY_SECONDS
+        if not math.isfinite(duration):
+            duration = TOAST_DISPLAY_SECONDS
+        duration = max(0.0, duration)
+
         toast = Toast(
             title=title or level.capitalize(),
             message=message,

@@ -53,7 +53,15 @@ class WindowManager:
     # ------------------------------------------------------------------
 
     def set_active_window(self, win):
-        """Set a window as active (bring to front)."""
+        """Set a registered window as active (bring to front).
+
+        Activation is not a spawn path. Stale references are rejected without
+        mutating focus or registering a window that skipped lifecycle hooks.
+        """
+        if win not in self.windows:
+            LOGGER.warning("Ignoring activation request for unregistered window %r", win)
+            return False
+
         # Deactivate only the previous active window (O(1) via the
         # cached pointer) instead of walking every window in the list.
         # Also pick up a stale active flag in case the pointer is
@@ -76,7 +84,8 @@ class WindowManager:
         self.normalize_window_layers()
         if getattr(win, "always_on_top", False):
             self.windows.append(win)
-            return
+            self._emit_event("window.focused", win)
+            return True
 
         insert_at = len(self.windows)
         for i, candidate in enumerate(self.windows):
@@ -85,6 +94,7 @@ class WindowManager:
                 break
         self.windows.insert(insert_at, win)
         self._emit_event("window.focused", win)
+        return True
 
     def normalize_window_layers(self):
         """Keep always-on-top windows above regular windows preserving order."""
@@ -204,7 +214,10 @@ class WindowManager:
     # ------------------------------------------------------------------
 
     def _spawn_window(self, win):
-        """Append a window and make it active."""
+        """Register a window exactly once and make it active."""
+        if win in self.windows:
+            LOGGER.warning("Ignoring duplicate spawn for window %r", win)
+            return False
         self.windows.append(win)
         self._layers_dirty = True
         self._emit_event("window.opened", win)
@@ -215,6 +228,7 @@ class WindowManager:
             if bus is not None:
                 bus_sub(bus)
         self.set_active_window(win)
+        return True
 
     def _next_window_offset(self, base_x, base_y, step_x=2, step_y=1):
         """Return staggered window coordinates based on open window count."""

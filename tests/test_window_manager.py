@@ -32,24 +32,17 @@ class WindowManagerTests(unittest.TestCase):
         wm.close_window(w1)
         self.assertTrue(all(getattr(x, 'closed', False) or x is not w1 for x in [w1]))
 
-    def test_set_active_window_tolerates_stale_reference(self):
-        """N12: set_active_window must not raise ``ValueError`` when the
-        window isn't in the list (stale ref, dangling test stub). The
-        method is allowed to add the window as a side effect, but the
-        membership ``remove`` must be guarded."""
+    def test_set_active_window_rejects_stale_reference_without_spawning(self):
         wm = WindowManager(None)
         w1 = make_win('a')
         wm.windows = [w1]
 
         ghost = make_win('ghost')
-        # ghost is not in windows; this must not raise.
-        wm.set_active_window(ghost)
+        self.assertFalse(wm.set_active_window(ghost))
 
-        self.assertTrue(ghost.active)
-        self.assertIs(wm._active_window, ghost)
-        # The original window is still in the list, ghost got added.
-        self.assertIn(w1, wm.windows)
-        self.assertIn(ghost, wm.windows)
+        self.assertFalse(ghost.active)
+        self.assertIsNone(wm._active_window)
+        self.assertEqual(wm.windows, [w1])
 
     def test_spawn_and_offset(self):
         wm = WindowManager(None)
@@ -59,6 +52,22 @@ class WindowManagerTests(unittest.TestCase):
         x, y = wm._next_window_offset(1, 2)
         self.assertIsInstance(x, int)
         self.assertIsInstance(y, int)
+
+    def test_duplicate_spawn_is_rejected_without_repeating_lifecycle(self):
+        events = []
+        subscriptions = []
+        bus = SimpleNamespace(publish=lambda topic, data=None: events.append((topic, data)))
+        app = SimpleNamespace(event_bus=bus)
+        wm = WindowManager(app)
+        win = make_win('x')
+        win.subscribe_to_bus = subscriptions.append
+
+        self.assertTrue(wm._spawn_window(win))
+        self.assertFalse(wm._spawn_window(win))
+
+        self.assertEqual(wm.windows.count(win), 1)
+        self.assertEqual(subscriptions, [bus])
+        self.assertEqual([topic for topic, _ in events].count("window.opened"), 1)
 
     def test_taskbar_buttons_layout_and_cache(self):
         app = SimpleNamespace(stdscr=SimpleNamespace(getmaxyx=lambda: (20, 80)))
