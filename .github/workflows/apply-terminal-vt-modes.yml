@@ -49,3 +49,5 @@ jobs:
           git add retrotui/core/ansi.py retrotui/core/terminal_modes.py retrotui/apps/terminal.py tests/test_terminal_component.py ARCHITECTURE.md
           git commit -m "Strengthen terminal VT modes and bracketed paste"
           git push origin HEAD:agent/terminal-vt-modes
+
+# Triggered intentionally after creating the stacked branch.
