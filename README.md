@@ -27,17 +27,25 @@
 
 ## Project status
 
-RetroTUI is in the late `0.9.x` stabilization phase.
+| Item | Current state |
+|---|---|
+| Published package | `0.9.5` |
+| Primary branch | `main` |
+| Automated stabilization | ✅ Pre-v0.9.6 P0/P1 gate completed |
+| Active milestone | `v0.9.6 — cross-terminal certification` |
+| v0.9.6 release | Not published yet |
+| v1.0 status | Planned after v0.9.7–v0.9.9 |
 
 The pre-v0.9.6 core stabilization is complete: lifecycle ownership, redraw scheduling, terminal PTY service, dialog routing, drag-and-drop precedence, color-pair negotiation, scrollback ownership and the complete CI gate now have explicit contracts and regression coverage.
 
-The next milestone is **v0.9.6 cross-terminal certification**. That milestone is about validating real environments and documenting limitations; it is not a feature-development milestone.
+The current milestone is **real-environment certification**. A green automated suite validates internal behavior, but does not by itself certify a physical TTY, terminal emulator, SSH client, multiplexer or Windows terminal host.
 
-See:
+Start here:
 
-- [docs/STABILIZATION_PRE_0.9.6.md](docs/STABILIZATION_PRE_0.9.6.md) for the completed stabilization record.
-- [docs/TTY_TEST_MATRIX.md](docs/TTY_TEST_MATRIX.md) for real-terminal certification.
-- [ROADMAP.md](ROADMAP.md) for the path to 1.0.
+- [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md) — concise current state, completed work and pending certification.
+- [docs/TTY_TEST_MATRIX.md](docs/TTY_TEST_MATRIX.md) — live real-terminal certification results.
+- [docs/STABILIZATION_PRE_0.9.6.md](docs/STABILIZATION_PRE_0.9.6.md) — completed stabilization record.
+- [ROADMAP.md](ROADMAP.md) — path from v0.9.6 to 1.0.
 
 ## What RetroTUI is
 
@@ -187,6 +195,7 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for the complete model.
 
 ## Documentation
 
+- [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md) — current project state and active work.
 - [ARCHITECTURE.md](ARCHITECTURE.md) — runtime architecture and ownership contracts.
 - [ROADMAP.md](ROADMAP.md) — current milestone and path to 1.0.
 - [CHANGELOG.md](CHANGELOG.md) — release and unreleased change history.
