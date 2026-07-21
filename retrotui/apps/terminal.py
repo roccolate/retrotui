@@ -363,6 +363,9 @@ class TerminalWindow(SelectableTextMixin, Window):
                 if size != self._last_pty_size:
                     self._session.resize(text_cols, text_rows)
                     self._last_pty_size = size
+                flush_writes = getattr(self._session, 'flush_pending_writes', None)
+                if callable(flush_writes):
+                    flush_writes()
                 chunk = self._session.read()
                 if chunk:
                     self._pending_output += chunk

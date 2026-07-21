@@ -16,6 +16,7 @@ _WIN_BACKEND_CACHE = {"value": _BACKENDS_UNSET}
 _CLOSE_WAIT_SECONDS = 0.2
 _CLOSE_POLL_INTERVAL = 0.01
 _DEFAULT_READ_BUDGET = 8192
+_DEFAULT_WRITE_BUDGET = 8192
 
 
 class TerminalScreenBuffer:
@@ -395,6 +396,7 @@ class TerminalSession:
         self.running = False
         self._win_pty = None
         self._decoder = codecs.getincrementaldecoder("utf-8")("replace")
+        self._pending_write = bytearray()
 
     @staticmethod
     def is_supported():
@@ -524,30 +526,76 @@ class TerminalSession:
             return self._decoder.decode(data)
         return data
 
-    def write(self, data):
-        """Write data to PTY input."""
-        if self._win_pty is not None:
-            return self._write_windows(data)
+    @property
+    def pending_write_bytes(self):
+        """Return the number of queued input bytes awaiting the PTY."""
+        return len(self._pending_write)
 
-        if self.master_fd is None:
+    def write(self, data):
+        """Accept a complete input payload and queue any unsent suffix.
+
+        The return value is the number of bytes accepted by the session,
+        not necessarily the number synchronously written to the backend.
+        """
+        if self._win_pty is None and self.master_fd is None:
             return 0
         if isinstance(data, str):
             payload = data.encode("utf-8", errors="replace")
         else:
             payload = bytes(data)
-        return os.write(self.master_fd, payload)
+        if not payload:
+            return 0
+        self._pending_write.extend(payload)
+        flushed = self.flush_pending_writes()
+        if self._win_pty is not None and not self.running and flushed == 0:
+            return 0
+        return len(payload)
+
+    def flush_pending_writes(self, max_total_bytes=_DEFAULT_WRITE_BUDGET):
+        """Flush queued input without exceeding one service-tick budget."""
+        budget = max(0, int(max_total_bytes))
+        if budget == 0 or not self._pending_write:
+            return 0
+        if self._win_pty is None and self.master_fd is None:
+            return 0
+
+        total = 0
+        while self._pending_write and total < budget:
+            chunk = bytes(self._pending_write[:budget - total])
+            try:
+                if self._win_pty is not None:
+                    written = self._write_windows(chunk)
+                else:
+                    written = os.write(self.master_fd, chunk)
+            except BlockingIOError:
+                break
+            except OSError as exc:
+                if exc.errno in (errno.EAGAIN, errno.EWOULDBLOCK):
+                    break
+                if exc.errno in (errno.EIO, errno.EPIPE, errno.EBADF):
+                    self.running = False
+                raise
+
+            if written is None:
+                written = len(chunk)
+            written = max(0, min(int(written), len(chunk)))
+            if written == 0:
+                break
+            del self._pending_write[:written]
+            total += written
+        return total
 
     def _write_windows(self, data):
-        """Write data to Windows ConPTY input."""
-        if isinstance(data, str):
-            payload = data.encode("utf-8", errors="replace")
-        else:
-            payload = bytes(data)
+        """Write one queued chunk to Windows ConPTY."""
+        payload = data.encode("utf-8", errors="replace") if isinstance(data, str) else bytes(data)
         try:
-            self._win_pty.write(payload)
+            result = self._win_pty.write(payload)
         except OSError:
+            self._pending_write.clear()
             self.running = False
             return 0
+        if isinstance(result, int):
+            return max(0, min(result, len(payload)))
         return len(payload)
 
     def send_signal(self, sig):
@@ -689,6 +737,7 @@ class TerminalSession:
             except Exception:
                 pass
             self._win_pty = None
+            self._pending_write.clear()
             self.running = False
             return
 
@@ -706,4 +755,5 @@ class TerminalSession:
             except OSError:
                 pass
             self.master_fd = None
+        self._pending_write.clear()
         self.running = False
