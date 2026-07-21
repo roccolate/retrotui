@@ -159,45 +159,66 @@ class DialogDispatcher:
         LOGGER.debug('Unhandled ActionResult type: %s', result_type)
         return False
 
+    def _dialog_source_is_live(self, dialog):
+        """Return whether the dialog's captured source is still registered."""
+        source = getattr(dialog, "source_window", None)
+        if source is None:
+            return True
+        try:
+            windows = getattr(self._app, "windows")
+        except (AttributeError, TypeError):
+            # Minimal test scaffolding may not expose a window registry.
+            return True
+        if windows is None:
+            return True
+        expected_id = getattr(dialog, "source_window_id", None)
+        try:
+            for window in windows:
+                if window is source:
+                    return expected_id is None or getattr(window, "id", None) == expected_id
+        except TypeError:
+            return True
+        return False
+
+    @staticmethod
+    def _dialog_callback(dialog, accepted):
+        callback = getattr(dialog, "on_accept" if accepted else "on_cancel", None)
+        if callback is None and accepted:
+            # Compatibility for existing third-party dialogs.
+            callback = getattr(dialog, "callback", None)
+        return callback
+
     def resolve_dialog_result(self, result_idx):
-        """Apply dialog button result and run dialog callback when needed."""
+        """Resolve a dialog through explicit workflow metadata."""
         if result_idx < 0 or not self._app.dialog:
             return
 
         dialog = self._app.dialog
-        btn_text = dialog.buttons[result_idx] if result_idx < len(dialog.buttons) else ''
+        accepted = result_idx == 0
+        source = getattr(dialog, "source_window", None)
+        source_live = self._dialog_source_is_live(dialog)
         callback_result = None
-        callback_source = getattr(dialog, 'source_window', None)
+        callback = self._dialog_callback(dialog, accepted)
 
-        if dialog.title == 'Exit RetroTUI' and btn_text == 'Yes':
-            self._app.running = False
-        elif getattr(dialog, 'kind', None) == 'save_confirm' or dialog.title == 'Discard unsaved changes?':
-            callback_source = getattr(
-                self._app, '_pending_discard_source', callback_source
-            )
-            if result_idx == 0:
-                callback = getattr(self._app, '_pending_discard_callback', None)
+        if callable(callback):
+            if source is not None and not source_live:
+                LOGGER.warning(
+                    "Ignoring dialog workflow %r for closed source window %r",
+                    getattr(dialog, "workflow_id", None),
+                    source,
+                )
+            elif accepted and hasattr(dialog, "value"):
+                callback_result = callback(dialog.value)
             else:
-                callback = getattr(self._app, '_pending_discard_cancel_callback', None)
-            self._app._pending_discard_callback = None
-            self._app._pending_discard_cancel_callback = None
-            self._app._pending_discard_source = None
-            if callable(callback):
                 callback_result = callback()
-        elif result_idx == 0:
-            callback = getattr(dialog, 'callback', None)
-            if callable(callback):
-                if hasattr(dialog, 'value'):
-                    callback_result = callback(dialog.value)
-                else:
-                    callback_result = callback()
 
         if self._app.dialog is dialog:
             self._app.dialog = None
+
         if callback_result is not None:
-            source_win = callback_source or self._app.get_active_window()
-            app_dispatch = getattr(self._app, '_dispatch_window_result', None)
+            dispatch_source = source if source_live else None
+            app_dispatch = getattr(self._app, "_dispatch_window_result", None)
             if callable(app_dispatch):
-                app_dispatch(callback_result, source_win)
+                app_dispatch(callback_result, dispatch_source)
             else:
-                self.dispatch_window_result(callback_result, source_win)
+                self.dispatch_window_result(callback_result, dispatch_source)

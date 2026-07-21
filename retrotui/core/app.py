@@ -51,6 +51,7 @@ from .rendering import (
 )
 from .event_loop import run_app_loop
 from .dialog_dispatch import DialogDispatcher
+from .dialog_workflow import DialogWorkflowId, bind_dialog
 from .bootstrap import (
     configure_terminal,
     disable_flow_control,
@@ -184,17 +185,18 @@ class RetroTUI:
             if callable(fallback):
                 on_discard = fallback
 
-        self.dialog = Dialog(
-            title="Discard unsaved changes?",
-            message=message,
-            buttons=["Discard", "Cancel"],
-            width=58,
+        self.dialog = bind_dialog(
+            Dialog(
+                title="Discard unsaved changes?",
+                message=message,
+                buttons=["Discard", "Cancel"],
+                width=58,
+            ),
+            workflow_id=DialogWorkflowId.SAVE_CONFIRM,
+            source_window=win,
+            on_accept=on_discard,
+            on_cancel=on_cancel,
         )
-        self.dialog.kind = "save_confirm"
-        self.dialog.source_window = win
-        self._pending_discard_callback = on_discard
-        self._pending_discard_cancel_callback = on_cancel
-        self._pending_discard_source = win
 
     def show_rename_dialog(self, win):
         return self.file_ops.show_rename_dialog(win)
