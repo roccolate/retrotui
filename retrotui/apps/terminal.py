@@ -1134,6 +1134,8 @@ class TerminalWindow(SelectableTextMixin, Window):
                 )
                 return False
             self._session = None
+        if super().close() is False:
+            return False
         self._pending_output = ''
         self._last_pty_size = None
         return True

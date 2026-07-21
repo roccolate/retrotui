@@ -15,6 +15,7 @@ from ..constants import (
     BOTTOM_BARS_HEIGHT,
 )
 from ..utils import safe_addstr, draw_box, theme_attr
+from ..core.worker_scope import WorkerScope
 from .menu import WindowMenu
 
 class Window:
@@ -30,6 +31,7 @@ class Window:
     MIN_BTN_OFFSET = 10
     MAX_BTN_OFFSET = 7
     CLOSE_BTN_OFFSET = 4
+    WORKER_JOIN_TIMEOUT = 0.25
 
     def __init__(
         self,
@@ -46,6 +48,10 @@ class Window:
     ):
         self.id = Window._next_id
         Window._next_id += 1
+        self._worker_scope = WorkerScope(
+            f"{self.__class__.__name__}:{self.id}",
+            join_timeout=self.WORKER_JOIN_TIMEOUT,
+        )
         self.title = title
         self.x = x
         self.y = y
@@ -80,6 +86,43 @@ class Window:
 
     def request_close(self):
         """Return True when the window may be closed immediately."""
+        return True
+
+    def _start_worker(self, target, *args, name=None, daemon=True, **kwargs):
+        """Start a worker owned by this window.
+
+        The target receives the window cancellation event as its first argument.
+        """
+        scope = getattr(self, "_worker_scope", None)
+        if scope is None:
+            scope = WorkerScope(
+                f"{self.__class__.__name__}:{getattr(self, 'id', 'detached')}",
+                join_timeout=self.WORKER_JOIN_TIMEOUT,
+            )
+            self._worker_scope = scope
+        return scope.start(
+            target,
+            *args,
+            name=name,
+            daemon=daemon,
+            **kwargs,
+        )
+
+    def worker_cancelled(self):
+        """Return whether this window has entered logical shutdown."""
+        scope = getattr(self, "_worker_scope", None)
+        return bool(scope is not None and scope.cancel_event.is_set())
+
+    def close(self):
+        """Cancel all workers owned by this window.
+
+        Window workers are required to reject late results after cancellation,
+        so a blocked read-only worker does not keep the UI window registered.
+        """
+        scope = getattr(self, "_worker_scope", None)
+        if scope is None:
+            return True
+        scope.shutdown(timeout=self.WORKER_JOIN_TIMEOUT, require_stopped=False)
         return True
 
     def close_button_pos(self):
