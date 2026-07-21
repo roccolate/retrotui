@@ -11,7 +11,10 @@ from .actions import AppAction
 try:  # Python 3.11+
     import tomllib  # type: ignore[attr-defined]
 except ModuleNotFoundError:  # pragma: no cover - exercised on Python <3.11
-    tomllib = None
+    try:
+        import tomli as tomllib  # type: ignore[no-redef]
+    except ModuleNotFoundError:
+        tomllib = None
 
 if tomllib is not None:
     _TOML_PARSE_ERRORS = (
@@ -23,6 +26,7 @@ else:
     _TOML_PARSE_ERRORS = (TypeError, ValueError)
 
 
+CONFIG_SCHEMA_VERSION = 1
 PLUGIN_VISIBILITY_WILDCARD = "plugin:*"
 DEFAULT_HIDDEN_MENU_ITEMS = ",".join(
     sorted(
@@ -73,6 +77,7 @@ DEFAULT_HIDDEN_ICONS = ",".join(
 class AppConfig:
     """Persistent user-facing configuration."""
 
+    schema_version: int = CONFIG_SCHEMA_VERSION
     theme: str = DEFAULT_THEME
     show_hidden: bool = False
     word_wrap_default: bool = False
@@ -186,6 +191,58 @@ def _parse_toml(text: str) -> dict:
     return _fallback_parse_toml(text)
 
 
+def _coerce_schema_version(value, default=0):
+    try:
+        version = int(value)
+    except (TypeError, ValueError, OverflowError):
+        return default
+    return max(0, version)
+
+
+def _config_schema_version(raw: dict) -> int:
+    """Read schema metadata while accepting pre-versioned legacy files."""
+    if not isinstance(raw, dict):
+        return 0
+    meta = raw.get("meta")
+    if isinstance(meta, dict) and "schema_version" in meta:
+        return _coerce_schema_version(meta.get("schema_version"))
+    if "schema_version" in raw:
+        return _coerce_schema_version(raw.get("schema_version"))
+    if "config_version" in raw:
+        return _coerce_schema_version(raw.get("config_version"))
+    return 0
+
+
+def _migrate_config(raw: dict) -> tuple[dict, int]:
+    """Migrate legacy schema 0 into the current structured representation."""
+    if not isinstance(raw, dict):
+        raw = {}
+    version = _config_schema_version(raw)
+    if version > 0:
+        return raw, version
+
+    migrated = dict(raw)
+    if not isinstance(migrated.get("ui"), dict):
+        ui_keys = {
+            "theme",
+            "show_hidden",
+            "word_wrap_default",
+            "sunday_first",
+            "show_welcome",
+            "icon_style",
+            "hidden_icons",
+            "hidden_menu_items",
+        }
+        legacy_ui = {
+            key: migrated[key]
+            for key in ui_keys
+            if key in migrated
+        }
+        migrated["ui"] = legacy_ui
+    migrated["meta"] = {"schema_version": CONFIG_SCHEMA_VERSION}
+    return migrated, CONFIG_SCHEMA_VERSION
+
+
 def _normalize_icon_style_value(value) -> str:
     icon_style = str(value or "default").strip().lower() or "default"
     if icon_style in ("mini", "retro_01", "retro01", "retro-01"):
@@ -198,6 +255,7 @@ def _normalize_icon_style_value(value) -> str:
 
 
 def _normalize_config(raw: dict) -> AppConfig:
+    raw, schema_version = _migrate_config(raw)
     ui = raw.get("ui", raw)
     if not isinstance(ui, dict):
         ui = {}
@@ -214,6 +272,7 @@ def _normalize_config(raw: dict) -> AppConfig:
     hidden_icons = str(ui.get("hidden_icons", DEFAULT_HIDDEN_ICONS)).strip()
     hidden_menu_items = str(ui.get("hidden_menu_items", DEFAULT_HIDDEN_MENU_ITEMS)).strip()
     return AppConfig(
+        schema_version=schema_version,
         theme=theme,
         show_hidden=show_hidden,
         word_wrap_default=word_wrap_default,
@@ -244,8 +303,20 @@ def serialize_config(config: AppConfig, *, icon_positions=None) -> str:
     the icons block afterwards).
     """
     from ..utils import toml_basic_string
+    schema_version = _coerce_schema_version(
+        getattr(config, "schema_version", CONFIG_SCHEMA_VERSION),
+        default=CONFIG_SCHEMA_VERSION,
+    )
+    if schema_version > CONFIG_SCHEMA_VERSION:
+        raise ValueError(
+            "Refusing to overwrite config schema "
+            f"{schema_version} with older schema {CONFIG_SCHEMA_VERSION}."
+        )
     body = (
         "# RetroTUI user configuration\n"
+        "[meta]\n"
+        f"schema_version = {CONFIG_SCHEMA_VERSION}\n"
+        "\n"
         "[ui]\n"
         f'theme = "{toml_basic_string(config.theme)}"\n'
         f"show_hidden = {'true' if config.show_hidden else 'false'}\n"

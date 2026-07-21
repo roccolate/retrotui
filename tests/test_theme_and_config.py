@@ -180,8 +180,8 @@ class ThemeAndConfigTests(unittest.TestCase):
         real_import = __import__
 
         def fake_import(name, *args, **kwargs):
-            if name == "tomllib":
-                raise ModuleNotFoundError("no tomllib")
+            if name in {"tomllib", "tomli"}:
+                raise ModuleNotFoundError(f"no {name}")
             return real_import(name, *args, **kwargs)
 
         with mock.patch("builtins.__import__", side_effect=fake_import):
@@ -195,6 +195,38 @@ class ThemeAndConfigTests(unittest.TestCase):
         sys.modules.pop("retrotui.core.config", None)
         importlib.import_module("retrotui.core.config")
 
+    def test_legacy_config_is_migrated_to_current_schema(self):
+        loaded = self.config._normalize_config({
+            "theme": "hacker",
+            "show_hidden": True,
+        })
+
+        self.assertEqual(
+            loaded.schema_version,
+            self.config.CONFIG_SCHEMA_VERSION,
+        )
+        self.assertEqual(loaded.theme, "hacker")
+        self.assertTrue(loaded.show_hidden)
+
+    def test_serialized_config_declares_schema_version(self):
+        text = self.config.serialize_config(self.config.AppConfig())
+
+        self.assertIn("[meta]", text)
+        self.assertIn(
+            f"schema_version = {self.config.CONFIG_SCHEMA_VERSION}",
+            text,
+        )
+
+    def test_future_config_is_readable_but_cannot_be_downgraded(self):
+        future = self.config._normalize_config({
+            "meta": {"schema_version": 99},
+            "ui": {"theme": "amiga"},
+        })
+
+        self.assertEqual(future.schema_version, 99)
+        self.assertEqual(future.theme, "amiga")
+        with self.assertRaisesRegex(ValueError, "Refusing to overwrite"):
+            self.config.serialize_config(future)
 
 if __name__ == "__main__":
     unittest.main()
