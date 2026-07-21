@@ -5,7 +5,8 @@ These cover the contract between ``TerminalWindow`` and
 
 * The ANSI state machine writes through the buffer (not the legacy
   ``_line_cells`` / ``_scroll_lines`` lists).
-* The normal-screen buffer captures into scrollback on every newline.
+* The normal-screen buffer captures only rows that leave the visible grid.
+* Newlines inside the visible grid do not duplicate rows in scrollback.
 * The alt-screen buffer is isolated and swapped via ``TerminalScreen``.
 * The cursor position read by the renderer comes from the buffer.
 """
@@ -133,6 +134,14 @@ class TerminalBufferWiringTests(unittest.TestCase):
                 self.win.body_rect = mock.Mock(return_value=(4, 5, 70, 18))
                 self.win._sync_screen_size()
 
+    @staticmethod
+    def _texts(lines):
+        return ["".join(ch for ch, _ in line).rstrip() for line in lines]
+
+    def _resize_buffers(self, rows, cols=20):
+        self.win._normal_buf.resize(rows, cols)
+        self.win._alt_buf.resize(rows, cols)
+
     def test_terminalwindow_owns_terminal_screen(self):
         win = self.win
         # Both buffers must be TerminalScreenBuffer instances owned by a
@@ -153,21 +162,63 @@ class TerminalBufferWiringTests(unittest.TestCase):
         cursor_row = win._normal_buf.get_row(win._cursor_row)
         self.assertEqual([ch for ch, _ in cursor_row[:3]], ["A", "B", "C"])
 
-    def test_newline_captures_current_row_into_scrollback(self):
+    def test_newline_does_not_duplicate_rows_before_or_after_overflow(self):
         win = self.win
-        win._consume_output("hello\nworld\n")
-        scrollback_texts = [
-            "".join(ch for ch, _ in line).rstrip() for line in win._scrollback
-        ]
-        self.assertIn("hello", scrollback_texts)
-        self.assertIn("world", scrollback_texts)
+        self._resize_buffers(3)
+
+        win._consume_output("one\ntwo\n")
+        self.assertEqual(list(win._scrollback), [])
+        self.assertEqual(
+            [text for text in self._texts(win._all_lines()) if text],
+            ["one", "two"],
+        )
+
+        win._consume_output("three\nfour\n")
+        self.assertEqual(self._texts(win._scrollback), ["one", "two"])
+        self.assertEqual(
+            [text for text in self._texts(win._all_lines()) if text],
+            ["one", "two", "three", "four"],
+        )
 
     def test_scrollback_respects_maxlen(self):
         win = self.win
         win.max_scrollback = 3
+        win._scroll_lines = []
+        self._resize_buffers(2)
+
         for ch in "abcdefghij":
             win._consume_output(ch + "\n")
-        self.assertLessEqual(len(win._scrollback), 3)
+
+        self.assertEqual(self._texts(win._scrollback), ["g", "h", "i"])
+        self.assertEqual(
+            [text for text in self._texts(win._all_lines()) if text],
+            ["g", "h", "i", "j"],
+        )
+
+    def test_consecutive_identical_lines_are_preserved_once_each(self):
+        win = self.win
+        self._resize_buffers(2)
+
+        win._consume_output("same\nsame\nsame\n")
+
+        self.assertEqual(
+            [text for text in self._texts(win._all_lines()) if text],
+            ["same", "same", "same"],
+        )
+        self.assertEqual(self._texts(win._scrollback), ["same", "same"])
+
+    def test_replacing_scrollback_rebinds_buffer_sink(self):
+        win = self.win
+        old_scrollback = win._scrollback
+        win._scroll_lines = []
+        new_scrollback = win._scrollback
+        self._resize_buffers(2)
+
+        win._consume_output("a\nb\nc\n")
+
+        self.assertIsNot(old_scrollback, new_scrollback)
+        self.assertEqual(list(old_scrollback), [])
+        self.assertEqual(self._texts(new_scrollback), ["a", "b"])
 
     def test_carriage_return_resets_column_to_zero(self):
         win = self.win
@@ -219,14 +270,14 @@ class TerminalBufferWiringTests(unittest.TestCase):
         self.assertEqual([ch for ch, _ in row[:2]], ["X", "Y"])
         self.assertEqual(win._cursor_col, 2)
 
-    def test_backward_compat_scroll_lines_reflects_scrollback(self):
+    def test_backward_compat_scroll_lines_exposes_committed_rows(self):
         win = self.win
         win._consume_output("first\nsecond\n")
-        scrollback_texts = [
-            "".join(ch for ch, _ in line).rstrip() for line in win._scroll_lines
-        ]
+        scrollback_texts = self._texts(win._scroll_lines)
         self.assertIn("first", scrollback_texts)
         self.assertIn("second", scrollback_texts)
+        # The compatibility view must not create a second stored copy.
+        self.assertEqual(list(win._scrollback), [])
 
     def test_resize_preserves_overlapping_cells(self):
         win = self.win
