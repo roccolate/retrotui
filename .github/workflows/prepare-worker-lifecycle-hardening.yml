@@ -6,6 +6,7 @@ on:
       - hardening/core-worker-lifecycle
     paths:
       - tools/prepare_worker_lifecycle_hardening.py
+      - tools/refine_worker_lifecycle_hardening.py
       - .github/workflows/prepare-worker-lifecycle-hardening.yml
   pull_request:
     branches:
@@ -32,7 +33,9 @@ jobs:
           python-version: "3.12"
 
       - name: Apply deterministic hardening patch
-        run: python tools/prepare_worker_lifecycle_hardening.py
+        run: |
+          python tools/prepare_worker_lifecycle_hardening.py
+          python tools/refine_worker_lifecycle_hardening.py
 
       - name: Install test dependencies
         run: |
