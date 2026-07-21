@@ -1,0 +1,76 @@
+name: Apply terminal VT modes maintenance v2
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  apply:
+    if: github.event.issue.title == '[maintenance] apply terminal VT modes v2'
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TARGET_BRANCH: agent/terminal-vt-modes
+    steps:
+      - name: Announce start
+        run: gh issue comment "${{ github.event.issue.number }}" --repo "${{ github.repository }}" --body "Diagnostic terminal VT mode run started."
+
+      - name: Checkout target branch
+        uses: actions/checkout@v5
+        with:
+          ref: agent/terminal-vt-modes
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Apply and validate
+        id: validate
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          {
+            python tools/apply_terminal_vt_modes.py
+            python -m pip install -e ".[test]"
+            python tools/qa.py --skip-tests
+            python -m ruff check --select F821 retrotui tests tools
+            python -m unittest discover -s tests -p 'test_terminal_component.py' -v
+            python -m pytest tests/test_terminal_component.py -q
+          } 2>&1 | tee /tmp/terminal-vt-maintenance.log
+
+      - name: Commit implementation
+        if: steps.validate.outcome == 'success'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add retrotui/core/ansi.py retrotui/core/terminal_modes.py retrotui/apps/terminal.py tests/test_terminal_component.py ARCHITECTURE.md
+          git commit -m "Strengthen terminal VT modes and bracketed paste"
+          git push origin HEAD:${TARGET_BRANCH}
+
+      - name: Report result
+        if: always()
+        shell: bash
+        run: |
+          if [ "${{ steps.validate.outcome }}" = "success" ]; then
+            printf '%s\n' 'Terminal VT mode hardening passed focused validation and was committed to agent/terminal-vt-modes.' > /tmp/comment.md
+          else
+            {
+              echo 'Terminal VT mode hardening failed before commit. No partial implementation commit was pushed.'
+              echo
+              echo '```text'
+              tail -n 100 /tmp/terminal-vt-maintenance.log
+              echo '```'
+            } > /tmp/comment.md
+          fi
+          gh issue comment "${{ github.event.issue.number }}" --repo "${{ github.repository }}" --body-file /tmp/comment.md
+
+      - name: Fail diagnostic run
+        if: steps.validate.outcome != 'success'
+        run: exit 1
