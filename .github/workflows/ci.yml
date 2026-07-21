@@ -57,5 +57,8 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
+          git status --short
           git commit -m "terminal: queue partial PTY writes"
-          git push origin HEAD:${{ github.event.pull_request.head.ref }}
+
+      - name: Push validated partial-write contract
+        run: git push origin HEAD:${{ github.event.pull_request.head.ref }}
