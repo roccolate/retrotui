@@ -81,6 +81,9 @@ class TerminalWindow(SelectableTextMixin, Window):
         # so the ANSI state machine writes through ``put_char`` / ``line_feed``
         # / ``clear_screen`` and the buffer stays the source of truth.
         text_cols, text_rows = self._text_area_size()
+        self._tab_stops = set(range(8, text_cols, 8))
+        self._tab_stop_extent = text_cols
+        self._tab_stops_cleared_all = False
         self._scrollback: deque = deque(maxlen=self.max_scrollback)
         self._normal_buf = _ScrollbackBuffer(
             text_rows, text_cols, scrollback=self._scrollback
@@ -251,8 +254,9 @@ class TerminalWindow(SelectableTextMixin, Window):
 
 
     def _sync_screen_size(self):
-        """Resize both buffers to match the current text area dimensions."""
+        """Resize both buffers and keep tab stops valid for the viewport."""
         text_cols, text_rows = self._text_area_size()
+        self._sync_tab_stops(text_cols)
         if (
             self._normal_buf.rows == text_rows
             and self._normal_buf.cols == text_cols
@@ -432,6 +436,102 @@ class TerminalWindow(SelectableTextMixin, Window):
         row = active.scroll_top if self.modes.origin_mode else 0
         active.set_cursor(row, 0)
 
+    def _reset_tab_stops(self, cols=None):
+        """Restore default horizontal stops every eight physical columns."""
+        if cols is None:
+            cols = self._screen.cols
+        cols = max(1, int(cols))
+        self._tab_stops = set(range(8, cols, 8))
+        self._tab_stop_extent = cols
+        self._tab_stops_cleared_all = False
+
+    def _sync_tab_stops(self, cols):
+        """Clip stops on shrink and seed new default columns on expansion."""
+        cols = max(1, int(cols))
+        previous = max(1, int(self._tab_stop_extent))
+        self._tab_stops = {stop for stop in self._tab_stops if 0 <= stop < cols}
+        if cols > previous and not self._tab_stops_cleared_all:
+            first = max(8, ((previous + 7) // 8) * 8)
+            self._tab_stops.update(range(first, cols, 8))
+        self._tab_stop_extent = cols
+
+    def _set_tab_stop(self):
+        active = self._screen._active
+        if 0 <= active.cursor_col < active.cols:
+            self._tab_stops.add(active.cursor_col)
+
+    def _clear_tab_stop(self, mode=0):
+        active = self._screen._active
+        if mode in (0, None):
+            self._tab_stops.discard(active.cursor_col)
+        elif mode == 3:
+            self._tab_stops.clear()
+            self._tab_stops_cleared_all = True
+
+    def _tab_forward(self, count=1):
+        active = self._screen._active
+        col = active.cursor_col
+        for _ in range(max(1, int(count))):
+            candidates = [stop for stop in self._tab_stops if col < stop < active.cols]
+            col = min(candidates) if candidates else active.cols - 1
+        active.set_cursor(active.cursor_row, col)
+
+    def _tab_backward(self, count=1):
+        active = self._screen._active
+        col = active.cursor_col
+        for _ in range(max(1, int(count))):
+            candidates = [stop for stop in self._tab_stops if 0 <= stop < col]
+            col = max(candidates) if candidates else 0
+        active.set_cursor(active.cursor_row, col)
+
+    def _send_terminal_response(self, payload):
+        """Write a protocol response to the existing child without UI side effects."""
+        session = self._session
+        if session is None or not getattr(session, 'running', False):
+            return False
+        try:
+            session.write(payload)
+        except (OSError, RuntimeError) as exc:
+            self._set_session_error(exc)
+            return False
+        return True
+
+    def _apply_esc(self, final):
+        """Apply supported single-byte ESC format effectors."""
+        active = self._screen._active
+        if final == 'D':
+            active.line_feed()
+        elif final == 'E':
+            active.line_feed()
+            active.carriage_return()
+        elif final == 'M':
+            active.reverse_index()
+        elif final == 'H':
+            self._set_tab_stop()
+        elif final == '7':
+            active.save_cursor()
+        elif final == '8':
+            active.restore_cursor()
+
+    def _apply_dsr(self, params, private=''):
+        """Answer ANSI/DEC status and cursor-position requests."""
+        if private not in ('', '?'):
+            return
+        request = params[0] if params else 0
+        prefix = '?' if private == '?' else ''
+        if request == 5:
+            self._send_terminal_response(f'\x1b[{prefix}0n')
+            return
+        if request != 6:
+            return
+        active = self._screen._active
+        if self.modes.origin_mode:
+            row = active.cursor_row - active.scroll_top + 1
+        else:
+            row = active.cursor_row + 1
+        col = active.cursor_col + 1
+        self._send_terminal_response(f'\x1b[{prefix}{row};{col}R')
+
     def _erase_line(self, mode):
         """Apply CSI K without splitting wide glyphs."""
         active = self._screen._active
@@ -500,6 +600,18 @@ class TerminalWindow(SelectableTextMixin, Window):
             return
         if final == 'G':
             active.set_cursor(active.cursor_row, min(cols - 1, max(0, _num(0, 1) - 1)))
+            return
+        if final == 'I':
+            self._tab_forward(max(1, _num(0, 1)))
+            return
+        if final == 'Z':
+            self._tab_backward(max(1, _num(0, 1)))
+            return
+        if final == 'g' and private == '':
+            self._clear_tab_stop(_num(0, 0))
+            return
+        if final == 'n':
+            self._apply_dsr(params, private)
             return
         if final == 'd':
             row = max(0, _num(0, 1) - 1)
@@ -570,9 +682,9 @@ class TerminalWindow(SelectableTextMixin, Window):
                 elif data == '\b':
                     self._screen.backspace()
                 elif data == '\t':
-                    spaces = 8 - (self._screen.cursor_col % 8)
-                    for _ in range(spaces):
-                        self._write_char(' ', self.ansi.attr)
+                    self._tab_forward()
+            elif kind == 'ESC':
+                self._apply_esc(data)
             elif kind == 'CSI':
                 # data is final char, attr is params list
                 self._apply_csi(attr, data)
@@ -1213,6 +1325,7 @@ class TerminalWindow(SelectableTextMixin, Window):
         self._normal_cursor_before_alt = None
         self._screen.set_alt_screen(False)
         self._screen.set_cursor(0, 0)
+        self._reset_tab_stops(self._screen.cols)
         # The fresh child has not re-enabled mouse reporting yet.
         self._mouse_modes = set()
         self.scrollback_offset = 0

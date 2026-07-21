@@ -101,6 +101,7 @@ class AnsiStateMachine:
         Yields:
           ('TEXT', char, attr)
           ('CSI', final_char, params_list)
+          ('ESC', final_char, 0) # Single-byte ESC dispatch
           ('OSC', ...) # Not fully implemented, just consumed
           ('CONTROL', char) # For \n, \r, \b, \t
         """
@@ -135,10 +136,12 @@ class AnsiStateMachine:
                     self.state = 'OSC'
                 elif ch == '(':
                     self.state = 'CHARSET'
+                elif ch in ('D', 'E', 'M', 'H', '7', '8'):
+                    self.state = 'TEXT'
+                    yield ('ESC', ch, 0)
                 else:
-                    # Fallback for unhandled ESC sequence or immediate char
-                    self.state = 'TEXT' # Reset and treat as text or ignore?
-                    # Properly we should handle ESC c etc.
+                    # Unknown single-byte ESC commands are consumed safely.
+                    self.state = 'TEXT'
             
             elif self.state == 'CSI':
                 if (
