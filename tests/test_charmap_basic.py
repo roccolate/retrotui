@@ -5,10 +5,18 @@ from retrotui.apps.charmap import CharacterMapWindow, UNICODE_BLOCKS
 
 def test_load_block_and_grid_dims():
     w = CharacterMapWindow(0, 0, 80, 24)
-    # ensure initial block loaded
+    # ensure initial block loaded through both the canonical field and the
+    # public compatibility view used by older integrations.
     assert w._status_message.startswith("Block:")
+    assert w.status_message == w._status_message
     cols, rows = w._get_grid_dims(80, 24)
     assert cols >= 1 and rows >= 1
+
+
+def test_status_message_compatibility_setter_updates_canonical_storage():
+    w = CharacterMapWindow(0, 0, 80, 24)
+    w.status_message = "Ready"
+    assert w._status_message == "Ready"
 
 
 def test_handle_key_navigation_and_execute_block():
