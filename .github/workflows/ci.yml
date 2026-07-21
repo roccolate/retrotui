@@ -5,8 +5,6 @@ on:
   pull_request:
 
 env:
-  # lowered to current local coverage total (75.7%) to allow CI to proceed
-  # we'll raise this over time as tests improve coverage
   MODULE_COVERAGE_FAIL_UNDER: "75.0"
 
 jobs:
@@ -62,6 +60,11 @@ jobs:
               "from pathlib import Path\n\nLOGGER = logging.getLogger(__name__)\n\n_PLUGIN_IMPORT_ERRORS",
           )
           replace_once(
+              "retrotui/apps/charmap.py",
+              "        self.block_idx = 0\n        self.chars = []\n        self._load_block()\n        \n        self.sel_idx = 0\n        self.selected_char = self.chars[0] if self.chars else None\n        self._status_message = \"\"\n        self._status_ttl = 0\n",
+              "        self._status_message = \"\"\n        self._status_ttl = 0\n        self.block_idx = 0\n        self.chars = []\n        self._load_block()\n        \n        self.sel_idx = 0\n        self.selected_char = self.chars[0] if self.chars else None\n",
+          )
+          replace_once(
               "tests/test_charmap_basic.py",
               'assert w.status_message.startswith("Block:")',
               'assert w._status_message.startswith("Block:")',
@@ -107,6 +110,7 @@ jobs:
       - name: Compile changed Python files
         run: |
           python -m py_compile \
+            retrotui/apps/charmap.py \
             retrotui/apps/terminal.py \
             retrotui/plugins/loader.py \
             tests/test_charmap_basic.py \
@@ -127,6 +131,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add \
+            retrotui/apps/charmap.py \
             retrotui/apps/terminal.py \
             retrotui/plugins/loader.py \
             tests/test_charmap_basic.py \
