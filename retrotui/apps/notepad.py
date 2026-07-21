@@ -7,7 +7,7 @@ import unicodedata
 from ..ui.selectable_text import SelectableTextMixin
 from ..ui.window import Window
 from ..ui.menu import WindowMenu
-from ..core.actions import ActionResult, ActionType, AppAction
+from ..core.actions import ActionResult, ActionType, AppAction, SaveConfirmPayload
 from ..core.clipboard import copy_text, paste_text
 from ..utils import safe_addstr, normalize_key_code, theme_attr
 from ..constants import C_STATUS, C_SCROLLBAR, WIN_MIN_WIDTH
@@ -226,14 +226,14 @@ class NotepadWindow(SelectableTextMixin, Window):
             )
             return ActionResult(
                 ActionType.REQUEST_SAVE_CONFIRM,
-                payload={
-                    "on_discard": self._do_open_path_force,
-                    "on_cancel": self._cancel_open_path,
-                    "message": (
+                payload=SaveConfirmPayload(
+                    on_discard=self._do_open_path_force,
+                    on_cancel=self._cancel_open_path,
+                    message=(
                         f"{self.title} has unsaved changes.\n"
                         "Discard them and open the new file?"
                     ),
-                },
+                ),
             )
         self._do_open_path(os.path.abspath(os.path.expanduser(path)))
         return None
@@ -263,14 +263,14 @@ class NotepadWindow(SelectableTextMixin, Window):
         self._close_confirm_pending = True
         return ActionResult(
             ActionType.REQUEST_SAVE_CONFIRM,
-            payload={
-                "on_discard": self._confirm_close,
-                "on_cancel": self._cancel_close_request,
-                "message": (
+            payload=SaveConfirmPayload(
+                on_discard=self._confirm_close,
+                on_cancel=self._cancel_close_request,
+                message=(
                     f"{self.title} has unsaved changes.\n"
                     "Discard them and close the window?"
                 ),
-            },
+            ),
         )
 
     def _confirm_close(self):

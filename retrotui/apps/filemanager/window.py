@@ -8,7 +8,7 @@ import threading
 import time
 from ...ui.window import Window
 from ...ui.menu import WindowMenu
-from ...core.actions import ActionResult, ActionType, AppAction
+from ...core.actions import ActionResult, ActionType, AppAction, FileTransferPayload
 from ...utils import safe_addstr, check_unicode_support, theme_attr, normalize_key_code
 from ...constants import WIN_MIN_WIDTH, WIN_MIN_HEIGHT, DEFAULT_DOUBLE_CLICK_INTERVAL
 from .core import FileEntry, PaneState, _fit_text_to_cells, _cell_width
@@ -941,10 +941,13 @@ class FileManagerWindow(Window):
                 if move
                 else ActionType.REQUEST_COPY_BETWEEN_PANES
             )
-            return ActionResult(request_type, {
-                'source': source.full_path,
-                'destination': dest_dir,
-            })
+            return ActionResult(
+                request_type,
+                FileTransferPayload(
+                    source=source.full_path,
+                    destination=dest_dir,
+                ),
+            )
 
         if move:
             res = perform_move(source.full_path, dest_path)
