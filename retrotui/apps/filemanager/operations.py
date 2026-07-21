@@ -8,6 +8,7 @@ import time
 import threading
 from pathlib import Path
 from ...core.actions import ActionResult, ActionType
+from ...core.file_transfer import cooperative_copy, cooperative_move
 from .core import FileEntry
 
 _TRASH_METADATA_ERRORS = (
@@ -109,28 +110,46 @@ def next_trash_path(original_path, trash_dir=None):
             return alt
         index += 1
 
-def perform_copy(source_path, dest_path):
-    """Copy file or directory."""
+def perform_copy(
+    source_path,
+    dest_path,
+    *,
+    cancel_event=None,
+    progress_callback=None,
+):
+    """Copy file or directory through a rollback-safe temporary destination."""
     try:
-        if os.path.isdir(source_path):
-            shutil.copytree(source_path, dest_path)
-        else:
-            shutil.copy2(source_path, dest_path)
+        cooperative_copy(
+            source_path,
+            dest_path,
+            cancel_event=cancel_event,
+            progress_callback=progress_callback,
+        )
         return ActionResult(ActionType.REFRESH)
-    except (OSError, shutil.Error) as exc:
+    except (OSError, shutil.Error, ValueError) as exc:
         return ActionResult(ActionType.ERROR, str(exc))
 
-def perform_move(source_path, dest_path):
-    """Move file or directory."""
+
+def perform_move(
+    source_path,
+    dest_path,
+    *,
+    cancel_event=None,
+    progress_callback=None,
+):
+    """Move atomically when possible, otherwise use cooperative copy + cleanup."""
     try:
-        # ``shutil.move`` is only atomic on the same filesystem; across
-        # filesystems it falls back to copy+delete, which can leave the
-        # source partially deleted on a crash. Acceptable for a desktop
-        # file manager; documented here so future improvements are aware.
-        shutil.move(source_path, dest_path)
+        cooperative_move(
+            source_path,
+            dest_path,
+            cancel_event=cancel_event,
+            progress_callback=progress_callback,
+        )
         return ActionResult(ActionType.REFRESH)
-    except (OSError, shutil.Error) as exc:
+    except (OSError, shutil.Error, ValueError) as exc:
         return ActionResult(ActionType.ERROR, str(exc))
+
+
 def perform_delete(source_path, trash_dir=None):
     """Move file or directory to trash."""
     try:

@@ -413,18 +413,52 @@ class ProgressDialog:
 
     SPINNER_FRAMES = ('|', '/', '-', '\\')
 
-    def __init__(self, title, message, width=58):
+    def __init__(self, title, message, width=58, cancel_callback=None):
         self.title = title
         self.message = message
         self.buttons = []
         self.width = max(width, len(title) + 8)
         self.lines = _wrap_dialog_message(message, self.width - 6)
         self.elapsed_seconds = 0.0
-        self.height = len(self.lines) + 8
+        self.progress = {}
+        self.cancel_callback = cancel_callback
+        self.cancel_requested = False
+        self.height = len(self.lines) + 10
+        self._cancel_y = 0
+        self._cancel_x_start = 0
+        self._cancel_x_end = 0
 
     def set_elapsed(self, seconds):
-        """Update elapsed runtime shown by the spinner row."""
         self.elapsed_seconds = max(0.0, float(seconds))
+
+    def set_progress(self, progress):
+        if hasattr(progress, "as_dict"):
+            progress = progress.as_dict()
+        self.progress = dict(progress or {})
+
+    def set_cancel_requested(self):
+        self.cancel_requested = True
+
+    def _request_cancel(self):
+        if self.cancel_requested or not callable(self.cancel_callback):
+            return
+        self.cancel_requested = True
+        self.cancel_callback()
+
+    def _progress_fraction(self):
+        fraction = self.progress.get("fraction")
+        if fraction is not None:
+            try:
+                return max(0.0, min(1.0, float(fraction)))
+            except (TypeError, ValueError):
+                return None
+        total_bytes = int(self.progress.get("total_bytes", 0) or 0)
+        if total_bytes > 0:
+            return max(0.0, min(1.0, int(self.progress.get("bytes_done", 0) or 0) / total_bytes))
+        total_files = int(self.progress.get("total_files", 0) or 0)
+        if total_files > 0:
+            return max(0.0, min(1.0, int(self.progress.get("files_done", 0) or 0) / total_files))
+        return None
 
     def draw(self, stdscr, frame_size=None):
         if frame_size is not None:
@@ -433,65 +467,72 @@ class ProgressDialog:
             max_h, max_w = stdscr.getmaxyx()
         x = (max_w - self.width) // 2
         y = (max_h - self.height) // 2
-
         attr = theme_attr('dialog')
         title_attr = theme_attr('window_title') | curses.A_BOLD
         info_attr = theme_attr('status') | curses.A_BOLD
 
-        shadow_attr = curses.A_DIM
         for row in range(self.height):
-            safe_addstr(
-                stdscr,
-                y + row + 1,
-                x + 2,
-                ' ' * self.width,
-                shadow_attr,
-                _bounds=frame_size,
-            )
-
+            safe_addstr(stdscr, y + row + 1, x + 2, ' ' * self.width, curses.A_DIM, _bounds=frame_size)
         for row in range(self.height):
             safe_addstr(stdscr, y + row, x, ' ' * self.width, attr, _bounds=frame_size)
-
         draw_box(stdscr, y, x, self.height, self.width, attr, double=True, _bounds=frame_size)
-
-        title_text = f' {self.title} '
-        safe_addstr(
-            stdscr,
-            y,
-            x + 1,
-            title_text.ljust(self.width - 2),
-            title_attr,
-            _bounds=frame_size,
-        )
+        safe_addstr(stdscr, y, x + 1, f' {self.title} '.ljust(self.width - 2), title_attr, _bounds=frame_size)
 
         for i, line in enumerate(self.lines):
-            safe_addstr(
-                stdscr,
-                y + 2 + i,
-                x + 3,
-                line[: self.width - 6],
-                attr,
-                _bounds=frame_size,
-            )
+            safe_addstr(stdscr, y + 2 + i, x + 3, line[: self.width - 6], attr, _bounds=frame_size)
 
-        spinner_idx = int(self.elapsed_seconds * 8) % len(self.SPINNER_FRAMES)
-        spinner = self.SPINNER_FRAMES[spinner_idx]
-        status = f'Working {spinner}  {self.elapsed_seconds:5.1f}s'
+        fraction = self._progress_fraction()
+        bar_width = max(8, self.width - 14)
+        if fraction is None:
+            fill = 0
+            percent = " --%"
+        else:
+            fill = int(round(bar_width * fraction))
+            percent = f"{fraction * 100:3.0f}%"
+        bar = '[' + ('#' * fill).ljust(bar_width, '-') + ']'
         safe_addstr(
-            stdscr,
-            y + self.height - 3,
-            x + 3,
-            status.ljust(self.width - 6),
-            info_attr,
-            _bounds=frame_size,
+            stdscr, y + self.height - 5, x + 3,
+            f'{bar} {percent}'[: self.width - 6].ljust(self.width - 6),
+            info_attr, _bounds=frame_size,
         )
 
+        spinner = self.SPINNER_FRAMES[int(self.elapsed_seconds * 8) % len(self.SPINNER_FRAMES)]
+        phase = str(self.progress.get("phase") or "working").replace("_", " ").title()
+        current_path = str(self.progress.get("current_path") or "")
+        status = (
+            f'Cancelling {spinner}  {self.elapsed_seconds:5.1f}s'
+            if self.cancel_requested
+            else f'{phase} {spinner}  {self.elapsed_seconds:5.1f}s'
+        )
+        if current_path:
+            status = f'{status}  {current_path}'
+        safe_addstr(
+            stdscr, y + self.height - 4, x + 3,
+            status[: self.width - 6].ljust(self.width - 6),
+            info_attr, _bounds=frame_size,
+        )
+
+        if callable(self.cancel_callback):
+            label = '[ Cancelling... ]' if self.cancel_requested else '[ Cancel: Esc/C ]'
+            cancel_x = x + max(3, (self.width - len(label)) // 2)
+            cancel_y = y + self.height - 2
+            safe_addstr(stdscr, cancel_y, cancel_x, label, info_attr, _bounds=frame_size)
+            self._cancel_y = cancel_y
+            self._cancel_x_start = cancel_x
+            self._cancel_x_end = cancel_x + len(label)
+
     def handle_click(self, mx, my):
-        """Progress dialogs do not process click actions."""
-        _ = (mx, my)
+        if (
+            callable(self.cancel_callback)
+            and my == self._cancel_y
+            and self._cancel_x_start <= mx < self._cancel_x_end
+        ):
+            self._request_cancel()
         return -1
 
     def handle_key(self, key):
-        """Progress dialogs do not process keyboard actions."""
-        _ = key
+        key_code = normalize_key_code(key)
+        if callable(self.cancel_callback) and key_code in (27, ord('c'), ord('C')):
+            self._request_cancel()
         return -1
+

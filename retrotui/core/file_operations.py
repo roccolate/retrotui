@@ -1,4 +1,5 @@
 """File operation manager for RetroTUI."""
+import inspect
 import os
 import logging
 import threading
@@ -7,6 +8,7 @@ from types import SimpleNamespace
 
 from ..ui.dialog import Dialog, InputDialog, ProgressDialog
 from .actions import ActionResult, ActionType
+from .file_transfer import TransferCancelled
 from .dialog_workflow import DialogWorkflowId, bind_dialog
 from .worker_scope import WorkerScope
 
@@ -23,6 +25,16 @@ _BACKGROUND_WORKER_ERRORS = (
     TypeError,
     ValueError,
 )
+
+
+class _CombinedCancelEvent:
+    """Cancellation probe that becomes set when any owned event is set."""
+
+    def __init__(self, *events):
+        self._events = tuple(event for event in events if event is not None)
+
+    def is_set(self):
+        return any(event.is_set() for event in self._events)
 
 
 class FileOperationManager:
@@ -284,6 +296,65 @@ class FileOperationManager:
                 return False
         return int(size) >= self.LONG_FILE_OPERATION_BYTES
 
+    @staticmethod
+    def _invoke_worker(worker, cancel_event, progress_callback):
+        """Call legacy or cooperative workers without masking worker TypeErrors."""
+        try:
+            params = inspect.signature(worker).parameters
+        except (TypeError, ValueError):
+            return worker()
+
+        accepts_kwargs = any(
+            param.kind == inspect.Parameter.VAR_KEYWORD
+            for param in params.values()
+        )
+        kwargs = {}
+        cancel_param = params.get("cancel_event")
+        if accepts_kwargs or (
+            cancel_param is not None
+            and cancel_param.kind != inspect.Parameter.POSITIONAL_ONLY
+        ):
+            kwargs["cancel_event"] = cancel_event
+        progress_param = params.get("progress_callback")
+        if accepts_kwargs or (
+            progress_param is not None
+            and progress_param.kind != inspect.Parameter.POSITIONAL_ONLY
+        ):
+            kwargs["progress_callback"] = progress_callback
+        return worker(**kwargs)
+
+    @staticmethod
+    def _normalize_progress(progress):
+        if hasattr(progress, "as_dict"):
+            progress = progress.as_dict()
+        if not isinstance(progress, dict):
+            return {}
+        return dict(progress)
+
+    def cancel_background_operation(self):
+        """Request cancellation for the active cooperative file operation."""
+        state = getattr(self._app, '_background_operation', None)
+        if not state or not state.get('cancellable') or state.get('done'):
+            return False
+        event = state.get('operation_cancel_event')
+        if event is None:
+            return False
+        event.set()
+        lock = state.get('lock')
+        if lock is not None:
+            with lock:
+                state['cancel_requested'] = True
+        else:
+            state['cancel_requested'] = True
+        dialog = state.get('dialog')
+        if dialog and hasattr(dialog, 'set_cancel_requested'):
+            dialog.set_cancel_requested()
+        bus = getattr(self._app, '_event_bus', None)
+        if bus is not None:
+            bus.publish("file_op.cancel_requested", data={"title": state.get('dialog_title', '')})
+        self._app._dirty = True
+        return True
+
     def _start_background_operation(self, *, title, message, worker, source_win):
         """Run blocking filesystem operation in an owned worker scope."""
         if self._shutting_down or self._worker_scope.closed:
@@ -292,34 +363,56 @@ class FileOperationManager:
         if state:
             return ActionResult(ActionType.ERROR, 'Another operation is already running.')
 
-        progress_dialog = ProgressDialog(title, message, width=62)
+        cancellable = getattr(worker, '_retrotui_cancellable', False) is True
+        if cancellable:
+            progress_dialog = ProgressDialog(
+                title, message, width=62,
+                cancel_callback=self.cancel_background_operation,
+            )
+        else:
+            progress_dialog = ProgressDialog(title, message, width=62)
         op_lock = threading.Lock()
+        operation_cancel_event = threading.Event()
         op_state = {
             'dialog': progress_dialog,
             'source_win': source_win,
             'worker_result': None,
             'done': False,
+            'cancelled': False,
+            'cancel_requested': False,
+            'cancellable': cancellable,
+            'progress': {},
+            'operation_cancel_event': operation_cancel_event,
             'started_at': time.monotonic(),
             'thread': None,
         }
 
-        def _runner(cancel_event):
-            if cancel_event.is_set():
-                result = ActionResult(ActionType.ERROR, 'Operation cancelled during shutdown.')
-            else:
-                try:
+        def _publish_progress(progress):
+            data = self._normalize_progress(progress)
+            with op_lock:
+                op_state['progress'] = data
+
+        def _runner(scope_cancel_event):
+            cancel_event = _CombinedCancelEvent(scope_cancel_event, operation_cancel_event)
+            cancelled = False
+            try:
+                if cancellable:
+                    result = self._invoke_worker(worker, cancel_event, _publish_progress)
+                else:
                     result = worker()
-                except _BACKGROUND_WORKER_ERRORS as exc:  # pragma: no cover - defensive worker path
-                    result = ActionResult(ActionType.ERROR, str(exc))
-            # Publish the result together with the ``done`` flag under a
-            # single lock so the main loop never observes a partial state.
+            except TransferCancelled:
+                cancelled = True
+                result = ActionResult(ActionType.REFRESH, 'Operation cancelled.')
+            except _BACKGROUND_WORKER_ERRORS as exc:
+                result = ActionResult(ActionType.ERROR, str(exc))
             with op_lock:
                 op_state['worker_result'] = result
+                op_state['cancelled'] = cancelled
                 op_state['done'] = True
 
         op_state['lock'] = op_lock
         op_state['dialog_title'] = title
-        op_state['cancel_event'] = self._worker_scope.cancel_event
+        op_state['cancel_event'] = operation_cancel_event
         self._app._background_operation = op_state
         self._app.dialog = progress_dialog
         thread = self._worker_scope.start(_runner, name='retrotui-file-op')
@@ -331,7 +424,7 @@ class FileOperationManager:
         op_state['thread'] = thread
         bus = getattr(self._app, '_event_bus', None)
         if bus is not None:
-            bus.publish("file_op.started", data={"title": title})
+            bus.publish("file_op.started", data={"title": title, "cancellable": cancellable})
         return None
 
     def has_background_operation(self):
@@ -368,35 +461,44 @@ class FileOperationManager:
         if not state or self._shutting_down:
             return
 
-        # Active background operation always needs redraw (progress animation).
         self._app._dirty = True
-
         elapsed = max(0.0, time.monotonic() - state['started_at'])
         dialog = state.get('dialog')
         if dialog and hasattr(dialog, 'set_elapsed'):
             dialog.set_elapsed(elapsed)
 
-        # Read the ``done`` flag and the worker result atomically. Without
-        # the lock the main loop could observe ``done=True`` with a stale
-        # ``worker_result`` if the worker had not yet finished assigning.
         lock = state.get('lock')
         if lock is not None:
             with lock:
                 done = state.get('done')
                 result = state.get('worker_result')
-        else:  # pragma: no cover - legacy paths
+                cancelled = bool(state.get('cancelled'))
+                progress = dict(state.get('progress') or {})
+                cancel_requested = bool(state.get('cancel_requested'))
+        else:
             done = state.get('done')
             result = state.get('worker_result')
+            cancelled = bool(state.get('cancelled'))
+            progress = dict(state.get('progress') or {})
+            cancel_requested = bool(state.get('cancel_requested'))
+
+        if dialog and progress and hasattr(dialog, 'set_progress'):
+            dialog.set_progress(progress)
+        if dialog and cancel_requested and hasattr(dialog, 'set_cancel_requested'):
+            dialog.set_cancel_requested()
         if not done:
             return
 
         if self._app.dialog is dialog:
             self._app.dialog = None
-
         self._app._background_operation = None
 
-        # Publish completion event on the bus (main thread, safe).
         bus = getattr(self._app, '_event_bus', None)
+        if cancelled:
+            if bus is not None:
+                bus.publish("file_op.cancelled", data={"title": state.get('dialog_title', '')})
+            return
+
         if bus is not None:
             is_error = result is not None and getattr(result, 'type', None) == ActionType.ERROR
             topic = "file_op.failed" if is_error else "file_op.completed"
@@ -410,10 +512,11 @@ class FileOperationManager:
         entry = self._window_selected_entry(win)
         operation = str(operation).lower()
 
-        if operation == 'copy' and source_path:
-            copy_path_to = getattr(win, 'copy_path_to', None)
-            if not callable(copy_path_to):
-                return ActionResult(ActionType.ERROR, 'Window does not support source-path copy.')
+        if operation in ('copy', 'move') and source_path:
+            method_name = 'copy_path_to' if operation == 'copy' else 'move_path_to'
+            transfer_path_to = getattr(win, method_name, None)
+            if not callable(transfer_path_to):
+                return ActionResult(ActionType.ERROR, f'Window does not support source-path {operation}.')
             name = os.path.basename(os.path.normpath(str(source_path))) or 'item'
             entry = SimpleNamespace(
                 name=name,
@@ -421,33 +524,63 @@ class FileOperationManager:
                 is_dir=os.path.isdir(source_path),
                 size=None,
             )
-            worker = lambda target=win, src=source_path, dest=destination: target.copy_path_to(src, dest)
-            title = 'Copying'
-            details = f"Copying:\n{name}"
+
+            def worker(cancel_event=None, progress_callback=None, transfer=transfer_path_to):
+                if cancel_event is None and progress_callback is None:
+                    return transfer(source_path, destination)
+                return transfer(
+                    source_path,
+                    destination,
+                    cancel_event=cancel_event,
+                    progress_callback=progress_callback,
+                )
+
+            title = 'Copying' if operation == 'copy' else 'Moving'
+            details = f"{title}:\n{name}"
         elif operation == 'copy':
-            worker = lambda target=win, dest=destination: target.copy_selected(dest)
+            def worker(cancel_event=None, progress_callback=None):
+                if cancel_event is None and progress_callback is None:
+                    return win.copy_selected(destination)
+                return win.copy_selected(
+                    destination,
+                    cancel_event=cancel_event,
+                    progress_callback=progress_callback,
+                )
+
             title = 'Copying'
             details = f"Copying:\n{getattr(entry, 'name', 'item')}"
         elif operation == 'move':
-            worker = lambda target=win, dest=destination: target.move_selected(dest)
+            def worker(cancel_event=None, progress_callback=None):
+                if cancel_event is None and progress_callback is None:
+                    return win.move_selected(destination)
+                return win.move_selected(
+                    destination,
+                    cancel_event=cancel_event,
+                    progress_callback=progress_callback,
+                )
+
             title = 'Moving'
             details = f"Moving:\n{getattr(entry, 'name', 'item')}"
         elif operation == 'delete':
-            worker = lambda target=win: target.delete_selected()
+            def worker():
+                return win.delete_selected()
+
             title = 'Deleting'
             details = f"Deleting:\n{getattr(entry, 'name', 'item')}"
         else:
             return ActionResult(ActionType.ERROR, f'Unsupported file operation: {operation}')
 
+        if operation in ('copy', 'move'):
+            setattr(worker, '_retrotui_cancellable', True)
+
         if not self._is_long_file_operation(entry):
             return worker()
 
         message = f'{details}\n\nPlease wait...'
-        # Delegate back through the app so that any mocks on app._start_background_operation
-        # are honoured and the public interface of RetroTUI is preserved.
         return self._app._start_background_operation(
             title=title,
             message=message,
             worker=worker,
             source_win=win,
         )
+
