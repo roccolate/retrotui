@@ -37,6 +37,10 @@ jobs:
           python tools/repair_cooperative_preparer.py
           python -m py_compile tools/prepare_cooperative_file_transfers_fixed.py
           python tools/prepare_cooperative_file_transfers_fixed.py
+          rm -f \
+            tools/prepare_cooperative_file_transfers.py \
+            tools/prepare_cooperative_file_transfers_fixed.py \
+            tools/repair_cooperative_preparer.py
 
       - name: Install test dependencies
         run: |
@@ -65,7 +69,7 @@ jobs:
         run: test "$(cat cooperative-qa-status.txt)" = "0"
 
       - name: Reject undefined names
-        run: python -m ruff check --select F821 retrotui tests tools/prepare_cooperative_file_transfers_fixed.py
+        run: python -m ruff check --select F821 retrotui tests
 
       - name: Capture unittest report
         shell: bash
