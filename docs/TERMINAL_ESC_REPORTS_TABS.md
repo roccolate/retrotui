@@ -41,8 +41,9 @@ it expands unless the child explicitly cleared all stops.
 - CPR row numbering follows `DECOM`: screen-relative when reset and relative to
   the scrolling region origin when set.
 
-Responses are written directly to the existing PTY child and do not alter
-scrollback position or create a new session.
+Responses use the existing session write path and are sent directly to the
+current PTY child. They do not alter scrollback position or create a new
+session.
 
 ## Deliberate follow-ups
 
