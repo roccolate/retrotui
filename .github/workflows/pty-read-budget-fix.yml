@@ -1,0 +1,218 @@
+name: PTY Read Budget Fix
+
+on:
+  pull_request:
+
+permissions:
+  contents: write
+
+jobs:
+  apply_pty_read_budget:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+
+      - name: Apply bounded PTY read contract
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path, old, new):
+              file_path = Path(path)
+              text = file_path.read_text(encoding="utf-8")
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"{path}: expected one match, found {count}")
+              file_path.write_text(text.replace(old, new), encoding="utf-8")
+
+          replace_once(
+              "retrotui/apps/terminal.py",
+              "    MAX_OUTPUT_PER_FRAME = 8192  # Compatibility name: max chars processed per service tick.\n",
+              "    MAX_OUTPUT_PER_FRAME = 8192  # Compatibility name: max chars processed per service tick.\n"
+              "    MAX_PTY_READ_PER_TICK = 8192  # Total decoded PTY bytes admitted per service tick.\n",
+          )
+
+          replace_once(
+              "retrotui/apps/terminal.py",
+              "                chunk = self._session.read()\n",
+              "                budgeted_read = getattr(self._session, 'read_budgeted', None)\n"
+              "                if callable(budgeted_read):\n"
+              "                    chunk = budgeted_read(self.MAX_PTY_READ_PER_TICK)\n"
+              "                else:\n"
+              "                    # Compatibility for injected/third-party session objects.\n"
+              "                    chunk = self._session.read()\n",
+          )
+
+          path = Path("retrotui/core/terminal_session.py")
+          text = path.read_text(encoding="utf-8")
+          start_marker = "    def read(self, max_bytes=4096):\n"
+          end_marker = "    def write(self, data):\n"
+          if text.count(start_marker) != 1 or text.count(end_marker) != 1:
+              raise SystemExit("terminal_session.py: read block markers mismatch")
+          prefix, remainder = text.split(start_marker, 1)
+          _old_read_block, suffix = remainder.split(end_marker, 1)
+          new_read_block = '''    def read(self, max_bytes=4096, max_total_bytes=None):
+        """Read available PTY output without exceeding an optional total budget.
+
+        ``max_bytes`` limits each backend read. ``max_total_bytes`` limits the
+        aggregate bytes admitted by this call; unread data remains buffered by
+        the PTY for the next service tick.
+        """
+        max_bytes = max(1, int(max_bytes))
+        if max_total_bytes is None:
+            remaining = None
+        else:
+            remaining = max(0, int(max_total_bytes))
+            if remaining == 0:
+                return ""
+
+        if self._win_pty is not None:
+            read_size = max_bytes if remaining is None else min(max_bytes, remaining)
+            return self._read_windows(read_size)
+
+        if self.master_fd is None:
+            return ""
+
+        chunks = []
+        while remaining is None or remaining > 0:
+            read_size = max_bytes if remaining is None else min(max_bytes, remaining)
+            try:
+                chunk = os.read(self.master_fd, read_size)
+            except BlockingIOError:
+                break
+            except OSError as exc:
+                if exc.errno in (errno.EAGAIN, errno.EWOULDBLOCK):
+                    break
+                if exc.errno == errno.EIO:
+                    self.running = False
+                    break
+                raise
+
+            if not chunk:
+                self.running = False
+                break
+
+            chunks.append(chunk)
+            if remaining is not None:
+                remaining -= len(chunk)
+            if len(chunk) < read_size:
+                break
+
+        if not chunks:
+            return ""
+        return self._decoder.decode(b"".join(chunks))
+
+    def read_budgeted(self, max_total_bytes, max_bytes=4096):
+        """Read at most ``max_total_bytes`` for one main-loop service tick."""
+        return self.read(max_bytes=max_bytes, max_total_bytes=max_total_bytes)
+
+    def _read_windows(self, max_bytes=4096):
+        """Read available output from Windows ConPTY."""
+        try:
+            data = self._win_pty.read(max_bytes, blocking=False)
+        except Exception:
+            data = None
+        if not data:
+            return ""
+        if isinstance(data, bytes):
+            return self._decoder.decode(data)
+        return data
+
+'''
+          path.write_text(prefix + new_read_block + end_marker + suffix, encoding="utf-8")
+          PY
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: python -m pip install -e ".[test]"
+
+      - name: Compile changed modules
+        run: python -m py_compile retrotui/core/terminal_session.py retrotui/apps/terminal.py
+
+      - name: Verify focused PTY budget contract
+        shell: bash
+        run: |
+          python - <<'PY'
+          import types
+          from unittest import mock
+
+          from retrotui.core import terminal_session
+          from retrotui.apps.terminal import TerminalWindow
+
+          session = terminal_session.TerminalSession()
+          session.master_fd = 7
+          session.running = True
+          with mock.patch.object(
+              terminal_session.os,
+              "read",
+              side_effect=lambda _fd, size: b"x" * size,
+          ) as reader:
+              output = session.read(max_bytes=4, max_total_bytes=10)
+          assert output == "x" * 10
+          assert [call.args[1] for call in reader.call_args_list] == [4, 4, 2]
+          assert session.running
+
+          session = terminal_session.TerminalSession()
+          session.master_fd = 8
+          with mock.patch.object(
+              terminal_session.os,
+              "read",
+              side_effect=lambda _fd, size: b"y" * size,
+          ) as reader:
+              output = session.read_budgeted(7, max_bytes=3)
+          assert output == "y" * 7
+          assert [call.args[1] for call in reader.call_args_list] == [3, 3, 1]
+
+          win = TerminalWindow(1, 1, 40, 12)
+          win.body_rect = lambda: (2, 2, 30, 8)
+          win._ensure_session = lambda: None
+          budgeted = mock.Mock(return_value="z" * win.MAX_PTY_READ_PER_TICK)
+          win._session = types.SimpleNamespace(
+              resize=mock.Mock(),
+              read_budgeted=budgeted,
+              poll_exit=mock.Mock(return_value=False),
+          )
+          win._consume_output = mock.Mock()
+          assert win.tick()
+          budgeted.assert_called_once_with(win.MAX_PTY_READ_PER_TICK)
+          win._consume_output.assert_called_once()
+          assert len(win._consume_output.call_args.args[0]) == win.MAX_OUTPUT_PER_FRAME
+
+          fallback_read = mock.Mock(return_value="ok")
+          win._session = types.SimpleNamespace(
+              resize=mock.Mock(),
+              read=fallback_read,
+              poll_exit=mock.Mock(return_value=False),
+          )
+          win._pending_output = ""
+          win._last_pty_size = None
+          assert win.tick()
+          fallback_read.assert_called_once_with()
+          PY
+
+      - name: Run unittest suite
+        run: python -m unittest discover -s tests -v
+
+      - name: Run pytest suite
+        run: python -m pytest tests -q
+
+      - name: Remove temporary workflow
+        run: git rm -f .github/workflows/pty-read-budget-fix.yml
+
+      - name: Commit validated PTY budget
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "terminal: bound PTY reads per tick"
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
