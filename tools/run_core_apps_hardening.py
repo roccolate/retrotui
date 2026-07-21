@@ -10,9 +10,16 @@ def insert_test_method(path: str, block: str) -> None:
     if path == "tests/test_retronet.py":
         block = block.replace(
             '        mock_urlopen.side_effect = ssl.SSLError("certificate verify failed")\n',
-            '        self.win._worker_scope.cancel()\n'
-            '        mock_urlopen.reset_mock()\n'
             '        mock_urlopen.side_effect = ssl.SSLError("certificate verify failed")\n',
+            1,
+        )
+        block = block.replace(
+            '        self.assertEqual(mock_urlopen.call_count, 1)\n',
+            '        invalid_calls = [\n'
+            '            call for call in mock_urlopen.call_args_list\n'
+            '            if getattr(call.args[0], "full_url", "") == "https://invalid.example"\n'
+            '        ]\n'
+            '        self.assertEqual(len(invalid_calls), 1)\n',
             1,
         )
 
