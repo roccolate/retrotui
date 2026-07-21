@@ -39,13 +39,20 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e ".[test]"
 
-      - name: Validate patched tree
-        run: |
-          python tools/qa.py --skip-tests
-          python -m ruff check --select F821 retrotui tests tools
-          python -m unittest discover -s tests -v
-          python -m pytest tests -q
-          python tools/report_module_coverage.py --quiet-tests --top 20 --fail-under 75.0
+      - name: Repository QA
+        run: python tools/qa.py --skip-tests
+
+      - name: Undefined-name lint
+        run: python -m ruff check --select F821 retrotui tests tools
+
+      - name: unittest
+        run: python -m unittest discover -s tests -v
+
+      - name: pytest
+        run: python -m pytest tests -q
+
+      - name: Coverage floor
+        run: python tools/report_module_coverage.py --quiet-tests --top 20 --fail-under 75.0
 
       - name: Commit validated hardening changes
         run: |
