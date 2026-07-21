@@ -1,6 +1,7 @@
 """
 Entry point for RetroTUI.
 """
+import argparse
 import curses
 import locale
 import logging
@@ -121,8 +122,54 @@ def run():
         traceback.print_exc()
         return 1
 
-def main_cli():
-    """Console script entrypoint."""
+
+def _terminfo_parser() -> argparse.ArgumentParser:
+    """Build the small maintenance parser without affecting normal startup."""
+    parser = argparse.ArgumentParser(
+        prog="retrotui",
+        description="RetroTUI terminal desktop and maintenance commands.",
+    )
+    parser.add_argument(
+        "--install-terminfo",
+        action="store_true",
+        help="compile the bundled conservative terminfo profile",
+    )
+    parser.add_argument(
+        "--terminfo-dir",
+        metavar="PATH",
+        help="destination terminfo database (default: ~/.terminfo)",
+    )
+    return parser
+
+
+def _install_terminfo_cli(argv) -> int:
+    """Run the explicit terminfo installer and return a process exit code."""
+    from .core.terminal_environment import TerminfoInstallError, install_terminfo
+
+    args = _terminfo_parser().parse_args(argv)
+    if not args.install_terminfo:
+        return run()
+    try:
+        target = install_terminfo(args.terminfo_dir)
+    except TerminfoInstallError as exc:
+        print(f"Error installing RetroTUI terminfo: {exc}", file=sys.stderr)
+        return 2
+    print(f"Installed RetroTUI terminfo in: {target}")
+    print("New embedded terminals will advertise TERM=retrotui.")
+    return 0
+
+
+def main_cli(argv=None):
+    """Console script entrypoint.
+
+    Normal invocations retain the historical no-argument path. The maintenance
+    parser is activated only when ``--install-terminfo`` is present, which keeps
+    programmatic callers and existing test runners insulated from their own
+    command-line arguments.
+    """
+    raw_args = list(sys.argv[1:] if argv is None else argv)
+    if "--install-terminfo" in raw_args:
+        return _install_terminfo_cli(raw_args)
     return run()
 
 if __name__ == '__main__':
