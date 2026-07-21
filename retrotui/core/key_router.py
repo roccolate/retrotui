@@ -5,6 +5,10 @@ import logging
 
 from ..utils import normalize_key_code
 from .actions import AppAction
+from .terminal_input_policy import (
+    cancel_terminal_host_prefix,
+    handle_terminal_key_policy,
+)
 
 
 LOGGER = logging.getLogger(__name__)
@@ -212,21 +216,34 @@ def handle_key_event(app, key):
     key_code = normalize_app_key(key)
 
     if app._handle_dialog_key(key):
+        cancel_terminal_host_prefix(app)
         return
 
+    menu_layer_open = _has_any_open_menu_layer(app)
+    if menu_layer_open:
+        cancel_terminal_host_prefix(app)
+    else:
+        active_win = app.get_active_window()
+        if handle_terminal_key_policy(app, active_win, key, key_code):
+            return
+
     if app._handle_menu_hotkeys(key_code):
+        return
+
+    if key_code == 17:  # Ctrl+Q
+        # Preserve the inactive global-menu hook for compatibility, but never
+        # let an open menu consume Ctrl+Q before the safe close-first policy.
+        if not menu_layer_open:
+            app._handle_global_menu_key(key_code)
+        _handle_ctrl_q(app)
         return
 
     if app._handle_global_menu_key(key_code):
         return
 
-    if key_code == 17:  # Ctrl+Q
-        _handle_ctrl_q(app)
-        return
-
     if key_code == 9:  # Tab
         active_win = app.get_active_window()
-        local_tab = getattr(active_win, 'handle_tab_key', None) if active_win else None
+        local_tab = getattr(active_win, "handle_tab_key", None) if active_win else None
         if callable(local_tab) and local_tab():
             return
         app._cycle_focus()
@@ -235,7 +252,7 @@ def handle_key_event(app, key):
     key_btab = getattr(curses, "KEY_BTAB", 353)
     if key_code == key_btab:  # Shift+Tab — cycle focus backward
         active_win = app.get_active_window()
-        local_tab = getattr(active_win, 'handle_tab_key', None) if active_win else None
+        local_tab = getattr(active_win, "handle_tab_key", None) if active_win else None
         if callable(local_tab):
             try:
                 consumed = local_tab(reverse=True)

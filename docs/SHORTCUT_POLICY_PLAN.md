@@ -1,42 +1,78 @@
-# RetroTUI Shortcut Policy Plan (TTY)
+# RetroTUI Shortcut Policy (TTY)
 
-Objetivo: evitar salidas accidentales a shell host y garantizar comportamiento consistente de atajos globales en `tty`, `tmux` y `ssh`.
+Objetivo: evitar salidas accidentales al shell host, preservar la prioridad modal y permitir que una terminal enfocada reciba las teclas que necesita una TUI real.
 
 ## Principios
 
 - Prioridad modal: `Dialog` > `Context Menu` > `Global/Window Menu` > `Focused App`.
-- Atajos globales no deben romper atajos locales de apps si no hay capa global activa.
-- Cualquier atajo de salida debe ser intencional y reversible.
+- Una capa modal o menú abierto conserva el control del teclado.
+- Una terminal enfocada recibe por defecto los atajos y teclas de función del proceso hijo.
+- Los comandos del escritorio dentro de Terminal se ejecutan mediante un prefijo intencional.
+- Un atajo de salida nunca debe saltarse una capa transitoria abierta.
 
-## Politica Actual (implementada)
+## Política global
 
 - `Ctrl+C`:
-  - Sesion normal: no debe expulsar al host.
-  - En Terminal app: con seleccion copia; sin seleccion envia interrupcion a foreground.
+  - Sesión normal: no debe expulsar al host.
+  - En Terminal: con selección copia; sin selección interrumpe el proceso foreground.
 - `Ctrl+Q`:
-  - Si hay capa UI abierta, cierra capa primero.
-  - Solo sin capas abiertas dispara flujo de salida.
+  - Con diálogo o menú activo, cierra primero la capa transitoria.
+  - En Terminal enfocada y sin capas abiertas, se envía al proceso hijo.
+  - Fuera de Terminal y sin capas abiertas, inicia el flujo de salida.
 - `Esc`:
-  - Cierra capa activa de menu/contexto.
-  - Sin capas abiertas se delega a la app enfocada.
+  - Cierra la capa activa de menú o contexto.
+  - Sin capas abiertas se delega a la aplicación enfocada.
 - `F10`:
-  - Alterna menu de ventana activa o menu global.
+  - En Terminal enfocada y sin capas abiertas, se envía al proceso hijo.
+  - En otras aplicaciones alterna el menú de ventana o el menú global.
 
-## Conflictos pendientes
+## Propiedad del teclado en Terminal
 
-- Definir politica uniforme para `Alt+F4` / `Ctrl+W` por app.
-- Revisar consistencia de `Tab` (cambio de foco global vs tab local en app).
-- Documentar comportamiento de `Enter` cuando menu global esta activo vs app activa.
+Cuando Terminal tiene el foco y no existe una capa modal abierta, las siguientes teclas pertenecen al proceso hijo:
 
-## Plan de cierre (sprint)
+- `Tab` y `Shift+Tab`;
+- `Ctrl+Q`;
+- `F6`, `F7`, `F8` y `F10`;
+- el resto de teclas que ya llegan normalmente a `TerminalWindow`.
 
-1. Congelar tabla de precedencia de atajos en tests.
-2. Agregar casos de regresion para:
-   - `Ctrl+Q` con dialog/context/menu/window-menu.
-   - `Esc` con y sin capas.
-   - `Tab` con `handle_tab_key` local y fallback global.
-3. Ejecutar matriz manual en:
-   - Linux `tty`
-   - Linux `tmux`
-   - SSH (`MobaXterm` + `Windows Terminal`)
-4. Registrar desvíos en `docs/TTY_TEST_MATRIX.md` y cerrar tareas P1 relacionadas.
+Esto evita romper autocompletado de shells, Midnight Commander, Vim, Emacs y otras TUIs que usan esas teclas.
+
+La detección es por capacidades (`_key_to_input` + `_forward_payload`), no por el título visible de la ventana ni por una clase concreta.
+
+## Prefijo de comandos del host
+
+`F12` arma un comando de RetroTUI para la Terminal enfocada. La siguiente tecla ejecuta:
+
+| Secuencia | Acción |
+|---|---|
+| `F12`, `C` | Copiar selección o línea actual |
+| `F12`, `V` | Pegar desde el clipboard |
+| `F12`, `I` | Interrumpir proceso foreground |
+| `F12`, `K` | Terminar proceso foreground |
+| `F12`, `R` | Reiniciar la sesión |
+| `F12`, `M` | Abrir o cerrar el menú de Terminal |
+| `F12`, `X` | Cerrar la ventana Terminal |
+| `F12`, `Q` | Salir de RetroTUI |
+| `F12`, `Tab` | Cambiar el foco de ventana |
+| `F12`, `Esc` | Cancelar el prefijo |
+| `F12`, `F12` | Enviar un `F12` literal al proceso hijo |
+
+Una combinación desconocida no pierde datos: reenvía al hijo el `F12` y la tecla posterior. El prefijo también se cancela cuando aparece un diálogo, menú o cambia el destino enfocado.
+
+## Cobertura automatizada
+
+Las regresiones deben congelar al menos:
+
+- passthrough de `Tab`, `Shift+Tab`, `Ctrl+Q`, `F6`, `F7`, `F8` y `F10`;
+- comandos y cancelación del prefijo `F12`;
+- replay de comandos desconocidos;
+- `Ctrl+Q` cerrando menú antes de salir;
+- conservación de la política global en ventanas no terminales.
+
+## Pendiente para certificación
+
+- Hacer configurable el prefijo del host.
+- Mostrar un indicador visible cuando el prefijo está armado.
+- Probar físicamente Bash/Zsh/Fish, Vim/Neovim, `less`, `mc`, `htop` y `tmux`.
+- Ejecutar la matriz manual en Linux TTY, terminal GUI, tmux, SSH, WSL y Windows ConPTY.
+- Registrar desvíos en `docs/TTY_TEST_MATRIX.md`.
