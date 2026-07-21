@@ -8,6 +8,7 @@ on:
       - tools/apply_core_hardening.py
       - tools/apply_core_hardening_f821.py
       - tools/refine_core_hardening.py
+      - tools/refine_coverage_gate.py
       - .github/workflows/apply-core-hardening.yml
   pull_request:
     branches:
@@ -38,6 +39,7 @@ jobs:
           python tools/apply_core_hardening.py
           python tools/apply_core_hardening_f821.py
           python tools/refine_core_hardening.py
+          python tools/refine_coverage_gate.py
 
       - name: Install validation dependencies
         run: |
@@ -121,6 +123,6 @@ jobs:
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add retrotui tests pyproject.toml .github/workflows/ci.yml .github/workflows/release.yml
+          git add retrotui tests tools/report_module_coverage.py pyproject.toml .github/workflows/ci.yml .github/workflows/release.yml
           git commit -m "Harden core close, focus, and validation contracts"
           git push origin HEAD:hardening/core-contracts
