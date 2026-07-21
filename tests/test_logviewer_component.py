@@ -218,6 +218,17 @@ class LogViewerComponentTests(unittest.TestCase):
         self.assertIsNone(win.handle_click(0, 0, self.curses.BUTTON1_CLICKED))
         self.assertFalse(win.has_selection())
 
+    def test_periodic_tick_contract_tracks_follow_state(self):
+        win = self._make_window()
+        self.assertFalse(win.wants_periodic_tick)
+        win.filepath = "/tmp/demo.log"
+        self.assertTrue(win.wants_periodic_tick)
+        win.freeze_scroll = True
+        self.assertFalse(win.wants_periodic_tick)
+        win.freeze_scroll = False
+        win.follow_mode = False
+        self.assertFalse(win.wants_periodic_tick)
+
 
 if __name__ == "__main__":
     unittest.main()

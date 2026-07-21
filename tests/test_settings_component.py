@@ -271,6 +271,12 @@ class SettingsComponentTests(unittest.TestCase):
             win3.close()
         revert.assert_not_called()
 
+    def test_close_chains_base_window_cleanup(self):
+        win = self._make_window()
+        with mock.patch.object(self.settings_mod.Window, "close", return_value=True) as base_close:
+            self.assertTrue(win.close())
+        base_close.assert_called_once_with()
+
 
 if __name__ == "__main__":
     unittest.main()

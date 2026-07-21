@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import curses
+import time
 from typing import List
 
 from ..ui.window import Window
@@ -57,12 +58,16 @@ except _OPTIONAL_PYPERCLIP_IMPORT_ERRORS:
 
 
 class ClipboardViewerWindow(Window):
+    wants_periodic_tick = True
+    POLL_INTERVAL_SECONDS = 0.5
+
     def __init__(self, x, y, w, h, history_size=10):
         super().__init__("Clipboard", x, y, max(30, w), max(10, h), content=[], resizable=False)
         self.history_size = history_size
         self.history: List[str] = []
         self.selected_index = 0
         self._unsub_clipboard = None
+        self._last_poll = 0.0
         self._refresh_from_clipboard()
 
     def subscribe_to_bus(self, event_bus):
@@ -83,26 +88,27 @@ class ClipboardViewerWindow(Window):
             self.history.insert(0, text)
             self.history = self.history[: self.history_size]
 
-    def _refresh_from_clipboard(self):
-        text = paste_text(sync_system=False)
+    def _refresh_from_clipboard(self, *, sync_system=False):
+        text = paste_text(sync_system=sync_system)
         if text and (not self.history or self.history[0] != text):
             self.history.insert(0, text)
             self.history = self.history[: self.history_size]
 
     def close(self):
-        """Unsubscribe from the event bus on close."""
+        """Unsubscribe from events and release resources owned by the window."""
         if self._unsub_clipboard:
             self._unsub_clipboard()
             self._unsub_clipboard = None
+        return super().close()
 
     def tick(self):
-        """Poll system clipboard as a fallback outside the render path.
-
-        The event bus only fires for internal copies; external clipboard
-        changes (other apps) need polling.
-        """
+        """Poll the system clipboard at a bounded fallback cadence."""
+        now = time.monotonic()
+        if (now - self._last_poll) < self.POLL_INTERVAL_SECONDS:
+            return False
+        self._last_poll = now
         before = self.history[:1] if self.history else None
-        self._refresh_from_clipboard()
+        self._refresh_from_clipboard(sync_system=True)
         after = self.history[:1] if self.history else None
         return before != after
 

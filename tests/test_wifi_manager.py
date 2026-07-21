@@ -123,3 +123,14 @@ class WifiManagerTests(unittest.TestCase):
 
         self.assertEqual(win._connect_result, (True, ""))
         self.assertFalse(win._connect_in_progress)
+    def test_tick_reports_the_completed_connection_ssid(self):
+        with mock.patch.object(self.mod.shutil, "which", return_value=None):
+            win = self.mod.WifiManagerWindow(0, 0, 60, 20)
+        win._connect_in_progress = True
+        win._connecting_ssid = "Cafe Network"
+        with mock.patch.object(win, "refresh"):
+            win._finish_connect(True, "")
+        self.assertIsNone(win._connecting_ssid)
+        self.assertTrue(win.tick())
+        self.assertEqual(win._status_msg, "Connected to Cafe Network.")
+

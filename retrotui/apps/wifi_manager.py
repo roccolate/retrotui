@@ -43,6 +43,7 @@ class WifiManagerWindow(Window):
         self._connect_lock = threading.Lock()
         self._connect_in_progress = False
         self._connect_result = None
+        self._connect_result_ssid = None
 
         if self.nmcli and self.radio_on:
             self.refresh()
@@ -336,11 +337,14 @@ class WifiManagerWindow(Window):
             with self._connect_lock:
                 self._connect_in_progress = False
                 self._connect_result = None
+                self._connect_result_ssid = None
                 self._connecting_ssid = None
             return
         with self._connect_lock:
+            connected_ssid = self._connecting_ssid
             self._connect_in_progress = False
             self._connect_result = (success, error_message)
+            self._connect_result_ssid = connected_ssid
             self._connecting_ssid = None
         if success:
             self.refresh()
@@ -421,6 +425,7 @@ class WifiManagerWindow(Window):
         with self._connect_lock:
             self._connect_in_progress = False
             self._connect_result = None
+            self._connect_result_ssid = None
             self._connecting_ssid = None
         self._dialog = None
         return result
@@ -438,14 +443,14 @@ class WifiManagerWindow(Window):
         with self._connect_lock:
             result = self._connect_result
             if result is not None:
+                result_ssid = self._connect_result_ssid
                 self._connect_result = None
+                self._connect_result_ssid = None
                 success, error_message = result
                 if success:
-                    # Use the stored SSID (captured at connect time) so
-                    # the message doesn't depend on the prefix of the
-                    # previous status string.
-                    ssid = self._connecting_ssid or self._status_msg
-                    self._status_msg = f"Connected to {ssid}."
+                    self._status_msg = (
+                        f"Connected to {result_ssid}." if result_ssid else "Connected."
+                    )
                 else:
                     self._status_msg = "Connection failed."
                 if not success and error_message:
