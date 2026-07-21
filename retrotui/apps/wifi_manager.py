@@ -82,7 +82,8 @@ class WifiManagerWindow(Window):
             pass
 
     def refresh(self):
-        if not self.nmcli or not self.radio_on:
+        nmcli = self.nmcli
+        if not nmcli or not self.radio_on:
             return
         with self._scan_lock:
             if self._scan_in_progress:
@@ -98,6 +99,7 @@ class WifiManagerWindow(Window):
         self._status_msg = "Rescanning..."
         thread = self._start_worker(
             self._scan_worker,
+            nmcli,
             name='retrotui-wifi-scan',
         )
         if thread is None:
@@ -142,18 +144,23 @@ class WifiManagerWindow(Window):
         fields.append("".join(current))
         return fields
 
-    def _scan_worker(self, cancel_event=None):
+    def _scan_worker(self, cancel_event=None, nmcli=None):
         # Preserve direct helper calls used by integrations/tests while the
-        # runtime path receives the owner scope's cancellation event.
+        # runtime path receives the owner scope's cancellation event. The
+        # executable is captured by refresh() so later attribute changes
+        # cannot turn an in-flight argv entry into None.
         if cancel_event is None:
             cancel_event = threading.Event()
+        executable = nmcli or self.nmcli
         new_networks = []
         error_message = None
         try:
             if cancel_event.is_set():
                 return
+            if not executable:
+                raise OSError("nmcli is unavailable")
             subprocess.run(
-                [self.nmcli, "dev", "wifi", "rescan"],
+                [executable, "dev", "wifi", "rescan"],
                 check=False,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
@@ -162,7 +169,7 @@ class WifiManagerWindow(Window):
             if cancel_event.is_set():
                 return
             result = subprocess.run(
-                [self.nmcli, "-t", "-f", "SSID,SIGNAL,SECURITY,IN-USE,BSSID", "dev", "wifi"],
+                [executable, "-t", "-f", "SSID,SIGNAL,SECURITY,IN-USE,BSSID", "dev", "wifi"],
                 text=True,
                 capture_output=True,
                 check=False,
