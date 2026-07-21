@@ -10,6 +10,15 @@ import signal
 import struct
 import time
 
+from .terminal_cells import (
+    CONTINUATION_TEXT,
+    codepoint_width,
+    display_width,
+    is_continuation,
+    leading_cell_index,
+    sanitize_row,
+)
+
 _BACKENDS_UNSET = object()
 _BACKENDS_CACHE = {"value": _BACKENDS_UNSET}
 _WIN_BACKEND_CACHE = {"value": _BACKENDS_UNSET}
@@ -20,18 +29,23 @@ _DEFAULT_WRITE_BUDGET = 8192
 
 
 class TerminalScreenBuffer:
-    """2D rows x cols grid of (character, attribute) cells with a cursor.
+    """2D grid of physical terminal cells with Unicode width semantics.
 
-    Introduced for v0.9.5 so the embedded terminal can hold a stable
-    grid representation independent of the alt-screen overlay and the
-    scrollback list. The class is deliberately framework-free: it does
-    not touch curses, the PTY session, or the application event loop.
-    The next milestone will route the normal-screen rendering through
-    this buffer.
+    Cells retain the legacy ``(text, attr)`` tuple contract. A wide glyph is
+    stored in its leading cell and reserves the following physical column with
+    ``("", attr)``. Combining marks and zero-width joiners are appended to the
+    preceding leading cell without advancing the cursor.
     """
 
-    __slots__ = ("rows", "cols", "_grid", "_cursor_row", "_cursor_col",
-                 "_default_attr", "_scroll_sink")
+    __slots__ = (
+        "rows",
+        "cols",
+        "_grid",
+        "_cursor_row",
+        "_cursor_col",
+        "_default_attr",
+        "_scroll_sink",
+    )
 
     def __init__(self, rows, cols, default_attr=0):
         rows = max(1, int(rows))
@@ -39,20 +53,16 @@ class TerminalScreenBuffer:
         self.rows = rows
         self.cols = cols
         self._default_attr = int(default_attr)
-        self._grid = [
-            [(" ", self._default_attr) for _ in range(cols)] for _ in range(rows)
-        ]
+        self._grid = [self._blank_row() for _ in range(rows)]
         self._cursor_row = 0
         self._cursor_col = 0
-        # Optional sink invoked with each row that scrolls off the top of
-        # the buffer (most often the case during word-wrap). ``None``
-        # means the buffer does not capture scrollback itself — the
-        # owning window is responsible for hooking the stream of rows.
         self._scroll_sink = None
 
-    # ------------------------------------------------------------------
-    # Cursor management
-    # ------------------------------------------------------------------
+    def _blank_cell(self):
+        return (" ", self._default_attr)
+
+    def _blank_row(self):
+        return [self._blank_cell() for _ in range(self.cols)]
 
     @property
     def cursor_row(self):
@@ -63,180 +73,291 @@ class TerminalScreenBuffer:
         return self._cursor_col
 
     def set_cursor(self, row, col):
-        """Move the cursor to ``(row, col)`` clamped to the grid."""
+        """Move the cursor to a physical column clamped to the grid."""
         self._cursor_row = max(0, min(self.rows - 1, int(row)))
         self._cursor_col = max(0, min(self.cols - 1, int(col)))
 
-    # ------------------------------------------------------------------
-    # Cell access
-    # ------------------------------------------------------------------
-
     def get_cell(self, row, col):
-        """Return the ``(char, attr)`` at ``(row, col)`` or a space."""
+        """Return the ``(text, attr)`` at ``(row, col)`` or a blank cell."""
         if 0 <= row < self.rows and 0 <= col < self.cols:
             return self._grid[row][col]
-        return (" ", self._default_attr)
+        return self._blank_cell()
 
     def get_row(self, row):
-        """Return the list of ``(char, attr)`` for ``row``."""
+        """Return a copy of one physical row."""
         if 0 <= row < self.rows:
             return list(self._grid[row])
         return []
 
-    def put_char(self, ch, attr=None):
-        """Write one character at the cursor and advance the column.
+    def normalize_row(self, row):
+        """Repair wide-cell invariants for one row after direct legacy edits."""
+        if 0 <= row < self.rows:
+            normalized = sanitize_row(self._grid[row], self._default_attr)
+            if len(normalized) < self.cols:
+                normalized.extend(self._blank_cell() for _ in range(self.cols - len(normalized)))
+            self._grid[row] = normalized[:self.cols]
 
-        Wraps to the next line on overflow; the bottom row scrolls up.
-        ``\\n`` and ``\\r`` are not interpreted here: callers should use
-        :meth:`line_feed` and :meth:`carriage_return` for those.
-        """
+    def _glyph_bounds(self, row, col):
+        if not (0 <= row < self.rows and 0 <= col < self.cols):
+            return None
+        line = self._grid[row]
+        lead = leading_cell_index(line, col)
+        if lead is None:
+            return None
+        width = display_width(line[lead][0])
+        end = lead + (2 if width == 2 else 1)
+        return lead, min(self.cols, end)
+
+    def _clear_glyph_at(self, row, col):
+        bounds = self._glyph_bounds(row, col)
+        if bounds is None:
+            return
+        start, end = bounds
+        for index in range(start, end):
+            self._grid[row][index] = self._blank_cell()
+
+    def _previous_leading_cell(self):
+        if self._cursor_col > 0:
+            col = min(self.cols - 1, self._cursor_col - 1)
+            lead = leading_cell_index(self._grid[self._cursor_row], col)
+            if lead is not None:
+                return self._cursor_row, lead
+        return None
+
+    def _merge_with_previous(self, ch):
+        previous = self._previous_leading_cell()
+        if previous is None:
+            return False
+        row, lead = previous
+        text, attr = self._grid[row][lead]
+        if text == " ":
+            return False
+
+        old_width = display_width(text)
+        merged = text + ch
+        new_width = display_width(merged)
+        if new_width < 0:
+            return False
+        if old_width < 1:
+            old_width = 1
+        if new_width < 1:
+            new_width = old_width
+        if new_width > 2:
+            new_width = 2
+
+        if new_width == 2 and lead + 1 >= self.cols:
+            return False
+
+        if old_width == 2 and new_width == 1 and lead + 1 < self.cols:
+            self._grid[row][lead + 1] = self._blank_cell()
+            if self._cursor_col > lead + 1:
+                self._cursor_col -= 1
+        elif old_width == 1 and new_width == 2:
+            self._clear_glyph_at(row, lead + 1)
+            self._grid[row][lead + 1] = (CONTINUATION_TEXT, attr)
+            if self._cursor_col == lead + 1:
+                self._cursor_col += 1
+
+        self._grid[row][lead] = (merged, attr)
+        if new_width == 2:
+            self._grid[row][lead + 1] = (CONTINUATION_TEXT, attr)
+        return True
+
+    def put_char(self, ch, attr=None, *, autowrap=True):
+        """Write one Unicode codepoint and advance by its display width."""
+        if not ch:
+            return
         attr = self._default_attr if attr is None else attr
+        width = codepoint_width(ch)
+        if width < 0:
+            return
+
+        previous = self._previous_leading_cell()
+        previous_text = ""
+        if previous is not None:
+            previous_text = self._grid[previous[0]][previous[1]][0]
+        if width == 0 or previous_text.endswith("\u200d"):
+            if self._merge_with_previous(ch):
+                return
+            if width == 0:
+                return
+
+        width = 2 if width >= 2 else 1
+
         if self._cursor_col >= self.cols:
-            # Wrap to the next line: line_feed scrolls if needed, then
-            # we reset the column so the cell write below stays in range.
-            self.line_feed()
-            self._cursor_col = 0
-        if 0 <= self._cursor_row < self.rows:
-            self._grid[self._cursor_row][self._cursor_col] = (ch, attr)
-        self._cursor_col += 1
+            if autowrap:
+                self.line_feed()
+                self._cursor_col = 0
+            else:
+                self._cursor_col = self.cols - 1
+
+        if width == 2 and self.cols < 2:
+            ch = "\ufffd"
+            width = 1
+        elif width == 2 and self._cursor_col == self.cols - 1:
+            if autowrap:
+                self.line_feed()
+                self._cursor_col = 0
+            else:
+                ch = "\ufffd"
+                width = 1
+
+        row = self._cursor_row
+        col = self._cursor_col
+        self._clear_glyph_at(row, col)
+        if width == 2:
+            self._clear_glyph_at(row, col + 1)
+
+        self._grid[row][col] = (ch, attr)
+        if width == 2:
+            self._grid[row][col + 1] = (CONTINUATION_TEXT, attr)
+
+        if autowrap:
+            self._cursor_col += width
+        else:
+            self._cursor_col = min(self.cols - 1, self._cursor_col + width)
 
     def carriage_return(self):
-        """Move the cursor to column 0."""
         self._cursor_col = 0
 
     def line_feed(self):
-        """Scroll up if the cursor is on the last line, else advance."""
         if self._cursor_row >= self.rows - 1:
             self.scroll_up()
         else:
             self._cursor_row += 1
 
     def backspace(self):
-        """Move the cursor one column to the left without wrapping."""
-        if self._cursor_col > 0:
-            self._cursor_col -= 1
+        if self._cursor_col <= 0:
+            return
+        target = min(self.cols - 1, self._cursor_col - 1)
+        lead = leading_cell_index(self._grid[self._cursor_row], target)
+        self._cursor_col = target if lead is None else lead
 
-    # ------------------------------------------------------------------
-    # Line / screen ops
-    # ------------------------------------------------------------------
+    def clear_range(self, row, start, end):
+        """Clear a half-open physical-column range without splitting glyphs."""
+        if not 0 <= row < self.rows:
+            return
+        start = max(0, min(self.cols, int(start)))
+        end = max(start, min(self.cols, int(end)))
+        if start >= end:
+            return
+
+        line = self._grid[row]
+        if start < self.cols and is_continuation(line[start]):
+            lead = leading_cell_index(line, start)
+            if lead is not None:
+                start = lead
+        if end > 0:
+            bounds = self._glyph_bounds(row, end - 1)
+            if bounds is not None:
+                end = max(end, bounds[1])
+
+        for col in range(start, min(end, self.cols)):
+            self._grid[row][col] = self._blank_cell()
 
     def clear_line(self, row=None):
-        """Reset every cell in ``row`` (defaults to the cursor row)."""
         if row is None:
             row = self._cursor_row
         if 0 <= row < self.rows:
-            self._grid[row] = [(" ", self._default_attr) for _ in range(self.cols)]
+            self._grid[row] = self._blank_row()
             if row == self._cursor_row:
                 self._cursor_col = 0
 
     def clear_screen(self, mode="all"):
-        """Clear the buffer.
-
-        ``mode`` follows the CSI ``ED`` semantics:
-        - ``"all"`` (default): clear the whole grid and home the cursor.
-        - ``"below"``: clear from the cursor (inclusive) to the end of
-          the screen. The cursor row is only blanked from the cursor
-          column onward; columns before the cursor are preserved.
-        - ``"above"``: clear from the top of the screen up to the
-          cursor (inclusive).
-        """
         if mode == "all":
-            self._grid = [
-                [(" ", self._default_attr) for _ in range(self.cols)]
-                for _ in range(self.rows)
-            ]
+            self._grid = [self._blank_row() for _ in range(self.rows)]
             self._cursor_row = 0
             self._cursor_col = 0
             return
         if mode == "below":
-            # Preserve columns before the cursor on the cursor row.
-            for c in range(self._cursor_col, self.cols):
-                self._grid[self._cursor_row][c] = (" ", self._default_attr)
-            for r in range(self._cursor_row + 1, self.rows):
-                self._grid[r] = [(" ", self._default_attr) for _ in range(self.cols)]
+            self.clear_range(self._cursor_row, self._cursor_col, self.cols)
+            for row in range(self._cursor_row + 1, self.rows):
+                self._grid[row] = self._blank_row()
             return
         if mode == "above":
-            for r in range(0, self._cursor_row):
-                self._grid[r] = [(" ", self._default_attr) for _ in range(self.cols)]
-            # Clear up to and including the cursor column; columns
-            # after the cursor are preserved.
-            for c in range(0, self._cursor_col + 1):
-                self._grid[self._cursor_row][c] = (" ", self._default_attr)
+            for row in range(0, self._cursor_row):
+                self._grid[row] = self._blank_row()
+            self.clear_range(self._cursor_row, 0, self._cursor_col + 1)
             return
         raise ValueError(f"unknown clear_screen mode: {mode!r}")
 
     def scroll_up(self, count=1):
-        """Scroll the whole buffer up by ``count`` rows."""
         if count <= 0 or self.rows <= 0:
             return
-        blank = [(" ", self._default_attr) for _ in range(self.cols)]
         for _ in range(min(count, self.rows)):
             scrolled_off = self._grid.pop(0)
-            self._grid.append(list(blank))
+            self._grid.append(self._blank_row())
             sink = self._scroll_sink
             if sink is not None:
                 try:
                     sink(scrolled_off)
                 except Exception:
-                    # A faulty sink must not corrupt the buffer.
                     pass
 
     def set_scroll_sink(self, sink):
-        """Register a callback receiving each row that scrolls off the top.
-
-        Pass ``None`` to detach. Use this to capture full history when
-        long un-newlined output scrolls the buffer via word-wrap.
-        """
         self._scroll_sink = sink
 
     def scroll_down(self, count=1):
-        """Scroll the whole buffer down by ``count`` rows."""
         if count <= 0 or self.rows <= 0:
             return
-        blank = [(" ", self._default_attr) for _ in range(self.cols)]
         for _ in range(min(count, self.rows)):
-            self._grid.insert(0, list(blank))
+            self._grid.insert(0, self._blank_row())
+            self._grid.pop()
 
     def insert_line(self, count=1):
-        """Insert ``count`` blank rows at the cursor position."""
         if count <= 0:
             return
-        blank = [(" ", self._default_attr) for _ in range(self.cols)]
         for _ in range(min(count, self.rows)):
-            self._grid.insert(self._cursor_row, list(blank))
+            self._grid.insert(self._cursor_row, self._blank_row())
             self._grid.pop()
 
     def delete_line(self, count=1):
-        """Delete ``count`` rows at the cursor position; bottom scrolls up."""
         if count <= 0:
             return
-        blank = [(" ", self._default_attr) for _ in range(self.cols)]
         for _ in range(min(count, self.rows)):
             self._grid.pop(self._cursor_row)
-            self._grid.append(list(blank))
+            self._grid.append(self._blank_row())
 
-    # ------------------------------------------------------------------
-    # Resize
-    # ------------------------------------------------------------------
+    def delete_chars(self, count=1):
+        """Delete physical columns at the cursor without orphaning wide tails."""
+        count = max(1, int(count))
+        row = self._cursor_row
+        line = self._grid[row]
+        if self._cursor_col >= self.cols:
+            return
+        start = self._cursor_col
+        if is_continuation(line[start]):
+            lead = leading_cell_index(line, start)
+            if lead is not None:
+                start = lead
+        end = min(self.cols, start + count)
+        if end < self.cols and is_continuation(line[end]):
+            end += 1
+        bounds = self._glyph_bounds(row, end - 1)
+        if bounds is not None:
+            end = max(end, bounds[1])
+        removed = max(0, end - start)
+        del line[start:end]
+        line.extend(self._blank_cell() for _ in range(removed))
+        self._grid[row] = sanitize_row(line[:self.cols], self._default_attr)
 
     def resize(self, rows, cols):
-        """Resize the buffer, preserving cells that stay on screen."""
         rows = max(1, int(rows))
         cols = max(1, int(cols))
+        old_cols = self.cols
         new_grid = [
             [(" ", self._default_attr) for _ in range(cols)] for _ in range(rows)
         ]
         common_rows = min(rows, self.rows)
-        common_cols = min(cols, self.cols)
-        for r in range(common_rows):
-            row_src = self._grid[r][:common_cols]
-            new_grid[r][:common_cols] = row_src
+        common_cols = min(cols, old_cols)
+        for row in range(common_rows):
+            new_grid[row][:common_cols] = self._grid[row][:common_cols]
+            new_grid[row] = sanitize_row(new_grid[row], self._default_attr)
         self._grid = new_grid
         self.rows = rows
         self.cols = cols
         self._cursor_row = min(self._cursor_row, rows - 1)
         self._cursor_col = min(self._cursor_col, cols - 1)
-
 
 class TerminalScreen:
     """Holds the normal-screen and alt-screen buffers for one terminal.
@@ -296,8 +417,8 @@ class TerminalScreen:
     def set_cursor(self, row, col):
         self._active.set_cursor(row, col)
 
-    def put_char(self, ch, attr=None):
-        self._active.put_char(ch, attr=attr)
+    def put_char(self, ch, attr=None, *, autowrap=True):
+        self._active.put_char(ch, attr=attr, autowrap=autowrap)
 
     def carriage_return(self):
         self._active.carriage_return()
