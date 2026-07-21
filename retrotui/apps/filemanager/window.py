@@ -678,19 +678,28 @@ class FileManagerWindow(Window):
                 return loading
             self._preview_pending.add(cache_key)
 
-        def _worker():
+        def _worker(cancel_event):
+            if cancel_event.is_set():
+                return
             try:
                 lines = get_preview_lines(entry, max_lines, max_cols)
             except Exception:  # pragma: no cover - defensive worker isolation
                 lines = ['[preview failed]']
             with self._preview_lock:
                 self._preview_pending.discard(cache_key)
+                if cancel_event.is_set():
+                    return
                 if self._preview_cache.get('key') == cache_key:
                     self._preview_cache = {'key': cache_key, 'lines': lines}
                     self._preview_redraw_pending = True
 
-        thread = threading.Thread(target=_worker, name='retrotui-preview', daemon=True)
-        thread.start()
+        thread = self._start_worker(
+            _worker,
+            name='retrotui-preview',
+        )
+        if thread is None:
+            with self._preview_lock:
+                self._preview_pending.discard(cache_key)
         return loading
 
     def _entry_info_lines(self, entry):
@@ -702,6 +711,14 @@ class FileManagerWindow(Window):
         with self._preview_lock:
             self._preview_cache = {'key': None, 'lines': []}
             self._preview_redraw_pending = False
+
+    def close(self):
+        """Cancel preview ownership and discard pending cache publication."""
+        with self._preview_lock:
+            self._preview_pending.clear()
+            self._preview_cache = {'key': None, 'lines': []}
+            self._preview_redraw_pending = False
+        return super().close()
 
     def tick(self):
         """Consume one completed asynchronous preview update."""

@@ -8,6 +8,7 @@ from types import SimpleNamespace
 from ..ui.dialog import Dialog, InputDialog, ProgressDialog
 from .actions import ActionResult, ActionType
 from .dialog_workflow import DialogWorkflowId, bind_dialog
+from .worker_scope import WorkerScope
 
 LOGGER = logging.getLogger(__name__)
 _BACKGROUND_WORKER_ERRORS = (
@@ -37,6 +38,11 @@ class FileOperationManager:
         so that external code and tests that access it directly continue to work.
         """
         self._app = app
+        self._shutting_down = False
+        self._worker_scope = WorkerScope(
+            "file-operations",
+            join_timeout=self.BACKGROUND_OPERATION_JOIN_TIMEOUT,
+        )
         # Initialise the state slot on the app if it is not already present.
         if not hasattr(self._app, '_background_operation'):
             self._app._background_operation = None
@@ -279,7 +285,9 @@ class FileOperationManager:
         return int(size) >= self.LONG_FILE_OPERATION_BYTES
 
     def _start_background_operation(self, *, title, message, worker, source_win):
-        """Run blocking filesystem operation in a worker thread and show progress."""
+        """Run blocking filesystem operation in an owned worker scope."""
+        if self._shutting_down or self._worker_scope.closed:
+            return ActionResult(ActionType.ERROR, 'Application is shutting down.')
         state = getattr(self._app, '_background_operation', None)
         if state:
             return ActionResult(ActionType.ERROR, 'Another operation is already running.')
@@ -295,24 +303,32 @@ class FileOperationManager:
             'thread': None,
         }
 
-        def _runner():
-            try:
-                result = worker()
-            except _BACKGROUND_WORKER_ERRORS as exc:  # pragma: no cover - defensive worker path
-                result = ActionResult(ActionType.ERROR, str(exc))
+        def _runner(cancel_event):
+            if cancel_event.is_set():
+                result = ActionResult(ActionType.ERROR, 'Operation cancelled during shutdown.')
+            else:
+                try:
+                    result = worker()
+                except _BACKGROUND_WORKER_ERRORS as exc:  # pragma: no cover - defensive worker path
+                    result = ActionResult(ActionType.ERROR, str(exc))
             # Publish the result together with the ``done`` flag under a
             # single lock so the main loop never observes a partial state.
             with op_lock:
                 op_state['worker_result'] = result
                 op_state['done'] = True
 
-        thread = threading.Thread(target=_runner, name='retrotui-file-op', daemon=True)
-        op_state['thread'] = thread
         op_state['lock'] = op_lock
         op_state['dialog_title'] = title
+        op_state['cancel_event'] = self._worker_scope.cancel_event
         self._app._background_operation = op_state
         self._app.dialog = progress_dialog
-        thread.start()
+        thread = self._worker_scope.start(_runner, name='retrotui-file-op')
+        if thread is None:
+            self._app._background_operation = None
+            if self._app.dialog is progress_dialog:
+                self._app.dialog = None
+            return ActionResult(ActionType.ERROR, 'Application is shutting down.')
+        op_state['thread'] = thread
         bus = getattr(self._app, '_event_bus', None)
         if bus is not None:
             bus.publish("file_op.started", data={"title": title})
@@ -320,12 +336,36 @@ class FileOperationManager:
 
     def has_background_operation(self):
         """Return whether a background file operation is currently running."""
-        return bool(getattr(self._app, '_background_operation', None))
+        return bool(
+            not self._shutting_down
+            and getattr(self._app, '_background_operation', None)
+        )
+
+    def shutdown(self, timeout=None):
+        """Stop accepting work and detach completion from the UI.
+
+        Filesystem primitives are not always interruptible. The bounded join
+        result tells the application whether physical completion was verified,
+        while clearing app state guarantees a late worker cannot dispatch into
+        a torn-down UI.
+        """
+        self._shutting_down = True
+        stopped = self._worker_scope.shutdown(
+            timeout=timeout,
+            require_stopped=True,
+        )
+        state = getattr(self._app, '_background_operation', None)
+        if state:
+            dialog = state.get('dialog')
+            if getattr(self._app, 'dialog', None) is dialog:
+                self._app.dialog = None
+            self._app._background_operation = None
+        return stopped
 
     def poll_background_operation(self):
         """Advance progress state and dispatch completion when worker finishes."""
         state = getattr(self._app, '_background_operation', None)
-        if not state:
+        if not state or self._shutting_down:
             return
 
         # Active background operation always needs redraw (progress animation).

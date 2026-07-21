@@ -241,6 +241,8 @@ class _TabState:
     search_idx: int = -1
     loading_frame: int = 0
     raw_html: str = ""
+    tab_id: int = 0
+    load_generation: int = 0
 
     def __post_init__(self):
         if self.content is None:
@@ -314,6 +316,7 @@ class RetroNetWindow(Window):
 
         self.tabs: List[_TabState] = []
         self.active_tab_idx = 0
+        self._next_tab_id = 1
         self._new_tab(_DEFAULT_TAB_URL, activate=True, _push_history=False)
         # Sweep stale ``viewsource`` temp files (one per URL) at startup
         # so a long-running session doesn't slowly fill ``$TMPDIR``.
@@ -332,10 +335,27 @@ class RetroNetWindow(Window):
             self.active_tab_idx = max(0, len(tabs) - 1)
         return tabs[self.active_tab_idx]
 
+    def _tab_index_by_id_locked(self, tab_id):
+        for index, tab in enumerate(self.tabs):
+            if tab.tab_id == tab_id:
+                return index
+        return None
+
+    def _tab_request_is_current_locked(self, tab_id, generation):
+        index = self._tab_index_by_id_locked(tab_id)
+        if index is None:
+            return None
+        tab = self.tabs[index]
+        if tab.load_generation != generation:
+            return None
+        return index
+
     def _new_tab(self, url="", *, activate=True, _push_history=True) -> int:
         """Create a new tab. Returns the new tab index."""
         with self._lock:
-            tab = _TabState(url=url)
+            tab_id = int(getattr(self, '_next_tab_id', 1))
+            self._next_tab_id = tab_id + 1
+            tab = _TabState(url=url, tab_id=tab_id)
             self.tabs.append(tab)
             new_idx = len(self.tabs) - 1
             if activate:
@@ -563,12 +583,23 @@ class RetroNetWindow(Window):
             tab.search_query = ""
             tab.search_matches = []
             tab.search_idx = -1
+            tab.load_generation += 1
+            tab_id = tab.tab_id
+            generation = tab.load_generation
         self._refresh_window_title()
 
-        thread = threading.Thread(
-            target=self._fetch_thread, args=(sanitized_url, tab_idx), daemon=True
+        thread = self._start_worker(
+            self._fetch_thread,
+            sanitized_url,
+            tab_id,
+            generation,
+            name=f'retrotui-fetch-{tab_id}',
         )
-        thread.start()
+        if thread is None:
+            with self._lock:
+                current_idx = self._tab_request_is_current_locked(tab_id, generation)
+                if current_idx is not None:
+                    self.tabs[current_idx].is_loading = False
 
     def _go_back(self):
         with self._lock:
@@ -594,7 +625,23 @@ class RetroNetWindow(Window):
     # Network
     # ------------------------------------------------------------------
 
-    def _fetch_thread(self, url, tab_idx):
+    def _fetch_thread(self, cancel_event, url=None, tab_id=None, generation=None):
+        # Legacy direct call: _fetch_thread(url, tab_index). Resolve that
+        # index once to the stable request identity used by the runtime path.
+        if not callable(getattr(cancel_event, "is_set", None)):
+            legacy_url = cancel_event
+            legacy_tab_idx = url
+            cancel_event = threading.Event()
+            url = legacy_url
+            with self._lock:
+                try:
+                    tab = self.tabs[int(legacy_tab_idx)]
+                except (IndexError, TypeError, ValueError):
+                    return
+                tab_id = tab.tab_id
+                generation = tab.load_generation
+        if cancel_event.is_set():
+            return
         try:
             headers = {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -633,41 +680,64 @@ class RetroNetWindow(Window):
                     response.close()
                 except _RESPONSE_CLOSE_ERRORS:
                     pass
+            if cancel_event.is_set():
+                return
             with self._lock:
-                if tab_idx < len(self.tabs):
-                    self.tabs[tab_idx].raw_html = raw_html
-            parsed = self._parse_html(raw_html, tab_idx=tab_idx)
+                current_idx = self._tab_request_is_current_locked(tab_id, generation)
+                if current_idx is None:
+                    return
+                self.tabs[current_idx].raw_html = raw_html
+            parsed = self._parse_html(
+                raw_html,
+                tab_id=tab_id,
+                generation=generation,
+            )
             if ssl_warning:
                 parsed.insert(0, RichLine("[SSL: certificate verification failed — showing unverified content]", self.attr_error))
+            if cancel_event.is_set():
+                return
             with self._lock:
-                if tab_idx < len(self.tabs):
-                    self.tabs[tab_idx].content = parsed
-                    self.tabs[tab_idx].is_loading = False
-                    if tab_idx == self.active_tab_idx:
-                        self._refresh_window_title()
+                current_idx = self._tab_request_is_current_locked(tab_id, generation)
+                if current_idx is None:
+                    return
+                self.tabs[current_idx].content = parsed
+                self.tabs[current_idx].is_loading = False
+                if current_idx == self.active_tab_idx:
+                    self._refresh_window_title()
         except _RETRONET_FETCH_ERRORS as e:
             msg = str(e) if str(e) else "Unknown network error or crash."
             LOGGER.warning("Failed to load %s: %s", url, msg)
             with self._lock:
-                if tab_idx < len(self.tabs):
-                    self.tabs[tab_idx].content = [
+                current_idx = self._tab_request_is_current_locked(tab_id, generation)
+                if current_idx is not None and not cancel_event.is_set():
+                    self.tabs[current_idx].content = [
                         RichLine(f"Error loading {url}:", self.attr_error),
                         RichLine(msg, self.attr_dim)
                     ]
-                    self.tabs[tab_idx].is_loading = False
+                    self.tabs[current_idx].is_loading = False
         except Exception:
             # Catch-all for the parser / decode path; log so future
             # regressions are diagnosable from the user's terminal log.
             LOGGER.exception("Unhandled exception while loading %s", url)
             with self._lock:
-                if tab_idx < len(self.tabs):
-                    self.tabs[tab_idx].is_loading = False
+                current_idx = self._tab_request_is_current_locked(tab_id, generation)
+                if current_idx is not None and not cancel_event.is_set():
+                    self.tabs[current_idx].is_loading = False
+
+    def close(self):
+        """Cancel fetch ownership and invalidate every in-flight navigation."""
+        result = super().close()
+        with self._lock:
+            for tab in self.tabs:
+                tab.load_generation += 1
+                tab.is_loading = False
+        return result
 
     # ------------------------------------------------------------------
     # HTML parsing
     # ------------------------------------------------------------------
 
-    def _parse_html(self, raw_html, tab_idx=None):
+    def _parse_html(self, raw_html, tab_idx=None, tab_id=None, generation=None):
         """Ultra parser with style and structure support."""
         parser = _RetroNetHTMLParser()
         try:
@@ -682,11 +752,14 @@ class RetroNetWindow(Window):
                 # The fetch thread may have switched the active tab while
                 # the request was in flight; write the title to the tab
                 # that initiated the fetch, not whichever tab is active now.
-                target_idx = tab_idx if tab_idx is not None else self.active_tab_idx
-                if 0 <= target_idx < len(self.tabs):
+                if tab_id is not None:
+                    target_idx = self._tab_request_is_current_locked(tab_id, generation)
+                else:
+                    target_idx = tab_idx if tab_idx is not None else self.active_tab_idx
+                if target_idx is not None and 0 <= target_idx < len(self.tabs):
                     self.tabs[target_idx].title = title
-                if tab_idx is None or tab_idx == self.active_tab_idx:
-                    self._refresh_window_title()
+                    if target_idx == self.active_tab_idx:
+                        self._refresh_window_title()
 
         text = parser.get_text()
 
