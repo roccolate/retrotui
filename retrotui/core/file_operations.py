@@ -427,6 +427,7 @@ class FileOperationManager:
         def _runner(scope_cancel_event):
             cancel_event = _CombinedCancelEvent(scope_cancel_event, operation_cancel_event)
             cancelled = False
+            result = None
             try:
                 if cancellable:
                     result = self._invoke_worker(worker, cancel_event, _publish_progress)
@@ -435,12 +436,17 @@ class FileOperationManager:
             except TransferCancelled:
                 cancelled = True
                 result = ActionResult(ActionType.REFRESH, 'Operation cancelled.')
-            except _BACKGROUND_WORKER_ERRORS as exc:
-                result = ActionResult(ActionType.ERROR, str(exc))
-            with op_lock:
-                op_state['worker_result'] = result
-                op_state['cancelled'] = cancelled
-                op_state['done'] = True
+            except Exception as exc:  # Worker boundary: convert every ordinary failure.
+                LOGGER.exception("Background file operation failed")
+                message = str(exc) or exc.__class__.__name__
+                result = ActionResult(ActionType.ERROR, message)
+            finally:
+                # A dead worker must never leave the modal operation permanently
+                # pending, even when it raised an application-defined exception.
+                with op_lock:
+                    op_state['worker_result'] = result
+                    op_state['cancelled'] = cancelled
+                    op_state['done'] = True
 
         op_state['lock'] = op_lock
         op_state['dialog_title'] = title

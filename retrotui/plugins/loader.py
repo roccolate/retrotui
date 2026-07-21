@@ -53,8 +53,14 @@ def _repo_examples_plugin_dir():
 
 
 def _cwd_examples_plugin_dir():
-    """Return cwd-local examples/plugins path when available."""
+    """Return cwd-local examples/plugins path when explicitly enabled."""
     return str((Path.cwd() / "examples" / "plugins").resolve())
+
+
+def _dev_plugins_enabled():
+    """Return whether untrusted cwd-local development plugins are opted in."""
+    value = str(os.environ.get("RETROTUI_DEV_PLUGINS", "") or "").strip().lower()
+    return value in {"1", "true", "yes", "on"}
 
 
 def _iter_plugin_dirs():
@@ -99,11 +105,14 @@ def _iter_plugin_dirs():
             seen.add(norm)
             yield bundled
 
-    # Bundled examples: include when using default plugin dir to keep
-    # built-in plugins visible out of the box. Earlier directories win on
-    # duplicate ids because discovery skips ids it has already seen.
+    # Repository examples remain available for source checkouts. The current
+    # working directory is not trusted implicitly: enable it only for deliberate
+    # plugin development with RETROTUI_DEV_PLUGINS=1.
     if primary and os.path.normcase(os.path.normpath(primary)) == os.path.normcase(os.path.normpath(_DEFAULT_PLUGIN_DIR)):
-        for candidate in (_repo_examples_plugin_dir(), _cwd_examples_plugin_dir()):
+        candidates = [_repo_examples_plugin_dir()]
+        if _dev_plugins_enabled():
+            candidates.append(_cwd_examples_plugin_dir())
+        for candidate in candidates:
             norm = os.path.normcase(os.path.normpath(candidate))
             if candidate and norm not in seen:
                 seen.add(norm)
@@ -202,7 +211,8 @@ def load_plugin(manifest):
         # work using standard import mechanics. Executing the spec loads
         # the module directly from its file.
         spec.loader.exec_module(module)  # type: ignore
-    except _PLUGIN_IMPORT_ERRORS:
+    except Exception:  # Plugin boundary: isolate application-defined exceptions.
+        LOGGER.debug("failed to execute plugin %s", plugin_id, exc_info=True)
         return None
 
     app_class = getattr(module, "Plugin", None) or getattr(module, "App", None)

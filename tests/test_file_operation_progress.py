@@ -79,6 +79,42 @@ class CooperativeProgressTests(unittest.TestCase):
         app._dispatch_window_result.assert_not_called()
         self.assertTrue(any(topic == "file_op.cancelled" for topic, _ in bus.events))
 
+    def test_custom_worker_exception_reaches_terminal_error_state(self):
+        from retrotui.core.actions import ActionType
+        from retrotui.core.file_operations import FileOperationManager
+
+        class CustomWorkerError(Exception):
+            pass
+
+        app = types.SimpleNamespace(
+            _background_operation=None,
+            dialog=None,
+            _event_bus=None,
+            _dirty=False,
+            _dispatch_window_result=mock.Mock(),
+        )
+        manager = FileOperationManager(app)
+        source = object()
+
+        def worker():
+            raise CustomWorkerError("custom failure")
+
+        self.assertIsNone(manager._start_background_operation(
+            title="Failing",
+            message="payload.bin",
+            worker=worker,
+            source_win=source,
+        ))
+        manager._worker_scope.join(timeout=1.0)
+        manager.poll_background_operation()
+
+        self.assertIsNone(app._background_operation)
+        app._dispatch_window_result.assert_called_once()
+        result, dispatched_source = app._dispatch_window_result.call_args.args
+        self.assertEqual(result.type, ActionType.ERROR)
+        self.assertEqual(result.payload, "custom failure")
+        self.assertIs(dispatched_source, source)
+
     def test_non_cancellable_worker_keeps_legacy_progress_dialog_contract(self):
         from retrotui.core.actions import ActionResult, ActionType
         from retrotui.core.file_operations import FileOperationManager
