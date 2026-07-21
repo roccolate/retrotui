@@ -1,0 +1,45 @@
+name: Windows Test Diagnostics
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        shell: pwsh
+        run: |
+          python -m pip install -e ".[test]"
+          python -m pip install windows-curses
+
+      - name: Capture Windows failures
+        shell: pwsh
+        run: |
+          python -m unittest discover -s tests -v *> unittest.log
+          $unittestStatus = $LASTEXITCODE
+          python -m pytest tests -q *> pytest.log
+          $pytestStatus = $LASTEXITCODE
+          "unittest_status=$unittestStatus" | Set-Content windows-diagnostics.txt
+          "pytest_status=$pytestStatus" | Add-Content windows-diagnostics.txt
+          "=== unittest tail ===" | Add-Content windows-diagnostics.txt
+          Get-Content unittest.log -Tail 260 | Add-Content windows-diagnostics.txt
+          "=== pytest tail ===" | Add-Content windows-diagnostics.txt
+          Get-Content pytest.log -Tail 360 | Add-Content windows-diagnostics.txt
+
+      - name: Upload diagnostics
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-diagnostics
+          path: windows-diagnostics.txt
