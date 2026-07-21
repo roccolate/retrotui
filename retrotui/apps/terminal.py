@@ -668,8 +668,8 @@ class TerminalWindow(SelectableTextMixin, Window):
 
         self._sync_screen_size()
 
-        prev_total = len(self._all_lines())
         prev_offset = self.scrollback_offset
+        prev_total = self._all_lines_count() if prev_offset > 0 else 0
 
         for kind, data, attr in self.ansi.parse_chunk(text):
             if kind == 'TEXT':

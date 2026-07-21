@@ -119,7 +119,7 @@ class WindowManager:
             if callable(requester):
                 try:
                     request_result = requester()
-                except _WINDOW_CLOSE_HOOK_ERRORS:
+                except Exception:  # Window/plugin boundary: isolate extension code.
                     LOGGER.debug('Window close request failed for %r', win, exc_info=True)
                     return False
                 if request_result is False:
@@ -140,7 +140,7 @@ class WindowManager:
         if callable(closer):
             try:
                 close_result = closer()
-            except _WINDOW_CLOSE_HOOK_ERRORS:
+            except Exception:  # Window/plugin boundary: isolate extension code.
                 LOGGER.debug('Window close hook failed for %r', win, exc_info=True)
                 return False
             if close_result is False:

@@ -32,7 +32,7 @@ class AnsiStateMachine:
     """Parses ANSI escape sequences and properly delegates both text attributes and control commands."""
 
     def __init__(self):
-        self.state = 'TEXT' # TEXT, ESC, CSI, OSC
+        self.state = 'TEXT' # TEXT, ESC, CSI, OSC, OSC_ESC, CHARSET
         self.params = []
         self.current_param_str = ''
         self.private_marker = ''
@@ -115,18 +115,6 @@ class AnsiStateMachine:
                     yield ('TEXT', ch, self.attr)
             
             elif self.state == 'ESC':
-                if getattr(self, '_osc_in_esc', False):
-                    # We arrived here from inside OSC. ``\\`` closes the OSC
-                    # cleanly via ST; any other byte just closes OSC and is
-                    # reprocessed normally. A stray non-backslash after ESC
-                    # is unusual (the OSC spec mandates ST = ``ESC \\`` or
-                    # ``BEL``); we drop the stray ESC but keep the byte.
-                    self._osc_in_esc = False
-                    if ch == '\\':
-                        self.state = 'TEXT'
-                        continue
-                    self.state = 'TEXT'
-                    # Fall through to normal ESC handling for this byte.
                 if ch == '[':
                     self.state = 'CSI'
                     self.params = []
@@ -183,19 +171,19 @@ class AnsiStateMachine:
                     pass
 
             elif self.state == 'OSC':
-                if ch == '\x07' or (ch == '\\'): # Simplified termination check
+                if ch == '\x07':
                     self.state = 'TEXT'
                 elif ch == '\x1b':
-                    # ESC inside the OSC body opens the String Terminator
-                    # (``ESC \\``). Move into ESC state so the next byte can
-                    # decide: a ``\\`` close cleans up; anything else routes
-                    # through the regular escape handler instead of looping
-                    # forever inside OSC. Without this the parser would
-                    # consume every following byte whenever an OSC was
-                    # terminated by raw ESC + non-``\\``.
-                    self._osc_in_esc = True
-                    self.state = 'ESC'
-            
+                    # ST is the two-byte sequence ESC + backslash.
+                    self.state = 'OSC_ESC'
+
+            elif self.state == 'OSC_ESC':
+                if ch == '\\' or ch == '\x07':
+                    self.state = 'TEXT'
+                elif ch != '\x1b':
+                    # A non-terminating ESC is consumed and OSC continues.
+                    self.state = 'OSC'
+
             elif self.state == 'CHARSET':
                 self.state = 'TEXT'
 
