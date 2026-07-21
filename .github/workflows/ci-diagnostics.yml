@@ -38,8 +38,16 @@ jobs:
             tail -n 160 pytest.log
           } > test-diagnostics.txt
 
-      - name: Upload diagnostics
+      - name: Upload diagnostics and source snapshot
         uses: actions/upload-artifact@v4
         with:
           name: test-diagnostics
-          path: test-diagnostics.txt
+          path: |
+            test-diagnostics.txt
+            retrotui/apps/terminal.py
+            retrotui/plugins/loader.py
+            tests/test_charmap_basic.py
+            tests/test_core_app.py
+            tests/test_terminal_buffer_wiring.py
+            tests/test_terminal_mouse_passthrough.py
+            tests/test_windows_logic.py
