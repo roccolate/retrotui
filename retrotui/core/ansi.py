@@ -14,6 +14,20 @@ _ANSI_COLOR_ERRORS = (
     _CURSES_ERROR,
 )
 
+class CsiParams(list):
+    """CSI parameters carrying an optional private marker.
+
+    This remains list-compatible for existing consumers while preserving
+    prefixes such as ``?`` that are required to distinguish DEC private modes.
+    """
+
+    __slots__ = ("private",)
+
+    def __init__(self, values=(), *, private=""):
+        super().__init__(values)
+        self.private = private
+
+
 class AnsiStateMachine:
     """Parses ANSI escape sequences and properly delegates both text attributes and control commands."""
 
@@ -21,6 +35,7 @@ class AnsiStateMachine:
         self.state = 'TEXT' # TEXT, ESC, CSI, OSC
         self.params = []
         self.current_param_str = ''
+        self.private_marker = ''
         self.attr = 0
         self.fg = -1
         self.bg = -1
@@ -115,6 +130,7 @@ class AnsiStateMachine:
                     self.state = 'CSI'
                     self.params = []
                     self.current_param_str = ''
+                    self.private_marker = ''
                 elif ch == ']':
                     self.state = 'OSC'
                 elif ch == '(':
@@ -125,7 +141,14 @@ class AnsiStateMachine:
                     # Properly we should handle ESC c etc.
             
             elif self.state == 'CSI':
-                if ch.isdigit():
+                if (
+                    ch in "?><!"
+                    and not self.params
+                    and not self.current_param_str
+                    and not self.private_marker
+                ):
+                    self.private_marker = ch
+                elif ch.isdigit():
                     self.current_param_str += ch
                 elif ch == ';':
                     if self.current_param_str:
@@ -141,16 +164,17 @@ class AnsiStateMachine:
                         except ValueError:
                             pass
 
-                    if ch == 'm':
+                    if ch == 'm' and not self.private_marker:
                         self._handle_sgr(self.params)
                     else:
                         # Consumers supply per-command defaults via _num(idx, default),
                         # so we do not synthesize a fake `[0]` here. Filling it would
                         # shadow the consumer's defaults (e.g. CUP without params is
                         # documented to default to row=1, col=1, not row=0/col=0).
-                        yield ('CSI', ch, list(self.params))
+                        yield ('CSI', ch, CsiParams(self.params, private=self.private_marker))
 
                     self.state = 'TEXT'
+                    self.private_marker = ''
                 else:
                     # Intermediate bytes (like ? in ?25h)
                     pass
