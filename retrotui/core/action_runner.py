@@ -21,6 +21,7 @@ from ..ui.window import Window
 from .actions import AppAction
 from .dialog_workflow import DialogWorkflowId, bind_dialog
 from .content import build_about_message, build_help_message
+from .terminal_environment import build_child_environment
 from ..constants import _CURSES_ERROR, WIN_MIN_HEIGHT, WIN_MIN_WIDTH
 _TERMINAL_SIZE_ERRORS = (
     AttributeError,
@@ -121,6 +122,10 @@ def _spawn_registered_app(app, action, registry) -> bool:
     for kwarg_name, attr_name in kwarg_map.items():
         if _supports_constructor_kwarg(cls, kwarg_name):
             kwargs[kwarg_name] = getattr(app, attr_name, False)
+
+    if class_name == "TerminalWindow" and _supports_constructor_kwarg(cls, "env"):
+        overrides = getattr(app, "terminal_env_overrides", None)
+        kwargs["env"] = build_child_environment(overrides)
 
     win = cls(offset_x, offset_y, w, h, **kwargs)
     app._spawn_window(win)

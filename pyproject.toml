@@ -28,3 +28,6 @@ retrotui = "retrotui.__main__:main_cli"
 
 [tool.setuptools.packages.find]
 include = ["retrotui*"]
+
+[tool.setuptools.package-data]
+retrotui = ["terminfo/*.src"]
