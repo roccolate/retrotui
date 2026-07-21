@@ -3,6 +3,8 @@ from __future__ import annotations
 
 from enum import Enum
 
+__all__ = ("DialogWorkflowId", "bind_dialog")
+
 
 class DialogWorkflowId(str, Enum):
     """Stable identifiers for application-level dialog workflows."""
