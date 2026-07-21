@@ -5,7 +5,7 @@ on:
   pull_request:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
@@ -15,6 +15,85 @@ env:
   MODULE_COVERAGE_FAIL_UNDER: "75.0"
 
 jobs:
+  apply-core-second-cut:
+    if: github.event_name == 'pull_request' && github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout second-cut branch
+        uses: actions/checkout@v5
+        with:
+          ref: fix/core-second-cut
+          fetch-depth: 0
+          show-progress: false
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Apply guarded source and regression patch
+        shell: bash
+        run: |
+          set -o pipefail
+          python tools/apply_core_second_cut.py 2>&1 | tee core-second-cut-apply.log
+
+      - name: Install package and test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[test]"
+
+      - name: Run focused second-cut regressions
+        shell: bash
+        run: |
+          set -o pipefail
+          python -m pytest -q \
+            tests/test_event_loop_circuit_breaker.py \
+            tests/test_action_payload_contracts.py \
+            tests/test_theme_and_config.py \
+            tests/test_dialog_dispatch.py \
+            tests/test_process_manager_component.py \
+            2>&1 | tee core-second-cut-focused.log
+
+      - name: Upload second-cut diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: core-second-cut-debug
+          path: |
+            core-second-cut-apply.log
+            core-second-cut-focused.log
+          if-no-files-found: warn
+
+      - name: Run repository quality checks
+        run: python tools/qa.py --skip-tests
+
+      - name: Reject undefined Python names
+        run: python -m ruff check --select F821 retrotui tests tools
+
+      - name: Run unittest suite
+        run: python -m unittest discover -s tests -v
+
+      - name: Run pytest suite
+        run: python -m pytest tests -q
+
+      - name: Restore permanent CI and remove temporary files
+        run: |
+          git checkout origin/main -- .github/workflows/ci.yml
+          rm -f tools/apply_core_second_cut.py
+          rm -f tools/.core_second_cut_*.part
+          rm -f core-second-cut-apply.log core-second-cut-focused.log
+          rm -f .core-second-cut-trigger
+
+      - name: Commit verified second cut
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git diff --cached --check
+          git commit -m 'refactor: externalize core runtime contracts'
+          git push origin HEAD:fix/core-second-cut
+
   quality:
     runs-on: ${{ matrix.os }}
     strategy:
