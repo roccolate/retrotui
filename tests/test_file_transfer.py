@@ -104,6 +104,22 @@ class CooperativeFileTransferTests(unittest.TestCase):
             self.assertTrue(source.exists())
             self.assertFalse(dest.exists())
 
+    def test_atomic_no_replace_preserves_existing_destination(self):
+        from retrotui.core import file_transfer as transfer
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "source.txt"
+            dest = root / "dest.txt"
+            source.write_text("new payload", encoding="utf-8")
+            dest.write_text("existing payload", encoding="utf-8")
+
+            with self.assertRaises(FileExistsError):
+                transfer._rename_noreplace(source, dest)
+
+            self.assertEqual(source.read_text(encoding="utf-8"), "new payload")
+            self.assertEqual(dest.read_text(encoding="utf-8"), "existing payload")
+
     def test_atomic_move_does_not_copy_payload(self):
         from retrotui.core import file_transfer as transfer
 
