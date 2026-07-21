@@ -115,14 +115,14 @@ jobs:
         shell: bash
         run: test "${COVERAGE_STATUS}" -eq 0
 
-      - name: Commit validated hardening changes
+      - name: Commit validated code changes
         run: |
-          if git diff --quiet && [ -z "$(git status --porcelain)" ]; then
-            echo "No patch changes to commit."
-            exit 0
-          fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add retrotui tests tools/report_module_coverage.py pyproject.toml .github/workflows/ci.yml .github/workflows/release.yml
-          git commit -m "Harden core close, focus, and validation contracts"
+          git add retrotui tests tools/report_module_coverage.py pyproject.toml
+          if git diff --cached --quiet; then
+            echo "No validated code changes to commit."
+            exit 0
+          fi
+          git commit --no-verify -m "Harden core close, focus, and validation contracts"
           git push origin HEAD:hardening/core-contracts
