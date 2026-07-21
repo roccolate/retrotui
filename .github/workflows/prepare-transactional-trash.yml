@@ -55,6 +55,7 @@ jobs:
             retrotui/core/dialog_dispatch.py \
             retrotui/core/app.py \
             retrotui/core/file_operations.py \
+            tests/test_filemanager_additional.py \
             tests/test_trash_transactions.py
 
       - name: Install test dependencies
@@ -110,6 +111,7 @@ jobs:
             retrotui/core/dialog_dispatch.py \
             retrotui/core/file_operations.py \
             retrotui/core/trash_transaction.py \
+            tests/test_filemanager_additional.py \
             tests/test_trash_transactions.py
 
       - name: Upload validated payload
