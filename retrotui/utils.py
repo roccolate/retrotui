@@ -8,6 +8,7 @@ import shutil
 import subprocess
 import time
 import locale
+from wcwidth import wcwidth, wcswidth
 from .constants import (
     C_DESKTOP, C_WIN_TITLE, C_WIN_INACTIVE, C_ICON, C_MENUBAR, C_MENU_ITEM,
     C_MENU_SEL, C_WIN_BORDER, C_WIN_TITLE_INV, C_WIN_BODY, C_BUTTON,
@@ -191,6 +192,46 @@ def theme_attr(role):
         attr = 0
     _theme_attr_cache[role] = attr
     return attr
+
+def text_display_width(text) -> int:
+    """Return the physical terminal-column width of arbitrary UI text."""
+    value = str(text or "")
+    width = wcswidth(value)
+    if width >= 0:
+        return width
+
+    # Preserve safe layout even when a title contains an unprintable codepoint.
+    total = 0
+    for ch in value:
+        ch_width = wcwidth(ch)
+        total += ch_width if ch_width >= 0 else 1
+    return total
+
+
+def clip_text_columns(text, max_columns, *, suffix="") -> str:
+    """Clip text to physical terminal columns without splitting combining text."""
+    value = str(text or "")
+    columns = max(0, int(max_columns))
+    if columns <= 0:
+        return ""
+    if text_display_width(value) <= columns:
+        return value
+
+    suffix_value = str(suffix or "")
+    suffix_width = text_display_width(suffix_value)
+    if suffix_width > columns:
+        suffix_value = ""
+        suffix_width = 0
+    content_limit = columns - suffix_width
+
+    clipped = ""
+    for ch in value:
+        candidate = clipped + ch
+        if text_display_width(candidate) > content_limit:
+            break
+        clipped = candidate
+    return clipped + suffix_value
+
 
 def safe_addstr(win, y, x, text, attr=0, *, _bounds=None):
     """Write string safely, clipping to window bounds.
