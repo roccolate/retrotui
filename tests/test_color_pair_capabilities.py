@@ -121,31 +121,73 @@ class ColorPairCapabilityTests(unittest.TestCase):
         self.assertEqual(negotiator.resolve_pair_id(121), 0)
         self.assertEqual(fake.color_pair(121), 0)
 
-    def test_first_definition_wins_until_start_color_resets_generation(self):
+    def test_redefinition_preserves_legacy_curses_semantics(self):
         fake = _FakeCurses(LEGACY_COLOR_PAIR_CAPACITY)
         negotiator = install_color_pair_negotiation(fake)
 
         fake.start_color()
         fake.init_pair(60, 1, 2)
         fake.init_pair(60, 3, 4)
-        self.assertEqual(fake.calls, [(60, 1, 2)])
-        self.assertEqual(negotiator.resolve_pair_id(60), 60)
+
+        self.assertEqual(fake.calls, [(60, 1, 2), (60, 3, 4)])
+        self.assertEqual(
+            negotiator.snapshot()["actual_definitions"][60],
+            (3, 4),
+        )
+
+    def test_redefinition_does_not_corrupt_shared_compact_pair(self):
+        fake = _FakeCurses(4)
+        negotiator = install_color_pair_negotiation(fake)
 
         fake.start_color()
+        fake.init_pair(1, 1, 1)
+        fake.init_pair(2, 1, 1)
+        fake.init_pair(2, 2, 2)
+
+        self.assertEqual(negotiator.resolve_pair_id(1), 1)
+        self.assertEqual(negotiator.resolve_pair_id(2), 2)
+        self.assertEqual(fake.calls, [(1, 1, 1), (2, 2, 2)])
+
+    def test_unknown_pair_is_zero_on_compact_backend(self):
+        fake = _FakeCurses(4)
+        negotiator = install_color_pair_negotiation(fake)
+
+        fake.start_color()
+
+        self.assertEqual(negotiator.resolve_pair_id(3), 0)
+        self.assertEqual(fake.color_pair(3), 0)
+        self.assertEqual(fake.color_calls[-1], 0)
+
+    def test_start_color_resets_generation(self):
+        fake = _FakeCurses(LEGACY_COLOR_PAIR_CAPACITY)
+        negotiator = install_color_pair_negotiation(fake)
+
+        fake.start_color()
+        fake.init_pair(60, 1, 2)
+        fake.start_color()
         fake.init_pair(60, 3, 4)
+
         self.assertEqual(fake.calls[-1], (60, 3, 4))
+        self.assertEqual(negotiator.resolve_pair_id(60), 60)
         self.assertEqual(fake.start_calls, 2)
 
     def test_missing_color_pairs_keeps_legacy_test_compatibility(self):
         fake = _FakeCurses(LEGACY_COLOR_PAIR_CAPACITY)
         del fake.COLOR_PAIRS
+        fake.init_pair = lambda pair_id, fg, bg: fake.calls.append(
+            (pair_id, fg, bg)
+        )
         negotiator = install_color_pair_negotiation(fake)
 
         fake.start_color()
         fake.init_pair(121, 7, 7)
 
-        self.assertEqual(negotiator.color_pair_capacity(), LEGACY_COLOR_PAIR_CAPACITY)
+        self.assertEqual(
+            negotiator.color_pair_capacity(),
+            LEGACY_COLOR_PAIR_CAPACITY,
+        )
         self.assertEqual(negotiator.resolve_pair_id(121), 121)
+        self.assertEqual(fake.calls, [(121, 7, 7)])
 
 
 if __name__ == "__main__":
