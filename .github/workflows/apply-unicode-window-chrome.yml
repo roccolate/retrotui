@@ -30,38 +30,61 @@ jobs:
 
       - name: Install package and test dependencies
         run: |
-          python -m pip install --upgrade pip
-          python -m pip install -e ".[test]"
+          set -o pipefail
+          : > .unicode-chrome-gate.log
+          python -m pip install --upgrade pip 2>&1 | tee -a .unicode-chrome-gate.log
+          python -m pip install -e ".[test]" 2>&1 | tee -a .unicode-chrome-gate.log
 
       - name: Apply asserted Unicode chrome changes
-        run: python tools/apply_unicode_window_chrome.py
+        run: |
+          set -o pipefail
+          python tools/apply_unicode_window_chrome.py 2>&1 | tee -a .unicode-chrome-gate.log
 
       - name: Run focused Unicode chrome regressions
-        run: python -m unittest tests.test_unicode_chrome -v
+        run: |
+          set -o pipefail
+          python -m unittest discover -s tests -p 'test_unicode_chrome.py' -v 2>&1 | tee -a .unicode-chrome-gate.log
 
       - name: Run repository quality checks
-        run: python tools/qa.py --skip-tests
+        run: |
+          set -o pipefail
+          python tools/qa.py --skip-tests 2>&1 | tee -a .unicode-chrome-gate.log
 
       - name: Reject undefined Python names
-        run: python -m ruff check --select F821 retrotui tests tools
+        run: |
+          set -o pipefail
+          python -m ruff check --select F821 retrotui tests tools 2>&1 | tee -a .unicode-chrome-gate.log
 
       - name: Run unittest suite
-        run: python -m unittest discover -s tests -v
+        run: |
+          set -o pipefail
+          python -m unittest discover -s tests -v 2>&1 | tee -a .unicode-chrome-gate.log
 
       - name: Run pytest suite
-        run: python -m pytest tests -q
+        run: |
+          set -o pipefail
+          python -m pytest tests -q 2>&1 | tee -a .unicode-chrome-gate.log
 
       - name: Enforce module coverage floor
-        run: >-
-          python tools/report_module_coverage.py
-          --quiet-tests
-          --top 20
-          --fail-under 75.0
+        run: |
+          set -o pipefail
+          python tools/report_module_coverage.py --quiet-tests --top 20 --fail-under 75.0 2>&1 | tee -a .unicode-chrome-gate.log
+
+      - name: Publish gate diagnostics on failure
+        if: failure()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .unicode-chrome-gate.log
+          git commit -m "Capture Unicode chrome gate failure" || true
+          git push origin HEAD:agent/unicode-window-chrome
 
       - name: Publish verified permanent diff
+        if: success()
         run: |
           rm tools/apply_unicode_window_chrome.py
           rm .github/workflows/apply-unicode-window-chrome.yml
+          rm -f .unicode-chrome-gate.log
           test ! -e tools/apply_unicode_window_chrome.py
           test ! -e .github/workflows/apply-unicode-window-chrome.yml
           git config user.name "github-actions[bot]"
