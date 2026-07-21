@@ -7,6 +7,9 @@ on:
     paths:
       - tools/prepare_worker_lifecycle_hardening.py
       - .github/workflows/prepare-worker-lifecycle-hardening.yml
+  pull_request:
+    branches:
+      - hardening/core-contracts
   workflow_dispatch:
 
 permissions:
@@ -14,6 +17,7 @@ permissions:
 
 jobs:
   prepare:
+    if: github.head_ref == 'hardening/core-worker-lifecycle' || github.ref == 'refs/heads/hardening/core-worker-lifecycle'
     runs-on: ubuntu-latest
 
     steps:
