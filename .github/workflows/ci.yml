@@ -4,9 +4,10 @@ on:
   push:
   pull_request:
 
+permissions:
+  contents: write
+
 env:
-  # Keep the current module coverage floor explicit while the complete
-  # unittest + pytest gate is stabilized across supported platforms.
   MODULE_COVERAGE_FAIL_UNDER: "75.0"
 
 jobs:
@@ -41,3 +42,23 @@ jobs:
       - name: Run pytest suite
         if: ${{ !cancelled() }}
         run: python -m pytest tests -q
+
+  cleanup_merged_branches:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Delete absorbed branches
+        shell: bash
+        run: |
+          for branch in agent/document-core-audit stabilization/pre-0.9.6; do
+            if git ls-remote --exit-code --heads origin "$branch" >/dev/null 2>&1; then
+              git push origin --delete "$branch"
+            else
+              echo "$branch already absent"
+            fi
+          done
