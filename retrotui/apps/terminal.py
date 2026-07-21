@@ -19,13 +19,10 @@ from ..utils import normalize_key_code, safe_addstr, theme_attr
 class _ScrollbackBuffer(TerminalScreenBuffer):
     """TerminalScreenBuffer variant that captures rows into a shared deque.
 
-    In v0.9.5 the terminal captures the cursor row into scrollback from
-    :meth:`TerminalWindow._append_newline` (so every newline lands in the
-    scrollback regardless of buffer overflow). In addition, this subclass
-    hooks the buffer's own ``scroll_up`` so rows that scroll off during
-    word-wrap (i.e. without a newline) also land in scrollback. Without
-    this hook long un-newlined output would lose the wrapped rows that
-    any normal terminal would scroll into history.
+    The normal-screen buffer is the live source of truth. Rows enter scrollback
+    only when they actually scroll off the top, whether overflow was caused by
+    an explicit newline or by word-wrap. Newlines that merely advance within
+    the visible grid must not copy a row that the grid still owns.
     """
 
     __slots__ = ("_scrollback",)
@@ -206,9 +203,11 @@ class TerminalWindow(SelectableTextMixin, Window):
 
     @_scroll_lines.setter
     def _scroll_lines(self, value: list):
-        # Replace the scrollback deque contents (keeping the maxlen cap).
+        # Replace the scrollback deque contents (keeping the maxlen cap) and
+        # rebind the sink so future overflow cannot append into the old deque.
         self._scrollback = deque(list(value), maxlen=self.max_scrollback)
         self._normal_buf._scrollback = self._scrollback
+        self._normal_buf.set_scroll_sink(self._scrollback.append)
 
     @property
     def _alt_lines(self) -> list:
@@ -379,25 +378,12 @@ class TerminalWindow(SelectableTextMixin, Window):
     # ``put_char`` already wraps with a scroll if needed.
 
     def _append_newline(self):
-        """Commit the current row to scrollback and move the cursor down.
+        """Advance using LF+CR and let the buffer own scrollback capture.
 
-        Emulates the LF+CR sequence shells typically emit: line feed moves
-        the row down, and the carriage return snaps the column back to 0.
-        Every newline is captured into scrollback (matching the legacy
-        behaviour where the visible window was always 1 line and the
-        scrollback held the full history); the buffer's own scroll_up
-        happens on top of that when the buffer overflows.
+        Rows are appended to history only when ``line_feed`` scrolls them off
+        the top. A newline inside the visible grid merely moves the cursor and
+        therefore cannot duplicate a row that is still present on screen.
         """
-        if not self._alt_screen:
-            self._scrollback.append(self._normal_buf.get_row(self._normal_buf.cursor_row))
-            # Enforce the maxlen cap even when the caller changed
-            # ``max_scrollback`` after the deque was created.
-            if len(self._scrollback) > self.max_scrollback:
-                self._scrollback = deque(
-                    list(self._scrollback)[-self.max_scrollback:],
-                    maxlen=self.max_scrollback,
-                )
-                self._normal_buf._scrollback = self._scrollback
         self._screen.line_feed()
         self._screen.carriage_return()
 
