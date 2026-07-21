@@ -28,6 +28,7 @@ class DialogDispatcher:
         ActionType.REQUEST_RENAME_ENTRY: 'show_rename_dialog',
         ActionType.REQUEST_DELETE_CONFIRM: 'show_delete_confirm_dialog',
         ActionType.REQUEST_EMPTY_TRASH_CONFIRM: 'show_empty_trash_confirm_dialog',
+        ActionType.REQUEST_RESTORE_TRASH: 'show_restore_trash',
         ActionType.REQUEST_COPY_ENTRY: 'show_copy_dialog',
         ActionType.REQUEST_MOVE_ENTRY: 'show_move_dialog',
         ActionType.REQUEST_NEW_DIR: 'show_new_dir_dialog',
