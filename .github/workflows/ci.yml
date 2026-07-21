@@ -46,13 +46,13 @@ jobs:
         run: python -m pytest tests -q
 
   apply_pty_read_budget:
-    if: github.event_name == 'pull_request' && github.actor != 'github-actions[bot]'
+    if: github.event_name == 'push' && github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout branch
         uses: actions/checkout@v5
         with:
-          ref: ${{ github.event.pull_request.head.ref }}
+          ref: stabilization/pre-0.9.6
 
       - name: Apply bounded PTY read contract
         shell: bash
@@ -72,7 +72,7 @@ jobs:
               "retrotui/apps/terminal.py",
               "    MAX_OUTPUT_PER_FRAME = 8192  # Compatibility name: max chars processed per service tick.\n",
               "    MAX_OUTPUT_PER_FRAME = 8192  # Compatibility name: max chars processed per service tick.\n"
-              "    MAX_PTY_READ_PER_TICK = 8192  # Total decoded PTY bytes admitted per service tick.\n",
+              "    MAX_PTY_READ_PER_TICK = 8192  # Total PTY bytes admitted per service tick.\n",
           )
 
           replace_once(
@@ -174,68 +174,10 @@ jobs:
         run: python -m pip install -e ".[test]"
 
       - name: Compile changed modules
-        run: python -m py_compile retrotui/core/terminal_session.py retrotui/apps/terminal.py
+        run: python -m py_compile retrotui/core/terminal_session.py retrotui/apps/terminal.py tests/test_terminal_read_budget.py
 
-      - name: Verify focused PTY budget contract
-        shell: bash
-        run: |
-          python - <<'PY'
-          import types
-          from unittest import mock
-
-          from retrotui.core import terminal_session
-          from retrotui.apps.terminal import TerminalWindow
-
-          session = terminal_session.TerminalSession()
-          session.master_fd = 7
-          session.running = True
-          with mock.patch.object(
-              terminal_session.os,
-              "read",
-              side_effect=lambda _fd, size: b"x" * size,
-          ) as reader:
-              output = session.read(max_bytes=4, max_total_bytes=10)
-          assert output == "x" * 10
-          assert [call.args[1] for call in reader.call_args_list] == [4, 4, 2]
-          assert session.running
-
-          session = terminal_session.TerminalSession()
-          session.master_fd = 8
-          with mock.patch.object(
-              terminal_session.os,
-              "read",
-              side_effect=lambda _fd, size: b"y" * size,
-          ) as reader:
-              output = session.read_budgeted(7, max_bytes=3)
-          assert output == "y" * 7
-          assert [call.args[1] for call in reader.call_args_list] == [3, 3, 1]
-
-          win = TerminalWindow(1, 1, 40, 12)
-          win.body_rect = lambda: (2, 2, 30, 8)
-          win._ensure_session = lambda: None
-          budgeted = mock.Mock(return_value="z" * win.MAX_PTY_READ_PER_TICK)
-          win._session = types.SimpleNamespace(
-              resize=mock.Mock(),
-              read_budgeted=budgeted,
-              poll_exit=mock.Mock(return_value=False),
-          )
-          win._consume_output = mock.Mock()
-          assert win.tick()
-          budgeted.assert_called_once_with(win.MAX_PTY_READ_PER_TICK)
-          win._consume_output.assert_called_once()
-          assert len(win._consume_output.call_args.args[0]) == win.MAX_OUTPUT_PER_FRAME
-
-          fallback_read = mock.Mock(return_value="ok")
-          win._session = types.SimpleNamespace(
-              resize=mock.Mock(),
-              read=fallback_read,
-              poll_exit=mock.Mock(return_value=False),
-          )
-          win._pending_output = ""
-          win._last_pty_size = None
-          assert win.tick()
-          fallback_read.assert_called_once_with()
-          PY
+      - name: Run focused PTY budget tests
+        run: python -m unittest tests.test_terminal_read_budget -v
 
       - name: Run unittest suite
         run: python -m unittest discover -s tests -v
@@ -244,7 +186,53 @@ jobs:
         run: python -m pytest tests -q
 
       - name: Restore permanent CI workflow
-        run: git checkout HEAD^ -- .github/workflows/ci.yml
+        shell: bash
+        run: |
+          cat > .github/workflows/ci.yml <<'YAML'
+          name: CI
+
+          on:
+            push:
+            pull_request:
+
+          env:
+            # Keep the current module coverage floor explicit while the complete
+            # unittest + pytest gate is stabilized across supported platforms.
+            MODULE_COVERAGE_FAIL_UNDER: "75.0"
+
+          jobs:
+            quality:
+              runs-on: ${{ matrix.os }}
+              strategy:
+                fail-fast: false
+                matrix:
+                  os: [ubuntu-latest, windows-latest]
+                  python-version: ["3.10", "3.12", "3.14"]
+
+              steps:
+                - name: Checkout
+                  uses: actions/checkout@v5
+
+                - name: Setup Python
+                  uses: actions/setup-python@v6
+                  with:
+                    python-version: ${{ matrix.python-version }}
+
+                - name: Install package and test dependencies
+                  run: |
+                    python -m pip install --upgrade pip
+                    python -m pip install -e ".[test]"
+
+                - name: Run repository quality checks
+                  run: python tools/qa.py --skip-tests
+
+                - name: Run unittest suite
+                  run: python -m unittest discover -s tests -v
+
+                - name: Run pytest suite
+                  if: ${{ !cancelled() }}
+                  run: python -m pytest tests -q
+          YAML
 
       - name: Commit validated PTY budget
         shell: bash
@@ -253,4 +241,4 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
           git commit -m "terminal: bound PTY reads per tick"
-          git push origin HEAD:${{ github.event.pull_request.head.ref }}
+          git push origin HEAD:stabilization/pre-0.9.6
