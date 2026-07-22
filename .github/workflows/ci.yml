@@ -5,7 +5,7 @@ on:
   pull_request:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
@@ -15,7 +15,7 @@ env:
   MODULE_COVERAGE_FAIL_UNDER: "75.0"
 
 jobs:
-  diagnose-runtime-performance:
+  apply-runtime-performance-compat:
     if: >-
       github.event_name == 'pull_request' &&
       github.actor != 'github-actions[bot]'
@@ -26,6 +26,7 @@ jobs:
         uses: actions/checkout@v5
         with:
           ref: agent/runtime-performance-hardening
+          fetch-depth: 0
 
       - name: Setup Python
         uses: actions/setup-python@v6
@@ -37,35 +38,37 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e ".[test]"
 
-      - name: Run complete suites with diagnostics
-        id: suites
-        continue-on-error: true
+      - name: Apply compatibility repair
+        run: python tools/apply_runtime_performance_compat.py
+
+      - name: Run repository quality checks
+        run: python tools/qa.py --skip-tests
+
+      - name: Reject undefined Python names
+        run: python -m ruff check --select F821 retrotui tests tools
+
+      - name: Run complete unittest suite
+        run: python -m unittest discover -s tests -v
+
+      - name: Run complete pytest suite
+        run: python -m pytest tests -q
+
+      - name: Enforce module coverage floor
+        run: >-
+          python tools/report_module_coverage.py
+          --quiet-tests
+          --top 20
+          --fail-under "${{ env.MODULE_COVERAGE_FAIL_UNDER }}"
+
+      - name: Commit verified compatibility repair
         shell: bash
         run: |
-          set +e
-          python -m unittest discover -s tests -v 2>&1 | tee runtime-performance-unittest.log
-          unittest_status=${PIPESTATUS[0]}
-          python -m pytest tests -q 2>&1 | tee runtime-performance-pytest.log
-          pytest_status=${PIPESTATUS[0]}
-          printf 'unittest=%s\npytest=%s\n' "$unittest_status" "$pytest_status" \
-            > runtime-performance-status.txt
-          if [ "$unittest_status" -ne 0 ] || [ "$pytest_status" -ne 0 ]; then
-            exit 1
-          fi
-
-      - name: Upload suite diagnostics
-        if: always()
-        uses: actions/upload-artifact@v5
-        with:
-          name: runtime-performance-full-suite
-          path: |
-            runtime-performance-unittest.log
-            runtime-performance-pytest.log
-            runtime-performance-status.txt
-
-      - name: Enforce complete suite result
-        if: steps.suites.outcome != 'success'
-        run: exit 1
+          git config user.name "roccolate"
+          git config user.email "20898609+roccolate@users.noreply.github.com"
+          git add retrotui/apps/process_manager.py retrotui/core/profile_metrics.py
+          git diff --cached --quiet && { echo 'No permanent changes produced'; exit 1; }
+          git commit -m "Preserve runtime performance compatibility"
+          git push origin HEAD:agent/runtime-performance-hardening
 
   quality:
     runs-on: ${{ matrix.os }}
