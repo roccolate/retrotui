@@ -5,7 +5,7 @@ on:
   pull_request:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
@@ -15,6 +15,49 @@ env:
   MODULE_COVERAGE_FAIL_UNDER: "75.0"
 
 jobs:
+  apply-runtime-performance:
+    if: >-
+      github.event_name == 'push' &&
+      github.ref == 'refs/heads/agent/runtime-performance-hardening' &&
+      github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout hardening branch
+        uses: actions/checkout@v5
+        with:
+          ref: agent/runtime-performance-hardening
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install package and test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[test]"
+
+      - name: Apply performance patch
+        run: python tools/apply_runtime_performance_hardening.py
+
+      - name: Run focused regressions
+        run: |
+          python -m unittest tests.test_process_manager_more -v
+          python -m unittest tests.test_event_loop -v
+          python -m pytest tests/test_profile_metrics.py -q
+
+      - name: Commit permanent changes
+        shell: bash
+        run: |
+          git config user.name "roccolate"
+          git config user.email "20898609+roccolate@users.noreply.github.com"
+          git add retrotui tests tools/baseline_extract.py docs/BASELINE_PROFILING.md
+          git diff --cached --quiet && { echo 'No permanent changes produced'; exit 1; }
+          git commit -m "Optimize runtime sampling and profiling"
+          git push origin HEAD:agent/runtime-performance-hardening
+
   quality:
     runs-on: ${{ matrix.os }}
     strategy:
