@@ -19,6 +19,12 @@ def replace_once(text: str, old: str, new: str, *, label: str) -> str:
     return text.replace(old, new, 1)
 
 
+def replace_first(text: str, old: str, new: str, *, label: str) -> str:
+    if old not in text:
+        raise RuntimeError(f"{label}: match not found")
+    return text.replace(old, new, 1)
+
+
 def patch_app() -> None:
     text = APP_PATH.read_text(encoding="utf-8")
 
@@ -28,11 +34,13 @@ def patch_app() -> None:
         "",
         label="welcome constants import",
     )
-    text = replace_once(
+    # app.py also has a local Window import in show_bookmarks_window; only the
+    # top-level import belongs to the extracted welcome controller.
+    text = replace_first(
         text,
         "from ..ui.window import Window\n",
         "",
-        label="Window import",
+        label="top-level Window import",
     )
     text = replace_once(
         text,
@@ -47,12 +55,10 @@ def patch_app() -> None:
         label="welcome controller import",
     )
 
-    old_bootstrap = '''        self.config = load_config()\n        self.theme_name = self.config.theme\n        self._plugins = {}\n        self.refresh_icons()\n        self._rebuild_global_menu()\n        self.context_menu = None\n        self.dialog = None\n        self.selected_icon = -1\n\n        self.theme = get_theme(self.theme_name)\n'''
-    new_bootstrap = '''        self.config = load_config()\n        self.theme_name = self.config.theme\n        self._plugins = {}\n        self.context_menu = None\n        self.dialog = None\n        self.selected_icon = -1\n\n        self.theme = get_theme(self.theme_name)\n'''
     text = replace_once(
         text,
-        old_bootstrap,
-        new_bootstrap,
+        "        self.refresh_icons()\n        self._rebuild_global_menu()\n",
+        "",
         label="duplicate shell catalog bootstrap",
     )
 
