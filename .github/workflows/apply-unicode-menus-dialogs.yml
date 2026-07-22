@@ -9,11 +9,12 @@ permissions:
   contents: write
 
 concurrency:
-  group: apply-unicode-menus-dialogs
+  group: apply-unicode-menus-dialogs-v2
   cancel-in-progress: false
 
 jobs:
   apply-and-verify:
+    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
 
     steps:
@@ -28,44 +29,61 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install package and test dependencies
+      - name: Apply, verify and publish
+        shell: bash
         run: |
-          python -m pip install --upgrade pip
-          python -m pip install -e ".[test]"
-
-      - name: Apply asserted Unicode menu and dialog changes
-        run: python tools/apply_unicode_menus_dialogs.py
-
-      - name: Run focused Unicode menu and dialog regressions
-        run: python -m unittest tests.test_unicode_menus_dialogs -v
-
-      - name: Run repository quality checks
-        run: python tools/qa.py --skip-tests
-
-      - name: Reject undefined Python names
-        run: python -m ruff check --select F821 retrotui tests tools
-
-      - name: Run unittest suite
-        run: python -m unittest discover -s tests -v
-
-      - name: Run pytest suite
-        run: python -m pytest tests -q
-
-      - name: Enforce module coverage floor
-        run: >-
-          python tools/report_module_coverage.py
-          --quiet-tests
-          --top 20
-          --fail-under 75.0
-
-      - name: Publish verified permanent diff
-        run: |
-          rm tools/apply_unicode_menus_dialogs.py
-          rm .github/workflows/apply-unicode-menus-dialogs.yml
-          test ! -e tools/apply_unicode_menus_dialogs.py
-          test ! -e .github/workflows/apply-unicode-menus-dialogs.yml
+          set -o pipefail
+          LOG=.gate-unicode-menus-dialogs.log
+          : > "$LOG"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          run_gate() {
+            echo "" | tee -a "$LOG"
+            echo ">>> $*" | tee -a "$LOG"
+            "$@" 2>&1 | tee -a "$LOG"
+          }
+
+          failed=0
+          run_gate python -m pip install --upgrade pip || failed=$?
+          if [ "$failed" -eq 0 ]; then
+            run_gate python -m pip install -e ".[test]" || failed=$?
+          fi
+          if [ "$failed" -eq 0 ]; then
+            run_gate python tools/apply_unicode_menus_dialogs.py || failed=$?
+          fi
+          if [ "$failed" -eq 0 ]; then
+            run_gate python -m unittest tests.test_unicode_menus_dialogs -v || failed=$?
+          fi
+          if [ "$failed" -eq 0 ]; then
+            run_gate python tools/qa.py --skip-tests || failed=$?
+          fi
+          if [ "$failed" -eq 0 ]; then
+            run_gate python -m ruff check --select F821 retrotui tests tools || failed=$?
+          fi
+          if [ "$failed" -eq 0 ]; then
+            run_gate python -m unittest discover -s tests -v || failed=$?
+          fi
+          if [ "$failed" -eq 0 ]; then
+            run_gate python -m pytest tests -q || failed=$?
+          fi
+          if [ "$failed" -eq 0 ]; then
+            run_gate python tools/report_module_coverage.py --quiet-tests --top 20 --fail-under 75.0 || failed=$?
+          fi
+
+          if [ "$failed" -ne 0 ]; then
+            git add "$LOG"
+            git commit -m "Capture Unicode menus and dialogs gate failure"
+            git push origin HEAD:agent/unicode-menus-dialogs
+            exit "$failed"
+          fi
+
+          rm tools/apply_unicode_menus_dialogs.py
+          rm .github/workflows/apply-unicode-menus-dialogs.yml
+          rm "$LOG"
+          test ! -e tools/apply_unicode_menus_dialogs.py
+          test ! -e .github/workflows/apply-unicode-menus-dialogs.yml
+          test ! -e "$LOG"
           git add -A
           git commit -m "Use physical columns for menus and dialogs"
           git push origin HEAD:agent/unicode-menus-dialogs
