@@ -7,10 +7,20 @@ from retrotui.apps.filemanager.core import FileEntry, _fit_text_to_cells
 from retrotui.core import rendering
 from retrotui.core.icon_manager import IconPositionManager, icon_render_metrics
 from retrotui.ui.window import Window
-from retrotui.utils import text_display_width
+from retrotui.utils import center_text_columns, text_display_width
 
 
 class UnicodeIconAndListTests(unittest.TestCase):
+    def test_center_text_columns_preserves_exact_width(self):
+        centered = center_text_columns("界é", 8)
+
+        self.assertEqual(text_display_width(centered), 8)
+        self.assertEqual(centered.strip(), "界é")
+        self.assertLessEqual(
+            abs(len(centered) - len(centered.lstrip()) - (len(centered) - len(centered.rstrip()))),
+            1,
+        )
+
     def test_file_entry_name_field_uses_physical_columns(self):
         name = "報告書é🙂" * 8
         with mock.patch("retrotui.apps.filemanager.core.os.access", return_value=False):
