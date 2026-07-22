@@ -1,0 +1,46 @@
+name: Inventory repository branches
+
+on:
+  push:
+    branches:
+      - maintenance/branch-inventory
+
+permissions:
+  contents: read
+
+jobs:
+  inventory:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Inventory branches
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --prune origin '+refs/heads/*:refs/remotes/origin/*'
+          printf 'branch\tsha\tmerged_into_main\tahead\tbehind\tdiff\tcommits_not_in_main\n' > branch-inventory.tsv
+          while IFS= read -r branch; do
+            [ "$branch" = "main" ] && continue
+            sha=$(git rev-parse "origin/$branch")
+            if git merge-base --is-ancestor "origin/$branch" origin/main; then
+              merged=yes
+            else
+              merged=no
+            fi
+            ahead=$(git rev-list --count "origin/main..origin/$branch")
+            behind=$(git rev-list --count "origin/$branch..origin/main")
+            diff=$(git diff --shortstat "origin/main...origin/$branch" | tr '\t\n' '  ' | sed 's/[[:space:]]\+/ /g')
+            commits=$(git log --format='%h %s' --max-count=5 "origin/main..origin/$branch" | tr '\t\n' '  ' | sed 's/[[:space:]]\+/ /g')
+            printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$branch" "$sha" "$merged" "$ahead" "$behind" "$diff" "$commits" >> branch-inventory.tsv
+          done < <(git for-each-ref --format='%(refname:strip=3)' refs/remotes/origin | grep -v '^HEAD$' | sort)
+          cat branch-inventory.tsv
+
+      - name: Upload inventory
+        uses: actions/upload-artifact@v4
+        with:
+          name: branch-inventory
+          path: branch-inventory.tsv
