@@ -44,7 +44,24 @@ jobs:
         run: python tools/apply_core_lifecycle_hardening.py
 
       - name: Run focused regressions
-        run: python -m unittest discover -s tests -p 'test_core_lifecycle_hardening.py' -v
+        id: focused
+        continue-on-error: true
+        shell: bash
+        run: python -m unittest discover -s tests -p 'test_core_lifecycle_hardening.py' -v > focused-tests.log 2>&1
+
+      - name: Upload focused regression diagnostics
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: focused-hardening-tests
+          path: focused-tests.log
+
+      - name: Enforce focused regression result
+        if: steps.focused.outcome == 'failure'
+        shell: bash
+        run: |
+          cat focused-tests.log
+          exit 1
 
       - name: Run repository QA
         run: python tools/qa.py --skip-tests
