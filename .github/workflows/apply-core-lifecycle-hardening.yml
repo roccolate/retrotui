@@ -60,6 +60,36 @@ jobs:
                   '            close_window=mock.Mock(return_value=True),\n'
                   '        )\n',
               ),
+              (
+                  'from _support import make_fake_curses\n\n'
+                  'sys.modules["curses"] = make_fake_curses()\n\n',
+                  '',
+              ),
+              (
+                  '        tail = stat_line[close + 2 :].split()\n'
+                  '        if len(tail) < 20:\n'
+                  '            return None\n'
+                  '        try:\n'
+                  '            utime = int(tail[11])\n'
+                  '            stime = int(tail[12])\n'
+                  '            total_ticks = utime + stime\n'
+                  '            start_time_ticks = int(tail[19])\n'
+                  '        except (ValueError, IndexError):\n'
+                  '            return None\n',
+                  '        tail = stat_line[close + 2 :].split()\n'
+                  '        if len(tail) < 13:\n'
+                  '            return None\n'
+                  '        try:\n'
+                  '            utime = int(tail[11])\n'
+                  '            stime = int(tail[12])\n'
+                  '            total_ticks = utime + stime\n'
+                  '        except (ValueError, IndexError):\n'
+                  '            return None\n'
+                  '        try:\n'
+                  '            start_time_ticks = int(tail[19]) if len(tail) > 19 else 0\n'
+                  '        except (ValueError, IndexError):\n'
+                  '            start_time_ticks = 0\n',
+              ),
           )
           for old, new in replacements:
               if text.count(old) != 1:
