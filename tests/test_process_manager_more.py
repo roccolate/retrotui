@@ -134,6 +134,53 @@ class ProcessManagerMoreTests(unittest.TestCase):
             self.assertIsNotNone(row2)
             self.assertGreaterEqual(row2.cpu_percent, 0.0)
 
+    def test_tick_delegates_to_rate_limited_refresh_result(self):
+        with mock.patch.object(
+            self.win,
+            "refresh_processes",
+            return_value=False,
+        ) as refresh:
+            self.assertFalse(self.win.tick())
+        refresh.assert_called_once_with(force=False)
+
+    def test_command_cache_is_identity_scoped_and_ttl_bounded(self):
+        self.win._command_cache = {}
+        with mock.patch.object(
+            self.win,
+            "_read_command",
+            side_effect=["first", "second", "third"],
+        ) as read_command:
+            self.assertEqual(self.win._command_for_process(7, 100, 1.0), "first")
+            self.assertEqual(self.win._command_for_process(7, 100, 2.0), "first")
+            self.assertEqual(self.win._command_for_process(7, 100, 7.0), "second")
+            self.assertEqual(self.win._command_for_process(7, 101, 7.0), "third")
+        self.assertEqual(read_command.call_count, 3)
+
+    def test_sort_avoids_proc_rescan_and_preserves_selected_process(self):
+        selected = self.ProcessRow(7, 1.0, 2.0, "selected", 10, 100)
+        self.win.rows = [
+            self.ProcessRow(9, 3.0, 1.0, "other", 20, 200),
+            selected,
+        ]
+        self.win.selected_index = 1
+        with mock.patch.object(self.win, "refresh_processes") as refresh:
+            self.win._set_sort("pid")
+        refresh.assert_not_called()
+        self.assertEqual(self.win._selected_row().pid, selected.pid)
+        self.assertEqual(
+            self.win._selected_row().start_time_ticks,
+            selected.start_time_ticks,
+        )
+
+    def test_refresh_rate_limit_returns_false_before_proc_io(self):
+        self.win._last_refresh = 10.0
+        with (
+            mock.patch.object(self.pm_mod.time, "monotonic", return_value=10.5),
+            mock.patch.object(self.win, "_read_meminfo") as read_meminfo,
+        ):
+            self.assertFalse(self.win.refresh_processes(force=False))
+        read_meminfo.assert_not_called()
+
     def test_sorting_and_selection_visibility(self):
         r1 = self.ProcessRow(pid=1, cpu_percent=1.0, mem_percent=5.0, command="a", total_ticks=0)
         r2 = self.ProcessRow(pid=2, cpu_percent=2.0, mem_percent=1.0, command="b", total_ticks=0)

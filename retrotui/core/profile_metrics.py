@@ -23,6 +23,15 @@ class BaselineProfile:
     loops: int | None
     redraws: int | None
     events: int | None
+    background_ms: float | None = None
+    tick_ms: float | None = None
+    max_tick_ms: float | None = None
+    max_draw_ms: float | None = None
+    max_dispatch_ms: float | None = None
+    clock_refreshes: int | None = None
+    notification_invalidations: int | None = None
+    tick_invalidations: int | None = None
+    input_invalidations: int | None = None
 
 
 def _to_int(value: float | None) -> int | None:
@@ -68,9 +77,18 @@ def parse_profile_metrics(lines: Iterable[str]) -> BaselineProfile:
             draw_ms=None,
             dispatch_ms=None,
             input_wait_ms=None,
+            background_ms=None,
+            tick_ms=None,
+            max_tick_ms=None,
+            max_draw_ms=None,
+            max_dispatch_ms=None,
             loops=None,
             redraws=None,
+            clock_refreshes=None,
             events=None,
+            notification_invalidations=None,
+            tick_invalidations=None,
+            input_invalidations=None,
         )
 
     return BaselineProfile(
@@ -79,7 +97,18 @@ def parse_profile_metrics(lines: Iterable[str]) -> BaselineProfile:
         draw_ms=final_values.get("draw_ms"),
         dispatch_ms=final_values.get("dispatch_ms"),
         input_wait_ms=final_values.get("input_wait_ms"),
+        background_ms=final_values.get("background_ms"),
+        tick_ms=final_values.get("tick_ms"),
+        max_tick_ms=final_values.get("max_tick_ms"),
+        max_draw_ms=final_values.get("max_draw_ms"),
+        max_dispatch_ms=final_values.get("max_dispatch_ms"),
         loops=_to_int(final_values.get("loops")),
         redraws=_to_int(final_values.get("redraws")),
+        clock_refreshes=_to_int(final_values.get("clock_refreshes")),
         events=_to_int(final_values.get("events")),
+        notification_invalidations=_to_int(
+            final_values.get("invalidations_notification")
+        ),
+        tick_invalidations=_to_int(final_values.get("invalidations_tick")),
+        input_invalidations=_to_int(final_values.get("invalidations_input")),
     )
