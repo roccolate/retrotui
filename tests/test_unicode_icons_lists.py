@@ -3,6 +3,7 @@ import unittest
 from unittest import mock
 
 from retrotui.apps import app_manager, process_manager
+from retrotui.apps.filemanager import core as filemanager_core
 from retrotui.apps.filemanager.core import FileEntry, _fit_text_to_cells
 from retrotui.core import rendering
 from retrotui.core.icon_manager import IconPositionManager, icon_render_metrics
@@ -23,7 +24,7 @@ class UnicodeIconAndListTests(unittest.TestCase):
 
     def test_file_entry_name_field_uses_physical_columns(self):
         name = "報告書é🙂" * 8
-        with mock.patch("retrotui.apps.filemanager.core.os.access", return_value=False):
+        with mock.patch.object(filemanager_core.os, "access", return_value=False):
             entry = FileEntry(name, False, "/tmp/report", 123, use_unicode=True)
 
         self.assertEqual(text_display_width(entry.display_text), 44)
