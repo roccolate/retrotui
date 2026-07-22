@@ -233,6 +233,13 @@ def clip_text_columns(text, max_columns, *, suffix="") -> str:
     return clipped + suffix_value
 
 
+def pad_text_columns(text, columns, *, suffix="") -> str:
+    """Clip and right-pad text to an exact physical terminal-column width."""
+    width = max(0, int(columns))
+    fitted = clip_text_columns(text, width, suffix=suffix)
+    return fitted + (" " * max(0, width - text_display_width(fitted)))
+
+
 def safe_addstr(win, y, x, text, attr=0, *, _bounds=None):
     """Write string safely, clipping to window bounds.
 
