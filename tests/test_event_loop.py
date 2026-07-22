@@ -238,6 +238,40 @@ class EventLoopTests(unittest.TestCase):
 
         app.stdscr.timeout.assert_called_once_with(120)
 
+    def test_disabled_profiler_avoids_startup_clock_sampling(self):
+        app = self._make_app()
+        with (
+            mock.patch.dict(self.event_loop.os.environ, {}, clear=True),
+            mock.patch.object(self.event_loop.time, "perf_counter") as timer,
+        ):
+            metrics = self.event_loop._ensure_runtime_metrics(app)
+
+        self.assertFalse(metrics["enabled"])
+        timer.assert_not_called()
+
+    def test_disabled_profiler_does_not_time_hot_loop_phases(self):
+        app = self._make_app()
+        app._runtime_metrics = self.event_loop._ensure_runtime_metrics(app)
+        app._runtime_metrics["enabled"] = False
+
+        def _dispatch_once(target, key):
+            target.running = False
+            return False
+
+        with (
+            mock.patch.object(self.event_loop, "draw_frame"),
+            mock.patch.object(self.event_loop, "read_input_key", return_value=None),
+            mock.patch.object(
+                self.event_loop,
+                "dispatch_input",
+                side_effect=_dispatch_once,
+            ),
+            mock.patch.object(self.event_loop.time, "perf_counter") as timer,
+        ):
+            self.event_loop.run_app_loop(app)
+
+        timer.assert_not_called()
+
     def test_runtime_metrics_use_default_for_invalid_profile_interval(self):
         app = self._make_app()
 

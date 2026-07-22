@@ -549,9 +549,10 @@ def _ensure_runtime_metrics(app):
     metrics = getattr(app, "_runtime_metrics", None)
     if isinstance(metrics, dict):
         return metrics
-    now = time.perf_counter()
+    enabled = _profile_enabled()
+    now = time.perf_counter() if enabled else 0.0
     metrics = {
-        "enabled": _profile_enabled(),
+        "enabled": enabled,
         "started_at": now,
         "last_report_at": now,
         "report_interval_s": _env_float("RETROTUI_PROFILE_INTERVAL", 5.0),
@@ -680,45 +681,55 @@ def run_app_loop(app):
     app._event_loop_first_error = None
     app._event_loop_first_error_phase = None
     cleanup_ok = True
+    profiling = bool(metrics.get("enabled"))
 
     try:
         while app.running:
             try:
                 metrics["loops"] += 1
                 phase = "background"
-                background_start = time.perf_counter()
-                app.poll_background_operation()
-                metrics["background_time_s"] += (
-                    time.perf_counter() - background_start
-                )
+                if profiling:
+                    background_start = time.perf_counter()
+                    app.poll_background_operation()
+                    metrics["background_time_s"] += (
+                        time.perf_counter() - background_start
+                    )
+                else:
+                    app.poll_background_operation()
 
                 if _tick_notifications(app):
                     metrics["notification_invalidations"] += 1
                     app._dirty = True
 
                 phase = "tick"
-                tick_start = time.perf_counter()
-                _tick_changed, has_live, has_periodic = _tick_and_probe_windows(app)
-                tick_elapsed = time.perf_counter() - tick_start
-                metrics["tick_time_s"] += tick_elapsed
-                metrics["max_tick_time_s"] = max(
-                    float(metrics.get("max_tick_time_s", 0.0)),
-                    tick_elapsed,
-                )
+                if profiling:
+                    tick_start = time.perf_counter()
+                    _tick_changed, has_live, has_periodic = _tick_and_probe_windows(app)
+                    tick_elapsed = time.perf_counter() - tick_start
+                    metrics["tick_time_s"] += tick_elapsed
+                    metrics["max_tick_time_s"] = max(
+                        float(metrics.get("max_tick_time_s", 0.0)),
+                        tick_elapsed,
+                    )
+                else:
+                    _tick_changed, has_live, has_periodic = _tick_and_probe_windows(app)
                 if _tick_changed:
                     metrics["tick_invalidations"] += 1
                     app._dirty = True
 
                 phase = "render"
                 if getattr(app, "_dirty", True):
-                    draw_start = time.perf_counter()
-                    draw_frame(app)
-                    draw_elapsed = time.perf_counter() - draw_start
-                    metrics["draw_time_s"] += draw_elapsed
-                    metrics["max_draw_time_s"] = max(
-                        float(metrics.get("max_draw_time_s", 0.0)),
-                        draw_elapsed,
-                    )
+                    if profiling:
+                        draw_start = time.perf_counter()
+                        draw_frame(app)
+                        draw_elapsed = time.perf_counter() - draw_start
+                        metrics["draw_time_s"] += draw_elapsed
+                        metrics["max_draw_time_s"] = max(
+                            float(metrics.get("max_draw_time_s", 0.0)),
+                            draw_elapsed,
+                        )
+                    else:
+                        draw_frame(app)
                     metrics["redraws"] += 1
                     app._dirty = False
 
@@ -729,9 +740,14 @@ def run_app_loop(app):
                         app, has_live=has_live, has_periodic=has_periodic
                     ),
                 )
-                input_start = time.perf_counter()
-                key = read_input_key(app.stdscr)
-                metrics["input_wait_time_s"] += time.perf_counter() - input_start
+                if profiling:
+                    input_start = time.perf_counter()
+                    key = read_input_key(app.stdscr)
+                    metrics["input_wait_time_s"] += (
+                        time.perf_counter() - input_start
+                    )
+                else:
+                    key = read_input_key(app.stdscr)
                 if key is None:
                     consume_signal_key = getattr(app, "_consume_pending_signal_key", None)
                     if callable(consume_signal_key):
@@ -745,17 +761,19 @@ def run_app_loop(app):
                 _record_input_stats(metrics, key)
 
                 phase = "dispatch"
-                dispatch_start = time.perf_counter()
+                if profiling:
+                    dispatch_start = time.perf_counter()
                 if dispatch_input(app, key):
                     app._dirty = True
                     metrics["dispatched_events"] += 1
                     metrics["input_invalidations"] += 1
-                dispatch_elapsed = time.perf_counter() - dispatch_start
-                metrics["dispatch_time_s"] += dispatch_elapsed
-                metrics["max_dispatch_time_s"] = max(
-                    float(metrics.get("max_dispatch_time_s", 0.0)),
-                    dispatch_elapsed,
-                )
+                if profiling:
+                    dispatch_elapsed = time.perf_counter() - dispatch_start
+                    metrics["dispatch_time_s"] += dispatch_elapsed
+                    metrics["max_dispatch_time_s"] = max(
+                        float(metrics.get("max_dispatch_time_s", 0.0)),
+                        dispatch_elapsed,
+                    )
                 _emit_runtime_metrics(metrics, final=False)
 
                 # A complete iteration breaks the global failure streak.
