@@ -99,6 +99,62 @@ jobs:
           PY
           python tools/apply_core_lifecycle_hardening.py
 
+          python - <<'PY'
+          from pathlib import Path
+
+          focused_path = Path('tests/test_core_lifecycle_hardening.py')
+          focused = focused_path.read_text(encoding='utf-8')
+          focused = focused.replace('from retrotui.core.app import RetroTUI\n', '', 1)
+          start = focused.index(
+              '    def test_cleanup_failure_remains_false_when_called_again(self):\n'
+          )
+          end = focused.index(
+              '    def test_entrypoint_reports_incomplete_cleanup(self):\n',
+              start,
+          )
+          focused = focused[:start] + focused[end:]
+          focused_path.write_text(focused, encoding='utf-8', newline='\n')
+
+          core_path = Path('tests/test_core_app.py')
+          core = core_path.read_text(encoding='utf-8')
+          anchor = (
+              '    def test_draw_wrappers_delegate_to_rendering_helpers(self):\n'
+              '        app = self._make_app()\n'
+          )
+          addition = (
+              '    def test_cleanup_preserves_failed_result_across_repeated_calls(self):\n'
+              '        app = self._make_app()\n'
+              '        app._cleanup_complete = False\n'
+              '        app._cleanup_started = False\n'
+              '        app._file_ops = types.SimpleNamespace(\n'
+              '            shutdown=mock.Mock(return_value=False),\n'
+              '        )\n'
+              '        app._restore_runtime_signal_handlers = mock.Mock()\n'
+              '        app.windows = []\n'
+              '\n'
+              '        with mock.patch.object(\n'
+              '            self.app_mod, "disable_mouse_support"\n'
+              '        ):\n'
+              '            first = app.cleanup()\n'
+              '            second = app.cleanup()\n'
+              '\n'
+              '        self.assertFalse(first)\n'
+              '        self.assertFalse(second)\n'
+              '        app._file_ops.shutdown.assert_called_once_with(\n'
+              '            timeout=app.BACKGROUND_OPERATION_JOIN_TIMEOUT\n'
+              '        )\n'
+              '\n'
+              + anchor
+          )
+          if core.count(anchor) != 1:
+              raise SystemExit('core cleanup test anchor not found exactly once')
+          core_path.write_text(
+              core.replace(anchor, addition, 1),
+              encoding='utf-8',
+              newline='\n',
+          )
+          PY
+
       - name: Run focused regressions
         id: focused
         continue-on-error: true
