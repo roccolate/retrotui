@@ -77,16 +77,28 @@ jobs:
           python -m pip install -e '.[test]'
 
       - name: Run focused regressions
-        run: >-
-          python -m pytest
-          tests/test_unicode_icons_lists.py
-          tests/test_icon_manager.py
-          tests/test_rendering.py
-          tests/test_filemanager_extra.py
-          tests/test_filemanager_additional.py
-          tests/test_process_manager.py
-          tests/test_app_manager.py
-          -q
+        id: focused
+        shell: bash
+        run: |
+          set +e
+          python -m pytest \
+            tests/test_unicode_icons_lists.py \
+            tests/test_icon_manager.py \
+            tests/test_rendering.py \
+            tests/test_filemanager_extra.py \
+            tests/test_filemanager_additional.py \
+            tests/test_process_manager.py \
+            tests/test_app_manager.py \
+            -vv --tb=short 2>&1 | tee unicode-icons-lists-test.log
+          status=${PIPESTATUS[0]}
+          exit "$status"
+
+      - name: Upload focused regression diagnostics
+        if: ${{ failure() && steps.focused.outcome == 'failure' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: unicode-icons-lists-test-log
+          path: unicode-icons-lists-test.log
 
       - name: Run repository quality checks
         run: python tools/qa.py --skip-tests
@@ -106,7 +118,7 @@ jobs:
       - name: Publish verified patch
         shell: bash
         run: |
-          rm -f unicode-icons-lists-apply.log
+          rm -f unicode-icons-lists-apply.log unicode-icons-lists-test.log
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add -A
