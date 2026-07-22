@@ -89,16 +89,31 @@ def patch_app() -> None:
     text = APP_PATH.read_text(encoding="utf-8")
 
     for unused_import in ("import signal\n", "import threading\n"):
-        text = replace_once(text, unused_import, "", label=f"remove {unused_import.strip()}")
+        text = replace_once(
+            text,
+            unused_import,
+            "",
+            label=f"remove {unused_import.strip()}",
+        )
 
-    text = replace_once(text, "    ICONS, ICONS_ASCII,\n", "", label="remove accidental constants re-export")
+    text = replace_once(
+        text,
+        "    ICONS, ICONS_ASCII,\n",
+        "",
+        label="remove accidental constants re-export",
+    )
     text = replace_once(
         text,
         "from ..ui.dialog import Dialog, InputDialog, ProgressDialog\n",
         "from ..ui.dialog import Dialog, InputDialog\n",
         label="remove unused ProgressDialog import",
     )
-    text = replace_once(text, "        from ..ui.dialog import Dialog\n\n", "", label="remove duplicate local Dialog import")
+    text = replace_once(
+        text,
+        "        from ..ui.dialog import Dialog\n\n",
+        "",
+        label="remove duplicate local Dialog import",
+    )
     text = replace_once(
         text,
         "        from ..ui.dialog import InputDialog\n        from .actions import ActionResult, ActionType\n",
@@ -106,26 +121,102 @@ def patch_app() -> None:
         label="remove duplicate bookmark imports",
     )
 
-    old_icon_imports = '''from .icon_styles import (\n    ICON_STYLE_DEFAULT,\n    ICON_STYLE_MINI,\n    ICON_STYLE_BRAILLE,\n    ICON_STYLE_RETRO_01,\n    normalize_icon_style,\n    icon_style_variants as _icon_style_variants,\n    style_symbol_for_icon as _style_symbol_for_icon,\n    styled_icon_entry as _styled_icon_entry,\n    icon_style_preview_symbol as _icon_style_preview_symbol,\n    icon_visibility_key as _icon_visibility_key,\n    get_hidden_icon_labels as _get_hidden_icon_labels,\n    split_config_csv as _split_config_csv,\n    plugin_icon_art as _plugin_icon_art,\n    build_plugin_icons as _build_plugin_icons,\n    build_desktop_icon_catalog as _build_desktop_icon_catalog,\n    refresh_icons as _refresh_icons,\n)\n'''
-    new_icon_imports = '''from .icon_styles import (\n    ICON_STYLE_DEFAULT,\n    normalize_icon_style,\n    icon_style_preview_symbol as _icon_style_preview_symbol,\n    refresh_icons as _refresh_icons,\n)\n'''
-    text = replace_once(text, old_icon_imports, new_icon_imports, label="simplify icon-style imports")
+    old_icon_imports = '''from .icon_styles import (
+    ICON_STYLE_DEFAULT,
+    ICON_STYLE_MINI,
+    ICON_STYLE_BRAILLE,
+    ICON_STYLE_RETRO_01,
+    normalize_icon_style,
+    icon_style_variants as _icon_style_variants,
+    style_symbol_for_icon as _style_symbol_for_icon,
+    styled_icon_entry as _styled_icon_entry,
+    icon_style_preview_symbol as _icon_style_preview_symbol,
+    icon_visibility_key as _icon_visibility_key,
+    get_hidden_icon_labels as _get_hidden_icon_labels,
+    split_config_csv as _split_config_csv,
+    plugin_icon_art as _plugin_icon_art,
+    build_plugin_icons as _build_plugin_icons,
+    build_desktop_icon_catalog as _build_desktop_icon_catalog,
+    refresh_icons as _refresh_icons,
+)
+'''
+    new_icon_imports = '''from .icon_styles import (
+    ICON_STYLE_DEFAULT,
+    normalize_icon_style,
+    icon_style_preview_symbol as _icon_style_preview_symbol,
+    refresh_icons as _refresh_icons,
+)
+'''
+    text = replace_once(
+        text,
+        old_icon_imports,
+        new_icon_imports,
+        label="simplify icon-style imports",
+    )
 
-    old_signal_imports = '''from .signal_handler import (\n    install_runtime_signal_handlers,\n    restore_runtime_signal_handlers,\n    queue_pending_signal_key,\n    consume_pending_signal_key,\n    consume_pending_sigint,\n)\n'''
-    new_signal_imports = '''from .signal_handler import (\n    install_runtime_signal_handlers,\n    restore_runtime_signal_handlers,\n    queue_pending_signal_key,\n    consume_pending_signal_key,\n)\n'''
-    text = replace_once(text, old_signal_imports, new_signal_imports, label="simplify signal-handler imports")
+    old_signal_imports = '''from .signal_handler import (
+    install_runtime_signal_handlers,
+    restore_runtime_signal_handlers,
+    queue_pending_signal_key,
+    consume_pending_signal_key,
+    consume_pending_sigint,
+)
+'''
+    new_signal_imports = '''from .signal_handler import (
+    install_runtime_signal_handlers,
+    restore_runtime_signal_handlers,
+    queue_pending_signal_key,
+    consume_pending_signal_key,
+)
+'''
+    text = replace_once(
+        text,
+        old_signal_imports,
+        new_signal_imports,
+        label="simplify signal-handler imports",
+    )
 
-    old_plugin_imports = '''from .plugin_manager import (\n    load_plugins_runtime,\n    register_plugin_manifest,\n    build_plugin_menu_items,\n    build_plugin_window,\n    open_plugin as _open_plugin,\n)\n'''
-    new_plugin_imports = '''from .plugin_manager import (\n    load_plugins_runtime,\n    register_plugin_manifest,\n    open_plugin as _open_plugin,\n)\n'''
-    text = replace_once(text, old_plugin_imports, new_plugin_imports, label="simplify plugin-manager imports")
+    old_plugin_imports = '''from .plugin_manager import (
+    load_plugins_runtime,
+    register_plugin_manifest,
+    build_plugin_menu_items,
+    build_plugin_window,
+    open_plugin as _open_plugin,
+)
+'''
+    new_plugin_imports = '''from .plugin_manager import (
+    load_plugins_runtime,
+    register_plugin_manifest,
+    open_plugin as _open_plugin,
+)
+'''
+    text = replace_once(
+        text,
+        old_plugin_imports,
+        new_plugin_imports,
+        label="simplify plugin-manager imports",
+    )
 
-    old_menu_imports = '''from .menu_builder import (\n    menu_item_visibility_key as _menu_item_visibility_key,\n    get_hidden_menu_keys as _get_hidden_menu_keys,\n    build_global_menu_items,\n    rebuild_global_menu,\n    build_menu_editor_catalog,\n)\n'''
+    old_menu_imports = '''from .menu_builder import (
+    menu_item_visibility_key as _menu_item_visibility_key,
+    get_hidden_menu_keys as _get_hidden_menu_keys,
+    build_global_menu_items,
+    rebuild_global_menu,
+    build_menu_editor_catalog,
+)
+'''
     text = replace_once(
         text,
         old_menu_imports,
         "from .menu_builder import build_global_menu_items, rebuild_global_menu\n",
         label="simplify menu-builder imports",
     )
-    text = replace_once(text, "    LONG_FILE_OPERATION_BYTES = 8 * 1024 * 1024\n", "", label="remove duplicate file-operation threshold")
+    text = replace_once(
+        text,
+        "    LONG_FILE_OPERATION_BYTES = 8 * 1024 * 1024\n",
+        "",
+        label="remove duplicate file-operation threshold",
+    )
 
     text = remove_class_methods(text, "RetroTUI", DEAD_APP_METHODS)
     APP_PATH.write_text(text, encoding="utf-8")
@@ -133,9 +224,20 @@ def patch_app() -> None:
 
 def patch_tests() -> None:
     text = TEST_PATH.read_text(encoding="utf-8")
-    old_imports = '''        cls.actions_mod = importlib.import_module("retrotui.core.actions")\n        cls.app_mod = importlib.import_module("retrotui.core.app")\n'''
-    new_imports = '''        cls.actions_mod = importlib.import_module("retrotui.core.actions")\n        cls.constants_mod = importlib.import_module("retrotui.constants")\n        cls.dialog_mod = importlib.import_module("retrotui.ui.dialog")\n        cls.app_mod = importlib.import_module("retrotui.core.app")\n'''
-    text = replace_once(text, old_imports, new_imports, label="test owner-module imports")
+    old_imports = '''        cls.actions_mod = importlib.import_module("retrotui.core.actions")
+        cls.app_mod = importlib.import_module("retrotui.core.app")
+'''
+    new_imports = '''        cls.actions_mod = importlib.import_module("retrotui.core.actions")
+        cls.constants_mod = importlib.import_module("retrotui.constants")
+        cls.dialog_mod = importlib.import_module("retrotui.ui.dialog")
+        cls.app_mod = importlib.import_module("retrotui.core.app")
+'''
+    text = replace_once(
+        text,
+        old_imports,
+        new_imports,
+        label="test owner-module imports",
+    )
 
     replacements = {
         "self.app_mod.ICONS_ASCII": "self.constants_mod.ICONS_ASCII",
@@ -152,9 +254,21 @@ def patch_tests() -> None:
 
 def patch_ci() -> None:
     text = CI_PATH.read_text(encoding="utf-8")
-    anchor = '''      - name: Reject undefined Python names\n        run: python -m ruff check --select F821 retrotui tests tools\n'''
-    replacement = anchor + '''\n      - name: Reject unused RetroTUI composition code\n        run: python -m ruff check --select F401,F811,F841 retrotui/core/app.py\n'''
-    text = replace_once(text, anchor, replacement, label="incremental app cleanup lint gate")
+    anchor = '''      - name: Reject undefined Python names
+        run: python -m ruff check --select F821 retrotui tests tools
+'''
+    replacement = anchor + '''
+      - name: Reject unused RetroTUI composition code
+        run: python -m ruff check --select F401,F811,F841 retrotui/core/app.py
+'''
+    count = text.count(anchor)
+    if count != 2:
+        raise RuntimeError(
+            "incremental app cleanup lint gate: "
+            f"expected temporary and permanent anchors, found {count}"
+        )
+    index = text.rfind(anchor)
+    text = text[:index] + replacement + text[index + len(anchor):]
     CI_PATH.write_text(text, encoding="utf-8")
 
 
