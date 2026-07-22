@@ -1,0 +1,65 @@
+name: Rewrite PR42 Clean
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  rewrite:
+    if: github.head_ref == 'maintenance/rewrite-pr42-as-roccolate'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: agent/secure-atomic-write
+          fetch-depth: 0
+      - name: Rebuild PR42 as one roccolate commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main agent/secure-atomic-write
+          git diff origin/main...origin/agent/secure-atomic-write -- \
+            retrotui/atomic_io.py \
+            retrotui/utils.py \
+            tests/test_atomic_io.py \
+            tests/test_theme_and_config.py \
+            tests/test_windows_logic.py > /tmp/pr42.patch
+          test -s /tmp/pr42.patch
+
+          git reset --hard origin/main
+          git apply --index /tmp/pr42.patch
+
+          mapfile -t changed < <(git diff --cached --name-only)
+          test "${#changed[@]}" -eq 5
+          for path in \
+            retrotui/atomic_io.py \
+            retrotui/utils.py \
+            tests/test_atomic_io.py \
+            tests/test_theme_and_config.py \
+            tests/test_windows_logic.py
+          do
+            printf '%s\n' "${changed[@]}" | grep -Fxq "$path"
+          done
+
+          git config user.name "roccolate"
+          git config user.email "20898609+roccolate@users.noreply.github.com"
+          git commit -m "Harden atomic text writes"
+
+          {
+            echo "commit_count=$(git rev-list --count origin/main..HEAD)"
+            git log origin/main..HEAD --format='commit=%H%n author=%an <%ae>%n committer=%cn <%ce>'
+          } > pr42-author-verification.txt
+
+          git push --force origin HEAD:agent/secure-atomic-write
+      - name: Upload author verification
+        uses: actions/upload-artifact@v5
+        with:
+          name: pr42-author-verification
+          path: pr42-author-verification.txt
+      - name: Delete maintenance branch
+        shell: bash
+        run: git push origin --delete maintenance/rewrite-pr42-as-roccolate
