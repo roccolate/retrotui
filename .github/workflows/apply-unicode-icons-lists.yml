@@ -29,6 +29,32 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Align duplicate App Manager replacements
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('tools/apply_unicode_icons_lists.py')
+          text = path.read_text(encoding='utf-8')
+          old = '''    count = text.count(old)
+              if count != 1:
+                  raise RuntimeError(f"{relative}: expected one exact match, found {count}")
+              _write(relative, text.replace(old, new, 1))
+          '''
+          new = '''    count = text.count(old)
+              expected = 2 if relative == "retrotui/apps/app_manager.py" and count == 2 else 1
+              if count != expected:
+                  raise RuntimeError(
+                      f"{relative}: expected {expected} exact match(es), found {count}"
+                  )
+              _write(relative, text.replace(old, new, expected))
+          '''
+          if text.count(old) != 1:
+              raise SystemExit('replace_once implementation not found exactly once')
+          path.write_text(text.replace(old, new, 1), encoding='utf-8')
+          PY
+
       - name: Apply Unicode patch
         id: apply
         shell: bash
