@@ -50,6 +50,15 @@ class UnicodeMenusDialogsTests(unittest.TestCase):
         else:
             sys.modules.pop("curses", None)
 
+    def test_pad_text_columns_preserves_combining_and_exact_width(self):
+        padded = self.utils.pad_text_columns("e\u0301你", 5)
+        self.assertTrue(padded.startswith("e\u0301你"))
+        self.assertEqual(self.utils.text_display_width(padded), 5)
+
+        clipped = self.utils.pad_text_columns("你你你", 4, suffix="…")
+        self.assertEqual(self.utils.text_display_width(clipped), 4)
+        self.assertIn("…", clipped)
+
     def test_menu_positions_use_physical_columns(self):
         menu = self.menu_mod.MenuBar({
             "文件": [("打开", "open")],
