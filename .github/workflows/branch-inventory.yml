@@ -1,15 +1,16 @@
 name: Inventory repository branches
 
 on:
-  push:
+  pull_request:
     branches:
-      - maintenance/branch-inventory
+      - main
 
 permissions:
   contents: read
 
 jobs:
   inventory:
+    if: ${{ github.head_ref == 'maintenance/branch-inventory' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
