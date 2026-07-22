@@ -365,62 +365,39 @@ class WifiManagerWindow(Window):
         if cancel_event.is_set():
             self._finish_connect(False, "Connection cancelled.", cancel_event)
             return
-        cmd = [self.nmcli, "dev", "wifi", "connect", ssid]
-        if password:
-            # Prefer stdin (--ask) so the password does not appear in
-            # process listings. If the --ask invocation fails for any
-            # reason, fall back to the explicit ``password`` argument —
-            # but if it does, surface the failure to the user rather
-            # than silently downgrading security.
-            error_message = ""
-            try:
-                res = subprocess.run(
-                    [self.nmcli, "--ask", "dev", "wifi", "connect", ssid],
-                    input=password + "\n",
-                    capture_output=True,
-                    text=True,
-                    check=False,
-                    timeout=NMCLI_CONNECT_TIMEOUT,
-                )
-                success = res.returncode == 0
-                if not success:
-                    error_message = (res.stderr or res.stdout or "").strip() or "Connection failed."
-                self._finish_connect(success, error_message, cancel_event)
-                return
-            except subprocess.TimeoutExpired:
-                self._finish_connect(False, "Connection timed out.", cancel_event)
-                return
-            except OSError as exc:
-                # The --ask path is unavailable (e.g. ``nmcli`` not on
-                # PATH for that subprocess call, or the option
-                # rejected). Don't silently retry with the password on
-                # argv — tell the user the secure path failed.
-                self._finish_connect(
-                    False,
-                    f"Could not run nmcli --ask: {exc}. "
-                    "Password was not sent insecurely; please report the error.",
-                    cancel_event,
-                )
-                return
-            cmd.extend(["password", password])
+
         success = False
         error_message = ""
         try:
+            if password:
+                cmd = [self.nmcli, "--ask", "dev", "wifi", "connect", ssid]
+                run_kwargs = {"input": password + "\n"}
+            else:
+                cmd = [self.nmcli, "dev", "wifi", "connect", ssid]
+                run_kwargs = {}
             res = subprocess.run(
                 cmd,
                 capture_output=True,
                 text=True,
                 check=False,
                 timeout=NMCLI_CONNECT_TIMEOUT,
+                **run_kwargs,
             )
             success = res.returncode == 0
             if not success:
-                error_message = (res.stderr or res.stdout or "").strip() or "Connection failed."
+                error_message = (
+                    (res.stderr or res.stdout or "").strip()
+                    or "Connection failed."
+                )
         except subprocess.TimeoutExpired:
             error_message = "Connection timed out."
         except OSError as exc:
             error_message = str(exc) or "Execution failed."
-        self._finish_connect(success, error_message, cancel_event)
+        except Exception as exc:  # Worker boundary: always finalize owned state.
+            LOGGER.exception("Unexpected nmcli connection failure")
+            error_message = str(exc) or exc.__class__.__name__
+        finally:
+            self._finish_connect(success, error_message, cancel_event)
 
     def close(self):
         """Cancel scan/connect ownership and clear pending UI state."""

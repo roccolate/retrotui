@@ -181,7 +181,13 @@ class ProcessSignalPayload(_PayloadCompat):
     pid: int = 0
     command: str = ""
     signal: int = 15
-    _payload_fields: ClassVar[tuple[str, ...]] = ("pid", "command", "signal")
+    start_time_ticks: int = 0
+    _payload_fields: ClassVar[tuple[str, ...]] = (
+        "pid",
+        "command",
+        "signal",
+        "start_time_ticks",
+    )
 
     @classmethod
     def from_value(cls, value):
@@ -197,11 +203,16 @@ class ProcessSignalPayload(_PayloadCompat):
             signal_number = int(value.get("signal", 15) or 15)
         except (TypeError, ValueError, OverflowError):
             signal_number = 15
+        try:
+            start_time_ticks = int(value.get("start_time_ticks", 0) or 0)
+        except (TypeError, ValueError, OverflowError):
+            start_time_ticks = 0
         command = value.get("command", "")
         return cls(
             pid=pid,
             command=str(command or ""),
             signal=signal_number,
+            start_time_ticks=max(0, start_time_ticks),
         )
 
 

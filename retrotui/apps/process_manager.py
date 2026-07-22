@@ -1,6 +1,7 @@
 """Process Manager window backed by /proc live data."""
 
 import curses
+import errno
 import os
 import signal
 import time
@@ -21,6 +22,7 @@ class ProcessRow:
     mem_percent: float
     command: str
     total_ticks: int
+    start_time_ticks: int = 0
 
 
 class ProcessManagerWindow(Window):
@@ -171,6 +173,24 @@ class ProcessManagerWindow(Window):
         except OSError:
             return f"[{pid}]"
 
+    @staticmethod
+    def _read_process_start_time_ticks(pid):
+        """Return Linux process start ticks, or ``None`` when it is gone."""
+        try:
+            stat_line = ProcessManagerWindow._read_first_line(f"/proc/{pid}/stat")
+        except OSError:
+            return None
+        close = stat_line.rfind(")")
+        if close < 0:
+            return None
+        tail = stat_line[close + 2 :].split()
+        if len(tail) < 20:
+            return None
+        try:
+            return int(tail[19])
+        except (ValueError, IndexError):
+            return None
+
     def _read_process_row(self, pid, total_delta, mem_total_kb):
         stat_path = f"/proc/{pid}/stat"
         statm_path = f"/proc/{pid}/statm"
@@ -192,6 +212,10 @@ class ProcessManagerWindow(Window):
             total_ticks = utime + stime
         except (ValueError, IndexError):
             return None
+        try:
+            start_time_ticks = int(tail[19]) if len(tail) > 19 else 0
+        except (ValueError, IndexError):
+            start_time_ticks = 0
 
         try:
             statm_line = self._read_first_line(statm_path).split()
@@ -215,6 +239,7 @@ class ProcessManagerWindow(Window):
             mem_percent=mem_percent,
             command=command,
             total_ticks=total_ticks,
+            start_time_ticks=start_time_ticks,
         )
 
     def _sort_rows(self):
@@ -311,27 +336,73 @@ class ProcessManagerWindow(Window):
             pid=row.pid,
             command=row.command,
             signal=signal.SIGTERM,
+            start_time_ticks=row.start_time_ticks,
         )
         return ActionResult(ActionType.REQUEST_KILL_CONFIRM, payload)
 
     def kill_process(self, payload):
-        """Send requested signal to one process."""
+        """Signal the process identity selected by the user, never a reused PID."""
         data = ProcessSignalPayload.from_value(payload)
         pid = data.pid
         sig = data.signal
+        expected_start = data.start_time_ticks
         if pid <= 0:
             return ActionResult(ActionType.ERROR, "Invalid PID.")
+
+        pidfd = None
+        pidfd_open = getattr(os, "pidfd_open", None)
+        pidfd_send_signal = getattr(signal, "pidfd_send_signal", None)
         try:
-            os.kill(pid, sig)
+            if expected_start > 0:
+                if callable(pidfd_open) and callable(pidfd_send_signal):
+                    try:
+                        pidfd = pidfd_open(pid, 0)
+                    except ProcessLookupError:
+                        self.refresh_processes(force=True)
+                        return ActionResult(
+                            ActionType.REFRESH,
+                            f"Process {pid} was already gone.",
+                        )
+                    except OSError as exc:
+                        unsupported = {
+                            errno.ENOSYS,
+                            errno.EINVAL,
+                            getattr(errno, "EOPNOTSUPP", errno.EINVAL),
+                        }
+                        if exc.errno not in unsupported:
+                            return ActionResult(ActionType.ERROR, str(exc))
+
+                current_start = self._read_process_start_time_ticks(pid)
+                if current_start is None:
+                    self.refresh_processes(force=True)
+                    return ActionResult(
+                        ActionType.REFRESH,
+                        f"Process {pid} was already gone.",
+                    )
+                if current_start != expected_start:
+                    self.refresh_processes(force=True)
+                    return ActionResult(
+                        ActionType.REFRESH,
+                        f"PID {pid} now belongs to another process; no signal was sent.",
+                    )
+
+            if pidfd is not None:
+                pidfd_send_signal(pidfd, sig)
+            else:
+                os.kill(pid, sig)
         except ProcessLookupError:
-            # Process already exited. Refresh the listing and tell the
-            # user so the action doesn't look like a silent no-op.
             self.refresh_processes(force=True)
             return ActionResult(ActionType.REFRESH, f"Process {pid} was already gone.")
         except PermissionError:
             return ActionResult(ActionType.ERROR, f"Permission denied for PID {pid}.")
         except OSError as exc:
             return ActionResult(ActionType.ERROR, str(exc))
+        finally:
+            if pidfd is not None:
+                try:
+                    os.close(pidfd)
+                except OSError:
+                    pass
         self.refresh_processes(force=True)
         return None
 

@@ -1,0 +1,29 @@
+test_retronet_has_one_window_class_definition (test_core_lifecycle_hardening.CleanupStructureTests.test_retronet_has_one_window_class_definition) ... ok
+test_confirmation_captures_start_time (test_core_lifecycle_hardening.ProcessIdentityTests.test_confirmation_captures_start_time) ... ok
+test_payload_preserves_process_start_identity (test_core_lifecycle_hardening.ProcessIdentityTests.test_payload_preserves_process_start_identity) ... ok
+test_pidfd_keeps_signal_bound_to_verified_process (test_core_lifecycle_hardening.ProcessIdentityTests.test_pidfd_keeps_signal_bound_to_verified_process) ... ok
+test_reused_pid_is_not_signalled (test_core_lifecycle_hardening.ProcessIdentityTests.test_reused_pid_is_not_signalled) ... ok
+test_entrypoint_reports_incomplete_cleanup (test_core_lifecycle_hardening.RuntimeLifecycleTests.test_entrypoint_reports_incomplete_cleanup) ... ok
+test_event_loop_returns_failed_cleanup_status (test_core_lifecycle_hardening.RuntimeLifecycleTests.test_event_loop_returns_failed_cleanup_status) ... ok
+test_idle_clock_without_menu_is_a_clean_noop (test_core_lifecycle_hardening.RuntimeLifecycleTests.test_idle_clock_without_menu_is_a_clean_noop) ... ok
+test_password_is_passed_on_stdin_not_argv (test_core_lifecycle_hardening.WifiLifecycleTests.test_password_is_passed_on_stdin_not_argv) ... ok
+test_unexpected_worker_failure_finalizes_state (test_core_lifecycle_hardening.WifiLifecycleTests.test_unexpected_worker_failure_finalizes_state) ... Unexpected nmcli connection failure
+Traceback (most recent call last):
+  File "/home/runner/work/retrotui/retrotui/retrotui/apps/wifi_manager.py", line 378, in _connect_worker
+    res = subprocess.run(
+          ^^^^^^^^^^^^^^^
+  File "/opt/hostedtoolcache/Python/3.12.13/x64/lib/python3.12/unittest/mock.py", line 1139, in __call__
+    return self._mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/hostedtoolcache/Python/3.12.13/x64/lib/python3.12/unittest/mock.py", line 1143, in _mock_call
+    return self._execute_mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/hostedtoolcache/Python/3.12.13/x64/lib/python3.12/unittest/mock.py", line 1198, in _execute_mock_call
+    raise effect
+RuntimeError: boom
+ok
+
+----------------------------------------------------------------------
+Ran 10 tests in 0.047s
+
+OK

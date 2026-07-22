@@ -265,10 +265,6 @@ class _TabState:
 _DEFAULT_TAB_URL = "http://text.npr.org"
 
 
-class RetroNetWindow(Window):
-    """Nostalgic yet ultra-modern text browser."""
-
-
 def _cleanup_stale_viewsource_files(max_age_seconds: int = 7 * 24 * 3600):
     """Remove stale ``retrotui_retronet_viewsource_*.html`` temp files.
 
@@ -304,6 +300,7 @@ def _cleanup_stale_viewsource_files(max_age_seconds: int = 7 * 24 * 3600):
 
 
 class RetroNetWindow(Window):
+    """Nostalgic text browser with isolated per-tab worker state."""
 
     def __init__(self, x, y, w, h):
         super().__init__('RetroNet Explorer Ultra', x, y, w, h)
