@@ -87,8 +87,8 @@ jobs:
             tests/test_rendering.py \
             tests/test_filemanager_extra.py \
             tests/test_filemanager_additional.py \
-            tests/test_process_manager.py \
-            tests/test_app_manager.py \
+            tests/test_process_manager_component.py \
+            tests/test_app_manager_v2.py \
             -vv --tb=short 2>&1 | tee unicode-icons-lists-test.log
           status=${PIPESTATUS[0]}
           exit "$status"
