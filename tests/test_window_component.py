@@ -107,14 +107,14 @@ class WindowComponentTests(unittest.TestCase):
 
         win.toggle_maximize(120, 40)
         self.assertTrue(win.maximized)
-        self.assertEqual((win.x, win.y, win.w, win.h), (0, 1, 120, 39))
-        self.assertEqual(win.y + win.h, 40)
+        self.assertEqual((win.x, win.y, win.w, win.h), (0, 0, 120, 39))
+        self.assertEqual(win.y + win.h, 39)
         self.assertFalse(win.window_menu.active)
 
         win.restore_rect = (200, 100, 50, 20)
         win.toggle_maximize(100, 40)
         self.assertFalse(win.maximized)
-        self.assertEqual((win.x, win.y), (50, 20))
+        self.assertEqual((win.x, win.y), (50, 19))
 
     def test_toggle_minimize_updates_visibility_and_active(self):
         win = self.window_mod.Window("Test", 0, 0, 20, 10)
@@ -153,7 +153,7 @@ class WindowComponentTests(unittest.TestCase):
 
         win.resize_edge = "bottom"
         win.apply_resize(mx=12, my=200, term_w=100, term_h=40)
-        self.assertEqual(win.h, 35)  # clamped by term_h - y
+        self.assertEqual(win.h, 34)  # reserves the bottom taskbar row
         self.assertFalse(win.window_menu.active)
 
     def test_draw_frame_and_draw_body_render_expected_paths(self):

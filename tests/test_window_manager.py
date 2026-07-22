@@ -103,11 +103,11 @@ class WindowManagerTests(unittest.TestCase):
         start_x, end_x, _label, _win = buttons[1]
         mx = (start_x + end_x) // 2
 
-        self.assertTrue(wm.handle_taskbar_click(mx, 0))
+        self.assertTrue(wm.handle_taskbar_click(mx, 19))
         self.assertIn("toggle_two", activated)
         self.assertIn(two, activated)
 
-    def test_taskbar_buttons_start_after_menu_in_unified_bar(self):
+    def test_taskbar_buttons_start_after_menu_in_classic_bar(self):
         app = SimpleNamespace(
             stdscr=SimpleNamespace(getmaxyx=lambda: (20, 80)),
             menu=SimpleNamespace(
@@ -121,7 +121,7 @@ class WindowManagerTests(unittest.TestCase):
 
         buttons = wm.taskbar_buttons(80)
 
-        self.assertEqual(buttons[0][0], 22)
+        self.assertEqual(buttons[0][0], 21)
         self.assertLess(buttons[0][1], 70)
 
     def test_window_stats_and_taskbar_share_single_iteration_per_render_cycle(self):
