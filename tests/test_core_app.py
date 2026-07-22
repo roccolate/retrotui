@@ -92,6 +92,7 @@ class CoreAppTests(unittest.TestCase):
             "retrotui.core.bootstrap",
             "retrotui.core.viewer",
             "retrotui.core.plugin_manager",
+            "retrotui.core.welcome",
             "retrotui.core.app",
         ):
             sys.modules.pop(mod_name, None)
@@ -100,6 +101,7 @@ class CoreAppTests(unittest.TestCase):
         cls.app_mod = importlib.import_module("retrotui.core.app")
         cls.viewer_mod = importlib.import_module("retrotui.core.viewer")
         cls.plugin_mod = importlib.import_module("retrotui.core.plugin_manager")
+        cls.welcome_mod = importlib.import_module("retrotui.core.welcome")
         cls.curses = sys.modules["curses"]
 
     @classmethod
@@ -124,6 +126,7 @@ class CoreAppTests(unittest.TestCase):
             "retrotui.core.bootstrap",
             "retrotui.core.viewer",
             "retrotui.core.plugin_manager",
+            "retrotui.core.welcome",
             "retrotui.core.app",
         ):
             sys.modules.pop(mod_name, None)
@@ -176,6 +179,57 @@ class CoreAppTests(unittest.TestCase):
         app._event_bus = EventBus()
         return app
 
+    def test_init_builds_shell_catalogs_once_after_plugin_loading(self):
+        stdscr = types.SimpleNamespace(getmaxyx=lambda: (30, 120))
+        fake_menu = types.SimpleNamespace(
+            active=False,
+            selected_menu=0,
+            selected_item=0,
+            handle_key=mock.Mock(return_value=None),
+            handle_click=mock.Mock(return_value=None),
+            handle_hover=mock.Mock(return_value=None),
+            hit_test_dropdown=mock.Mock(return_value=False),
+        )
+        events = []
+
+        def fake_refresh_icons(app):
+            events.append("icons")
+            app.icons = []
+
+        def fake_rebuild_menu(app):
+            events.append("menu")
+            app.menu = fake_menu
+
+        def fake_load_plugins(app):
+            events.append("plugins")
+            app.refresh_icons()
+            app._rebuild_global_menu()
+
+        config = types.SimpleNamespace(
+            theme="win31",
+            show_hidden=False,
+            word_wrap_default=False,
+            sunday_first=False,
+            show_welcome=False,
+            icon_style="default",
+            hidden_icons="",
+            hidden_menu_items="",
+        )
+        with (
+            mock.patch.object(self.app_mod, "check_unicode_support", return_value=True),
+            mock.patch.object(self.app_mod, "load_config", return_value=config),
+            mock.patch.object(self.app_mod, "load_plugins_runtime", side_effect=fake_load_plugins),
+            mock.patch.object(self.app_mod, "_refresh_icons", side_effect=fake_refresh_icons),
+            mock.patch.object(self.app_mod, "rebuild_global_menu", side_effect=fake_rebuild_menu),
+            mock.patch.object(self.app_mod, "configure_terminal"),
+            mock.patch.object(self.app_mod, "disable_flow_control"),
+            mock.patch.object(self.app_mod, "enable_mouse_support", return_value=(1, 2, 3)),
+            mock.patch.object(self.app_mod, "init_colors"),
+        ):
+            self.app_mod.RetroTUI(stdscr)
+
+        self.assertEqual(events, ["plugins", "icons", "menu"])
+
     def test_init_configures_terminal_and_creates_welcome_window(self):
         stdscr = types.SimpleNamespace(getmaxyx=lambda: (30, 120))
         fake_menu = types.SimpleNamespace(
@@ -197,8 +251,8 @@ class CoreAppTests(unittest.TestCase):
             mock.patch.object(self.app_mod, "enable_mouse_support", return_value=(11, 22, 33)),
             mock.patch.object(self.app_mod, "init_colors") as init_colors,
             mock.patch("retrotui.ui.menu.Menu", return_value=fake_menu),
-            mock.patch.object(self.app_mod, "build_welcome_content", return_value=["welcome"]) as welcome_builder,
-            mock.patch.object(self.app_mod, "Window", return_value=fake_window) as window_cls,
+            mock.patch.object(self.welcome_mod, "build_welcome_content", return_value=["welcome"]) as welcome_builder,
+            mock.patch.object(self.welcome_mod, "Window", return_value=fake_window) as window_cls,
         ):
             app = self.app_mod.RetroTUI(stdscr)
 
@@ -242,8 +296,8 @@ class CoreAppTests(unittest.TestCase):
             mock.patch.object(self.app_mod, "enable_mouse_support", return_value=(1, 2, 3)),
             mock.patch.object(self.app_mod, "init_colors"),
             mock.patch("retrotui.ui.menu.Menu", return_value=fake_menu),
-            mock.patch.object(self.app_mod, "build_welcome_content", return_value=["welcome"]),
-            mock.patch.object(self.app_mod, "Window", return_value=types.SimpleNamespace(active=False)),
+            mock.patch.object(self.welcome_mod, "build_welcome_content", return_value=["welcome"]),
+            mock.patch.object(self.welcome_mod, "Window", return_value=types.SimpleNamespace(active=False)),
         ):
             app = self.app_mod.RetroTUI(stdscr)
 

@@ -11,21 +11,18 @@ from ..constants import (
     TERMINAL_INPUT_TIMEOUT_MS,
     TERMINAL_LIVE_INPUT_TIMEOUT_MS,
     TERMINAL_BACKGROUND_INPUT_TIMEOUT_MS,
-    WELCOME_WIN_WIDTH, WELCOME_WIN_HEIGHT,
     WIN_MIN_WIDTH, WIN_MIN_HEIGHT,
     _CURSES_ERROR,
 )
 from ..utils import check_unicode_support, init_colors
 from ..theme import get_theme
 from ..ui.dialog import Dialog, InputDialog, ProgressDialog
-from ..ui.window import Window
 from .config import AppConfig, CONFIG_SCHEMA_VERSION, load_config, save_config
 from .actions import ActionResult, ActionType, AppAction, SaveConfirmPayload
 from .action_runner import execute_app_action
 from .drag_drop import DragDropManager
 from .file_operations import FileOperationManager
 from .icon_manager import IconPositionManager
-from .content import build_welcome_content
 from .mouse_router import (
     _invoke_mouse_handler,
     handle_drag_resize_mouse,
@@ -50,6 +47,7 @@ from .rendering import (
     draw_statusbar,
 )
 from .event_loop import run_app_loop
+from .welcome import open_welcome_window
 from .dialog_dispatch import DialogDispatcher
 from .dialog_workflow import DialogWorkflowId, bind_dialog
 from .bootstrap import (
@@ -366,8 +364,6 @@ class RetroTUI:
         self.config = load_config()
         self.theme_name = self.config.theme
         self._plugins = {}
-        self.refresh_icons()
-        self._rebuild_global_menu()
         self.context_menu = None
         self.dialog = None
         self.selected_icon = -1
@@ -403,7 +399,8 @@ class RetroTUI:
         self.input_timeout_background_ms = TERMINAL_BACKGROUND_INPUT_TIMEOUT_MS
         self.mouse_backend = detect_mouse_backend()
 
-        # Plugin discovery and registration (optional; failures should not crash).
+        # Plugin discovery owns the single final icon/menu catalog build.
+        # Building before discovery would compile both catalogs twice at startup.
         self._load_plugins_runtime()
         # Setup terminal
         configure_terminal(stdscr, timeout_ms=TERMINAL_INPUT_TIMEOUT_MS)
@@ -415,66 +412,9 @@ class RetroTUI:
 
         init_colors(self.theme)
 
-        # Create a welcome window if enabled
+        # Welcome behavior is isolated from the application composition root.
         if self.show_welcome:
-            h, w = stdscr.getmaxyx()
-            welcome_content = build_welcome_content(APP_VERSION)
-            win = Window(
-                'Welcome to RetroTUI',
-                w // 2 - WELCOME_WIN_WIDTH // 2,
-                h // 2 - WELCOME_WIN_HEIGHT // 2,
-                WELCOME_WIN_WIDTH,
-                WELCOME_WIN_HEIGHT,
-                content=welcome_content,
-                resizable=False,
-                minimizable=False,
-                maximizable=False,
-            )
-
-            def _refresh_welcome_content():
-                win.content = build_welcome_content(
-                    APP_VERSION,
-                    show_on_startup=self.show_welcome,
-                )
-
-            def _persist_welcome_preference(show_on_startup):
-                self.apply_preferences(show_welcome=show_on_startup)
-                _refresh_welcome_content()
-                self.persist_config()
-                self._dirty = True
-
-            def _toggle_welcome_preference():
-                _persist_welcome_preference(not self.show_welcome)
-                return ActionResult(ActionType.REFRESH)
-
-            def _welcome_checkbox_row():
-                for idx, line in enumerate(getattr(win, "content", ())):
-                    if "Show welcome on startup" in line:
-                        return win.y + 1 + idx
-                return None
-
-            # Custom handler to process the startup preference checkbox.
-            def _welcome_handle_key(key):
-                if getattr(curses, "KEY_F9", -1) == key or key == "KEY_F9":
-                    _persist_welcome_preference(False)
-                    self.close_window(win)
-                    return ActionResult(ActionType.REFRESH)
-                if key in (" ", "\n", "\r", 10, 13, getattr(curses, "KEY_ENTER", -1)):
-                    return _toggle_welcome_preference()
-                return Window.handle_key(win, key)
-
-            def _welcome_handle_click(mx, my, bstate=None):
-                _ = bstate
-                checkbox_y = _welcome_checkbox_row()
-                if checkbox_y is not None and my == checkbox_y:
-                    bx, _by, bw, _bh = win.body_rect()
-                    if bx <= mx < bx + bw:
-                        return _toggle_welcome_preference()
-                return Window.handle_click(win, mx, my)
-
-            win.handle_key = _welcome_handle_key
-            win.handle_click = _welcome_handle_click
-            self._spawn_window(win)
+            open_welcome_window(self, APP_VERSION)
         # load persisted icon positions (if any)
         try:
             self._load_icon_positions()
