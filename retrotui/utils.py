@@ -240,6 +240,15 @@ def pad_text_columns(text, columns, *, suffix="") -> str:
     return fitted + (" " * max(0, width - text_display_width(fitted)))
 
 
+def center_text_columns(text, columns, *, suffix="") -> str:
+    """Clip and center text inside an exact physical terminal-column width."""
+    width = max(0, int(columns))
+    fitted = clip_text_columns(text, width, suffix=suffix)
+    remaining = max(0, width - text_display_width(fitted))
+    left = remaining // 2
+    return (" " * left) + fitted + (" " * (remaining - left))
+
+
 def safe_addstr(win, y, x, text, attr=0, *, _bounds=None):
     """Write string safely, clipping to window bounds.
 

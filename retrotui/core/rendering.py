@@ -14,7 +14,8 @@ from ..constants import (
     MENU_BAR_HEIGHT,
     BOTTOM_BARS_HEIGHT,
 )
-from ..utils import safe_addstr, theme_attr
+from ..utils import center_text_columns, safe_addstr, theme_attr
+from .icon_manager import icon_render_metrics
 from .shell_geometry import (
     global_bar_row,
     workspace_bottom_exclusive,
@@ -147,13 +148,10 @@ def draw_desktop(app, frame_size=None):
 
 
 def draw_icons(app, frame_size=None):
-    """Draw desktop icons (3x4 art + label)."""
+    """Draw desktop icons with shared Unicode-aware render geometry."""
     h, w = _resolve_frame_size(app, frame_size)
     bounds = (h, w)
     get_pos = app.get_icon_screen_pos
-    # Backwards compat with mock/test stubs that don't accept the
-    # ``frame_size`` kwarg. Cached on the app after the first call so we
-    # don't pay ``inspect.signature`` per redraw.
     accepts_frame_size = getattr(app, "_get_pos_accepts_frame_size", None)
     if accepts_frame_size is None:
         try:
@@ -164,31 +162,19 @@ def draw_icons(app, frame_size=None):
         try:
             app._get_pos_accepts_frame_size = accepts_frame_size
         except (AttributeError, TypeError):
-            # Stubs that don't allow attr set still get a working
-            # fallback path.
             pass
+
     for idx, icon in enumerate(app.icons):
-        # Use dynamic position helper
         if accepts_frame_size:
             x, y = get_pos(idx, frame_size=frame_size)
         else:
             x, y = get_pos(idx)
 
-        symbol = icon.get("symbol")
-        if isinstance(symbol, str) and symbol:
-            art_lines = [symbol]
-        else:
-            art = icon.get("art", ())
-            art_lines = [str(line) for line in art] if isinstance(art, (list, tuple)) else []
-            if not art_lines:
-                art_lines = ["[]"]
-
-        art_height = len(art_lines)
-        art_width = max((len(line) for line in art_lines), default=2)
-        render_height = max(ICON_ART_HEIGHT, art_height)
-
-        # Clip if off-screen (y)
-        if y + render_height >= workspace_bottom_exclusive(h):
+        art_lines, render_height, render_width = icon_render_metrics(icon)
+        if y + render_height >= workspace_bottom_exclusive(h) or x >= w:
+            continue
+        visible_width = min(render_width, max(0, w - x))
+        if visible_width <= 0:
             continue
 
         is_selected = idx == app.selected_icon
@@ -197,9 +183,21 @@ def draw_icons(app, frame_size=None):
             attr |= curses.A_BOLD
 
         for row, line in enumerate(art_lines):
-            safe_addstr(app.stdscr, y + row, x, line, attr, _bounds=bounds)
-        label = str(icon.get("label", "")).center(max(art_width, 2))
-        safe_addstr(app.stdscr, y + render_height, x, label, attr, _bounds=bounds)
+            rendered = center_text_columns(line, visible_width, suffix="…")
+            safe_addstr(app.stdscr, y + row, x, rendered, attr, _bounds=bounds)
+        label = center_text_columns(
+            icon.get("label", ""),
+            visible_width,
+            suffix="…",
+        )
+        safe_addstr(
+            app.stdscr,
+            y + render_height,
+            x,
+            label,
+            attr,
+            _bounds=bounds,
+        )
 
 
 def draw_taskbar(app, frame_size=None):
