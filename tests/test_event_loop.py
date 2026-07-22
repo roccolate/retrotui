@@ -248,6 +248,9 @@ class EventLoopTests(unittest.TestCase):
             metrics = self.event_loop._ensure_runtime_metrics(app)
 
         self.assertEqual(metrics["report_interval_s"], 5.0)
+        self.assertIn("clock_refreshes", metrics)
+        self.assertIn("tick_time_s", metrics)
+        self.assertIn("max_draw_time_s", metrics)
 
     def test_emit_runtime_metrics_uses_default_for_invalid_interval(self):
         metrics = {
@@ -342,6 +345,8 @@ class EventLoopTests(unittest.TestCase):
         self.assertEqual(app.menu.refresh_clock.call_count, 2)
         app.stdscr.noutrefresh.assert_called_once_with()
         self.fake_curses.doupdate.assert_called_once_with()
+        self.assertEqual(app._runtime_metrics["redraws"], 0)
+        self.assertEqual(app._runtime_metrics["clock_refreshes"], 1)
 
     def test_run_app_loop_converts_keyboard_interrupt_into_ctrl_c_key(self):
         app = self._make_app()

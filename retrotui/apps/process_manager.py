@@ -29,6 +29,7 @@ class ProcessManagerWindow(Window):
     """Live process list with sorting and kill confirmation request."""
 
     REFRESH_INTERVAL_SECONDS = 1.0
+    COMMAND_CACHE_TTL_SECONDS = 5.0
     KEY_F5 = getattr(curses, "KEY_F5", -1)
     # Column header width: the rendered header pads to 6 chars per numeric
     # column. These widths must match the format strings below.
@@ -59,6 +60,8 @@ class ProcessManagerWindow(Window):
         self._page_kb = max(1, page_size // 1024)
         self._prev_total_jiffies = None
         self._prev_proc_ticks = {}
+        self._command_cache = {}
+        self._last_render_signature = None
 
         self.summary_uptime = "-"
         self.summary_load = "-"
@@ -174,6 +177,46 @@ class ProcessManagerWindow(Window):
             return f"[{pid}]"
 
     @staticmethod
+    def _process_identity(pid, start_time_ticks):
+        """Return the stable identity used by samples and metadata caches."""
+        return (int(pid), max(0, int(start_time_ticks or 0)))
+
+    def _command_for_process(self, pid, start_time_ticks, sampled_at):
+        """Read command metadata at most once per identity/TTL window."""
+        identity = self._process_identity(pid, start_time_ticks)
+        cached = self._command_cache.get(identity)
+        if cached is not None:
+            command, expires_at = cached
+            if sampled_at < expires_at:
+                return command
+
+        command = self._read_command(pid)
+        self._command_cache[identity] = (
+            command,
+            sampled_at + self.COMMAND_CACHE_TTL_SECONDS,
+        )
+        return command
+
+    def _render_signature(self):
+        """Return the lightweight visible-state signature for invalidation."""
+        return (
+            tuple(
+                (
+                    row.pid,
+                    row.start_time_ticks,
+                    row.cpu_percent,
+                    row.mem_percent,
+                    row.command,
+                )
+                for row in self.rows
+            ),
+            self.summary_uptime,
+            self.summary_load,
+            self.summary_mem,
+            self._error_message,
+        )
+
+    @staticmethod
     def _read_process_start_time_ticks(pid):
         """Return Linux process start ticks, or ``None`` when it is gone."""
         try:
@@ -191,9 +234,13 @@ class ProcessManagerWindow(Window):
         except (ValueError, IndexError):
             return None
 
-    def _read_process_row(self, pid, total_delta, mem_total_kb):
+    def _read_process_row(
+        self, pid, total_delta, mem_total_kb, *, sampled_at=None
+    ):
         stat_path = f"/proc/{pid}/stat"
         statm_path = f"/proc/{pid}/statm"
+        if sampled_at is None:
+            sampled_at = time.monotonic()
 
         try:
             stat_line = self._read_first_line(stat_path)
@@ -225,14 +272,18 @@ class ProcessManagerWindow(Window):
         rss_kb = rss_pages * self._page_kb
         mem_percent = (rss_kb / max(1, mem_total_kb)) * 100.0
 
-        prev_ticks = self._prev_proc_ticks.get(pid)
+        identity = self._process_identity(pid, start_time_ticks)
+        prev_ticks = self._prev_proc_ticks.get(identity)
+        if prev_ticks is None:
+            # Compatibility with tests and callers that seeded the legacy PID key.
+            prev_ticks = self._prev_proc_ticks.get(pid)
         if prev_ticks is None or total_delta <= 0:
             cpu_percent = 0.0
         else:
             proc_delta = max(0, total_ticks - prev_ticks)
             cpu_percent = (proc_delta / max(1, total_delta)) * 100.0 * self._cpu_count
 
-        command = self._read_command(pid)
+        command = self._command_for_process(pid, start_time_ticks, sampled_at)
         return ProcessRow(
             pid=pid,
             cpu_percent=cpu_percent,
@@ -273,7 +324,7 @@ class ProcessManagerWindow(Window):
         """Refresh table data from /proc."""
         now = time.monotonic()
         if not force and (now - self._last_refresh) < self.REFRESH_INTERVAL_SECONDS:
-            return
+            return False
         self._last_refresh = now
 
         # Read /proc/meminfo once; the wrapper helpers each re-opened
@@ -288,6 +339,7 @@ class ProcessManagerWindow(Window):
 
         rows = []
         new_ticks = {}
+        live_identities = set()
         self._error_message = None
         try:
             proc_dirs = [name for name in os.listdir("/proc") if name.isdigit()]
@@ -297,16 +349,28 @@ class ProcessManagerWindow(Window):
 
         for name in proc_dirs:
             pid = int(name)
-            row = self._read_process_row(pid, total_delta, mem_total_kb)
+            row = self._read_process_row(
+                pid,
+                total_delta,
+                mem_total_kb,
+                sampled_at=now,
+            )
             if row is None:
                 continue
+            identity = self._process_identity(row.pid, row.start_time_ticks)
             rows.append(row)
-            new_ticks[pid] = row.total_ticks
+            new_ticks[identity] = row.total_ticks
+            live_identities.add(identity)
 
         self.rows = rows
         self._sort_rows()
         self._prev_total_jiffies = total_jiffies
         self._prev_proc_ticks = new_ticks
+        self._command_cache = {
+            identity: cached
+            for identity, cached in self._command_cache.items()
+            if identity in live_identities
+        }
 
         if self.rows:
             self.selected_index = max(0, min(self.selected_index, len(self.rows) - 1))
@@ -319,6 +383,11 @@ class ProcessManagerWindow(Window):
         self.summary_uptime = self._format_uptime(self._read_uptime_seconds())
         self.summary_load = self._read_load_average()
         self.summary_mem = f"{used_kb // 1024}MB/{mem_total_kb // 1024}MB"
+
+        signature = self._render_signature()
+        changed = signature != self._last_render_signature
+        self._last_render_signature = signature
+        return changed
 
     def _selected_row(self):
         if not self.rows:
@@ -407,12 +476,28 @@ class ProcessManagerWindow(Window):
         return None
 
     def _set_sort(self, key):
+        selected = self._selected_row()
+        selected_identity = (
+            self._process_identity(selected.pid, selected.start_time_ticks)
+            if selected is not None
+            else None
+        )
+
         if self.sort_key == key:
             self.sort_reverse = not self.sort_reverse
         else:
             self.sort_key = key
             self.sort_reverse = key not in ("pid", "cmd")
-        self.refresh_processes(force=True)
+
+        self._sort_rows()
+        if selected_identity is not None:
+            for index, row in enumerate(self.rows):
+                if self._process_identity(row.pid, row.start_time_ticks) == selected_identity:
+                    self.selected_index = index
+                    break
+        self.scroll_offset = max(0, min(self.scroll_offset, self._max_scroll()))
+        self._ensure_selection_visible()
+        self._last_render_signature = self._render_signature()
 
     def execute_action(self, action):
         if action == "pm_sort_cpu":
@@ -434,23 +519,8 @@ class ProcessManagerWindow(Window):
         return None
 
     def tick(self):
-        """Refresh process table outside the render path."""
-        before = (
-            tuple(self.rows),
-            self.summary_uptime,
-            self.summary_load,
-            self.summary_mem,
-            self._error_message,
-        )
-        self.refresh_processes(force=False)
-        after = (
-            tuple(self.rows),
-            self.summary_uptime,
-            self.summary_load,
-            self.summary_mem,
-            self._error_message,
-        )
-        return after != before
+        """Refresh process data only when its sampling interval has elapsed."""
+        return bool(self.refresh_processes(force=False))
 
     def draw(self, stdscr):
         """Draw process table and summary bar."""

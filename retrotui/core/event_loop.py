@@ -463,36 +463,6 @@ def _tick_and_probe_windows(app):
     return changed, has_live, has_periodic
 
 
-def _tick_visible_windows(app):
-    """Run per-window update hooks outside rendering.
-
-    Window ``tick`` methods may poll background state or collect pending output,
-    but must not call curses drawing APIs.
-    """
-    _prune_component_failure_states(app)
-    changed = False
-    for w in app.windows:
-        visible = getattr(w, "visible", True)
-        if not visible and not getattr(w, "tick_when_hidden", False):
-            continue
-        tick = getattr(w, "tick", None)
-        if (
-            not callable(tick)
-            or _component_hook_disabled(app, w, "tick")
-            or getattr(w, "_retrotui_tick_disabled", False)
-        ):
-            continue
-        try:
-            tick_changed = bool(tick())
-        except Exception as exc:  # Window/plugin boundary.
-            _record_component_failure(app, w, "tick", exc)
-        else:
-            _reset_component_failure(app, w, "tick")
-            if visible:
-                changed = tick_changed or changed
-    return changed
-
-
 def _select_input_timeout_ms(app, *, has_live=None, has_periodic=None):
     """Return the target input timeout for the current runtime state.
 
@@ -592,9 +562,18 @@ def _ensure_runtime_metrics(app):
         "resize_events": 0,
         "key_events": 0,
         "empty_polls": 0,
+        "clock_refreshes": 0,
+        "notification_invalidations": 0,
+        "tick_invalidations": 0,
+        "input_invalidations": 0,
+        "background_time_s": 0.0,
+        "tick_time_s": 0.0,
         "draw_time_s": 0.0,
         "dispatch_time_s": 0.0,
         "input_wait_time_s": 0.0,
+        "max_tick_time_s": 0.0,
+        "max_draw_time_s": 0.0,
+        "max_dispatch_time_s": 0.0,
     }
     app._runtime_metrics = metrics
     return metrics
@@ -626,29 +605,37 @@ def _emit_runtime_metrics(metrics, final=False):
     redraws = int(metrics.get("redraws", 0))
     events = int(metrics.get("dispatched_events", 0))
     loops = int(metrics.get("loops", 0))
-    draw_time_s = float(metrics.get("draw_time_s", 0.0))
-    dispatch_time_s = float(metrics.get("dispatch_time_s", 0.0))
-    input_wait_s = float(metrics.get("input_wait_time_s", 0.0))
     redraw_ratio = redraws / max(1, loops)
     LOGGER.debug(
-        "profile%s elapsed_s=%.3f loops=%d redraws=%d redraw_ratio=%.3f "
-        "events=%d mouse=%d resize=%d key=%d empty_polls=%d draw_ms=%.2f "
-        "dispatch_ms=%.2f input_wait_ms=%.2f",
+        "profile%s elapsed_s=%.3f loops=%d redraws=%d clock_refreshes=%d "
+        "redraw_ratio=%.3f events=%d mouse=%d resize=%d key=%d empty_polls=%d "
+        "invalidations_notification=%d invalidations_tick=%d invalidations_input=%d "
+        "background_ms=%.2f tick_ms=%.2f draw_ms=%.2f dispatch_ms=%.2f "
+        "input_wait_ms=%.2f max_tick_ms=%.2f max_draw_ms=%.2f "
+        "max_dispatch_ms=%.2f",
         "_final" if final else "",
         elapsed,
         loops,
         redraws,
+        int(metrics.get("clock_refreshes", 0)),
         redraw_ratio,
         events,
         int(metrics.get("mouse_events", 0)),
         int(metrics.get("resize_events", 0)),
         int(metrics.get("key_events", 0)),
         int(metrics.get("empty_polls", 0)),
-        draw_time_s * 1000.0,
-        dispatch_time_s * 1000.0,
-        input_wait_s * 1000.0,
+        int(metrics.get("notification_invalidations", 0)),
+        int(metrics.get("tick_invalidations", 0)),
+        int(metrics.get("input_invalidations", 0)),
+        float(metrics.get("background_time_s", 0.0)) * 1000.0,
+        float(metrics.get("tick_time_s", 0.0)) * 1000.0,
+        float(metrics.get("draw_time_s", 0.0)) * 1000.0,
+        float(metrics.get("dispatch_time_s", 0.0)) * 1000.0,
+        float(metrics.get("input_wait_time_s", 0.0)) * 1000.0,
+        float(metrics.get("max_tick_time_s", 0.0)) * 1000.0,
+        float(metrics.get("max_draw_time_s", 0.0)) * 1000.0,
+        float(metrics.get("max_dispatch_time_s", 0.0)) * 1000.0,
     )
-
 
 def _refresh_idle_clock(app):
     """Refresh only the menu clock while idle, avoiding a full frame redraw."""
@@ -699,21 +686,39 @@ def run_app_loop(app):
             try:
                 metrics["loops"] += 1
                 phase = "background"
+                background_start = time.perf_counter()
                 app.poll_background_operation()
+                metrics["background_time_s"] += (
+                    time.perf_counter() - background_start
+                )
 
                 if _tick_notifications(app):
+                    metrics["notification_invalidations"] += 1
                     app._dirty = True
 
                 phase = "tick"
+                tick_start = time.perf_counter()
                 _tick_changed, has_live, has_periodic = _tick_and_probe_windows(app)
+                tick_elapsed = time.perf_counter() - tick_start
+                metrics["tick_time_s"] += tick_elapsed
+                metrics["max_tick_time_s"] = max(
+                    float(metrics.get("max_tick_time_s", 0.0)),
+                    tick_elapsed,
+                )
                 if _tick_changed:
+                    metrics["tick_invalidations"] += 1
                     app._dirty = True
 
                 phase = "render"
                 if getattr(app, "_dirty", True):
                     draw_start = time.perf_counter()
                     draw_frame(app)
-                    metrics["draw_time_s"] += time.perf_counter() - draw_start
+                    draw_elapsed = time.perf_counter() - draw_start
+                    metrics["draw_time_s"] += draw_elapsed
+                    metrics["max_draw_time_s"] = max(
+                        float(metrics.get("max_draw_time_s", 0.0)),
+                        draw_elapsed,
+                    )
                     metrics["redraws"] += 1
                     app._dirty = False
 
@@ -736,7 +741,7 @@ def run_app_loop(app):
                         if callable(consume_sigint):
                             key = consume_sigint()
                 if key is None and _refresh_idle_clock(app):
-                    metrics["redraws"] += 1
+                    metrics["clock_refreshes"] += 1
                 _record_input_stats(metrics, key)
 
                 phase = "dispatch"
@@ -744,7 +749,13 @@ def run_app_loop(app):
                 if dispatch_input(app, key):
                     app._dirty = True
                     metrics["dispatched_events"] += 1
-                metrics["dispatch_time_s"] += time.perf_counter() - dispatch_start
+                    metrics["input_invalidations"] += 1
+                dispatch_elapsed = time.perf_counter() - dispatch_start
+                metrics["dispatch_time_s"] += dispatch_elapsed
+                metrics["max_dispatch_time_s"] = max(
+                    float(metrics.get("max_dispatch_time_s", 0.0)),
+                    dispatch_elapsed,
+                )
                 _emit_runtime_metrics(metrics, final=False)
 
                 # A complete iteration breaks the global failure streak.
@@ -757,6 +768,7 @@ def run_app_loop(app):
                 app.handle_key("\x03")
                 app._dirty = True
                 metrics["dispatched_events"] += 1
+                metrics["input_invalidations"] += 1
                 consecutive_errors = 0
                 first_error = None
                 first_error_phase = None

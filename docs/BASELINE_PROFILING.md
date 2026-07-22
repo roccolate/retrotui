@@ -7,7 +7,11 @@ This guide defines a repeatable baseline for Fase 0 metrics.
 Capture at least:
 
 - Startup time (`boot_ms`)
-- Event loop redraw behavior (`redraw_ratio`)
+- Full-frame redraw behavior (`redraw_ratio`)
+- Partial menu-clock refreshes (`clock_refreshes`)
+- Background and window update cost (`background_ms`, `tick_ms`, `max_tick_ms`)
+- Render/dispatch worst cases (`max_draw_ms`, `max_dispatch_ms`)
+- Redraw causes (`invalidations_notification`, `invalidations_tick`, `invalidations_input`)
 - Approximate idle wait time (`input_wait_ms`)
 - CPU and RAM from host process monitor
 
@@ -35,7 +39,11 @@ Look for log lines:
 
 - `startup boot_ms=...`
 - `profile ... redraw_ratio=...`
-- `profile_final ... redraw_ratio=...`
+- `profile_final ... redraw_ratio=... clock_refreshes=... tick_ms=...`
+
+`redraws` and `redraw_ratio` count only complete frames. The menu clock uses a
+partial curses refresh and is reported separately as `clock_refreshes`. This
+keeps before/after redraw comparisons stable when the clock is visible.
 
 Optional extractor (from saved log file):
 

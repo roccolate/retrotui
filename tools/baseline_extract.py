@@ -75,6 +75,18 @@ def main(argv: list[str] | None = None) -> int:
     print(f"- draw_ms: {_format_metric(profile.draw_ms)}")
     print(f"- dispatch_ms: {_format_metric(profile.dispatch_ms)}")
     print(f"- input_wait_ms: {_format_metric(profile.input_wait_ms)}")
+    print(f"- background_ms: {_format_metric(profile.background_ms)}")
+    print(f"- tick_ms: {_format_metric(profile.tick_ms)}")
+    print(f"- max_tick_ms: {_format_metric(profile.max_tick_ms)}")
+    print(f"- max_draw_ms: {_format_metric(profile.max_draw_ms)}")
+    print(f"- max_dispatch_ms: {_format_metric(profile.max_dispatch_ms)}")
+    print(f"- clock_refreshes: {_format_metric(profile.clock_refreshes)}")
+    print(
+        "- invalidations: "
+        f"notification={_format_metric(profile.notification_invalidations)} "
+        f"tick={_format_metric(profile.tick_invalidations)} "
+        f"input={_format_metric(profile.input_invalidations)}"
+    )
     print()
     print("Markdown Row")
     print(
