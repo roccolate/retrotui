@@ -32,14 +32,14 @@ Downloading pluggy-1.6.0-py3-none-any.whl (20 kB)
 Downloading iniconfig-2.3.0-py3-none-any.whl (7.5 kB)
 Downloading packaging-26.2-py3-none-any.whl (100 kB)
 Downloading pygments-2.20.0-py3-none-any.whl (1.2 MB)
-   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.2/1.2 MB 15.5 MB/s  0:00:00
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.2/1.2 MB 143.3 MB/s  0:00:00
 Downloading ruff-0.15.22-py3-none-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (11.4 MB)
-   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 11.4/11.4 MB 36.7 MB/s  0:00:00
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 11.4/11.4 MB 276.4 MB/s  0:00:00
 Building wheels for collected packages: retrotui
   Building editable for retrotui (pyproject.toml): started
   Building editable for retrotui (pyproject.toml): finished with status 'done'
-  Created wheel for retrotui: filename=retrotui-0.9.5-0.editable-py3-none-any.whl size=7680 sha256=6232739505b80a0e3345e855be20fdf03c713a623be3351e1eaaf3a778f67ca9
-  Stored in directory: /tmp/pip-ephem-wheel-cache-12fdyoa6/wheels/16/4e/2f/6c3ce421578f301794ea67c4612e43686f2f6ed0b9df57a8ed
+  Created wheel for retrotui: filename=retrotui-0.9.5-0.editable-py3-none-any.whl size=7680 sha256=f796d5d2ca84b2c333596251034aa17dbfdacf60266e6ed10a93706397c00740
+  Stored in directory: /tmp/pip-ephem-wheel-cache-4uei_6ei/wheels/16/4e/2f/6c3ce421578f301794ea67c4612e43686f2f6ed0b9df57a8ed
 Successfully built retrotui
 Installing collected packages: wcwidth, ruff, pygments, pluggy, packaging, iniconfig, retrotui, pytest
 
