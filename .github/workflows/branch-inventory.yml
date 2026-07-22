@@ -1,4 +1,4 @@
-name: Inventory repository branches
+name: Clean merged repository branches
 
 on:
   pull_request:
@@ -6,10 +6,10 @@ on:
       - main
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  inventory:
+  cleanup:
     if: ${{ github.head_ref == 'maintenance/branch-inventory' }}
     runs-on: ubuntu-latest
     steps:
@@ -18,30 +18,35 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Inventory branches
+      - name: Delete audited redundant branches
         shell: bash
         run: |
           set -euo pipefail
-          git fetch --prune origin '+refs/heads/*:refs/remotes/origin/*'
-          printf 'branch\tsha\tmerged_into_main\tahead\tbehind\tdiff\tcommits_not_in_main\n' > branch-inventory.tsv
-          while IFS= read -r branch; do
-            [ "$branch" = "main" ] && continue
-            sha=$(git rev-parse "origin/$branch")
-            if git merge-base --is-ancestor "origin/$branch" origin/main; then
-              merged=yes
-            else
-              merged=no
-            fi
-            ahead=$(git rev-list --count "origin/main..origin/$branch")
-            behind=$(git rev-list --count "origin/$branch..origin/main")
-            diff=$(git diff --shortstat "origin/main...origin/$branch" | tr '\t\n' '  ' | sed 's/[[:space:]]\+/ /g')
-            commits=$(git log --format='%h %s' --max-count=5 "origin/main..origin/$branch" | tr '\t\n' '  ' | sed 's/[[:space:]]\+/ /g')
-            printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$branch" "$sha" "$merged" "$ahead" "$behind" "$diff" "$commits" >> branch-inventory.tsv
-          done < <(git for-each-ref --format='%(refname:strip=3)' refs/remotes/origin | grep -v '^HEAD$' | sort)
-          cat branch-inventory.tsv
+          branches=(
+            'agent/classic-bottom-taskbar'
+            'agent/control-panel-checkbox-clicks'
+            'agent/terminal-runtime-hardening'
+            'agent/unicode-icons-lists'
+            'agent/unicode-menus-dialogs'
+            'agent/unicode-window-chrome'
+            'maintenance/branch-inventory'
+          )
 
-      - name: Upload inventory
+          : > branch-cleanup.txt
+          for branch in "${branches[@]}"; do
+            if git ls-remote --exit-code --heads origin "refs/heads/$branch" >/dev/null 2>&1; then
+              git push origin --delete "$branch"
+              printf 'deleted\t%s\n' "$branch" | tee -a branch-cleanup.txt
+            else
+              printf 'already-absent\t%s\n' "$branch" | tee -a branch-cleanup.txt
+            fi
+          done
+
+          printf '\nremaining branches:\n' | tee -a branch-cleanup.txt
+          git ls-remote --heads origin | sed 's#refs/heads/##' | tee -a branch-cleanup.txt
+
+      - name: Upload cleanup report
         uses: actions/upload-artifact@v4
         with:
-          name: branch-inventory
-          path: branch-inventory.tsv
+          name: branch-cleanup
+          path: branch-cleanup.txt
