@@ -6,7 +6,13 @@ import time
 
 from ..constants import SB_H
 from ..core.actions import AppAction
-from ..utils import draw_box, safe_addstr, theme_attr
+from ..utils import (
+    draw_box,
+    pad_text_columns,
+    safe_addstr,
+    text_display_width,
+    theme_attr,
+)
 
 
 DEFAULT_GLOBAL_ITEMS = {
@@ -72,7 +78,7 @@ class MenuBar:
         x = self._menu_start_x(win_x)
         for name in self.menu_names:
             positions.append(x)
-            x += len(name) + 3
+            x += text_display_width(name) + 3
         return positions
 
     def menu_items_right_x(self, win_x=0):
@@ -81,7 +87,7 @@ class MenuBar:
             return self._menu_start_x(win_x)
         positions = self.get_menu_x_positions(win_x)
         last_idx = len(self.menu_names) - 1
-        return positions[last_idx] + len(self.menu_names[last_idx]) + 2
+        return positions[last_idx] + text_display_width(self.menu_names[last_idx]) + 2
 
     def hit_test_menu_item(self, mx, my, *, win_x=0, win_y=0, win_w=None):
         """Return True when a point is over an actual menu title."""
@@ -93,7 +99,7 @@ class MenuBar:
         positions = self.get_menu_x_positions(win_x)
         for i, pos in enumerate(positions):
             name = self.menu_names[i]
-            if pos <= mx < pos + len(name) + 2:
+            if pos <= mx < pos + text_display_width(name) + 2:
                 return True
         return False
 
@@ -140,8 +146,11 @@ class MenuBar:
         positions = self.get_menu_x_positions(win_x)
         x = positions[self.selected_menu]
         y = self._bar_row(win_y) + 1
-        max_item_len = max((len(label) for label, _ in full_items), default=0)
-        dropdown_w = max_item_len + 4
+        max_item_columns = max(
+            (text_display_width(label) for label, _ in full_items),
+            default=0,
+        )
+        dropdown_w = max_item_columns + 4
 
         if full_items:
             self.selected_item = max(0, min(self.selected_item, len(full_items) - 1))
@@ -201,7 +210,11 @@ class MenuBar:
         if self.menu_names:
             positions = self.get_menu_x_positions(win_x)
             last_idx = len(self.menu_names) - 1
-            menu_right = positions[last_idx] + len(self.menu_names[last_idx]) + 2
+            menu_right = (
+                positions[last_idx]
+                + text_display_width(self.menu_names[last_idx])
+                + 2
+            )
         if clock_x <= menu_right + 1:
             return None
         return clock_x, clock
@@ -363,11 +376,16 @@ class MenuBar:
                     _bounds=frame_size,
                 )
             else:
+                row_label = pad_text_columns(
+                    label,
+                    max(0, dropdown_w - 2),
+                    suffix="…",
+                )
                 safe_addstr(
                     stdscr,
                     y + 1 + i,
                     x,
-                    f' {label.ljust(dropdown_w - 2)} ',
+                    f' {row_label} ',
                     attr,
                     _bounds=frame_size,
                 )
@@ -430,7 +448,7 @@ class MenuBar:
             positions = self.get_menu_x_positions(win_x)
             for i, pos in enumerate(positions):
                 name = self.menu_names[i]
-                if pos <= mx < pos + len(name) + 2:
+                if pos <= mx < pos + text_display_width(name) + 2:
                     if i != self.selected_menu:
                         self.selected_menu = i
                         self.selected_item = self._first_selectable(self._current_items())
@@ -459,7 +477,7 @@ class MenuBar:
             positions = self.get_menu_x_positions(win_x)
             for i, pos in enumerate(positions):
                 name = self.menu_names[i]
-                if pos <= mx < pos + len(name) + 2:
+                if pos <= mx < pos + text_display_width(name) + 2:
                     if self.active and self.selected_menu == i:
                         self.active = False
                         self.dropdown_scroll = 0
