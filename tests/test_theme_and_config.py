@@ -165,16 +165,13 @@ class ThemeAndConfigTests(unittest.TestCase):
         self.assertIn('icon_style = "default"', text)
 
         cfg_file = Path("/tmp/nested/config.toml")
-        with (
-            mock.patch.object(Path, "mkdir") as mkdir,
-            mock.patch.object(Path, "write_text") as write_text,
-            mock.patch("os.replace") as replace,
-        ):
+        with mock.patch(
+            "retrotui.utils.atomic_write_text",
+            return_value=cfg_file,
+        ) as atomic_write:
             written = self.config.save_config(config, cfg_file)
         self.assertEqual(written, cfg_file)
-        mkdir.assert_called_once_with(parents=True, exist_ok=True)
-        write_text.assert_called_once()
-        replace.assert_called_once()
+        atomic_write.assert_called_once_with(cfg_file, text)
 
     def test_config_module_handles_missing_tomllib_import(self):
         real_import = __import__

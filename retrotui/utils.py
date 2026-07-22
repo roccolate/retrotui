@@ -17,6 +17,7 @@ from .constants import (
     SB_TL, SB_TR, SB_BL, SB_BR, SB_H, SB_V, VIDEO_EXTENSIONS,
     _CURSES_ERROR, C_ANSI_FGBG_START,
 )
+from .atomic_io import atomic_write_text
 from .theme import ROLE_TO_PAIR_ID, get_theme
 
 # Cache for theme_attr() lookups - invalidated by init_colors().
@@ -333,24 +334,6 @@ def decode_toml_basic_string(value: str) -> str:
         # Trailing backslash with nothing after it; keep the literal char.
         out.append("\\")
     return "".join(out)
-
-
-def atomic_write_text(path, text: str, *, encoding: str = "utf-8"):
-    """Write *text* atomically to *path*.
-
-    Writes to ``<name>.tmp`` next to *path* and then ``os.replace``s the
-    temp file over *path*. If the process is killed mid-write the user
-    keeps the previous valid file instead of a truncated one. Returns the
-    resolved *path*.
-    """
-    from pathlib import Path  # local import keeps top-level namespace clean
-
-    target = Path(path)
-    target.parent.mkdir(parents=True, exist_ok=True)
-    tmp = target.with_name(target.name + ".tmp")
-    tmp.write_text(text, encoding=encoding, newline="\n")
-    os.replace(tmp, target)
-    return target
 
 
 def normalize_key_code(key):
