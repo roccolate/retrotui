@@ -1,0 +1,59 @@
+
+>>> python -m pip install --upgrade pip
+Requirement already satisfied: pip in /opt/hostedtoolcache/Python/3.12.13/x64/lib/python3.12/site-packages (26.1.2)
+
+>>> python -m pip install -e .[test]
+Obtaining file:///home/runner/work/retrotui/retrotui
+  Installing build dependencies: started
+  Installing build dependencies: finished with status 'done'
+  Checking if build backend supports build_editable: started
+  Checking if build backend supports build_editable: finished with status 'done'
+  Getting requirements to build editable: started
+  Getting requirements to build editable: finished with status 'done'
+  Preparing editable metadata (pyproject.toml): started
+  Preparing editable metadata (pyproject.toml): finished with status 'done'
+Collecting wcwidth<1,>=0.8.2 (from retrotui==0.9.5)
+  Downloading wcwidth-0.8.2-py3-none-any.whl.metadata (43 kB)
+Collecting pytest (from retrotui==0.9.5)
+  Downloading pytest-9.1.1-py3-none-any.whl.metadata (7.6 kB)
+Collecting ruff (from retrotui==0.9.5)
+  Downloading ruff-0.15.22-py3-none-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (26 kB)
+Collecting iniconfig>=1.0.1 (from pytest->retrotui==0.9.5)
+  Downloading iniconfig-2.3.0-py3-none-any.whl.metadata (2.5 kB)
+Collecting packaging>=22 (from pytest->retrotui==0.9.5)
+  Downloading packaging-26.2-py3-none-any.whl.metadata (3.5 kB)
+Collecting pluggy<2,>=1.5 (from pytest->retrotui==0.9.5)
+  Downloading pluggy-1.6.0-py3-none-any.whl.metadata (4.8 kB)
+Collecting pygments>=2.7.2 (from pytest->retrotui==0.9.5)
+  Downloading pygments-2.20.0-py3-none-any.whl.metadata (2.5 kB)
+Downloading wcwidth-0.8.2-py3-none-any.whl (323 kB)
+Downloading pytest-9.1.1-py3-none-any.whl (386 kB)
+Downloading pluggy-1.6.0-py3-none-any.whl (20 kB)
+Downloading iniconfig-2.3.0-py3-none-any.whl (7.5 kB)
+Downloading packaging-26.2-py3-none-any.whl (100 kB)
+Downloading pygments-2.20.0-py3-none-any.whl (1.2 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.2/1.2 MB 15.5 MB/s  0:00:00
+Downloading ruff-0.15.22-py3-none-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (11.4 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 11.4/11.4 MB 36.7 MB/s  0:00:00
+Building wheels for collected packages: retrotui
+  Building editable for retrotui (pyproject.toml): started
+  Building editable for retrotui (pyproject.toml): finished with status 'done'
+  Created wheel for retrotui: filename=retrotui-0.9.5-0.editable-py3-none-any.whl size=7680 sha256=6232739505b80a0e3345e855be20fdf03c713a623be3351e1eaaf3a778f67ca9
+  Stored in directory: /tmp/pip-ephem-wheel-cache-12fdyoa6/wheels/16/4e/2f/6c3ce421578f301794ea67c4612e43686f2f6ed0b9df57a8ed
+Successfully built retrotui
+Installing collected packages: wcwidth, ruff, pygments, pluggy, packaging, iniconfig, retrotui, pytest
+
+Successfully installed iniconfig-2.3.0 packaging-26.2 pluggy-1.6.0 pygments-2.20.0 pytest-9.1.1 retrotui-0.9.5 ruff-0.15.22 wcwidth-0.8.2
+
+>>> python tools/apply_unicode_menus_dialogs.py
+Traceback (most recent call last):
+  File "/home/runner/work/retrotui/retrotui/tools/apply_unicode_menus_dialogs.py", line 435, in <module>
+    main()
+  File "/home/runner/work/retrotui/retrotui/tools/apply_unicode_menus_dialogs.py", line 430, in main
+    update_dialog()
+  File "/home/runner/work/retrotui/retrotui/tools/apply_unicode_menus_dialogs.py", line 213, in update_dialog
+    text = replace_exact(
+           ^^^^^^^^^^^^^^
+  File "/home/runner/work/retrotui/retrotui/tools/apply_unicode_menus_dialogs.py", line 25, in replace_exact
+    raise RuntimeError(
+RuntimeError: expected 1 match(es) in retrotui/ui/dialog.py, found 3: '            btn_w = len(btn_text) + 4\n'
