@@ -44,6 +44,17 @@ class ProcessIdentityTests(unittest.TestCase):
         self.assertEqual(result.type, ActionType.REQUEST_KILL_CONFIRM)
         self.assertEqual(result.payload.start_time_ticks, 1234)
 
+    def test_legacy_payload_without_identity_uses_os_kill(self):
+        win = self._window()
+        payload = {"pid": 77, "signal": signal.SIGTERM}
+
+        with mock.patch.object(os, "kill") as kill:
+            result = win.kill_process(payload)
+
+        self.assertIsNone(result)
+        kill.assert_called_once_with(77, signal.SIGTERM)
+        win.refresh_processes.assert_called_once_with(force=True)
+
     def test_reused_pid_is_not_signalled(self):
         win = self._window()
         win._read_process_start_time_ticks = mock.Mock(return_value=222)
