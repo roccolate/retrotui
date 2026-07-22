@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - agent/classic-bottom-taskbar
+  pull_request:
+    branches:
+      - main
 
 permissions:
   contents: write
@@ -14,13 +17,14 @@ concurrency:
 
 jobs:
   apply-and-verify:
-    if: ${{ github.actor != 'github-actions[bot]' }}
+    if: ${{ github.actor != 'github-actions[bot]' && (github.event_name != 'pull_request' || github.head_ref == 'agent/classic-bottom-taskbar') }}
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
+      - name: Checkout branch
         uses: actions/checkout@v5
         with:
+          ref: agent/classic-bottom-taskbar
           fetch-depth: 0
 
       - name: Setup Python
