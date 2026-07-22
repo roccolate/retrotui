@@ -2,34 +2,17 @@
 Core data structures and helpers for File Manager.
 """
 import os
-import unicodedata
+
+from ...utils import pad_text_columns, text_display_width
 
 def _cell_width(ch):
-    """Return terminal cell width for a single character."""
-    if not ch:
-        return 0
-    if unicodedata.combining(ch):
-        return 0
-    if unicodedata.east_asian_width(ch) in ('W', 'F'):
-        return 2
-    return 1
+    """Return physical terminal width for one character."""
+    return text_display_width(ch)
 
 
 def _fit_text_to_cells(text, max_cells):
-    """Clip/pad text so rendered width does not exceed max_cells."""
-    if max_cells <= 0:
-        return ''
-    out = []
-    used = 0
-    for ch in text:
-        w = _cell_width(ch)
-        if used + w > max_cells:
-            break
-        out.append(ch)
-        used += w
-    if used < max_cells:
-        out.append(' ' * (max_cells - used))
-    return ''.join(out)
+    """Clip/pad text to an exact physical terminal-column width."""
+    return pad_text_columns(text, max_cells)
 
 
 class FileEntry:
@@ -61,11 +44,9 @@ class FileEntry:
         elif is_dir:
             self.display_text = f'  {dir_icon} {name}/'
         else:
-            # ``name[:30]:<30`` truncates names longer than 30 chars before
-            # left-aligning so the size column stays aligned. Without the
-            # slice, names like executables with long paths overflow into
-            # the size column and break the visual grid.
-            self.display_text = f'  {file_icon} {name[:30]:<30} {self._format_size():>8}'
+            name_field = pad_text_columns(name, 30, suffix="…")
+            size_field = f"{self._format_size():>8}"
+            self.display_text = f"  {file_icon} {name_field} {size_field}"
 
     @staticmethod
     def _probe_executable(path):

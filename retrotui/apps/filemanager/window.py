@@ -1082,7 +1082,13 @@ class FileManagerWindow(Window):
         safe_addstr(stdscr, y + 1, x, _fit_text_to_cells(sep_line, w), dir_attr)
 
         if error_msg:
-             safe_addstr(stdscr, y + 2, x + 2, f'Error: {error_msg}'[:w-2], theme_attr('window_body'))
+             safe_addstr(
+                 stdscr,
+                 y + 2,
+                 x + 2,
+                 _fit_text_to_cells(f'Error: {error_msg}', max(0, w - 2)),
+                 theme_attr('window_body'),
+             )
              return
 
         items = content[self._header_lines():]

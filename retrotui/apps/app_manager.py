@@ -7,7 +7,14 @@ from dataclasses import replace
 from ..constants import ICONS, ICONS_ASCII
 from ..core.actions import ActionResult, ActionType, AppAction
 from ..ui.window import Window
-from ..utils import draw_box, normalize_key_code, safe_addstr, theme_attr
+from ..utils import (
+    draw_box,
+    normalize_key_code,
+    pad_text_columns,
+    safe_addstr,
+    text_display_width,
+    theme_attr,
+)
 
 
 class _BaseSelectionEditorWindow(Window):
@@ -153,8 +160,23 @@ class _BaseSelectionEditorWindow(Window):
         selected_attr = body_attr | curses.A_REVERSE
         bold_attr = body_attr | curses.A_BOLD
 
-        safe_addstr(stdscr, self.y + 1, self.x + 2, self._help_text.ljust(self.w - 4)[: self.w - 4], body_attr, _bounds=frame_size)
-        safe_addstr(stdscr, self.y + 2, self.x + 2, self._status_text.ljust(self.w - 4)[: self.w - 4], body_attr, _bounds=frame_size)
+        inner_width = max(0, self.w - 4)
+        safe_addstr(
+            stdscr,
+            self.y + 1,
+            self.x + 2,
+            pad_text_columns(self._help_text, inner_width, suffix="…"),
+            body_attr,
+            _bounds=frame_size,
+        )
+        safe_addstr(
+            stdscr,
+            self.y + 2,
+            self.x + 2,
+            pad_text_columns(self._status_text, inner_width, suffix="…"),
+            body_attr,
+            _bounds=frame_size,
+        )
 
         # Tabs
         tab_y = self.y + 4
@@ -163,9 +185,10 @@ class _BaseSelectionEditorWindow(Window):
         for idx, cat in enumerate(self.categories):
             tab = f" {cat} "
             attr = selected_attr if (self.active and self.in_list and idx == self.active_cat_idx) else bold_attr
+            tab_width = text_display_width(tab)
             safe_addstr(stdscr, tab_y, tab_x, tab, attr, _bounds=frame_size)
-            self._tab_ranges.append((tab_x, tab_x + len(tab), idx))
-            tab_x += len(tab) + 1
+            self._tab_ranges.append((tab_x, tab_x + tab_width, idx))
+            tab_x += tab_width + 1
 
         list_x, list_y, list_w, list_h = self._list_rect()
         draw_box(stdscr, list_y - 1, list_x - 1, list_h + 2, list_w + 2, body_attr, double=False, _bounds=frame_size)
@@ -183,7 +206,13 @@ class _BaseSelectionEditorWindow(Window):
                 text = f" {mark} {label}"
                 is_focused = self.in_list and self.active and idx == selected_idx
                 attr = selected_attr if is_focused else body_attr
-                safe_addstr(stdscr, list_y + row, list_x, text.ljust(list_w)[:list_w], attr)
+                safe_addstr(
+                    stdscr,
+                    list_y + row,
+                    list_x,
+                    pad_text_columns(text, list_w, suffix="…"),
+                    attr,
+                )
             else:
                 safe_addstr(stdscr, list_y + row, list_x, " " * list_w, body_attr)
 
@@ -196,15 +225,21 @@ class _BaseSelectionEditorWindow(Window):
 
         # Buttons
         btn_y = self.y + self.h - 2
-        total_w = sum(len(btn) + 4 for btn in self.buttons) + (len(self.buttons) - 1) * 2
+        button_labels = [f"[ {text} ]" for text in self.buttons]
+        total_w = sum(text_display_width(label) for label in button_labels)
+        total_w += max(0, len(button_labels) - 1) * 2
         btn_x = self.x + max(0, (self.w - total_w) // 2)
         self._btn_ranges = []
-        for idx, text in enumerate(self.buttons):
-            label = f"[ {text} ]"
-            attr = theme_attr("button_selected") if (self.active and not self.in_list and idx == self.selected_button) else theme_attr("button")
+        for idx, label in enumerate(button_labels):
+            attr = (
+                theme_attr("button_selected")
+                if self.active and not self.in_list and idx == self.selected_button
+                else theme_attr("button")
+            )
             safe_addstr(stdscr, btn_y, btn_x, label, attr)
-            self._btn_ranges.append((btn_x, btn_x + len(label), idx))
-            btn_x += len(label) + 2
+            label_width = text_display_width(label)
+            self._btn_ranges.append((btn_x, btn_x + label_width, idx))
+            btn_x += label_width + 2
 
     def handle_click(self, mx, my):
         if my == self.y + 4:
@@ -450,7 +485,13 @@ class IconsWindow(DesktopIconManagerWindow):
                 text = f" {symbol:<4} {label}"
                 is_focused = self.in_list and self.active and idx == selected_idx
                 attr = selected_attr if is_focused else body_attr
-                safe_addstr(stdscr, list_y + row, list_x, text.ljust(list_w)[:list_w], attr)
+                safe_addstr(
+                    stdscr,
+                    list_y + row,
+                    list_x,
+                    pad_text_columns(text, list_w, suffix="…"),
+                    attr,
+                )
             else:
                 safe_addstr(stdscr, list_y + row, list_x, " " * list_w, body_attr)
 

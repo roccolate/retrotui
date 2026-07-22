@@ -118,7 +118,7 @@ class RenderingTests(unittest.TestCase):
         with mock.patch.object(self.rendering, "safe_addstr") as safe_addstr:
             self.rendering.draw_icons(app)
 
-        self.assertTrue(any(call.args[3] == "[D]" for call in safe_addstr.call_args_list))
+        self.assertTrue(any(call.args[3].strip() == "[D]" for call in safe_addstr.call_args_list))
         self.assertFalse(any(call.args[3] == "[]" for call in safe_addstr.call_args_list))
 
     def test_draw_taskbar_no_minimized_windows_no_output(self):
