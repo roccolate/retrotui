@@ -14,7 +14,7 @@ from ..constants import (
     MENU_BAR_HEIGHT,
     BOTTOM_BARS_HEIGHT,
 )
-from ..utils import safe_addstr, draw_box, theme_attr
+from ..utils import clip_text_columns, safe_addstr, draw_box, theme_attr
 from ..core.worker_scope import WorkerScope
 from .menu import WindowMenu
 
@@ -305,10 +305,12 @@ class Window:
         draw_box(stdscr, self.y, self.x, self.h, self.w, border_attr, double=True, _bounds=frame_size)
 
         # Title Bar
-        max_title_len = max(0, self.w - self.MIN_BTN_OFFSET - 4)
-        display_title = self.title
-        if len(display_title) > max_title_len:
-            display_title = display_title[:max_title_len-1] + "…"
+        max_title_columns = max(0, self.w - self.MIN_BTN_OFFSET - 4)
+        display_title = clip_text_columns(
+            self.title,
+            max_title_columns,
+            suffix="…",
+        )
 
         title = f' {display_title} '
         # If active and has menu, show menu indicator

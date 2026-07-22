@@ -2,6 +2,7 @@
 import logging
 
 from ..constants import TASKBAR_TITLE_MAX_LEN, BOTTOM_BARS_HEIGHT
+from ..utils import clip_text_columns, text_display_width
 
 LOGGER = logging.getLogger(__name__)
 _WINDOW_CLOSE_HOOK_ERRORS = (
@@ -257,7 +258,11 @@ class WindowManager:
             if getattr(win, "visible", False):
                 visible_count += 1
             if getattr(win, "minimized", False):
-                label = str(getattr(win, "title", ""))[:TASKBAR_TITLE_MAX_LEN]
+                label = clip_text_columns(
+                    getattr(win, "title", ""),
+                    TASKBAR_TITLE_MAX_LEN,
+                    suffix="…",
+                )
                 minimized.append((label, win))
 
         stats = {
@@ -315,7 +320,7 @@ class WindowManager:
         x = int(start_x)
         buttons = []
         for label, win in stats.get("minimized", ()):
-            btn_w = len(label) + 2  # [label]
+            btn_w = text_display_width(label) + 2  # [label]
             if x + btn_w > end_x:
                 break
             buttons.append((x, x + btn_w, label, win))
