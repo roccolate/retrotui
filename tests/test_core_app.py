@@ -2110,7 +2110,7 @@ class CoreAppTests(unittest.TestCase):
         app.windows = [normal, minimized]
         app.set_active_window = mock.Mock()
 
-        handled = app.handle_taskbar_click(2, 0)
+        handled = app.handle_taskbar_click(2, 29)
 
         self.assertTrue(handled)
         minimized.toggle_minimize.assert_called_once_with()
@@ -2122,7 +2122,7 @@ class CoreAppTests(unittest.TestCase):
         app.windows = []
 
         self.assertFalse(app.handle_taskbar_click(2, 10))  # not taskbar row
-        self.assertFalse(app.handle_taskbar_click(2, 0))  # taskbar row but no minimized
+        self.assertFalse(app.handle_taskbar_click(2, 29))  # taskbar row but no minimized
 
         minimized = types.SimpleNamespace(minimized=True, title="One", toggle_minimize=mock.Mock())
         app.windows = [minimized]

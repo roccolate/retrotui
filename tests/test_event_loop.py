@@ -187,7 +187,7 @@ class EventLoopTests(unittest.TestCase):
 
         self.fake_curses.update_lines_cols.assert_called_once_with()
         self.assertEqual(app.windows[0].x, 60)
-        self.assertEqual(app.windows[0].y, 10)
+        self.assertEqual(app.windows[0].y, 9)
 
     def test_dispatch_input_routes_regular_key(self):
         app = self._make_app()

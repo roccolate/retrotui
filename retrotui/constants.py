@@ -165,8 +165,8 @@ C_ANSI_START = 50
 C_ANSI_FGBG_START = 58  # 8x8 combos for (fg, bg) both explicit; pair = 58 + fg*8 + bg
 
 # Layout constants
-MENU_BAR_HEIGHT = 1          # Row 0 is the unified global menu/taskbar
-BOTTOM_BARS_HEIGHT = 0       # No separate bottom bar; row 0 owns shell chrome
+MENU_BAR_HEIGHT = 0          # Workspace begins at row 0
+BOTTOM_BARS_HEIGHT = 1       # One classic shell/taskbar row at the bottom
 TASKBAR_TITLE_MAX_LEN = 15   # Max chars shown in taskbar buttons
 WIN_MIN_WIDTH = 20           # Minimum window width on resize
 WIN_MIN_HEIGHT = 8           # Minimum window height on resize

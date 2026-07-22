@@ -15,6 +15,11 @@ from ..constants import (
     BOTTOM_BARS_HEIGHT,
 )
 from ..utils import safe_addstr, theme_attr
+from .shell_geometry import (
+    global_bar_row,
+    workspace_bottom_exclusive,
+    workspace_top_row,
+)
 
 # Cache for desktop pattern line to avoid rebuilding every frame.
 _desktop_line_cache = {'key': None, 'line': ''}
@@ -34,19 +39,16 @@ def _resolve_frame_size(app, frame_size):
 
 
 def _taskbar_row(frame_h):
-    return frame_h - BOTTOM_BARS_HEIGHT if BOTTOM_BARS_HEIGHT else 0
+    return global_bar_row(frame_h)
 
 
 def _taskbar_bounds(app, width):
-    if BOTTOM_BARS_HEIGHT:
-        return 1, width
-
     menu = getattr(app, "menu", None)
     start_x = 1
     menu_right = getattr(menu, "menu_items_right_x", None)
     if callable(menu_right):
         try:
-            start_x = max(start_x, int(menu_right()) + 2)
+            start_x = max(start_x, int(menu_right()) + 1)
         except (TypeError, ValueError):
             start_x = 1
 
@@ -140,7 +142,7 @@ def draw_desktop(app, frame_size=None):
         _desktop_line_cache['key'] = cache_key
     line = _desktop_line_cache['line']
 
-    for row in range(MENU_BAR_HEIGHT, h - BOTTOM_BARS_HEIGHT):
+    for row in range(workspace_top_row(), workspace_bottom_exclusive(h)):
         safe_addstr(app.stdscr, row, 0, line, attr, _bounds=bounds)
 
 
@@ -186,7 +188,7 @@ def draw_icons(app, frame_size=None):
         render_height = max(ICON_ART_HEIGHT, art_height)
 
         # Clip if off-screen (y)
-        if y + render_height >= h - BOTTOM_BARS_HEIGHT:
+        if y + render_height >= workspace_bottom_exclusive(h):
             continue
 
         is_selected = idx == app.selected_icon
@@ -205,10 +207,7 @@ def draw_taskbar(app, frame_size=None):
     h, w = _resolve_frame_size(app, frame_size)
     bounds = (h, w)
     taskbar_y = _taskbar_row(h)
-    attr = theme_attr("taskbar" if BOTTOM_BARS_HEIGHT else "menubar")
-
-    if BOTTOM_BARS_HEIGHT:
-        safe_addstr(app.stdscr, taskbar_y, 0, ' ' * w, attr, _bounds=bounds)
+    attr = theme_attr("taskbar")
 
     stats = _window_stats(app)
     start_x, end_x = _taskbar_bounds(app, w)
@@ -218,23 +217,5 @@ def draw_taskbar(app, frame_size=None):
 
 
 def draw_statusbar(app, version, frame_size=None):
-    """Draw legacy bottom status text when a separate bottom bar exists."""
-    if not BOTTOM_BARS_HEIGHT:
-        return
-    h, w = _resolve_frame_size(app, frame_size)
-    attr = theme_attr("taskbar")
-    stats = _window_stats(app)
-    visible = stats["visible"]
-    total = stats["total"]
-    status_text = f' RetroTUI v{version} | Windows: {visible}/{total} | Mouse: Enabled '
-
-    statusbar_y = _taskbar_row(h)
-    start_x, end_x = _taskbar_bounds(app, w)
-    buttons = _taskbar_buttons(app, w, stats=stats, start_x=start_x, end_x=end_x)
-    left_reserved = buttons[-1][1] + 1 if buttons else 0
-
-    status_x = left_reserved + 1
-    max_status_len = w - status_x
-    if max_status_len <= 0:
-        return
-    safe_addstr(app.stdscr, statusbar_y, status_x, status_text[:max_status_len], attr, _bounds=(h, w))
+    """Compatibility hook; the classic taskbar owns the only bottom row."""
+    return None

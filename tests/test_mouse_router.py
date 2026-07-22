@@ -1361,10 +1361,10 @@ class MouseRouterTests(unittest.TestCase):
         app.handle_taskbar_click.return_value = True
         app.menu.hit_test_menu_item.return_value = False
 
-        # Right side of unified top bar overlaps clock hotspot; taskbar must win.
-        self.mouse_router.handle_mouse_event(app, (0, 79, 0, 0, self.curses.BUTTON1_CLICKED))
+        # Right side of the bottom taskbar overlaps the clock hotspot; taskbar must win.
+        self.mouse_router.handle_mouse_event(app, (0, 79, 24, 0, self.curses.BUTTON1_CLICKED))
 
-        app.handle_taskbar_click.assert_called_once_with(79, 0)
+        app.handle_taskbar_click.assert_called_once_with(79, 24)
         app.execute_action.assert_not_called()
 
     def test_handle_mouse_event_clock_region_runs_when_taskbar_not_handled(self):
@@ -1372,20 +1372,20 @@ class MouseRouterTests(unittest.TestCase):
         app.handle_taskbar_click.return_value = False
         app.menu.hit_test_menu_item.return_value = False
 
-        self.mouse_router.handle_mouse_event(app, (0, 79, 0, 0, self.curses.BUTTON1_CLICKED))
+        self.mouse_router.handle_mouse_event(app, (0, 79, 24, 0, self.curses.BUTTON1_CLICKED))
 
         app.execute_action.assert_called_once_with("plugin:clock")
         app._handle_window_mouse.assert_not_called()
 
-    def test_handle_mouse_event_top_bar_free_space_can_route_taskbar(self):
+    def test_handle_mouse_event_bottom_bar_free_space_can_route_taskbar(self):
         app = self._make_app()
         app.menu.hit_test_menu_item.return_value = False
         app.handle_taskbar_click.return_value = True
 
-        self.mouse_router.handle_mouse_event(app, (0, 40, 0, 0, self.curses.BUTTON1_CLICKED))
+        self.mouse_router.handle_mouse_event(app, (0, 40, 24, 0, self.curses.BUTTON1_CLICKED))
 
         app.menu.handle_click.assert_not_called()
-        app.handle_taskbar_click.assert_called_once_with(40, 0)
+        app.handle_taskbar_click.assert_called_once_with(40, 24)
         app._handle_window_mouse.assert_not_called()
         app._handle_desktop_mouse.assert_not_called()
 

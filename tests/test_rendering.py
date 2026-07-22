@@ -53,14 +53,14 @@ class RenderingTests(unittest.TestCase):
 
         self.assertEqual(safe_addstr.call_count, 9)
         first_call = safe_addstr.call_args_list[0].args
-        self.assertEqual(first_call[1], 1)
+        self.assertEqual(first_call[1], 0)
         self.assertEqual(first_call[2], 0)
         self.assertEqual(len(first_call[3]), 40)
         self.assertEqual(
             first_call[4], self.curses.color_pair(self.rendering.C_DESKTOP)
         )
         last_call = safe_addstr.call_args_list[-1].args
-        self.assertEqual(last_call[1], 9)
+        self.assertEqual(last_call[1], 8)
 
     def test_draw_icons_uses_selected_and_normal_colors(self):
         stdscr = types.SimpleNamespace(getmaxyx=mock.Mock(return_value=(20, 80)))
@@ -151,7 +151,7 @@ class RenderingTests(unittest.TestCase):
         self.assertTrue(any("[Notes]" in call.args[3] for call in safe_addstr.call_args_list))
         self.assertTrue(any("[Files]" in call.args[3] for call in safe_addstr.call_args_list))
 
-    def test_draw_taskbar_uses_unified_top_bar_free_space(self):
+    def test_draw_taskbar_uses_classic_bottom_bar_free_space(self):
         stdscr = types.SimpleNamespace(getmaxyx=mock.Mock(return_value=(20, 80)))
         app = types.SimpleNamespace(
             stdscr=stdscr,
@@ -167,11 +167,11 @@ class RenderingTests(unittest.TestCase):
 
         self.assertTrue(
             any(
-                call.args[1] == 0
-                and call.args[2] == 22
+                call.args[1] == 19
+                and call.args[2] == 21
                 and call.args[3] == "[Notes]"
                 and call.args[4]
-                == (self.curses.color_pair(self.constants.C_MENUBAR) | self.curses.A_BOLD)
+                == (self.curses.color_pair(self.constants.C_TASKBAR) | self.curses.A_BOLD)
                 for call in safe_addstr.call_args_list
             )
         )
