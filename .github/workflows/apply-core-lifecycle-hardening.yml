@@ -47,11 +47,25 @@ jobs:
           from pathlib import Path
           path = Path('tools/apply_core_lifecycle_hardening.py')
           text = path.read_text(encoding='utf-8')
-          old = 'self.assertEqual(run.call_args.kwargs["input"], "secret\\n")'
-          new = 'self.assertEqual(run.call_args.kwargs["input"], "secret\\\\n")'
-          if text.count(old) != 1:
-              raise SystemExit('newline test anchor not found exactly once')
-          path.write_text(text.replace(old, new, 1), encoding='utf-8', newline='\n')
+          replacements = (
+              (
+                  'self.assertEqual(run.call_args.kwargs["input"], "secret\\n")',
+                  'self.assertEqual(run.call_args.kwargs["input"], "secret\\\\n")',
+              ),
+              (
+                  '        app.windows = []\n'
+                  '        app.window_mgr = types.SimpleNamespace(close_window=mock.Mock(return_value=True))\n',
+                  '        app.window_mgr = types.SimpleNamespace(\n'
+                  '            windows=[],\n'
+                  '            close_window=mock.Mock(return_value=True),\n'
+                  '        )\n',
+              ),
+          )
+          for old, new in replacements:
+              if text.count(old) != 1:
+                  raise SystemExit(f'applicator anchor not found exactly once: {old!r}')
+              text = text.replace(old, new, 1)
+          path.write_text(text, encoding='utf-8', newline='\n')
           PY
           python tools/apply_core_lifecycle_hardening.py
 
