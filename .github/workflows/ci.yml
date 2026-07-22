@@ -39,7 +39,9 @@ jobs:
           python -m pip install -e ".[test]"
 
       - name: Apply conservative cleanup
-        run: python tools/apply_core_code_cleanup.py
+        run: |
+          python tools/apply_core_code_cleanup.py
+          python tools/fix_cleanup_test_owners.py
 
       - name: Run repository quality checks
         run: python tools/qa.py --skip-tests
