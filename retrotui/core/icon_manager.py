@@ -9,13 +9,34 @@ from ..constants import (
     ICON_DEFAULT_SPACING_Y,
     ICON_GRID_BOTTOM_MARGIN,
     ICON_FALLBACK_TERMINAL_HEIGHT,
+    ICON_ART_HEIGHT,
 )
+from ..utils import text_display_width
 
 LOGGER = logging.getLogger(__name__)
 
 _ICON_PERSIST_ERRORS = (AttributeError, OSError, TypeError, ValueError)
 _ICON_PARSE_ERRORS = (TypeError, ValueError)
 _ICON_TERMINAL_SIZE_ERRORS = (AttributeError, OSError, TypeError, ValueError)
+
+
+def icon_render_metrics(icon):
+    """Return art lines, art height and shared Unicode-aware icon width."""
+    symbol = icon.get("symbol")
+    if isinstance(symbol, str) and symbol:
+        art_lines = [symbol]
+    else:
+        art = icon.get("art", ())
+        art_lines = [str(line) for line in art] if isinstance(art, (list, tuple)) else []
+        if not art_lines:
+            art_lines = ["[]"]
+
+    art_width = max((text_display_width(line) for line in art_lines), default=2)
+    label_width = text_display_width(icon.get("label", ""))
+    slot_width = max(2, int(ICON_DEFAULT_SPACING_X) - 1)
+    render_width = min(slot_width, max(2, art_width, label_width))
+    render_height = max(ICON_ART_HEIGHT, len(art_lines))
+    return art_lines, render_height, render_width
 
 
 class IconPositionManager:
@@ -253,15 +274,10 @@ class IconPositionManager:
         icons = self._app.icons
         for i, icon in enumerate(icons):
             x, y = self.get_screen_pos(i, frame_size=frame_size)
-            symbol = icon.get("symbol")
-            if isinstance(symbol, str) and symbol:
-                w = max(3, len(symbol))
-                h = 2  # symbol + label
-            else:
-                art = icon.get('art', [])
-                w = max(len(line) for line in art) if art else 8
-                h = len(art) + 1  # +1 for label
-
-            if y <= my < y + h and x <= mx < x + w:
+            _art_lines, render_height, render_width = icon_render_metrics(icon)
+            if (
+                y <= my < y + render_height + 1
+                and x <= mx < x + render_width
+            ):
                 return i
         return -1

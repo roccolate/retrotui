@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from ..core.actions import ActionResult, ActionType, AppAction, ProcessSignalPayload
 from ..ui.menu import WindowMenu
 from ..ui.window import Window
-from ..utils import normalize_key_code, safe_addstr, theme_attr
+from ..utils import normalize_key_code, pad_text_columns, safe_addstr, theme_attr
 
 
 @dataclass
@@ -410,7 +410,13 @@ class ProcessManagerWindow(Window):
         elif self.sort_key == 'cmd':
             cmd_h = f'COMMAND{arrow}'
         header = f"{pid_h} {cpu_h} {mem_h} {cmd_h}"
-        safe_addstr(stdscr, by, bx, header[:bw].ljust(bw), theme_attr("menubar"))
+        safe_addstr(
+            stdscr,
+            by,
+            bx,
+            pad_text_columns(header, bw, suffix="…"),
+            theme_attr("menubar"),
+        )
 
         view_rows = self._visible_rows()
         start = max(0, min(self.scroll_offset, self._max_scroll()))
@@ -424,20 +430,38 @@ class ProcessManagerWindow(Window):
             attr = body_attr
             if row_index == self.selected_index:
                 attr = theme_attr("file_selected") | curses.A_BOLD
-            safe_addstr(stdscr, by + 1 + idx, bx, line[:bw].ljust(bw), attr)
+            safe_addstr(
+                stdscr,
+                by + 1 + idx,
+                bx,
+                pad_text_columns(line, bw, suffix="…"),
+                attr,
+            )
 
         summary = (
             f"Uptime {self.summary_uptime} | Load {self.summary_load} | "
             f"Mem {self.summary_mem}"
         )
-        safe_addstr(stdscr, by + bh - 2, bx, summary[:bw].ljust(bw), theme_attr("status"))
+        safe_addstr(
+            stdscr,
+            by + bh - 2,
+            bx,
+            pad_text_columns(summary, bw, suffix="…"),
+            theme_attr("status"),
+        )
 
         error_info = f" | {self._error_message}" if self._error_message else ""
         status = (
             f"Sort:{self.sort_key.upper()} C/M/P  K kill  F5 refresh  "
             f"Arrows/PgUp/PgDn nav{error_info}"
         )
-        safe_addstr(stdscr, by + bh - 1, bx, status[:bw].ljust(bw), theme_attr("status"))
+        safe_addstr(
+            stdscr,
+            by + bh - 1,
+            bx,
+            pad_text_columns(status, bw, suffix="…"),
+            theme_attr("status"),
+        )
 
         if self.window_menu:
             self.window_menu.draw_dropdown(stdscr, self.x, self.y, self.w)
