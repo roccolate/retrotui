@@ -50,72 +50,7 @@ jobs:
         run: python tools/bootstrap_classic_bottom_taskbar.py
 
       - name: Align legacy geometry expectations
-        shell: bash
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-
-          def replace_once(path_name, old, new):
-              path = Path(path_name)
-              text = path.read_text(encoding='utf-8')
-              count = text.count(old)
-              if count != 1:
-                  raise SystemExit(f'{path_name}: expected one match, found {count}: {old!r}')
-              path.write_text(text.replace(old, new, 1), encoding='utf-8')
-
-          replace_once(
-              'tests/test_rendering.py',
-              '                and call.args[2] == 22\n',
-              '                and call.args[2] == 21\n',
-          )
-          replace_once(
-              'tests/test_mouse_router.py',
-              '        # Right side of unified top bar overlaps clock hotspot; taskbar must win.\n'
-              '        self.mouse_router.handle_mouse_event(app, (0, 79, 0, 0, self.curses.BUTTON1_CLICKED))\n\n'
-              '        app.handle_taskbar_click.assert_called_once_with(79, 0)\n',
-              '        # Right side of the bottom taskbar overlaps the clock hotspot; taskbar must win.\n'
-              '        self.mouse_router.handle_mouse_event(app, (0, 79, 24, 0, self.curses.BUTTON1_CLICKED))\n\n'
-              '        app.handle_taskbar_click.assert_called_once_with(79, 24)\n',
-          )
-          replace_once(
-              'tests/test_mouse_router.py',
-              '        self.mouse_router.handle_mouse_event(app, (0, 79, 0, 0, self.curses.BUTTON1_CLICKED))\n\n'
-              '        app.execute_action.assert_called_once_with("plugin:clock")\n',
-              '        self.mouse_router.handle_mouse_event(app, (0, 79, 24, 0, self.curses.BUTTON1_CLICKED))\n\n'
-              '        app.execute_action.assert_called_once_with("plugin:clock")\n',
-          )
-          replace_once(
-              'tests/test_mouse_router.py',
-              '    def test_handle_mouse_event_top_bar_free_space_can_route_taskbar(self):\n',
-              '    def test_handle_mouse_event_bottom_bar_free_space_can_route_taskbar(self):\n',
-          )
-          replace_once(
-              'tests/test_mouse_router.py',
-              '        self.mouse_router.handle_mouse_event(app, (0, 40, 0, 0, self.curses.BUTTON1_CLICKED))\n\n'
-              '        app.menu.handle_click.assert_not_called()\n'
-              '        app.handle_taskbar_click.assert_called_once_with(40, 0)\n',
-              '        self.mouse_router.handle_mouse_event(app, (0, 40, 24, 0, self.curses.BUTTON1_CLICKED))\n\n'
-              '        app.menu.handle_click.assert_not_called()\n'
-              '        app.handle_taskbar_click.assert_called_once_with(40, 24)\n',
-          )
-          replace_once(
-              'tests/test_window_component.py',
-              '        self.assertEqual((win.x, win.y, win.w, win.h), (0, 1, 120, 39))\n'
-              '        self.assertEqual(win.y + win.h, 40)\n',
-              '        self.assertEqual((win.x, win.y, win.w, win.h), (0, 0, 120, 39))\n'
-              '        self.assertEqual(win.y + win.h, 39)\n',
-          )
-          replace_once(
-              'tests/test_window_component.py',
-              '        self.assertEqual((win.x, win.y), (50, 20))\n',
-              '        self.assertEqual((win.x, win.y), (50, 19))\n',
-          )
-          replace_once(
-              'tests/test_window_component.py',
-              '        self.assertEqual(win.h, 35)  # clamped by term_h - y\n',
-              '        self.assertEqual(win.h, 34)  # reserves the bottom taskbar row\n',
-          )
-          PY
+        run: python tools/align_classic_bottom_taskbar_tests.py
 
       - name: Install package and test dependencies
         run: |
@@ -169,7 +104,10 @@ jobs:
       - name: Publish verified patch
         shell: bash
         run: |
-          rm -f classic-bottom-taskbar-test.log classic-bottom-taskbar-unittest.log
+          rm -f \
+            classic-bottom-taskbar-test.log \
+            classic-bottom-taskbar-unittest.log \
+            tools/align_classic_bottom_taskbar_tests.py
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add -A
