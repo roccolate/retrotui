@@ -136,7 +136,7 @@ class MenuBarTests(unittest.TestCase):
             menu.draw_bar(stdscr, width=80)
 
         rendered = [call.args[3] for call in safe_addstr.call_args_list if len(call.args) >= 4]
-        self.assertIn(' =', rendered)
+        self.assertIn('[ Inicio ]', rendered)
         self.assertIn(' 12:34:56 ', rendered)
         self.assertTrue(any(' File ' in text for text in rendered))
 

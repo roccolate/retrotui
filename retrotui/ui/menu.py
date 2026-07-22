@@ -4,7 +4,7 @@ Menu components.
 import curses
 import time
 
-from ..constants import SB_H
+from ..constants import BOTTOM_BARS_HEIGHT, SB_H
 from ..core.actions import AppAction
 from ..utils import (
     draw_box,
@@ -13,6 +13,9 @@ from ..utils import (
     text_display_width,
     theme_attr,
 )
+
+
+START_BUTTON_TEXT = "[ Inicio ]"
 
 
 DEFAULT_GLOBAL_ITEMS = {
@@ -67,10 +70,34 @@ class MenuBar:
         self._last_clock_render = None
 
     def _bar_row(self, win_y=0):
-        return 0 if self.mode == 'global' else win_y + 1
+        if self.mode != "global":
+            return win_y + 1
+        if self._viewport_h is None:
+            return 0
+        if BOTTOM_BARS_HEIGHT:
+            return max(0, self._viewport_h - BOTTOM_BARS_HEIGHT)
+        return 0
+
+    def bar_row(self):
+        """Return the current global bar row for mouse-routing code."""
+        return self._bar_row()
+
+    def _start_button_bounds(self):
+        if self.mode != "global" or not self.show_logo:
+            return None
+        return 0, text_display_width(START_BUTTON_TEXT)
+
+    def hit_test_start_button(self, mx, my):
+        bounds = self._start_button_bounds()
+        if bounds is None or my != self._bar_row():
+            return False
+        start_x, end_x = bounds
+        return start_x <= mx < end_x
 
     def _menu_start_x(self, win_x=0):
-        return 2 if self.mode == 'global' else win_x + 2
+        if self.mode == "global" and self.show_logo:
+            return text_display_width(START_BUTTON_TEXT) + 1
+        return 2 if self.mode == "global" else win_x + 2
 
     def get_menu_x_positions(self, win_x=0):
         """Calculate absolute x position of each menu name."""
@@ -90,10 +117,12 @@ class MenuBar:
         return positions[last_idx] + text_display_width(self.menu_names[last_idx]) + 2
 
     def hit_test_menu_item(self, mx, my, *, win_x=0, win_y=0, win_w=None):
-        """Return True when a point is over an actual menu title."""
+        """Return True when a point is over a start button or menu title."""
+        if self.hit_test_start_button(mx, my):
+            return True
         if my != self._bar_row(win_y):
             return False
-        if self.mode == 'window' and win_w is not None:
+        if self.mode == "window" and win_w is not None:
             if not (win_x + 1 <= mx < win_x + win_w - 1):
                 return False
         positions = self.get_menu_x_positions(win_x)
@@ -145,7 +174,6 @@ class MenuBar:
         full_items = self._current_items()
         positions = self.get_menu_x_positions(win_x)
         x = positions[self.selected_menu]
-        y = self._bar_row(win_y) + 1
         max_item_columns = max(
             (text_display_width(label) for label, _ in full_items),
             default=0,
@@ -161,20 +189,30 @@ class MenuBar:
         viewport_w = self._viewport_w
         viewport_h = self._viewport_h
 
-        if self.mode == 'global' and viewport_w is not None:
+        if self.mode == "global" and viewport_w is not None:
             dropdown_w = min(dropdown_w, max(4, viewport_w - 2))
 
-        if self.mode == 'window' and win_w is not None:
+        if self.mode == "window" and win_w is not None:
             right_edge = win_x + win_w
             if x - 1 + dropdown_w + 2 > right_edge:
                 x = max(win_x + 2, right_edge - dropdown_w - 2)
-        elif self.mode == 'global' and viewport_w is not None:
+        elif self.mode == "global" and viewport_w is not None:
             max_x = max(1, viewport_w - dropdown_w - 1)
             x = max(1, min(x, max_x))
 
+        bar_y = self._bar_row(win_y)
+        opens_up = (
+            self.mode == "global"
+            and bool(BOTTOM_BARS_HEIGHT)
+            and viewport_h is not None
+        )
         visible_rows = len(full_items)
         if viewport_h is not None:
-            visible_rows = min(visible_rows, max(1, viewport_h - y - 2))
+            if opens_up:
+                available_rows = max(0, bar_y - 2)
+            else:
+                available_rows = max(0, viewport_h - (bar_y + 1) - 2)
+            visible_rows = min(visible_rows, available_rows)
 
         max_scroll = max(0, len(full_items) - visible_rows)
         self.dropdown_scroll = max(0, min(self.dropdown_scroll, max_scroll))
@@ -184,7 +222,13 @@ class MenuBar:
             self.dropdown_scroll = self.selected_item - visible_rows + 1
         self.dropdown_scroll = max(0, min(self.dropdown_scroll, max_scroll))
 
-        visible_items = full_items[self.dropdown_scroll : self.dropdown_scroll + visible_rows]
+        visible_items = full_items[
+            self.dropdown_scroll : self.dropdown_scroll + visible_rows
+        ]
+        if opens_up:
+            y = max(0, bar_y - (len(visible_items) + 2))
+        else:
+            y = bar_y + 1
         return x, y, dropdown_w, visible_items
 
     def _move_selected_item(self, delta):
@@ -279,12 +323,11 @@ class MenuBar:
         frame_size=None,
     ):
         """Draw the bar row for either global or window mode."""
-        bar_y = self._bar_row(win_y)
         bar_attr = theme_attr("menubar")
         self._last_layout_args = (win_x, win_y, win_w)
         size = frame_size if frame_size is not None else self._read_stdscr_size(stdscr)
 
-        if self.mode == 'global':
+        if self.mode == "global":
             if width is None:
                 if size is not None:
                     viewport_h, width = size
@@ -294,14 +337,20 @@ class MenuBar:
             else:
                 viewport_h = size[0] if size is not None else self._viewport_h
             self._set_viewport(width=width, height=viewport_h)
-            safe_addstr(stdscr, bar_y, 0, ' ' * width, bar_attr, _bounds=frame_size)
+            bar_y = self._bar_row(win_y)
+            safe_addstr(stdscr, bar_y, 0, " " * width, bar_attr, _bounds=frame_size)
             if self.show_logo:
+                start_attr = (
+                    theme_attr("menu_selected")
+                    if self.active and self.selected_menu == 0 and is_active
+                    else bar_attr | curses.A_BOLD
+                )
                 safe_addstr(
                     stdscr,
                     bar_y,
                     0,
-                    ' =',
-                    bar_attr | curses.A_BOLD,
+                    START_BUTTON_TEXT,
+                    start_attr,
                     _bounds=frame_size,
                 )
         else:
@@ -310,11 +359,12 @@ class MenuBar:
             if size is not None:
                 viewport_h, viewport_w = size
                 self._set_viewport(width=viewport_w, height=viewport_h)
+            bar_y = self._bar_row(win_y)
             safe_addstr(
                 stdscr,
                 bar_y,
                 win_x + 1,
-                ' ' * max(0, win_w - 2),
+                " " * max(0, win_w - 2),
                 bar_attr,
                 _bounds=frame_size,
             )
@@ -328,12 +378,12 @@ class MenuBar:
                 stdscr,
                 bar_y,
                 positions[i],
-                f' {name} ',
+                f" {name} ",
                 attr,
                 _bounds=frame_size,
             )
 
-        if self.mode == 'global':
+        if self.mode == "global":
             self.refresh_clock(
                 stdscr, width=width, win_x=win_x, force=True, frame_size=frame_size,
             )
@@ -445,6 +495,12 @@ class MenuBar:
 
         bar_y = self._bar_row(win_y)
         if my == bar_y:
+            if self.hit_test_start_button(mx, my) and self.menu_names:
+                if self.selected_menu != 0:
+                    self.selected_menu = 0
+                    self.selected_item = self._first_selectable(self._current_items())
+                    self.dropdown_scroll = 0
+                return True
             positions = self.get_menu_x_positions(win_x)
             for i, pos in enumerate(positions):
                 name = self.menu_names[i]
@@ -460,10 +516,14 @@ class MenuBar:
             layout = self._dropdown_layout(win_x=win_x, win_y=win_y, win_w=win_w)
             if layout is None:
                 return False
-            _, _, _, visible_items = layout
+            _, layout_y, _, visible_items = layout
             full_items = self._current_items()
-            idx = self.dropdown_scroll + (my - (bar_y + 2))
-            if 0 <= idx < len(full_items) and (idx - self.dropdown_scroll) < len(visible_items) and full_items[idx][1] is not None:
+            idx = self.dropdown_scroll + (my - (layout_y + 1))
+            if (
+                0 <= idx < len(full_items)
+                and (idx - self.dropdown_scroll) < len(visible_items)
+                and full_items[idx][1] is not None
+            ):
                 self.selected_item = idx
             return True
 
@@ -474,6 +534,17 @@ class MenuBar:
         bar_y = self._bar_row(win_y)
 
         if my == bar_y and self.on_menu_bar(mx, my, win_x=win_x, win_y=win_y, win_w=win_w):
+            if self.hit_test_start_button(mx, my) and self.menu_names:
+                if self.active and self.selected_menu == 0:
+                    self.active = False
+                    self.dropdown_scroll = 0
+                else:
+                    self.active = True
+                    self.selected_menu = 0
+                    self.selected_item = self._first_selectable(self._current_items())
+                    self.dropdown_scroll = 0
+                return None
+
             positions = self.get_menu_x_positions(win_x)
             for i, pos in enumerate(positions):
                 name = self.menu_names[i]
@@ -497,11 +568,14 @@ class MenuBar:
                 self.active = False
                 self.dropdown_scroll = 0
                 return None
-            x, _, dropdown_w, visible_items = layout
+            x, layout_y, dropdown_w, visible_items = layout
             full_items = self._current_items()
 
-            if x - 1 <= mx < x + dropdown_w + 1 and bar_y + 2 <= my < bar_y + 2 + len(visible_items):
-                idx = self.dropdown_scroll + (my - (bar_y + 2))
+            if (
+                x - 1 <= mx < x + dropdown_w + 1
+                and layout_y + 1 <= my < layout_y + 1 + len(visible_items)
+            ):
+                idx = self.dropdown_scroll + (my - (layout_y + 1))
                 if 0 <= idx < len(full_items) and full_items[idx][1] is not None:
                     action = full_items[idx][1]
                     self.active = False

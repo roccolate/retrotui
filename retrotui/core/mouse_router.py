@@ -7,7 +7,8 @@ and drag/resize handlers. Utility helpers live in ``mouse_utils``.
 import curses
 import logging
 
-from ..constants import MENU_BAR_HEIGHT, BOTTOM_BARS_HEIGHT, CLOCK_CLICK_REGION_WIDTH
+from ..constants import MENU_BAR_HEIGHT, CLOCK_CLICK_REGION_WIDTH
+from .shell_geometry import global_bar_row, workspace_bottom_exclusive
 from .actions import AppAction
 from .platform.mouse_backend import normalize_mouse_payload
 from .mouse_utils import (
@@ -100,15 +101,26 @@ _BUTTON3_MASK = _BUTTON3_PRESSED | _BUTTON3_CLICKED | _BUTTON3_RELEASED
 
 
 def _bottom_limit_y(screen_h):
-    return screen_h - BOTTOM_BARS_HEIGHT
+    return workspace_bottom_exclusive(screen_h)
 
 
 def _clock_row(screen_h):
-    return screen_h - BOTTOM_BARS_HEIGHT if BOTTOM_BARS_HEIGHT else 0
+    return global_bar_row(screen_h)
+
+
+def _menu_bar_row(app):
+    menu = getattr(app, "menu", None)
+    resolver = getattr(menu, "bar_row", None)
+    if callable(resolver):
+        try:
+            return int(resolver())
+        except (TypeError, ValueError):
+            pass
+    return 0
 
 
 def _menu_should_handle_top_click(app, mx, my):
-    if my != 0:
+    if my != _menu_bar_row(app):
         return False
     menu = getattr(app, "menu", None)
     if getattr(menu, "active", False):
@@ -173,7 +185,7 @@ def handle_global_menu_mouse(app, mx, my, bstate):
         if action:
             app.execute_action(action)
         return True
-    if app.menu.hit_test_dropdown(mx, my) or my == 0:
+    if app.menu.hit_test_dropdown(mx, my) or my == _menu_bar_row(app):
         return True
     return False
 
