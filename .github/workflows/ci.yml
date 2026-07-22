@@ -70,7 +70,7 @@ jobs:
         run: |
           git config user.name "roccolate"
           git config user.email "20898609+roccolate@users.noreply.github.com"
-          git add -A
+          git add retrotui/core/app.py tests/test_core_app.py
           git diff --cached --quiet && { echo 'No permanent changes produced'; exit 1; }
           git commit -m "Clean dead RetroTUI composition code"
           git push --force-with-lease origin HEAD:agent/core-code-cleanup-v2
