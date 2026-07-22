@@ -391,6 +391,28 @@ class CoreAppTests(unittest.TestCase):
         log_debug.assert_called_once()
         disable_mouse_support.assert_called_once_with()
 
+    def test_cleanup_preserves_failed_result_across_repeated_calls(self):
+        app = self._make_app()
+        app._cleanup_complete = False
+        app._cleanup_started = False
+        app._file_ops = types.SimpleNamespace(
+            shutdown=mock.Mock(return_value=False),
+        )
+        app._restore_runtime_signal_handlers = mock.Mock()
+        app.windows = []
+
+        with mock.patch.object(
+            self.app_mod, "disable_mouse_support"
+        ):
+            first = app.cleanup()
+            second = app.cleanup()
+
+        self.assertFalse(first)
+        self.assertFalse(second)
+        app._file_ops.shutdown.assert_called_once_with(
+            timeout=app.BACKGROUND_OPERATION_JOIN_TIMEOUT
+        )
+
     def test_draw_wrappers_delegate_to_rendering_helpers(self):
         app = self._make_app()
 

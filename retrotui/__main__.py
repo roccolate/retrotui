@@ -73,7 +73,7 @@ def main(stdscr):
             len(getattr(app, 'windows', [])),
             len(getattr(app, 'icons', [])),
         )
-    app.run()
+    cleanup_ok = app.run()
     # Capture the most recent external shutdown signal so ``run()`` can
     # mirror it in the process exit code. ``KeyboardInterrupt`` returns 130
     # explicitly; this path covers SIGTERM/SIGHUP/SIGBREAK caught by the
@@ -82,6 +82,8 @@ def main(stdscr):
     shutdown_signal = getattr(app, '_shutdown_signal', None)
     if isinstance(shutdown_signal, int) and not isinstance(shutdown_signal, bool):
         _LAST_SHUTDOWN_SIGNAL = shutdown_signal
+    return cleanup_ok
+
 
 def _default_crash_log_dir() -> Path:
     """Return the default persistent crash log directory."""
@@ -112,11 +114,17 @@ def run():
     global _LAST_SHUTDOWN_SIGNAL
     _LAST_SHUTDOWN_SIGNAL = None
     try:
-        curses.wrapper(main)
+        cleanup_ok = curses.wrapper(main)
         print('\033c', end='')
         if _LAST_SHUTDOWN_SIGNAL is not None:
             # Convention: ``128 + signum`` for terminations by signal.
             return 128 + _LAST_SHUTDOWN_SIGNAL
+        if cleanup_ok is False:
+            print(
+                "RetroTUI exited before every worker/window stopped cleanly.",
+                file=sys.stderr,
+            )
+            return 1
         return 0
     except KeyboardInterrupt:
         return 130

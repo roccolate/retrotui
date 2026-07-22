@@ -776,7 +776,7 @@ class RetroTUI:
         hook confirmed completion. Terminal restoration still runs on failures.
         """
         if getattr(self, "_cleanup_complete", False):
-            return True
+            return getattr(self, "_cleanup_result", True)
         if getattr(self, "_cleanup_started", False):
             LOGGER.warning("Ignoring re-entrant RetroTUI cleanup request.")
             return False
@@ -823,7 +823,11 @@ class RetroTUI:
                 self._notifications.cleanup()
             if hasattr(self, "_event_bus"):
                 self._event_bus.clear()
+        except Exception:
+            success = False
+            raise
         finally:
+            self._cleanup_result = success
             disable_mouse_support()
             self._cleanup_complete = True
             self._cleanup_started = False

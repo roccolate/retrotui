@@ -662,6 +662,7 @@ def _refresh_idle_clock(app):
 
     menu = getattr(app, "menu", None)
     refresh_clock = getattr(menu, "refresh_clock", None)
+    updated = False
     if callable(refresh_clock):
         try:
             updated = bool(refresh_clock(app.stdscr, width=width))
@@ -691,6 +692,7 @@ def run_app_loop(app):
     phase = "startup"
     app._event_loop_first_error = None
     app._event_loop_first_error_phase = None
+    cleanup_ok = True
 
     try:
         while app.running:
@@ -803,10 +805,12 @@ def run_app_loop(app):
     finally:
         _emit_runtime_metrics(metrics, final=True)
         try:
-            app.cleanup()
+            cleanup_ok = app.cleanup() is not False
         except Exception:
+            cleanup_ok = False
             if first_error is None:
                 raise
             LOGGER.exception(
                 "cleanup failed after event-loop error; preserving original cause"
             )
+    return cleanup_ok
