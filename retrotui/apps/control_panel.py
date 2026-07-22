@@ -110,6 +110,32 @@ class ControlPanelWindow(Window):
         self.app.apply_theme(self.theme_name)
         self.app.persist_config()
 
+    @staticmethod
+    def _checkbox_hit(mx, my, *, x, y, label):
+        """Return whether a click falls on the rendered checkbox row."""
+        return my == y and x <= mx < x + len(label)
+
+    def _toggle_show_hidden(self):
+        self.show_hidden = not self.show_hidden
+        self.app.apply_preferences(show_hidden=self.show_hidden)
+        self.app.persist_config()
+        return ActionResult(ActionType.REFRESH)
+
+    def _toggle_word_wrap_default(self):
+        self.word_wrap_default = not self.word_wrap_default
+        self.app.apply_preferences(word_wrap_default=self.word_wrap_default)
+        self.app.persist_config()
+        return ActionResult(ActionType.REFRESH)
+
+    def _toggle_sunday_first(self):
+        self.sunday_first = not self.sunday_first
+        self.app.apply_preferences(
+            sunday_first=self.sunday_first,
+            apply_to_open_windows=True,
+        )
+        self.app.persist_config()
+        return ActionResult(ActionType.REFRESH)
+
     def _toggle_welcome(self):
         self.show_welcome = not self.show_welcome
         self.app.apply_preferences(
@@ -162,6 +188,8 @@ class ControlPanelWindow(Window):
     def handle_click(self, mx, my):
         bx, by, bw, bh = self.body_rect()
         pane_divider_x = bx + 18
+        rx = pane_divider_x + 2
+        ry = by + 1
 
         # Click on category
         if bx <= mx < pane_divider_x:
@@ -173,7 +201,6 @@ class ControlPanelWindow(Window):
 
         # Click on a theme row in the Appearance pane
         if self.selected_cat == 0 and pane_divider_x <= mx:
-            rx = pane_divider_x + 2
             row = (my - by - 3)  # themes start at by + 2 (+1 for the header)
             if 0 <= row < len(self._themes) and my >= by + 2:
                 self.theme_name = self._themes[row].key
@@ -181,9 +208,22 @@ class ControlPanelWindow(Window):
                 self.app.persist_config()
                 return None
 
-        if self.selected_cat == 3 and pane_divider_x <= mx:
-            ry = by + 1
-            if my == ry + 2:
+        if self.selected_cat == 1:
+            hidden_label = "[ ] Show hidden files"
+            wrap_label = "[ ] Word wrap in Notepad"
+            if self._checkbox_hit(mx, my, x=rx, y=ry + 2, label=hidden_label):
+                return self._toggle_show_hidden()
+            if self._checkbox_hit(mx, my, x=rx, y=ry + 4, label=wrap_label):
+                return self._toggle_word_wrap_default()
+
+        if self.selected_cat == 2:
+            sunday_label = "[ ] Calendar: Sunday first"
+            if self._checkbox_hit(mx, my, x=rx, y=ry + 2, label=sunday_label):
+                return self._toggle_sunday_first()
+
+        if self.selected_cat == 3:
+            welcome_label = "[ ] Show Welcome Screen"
+            if self._checkbox_hit(mx, my, x=rx, y=ry + 2, label=welcome_label):
                 return self._toggle_welcome()
 
         # Check buttons
