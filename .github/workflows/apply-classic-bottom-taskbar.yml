@@ -63,15 +63,12 @@ jobs:
           status=${PIPESTATUS[0]}
           exit "$status"
 
-      - name: Publish focused-test diagnostics
+      - name: Upload focused-test diagnostics
         if: ${{ failure() && steps.focused.outcome == 'failure' }}
-        shell: bash
-        run: |
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add classic-bottom-taskbar-test.log
-          git commit -m 'Capture bottom taskbar test diagnostics'
-          git push origin HEAD:agent/classic-bottom-taskbar
+        uses: actions/upload-artifact@v4
+        with:
+          name: classic-bottom-taskbar-test-log
+          path: classic-bottom-taskbar-test.log
 
       - name: Run repository quality checks
         run: python tools/qa.py --skip-tests
