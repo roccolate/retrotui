@@ -1,0 +1,34 @@
+name: Rebase verified core hardening
+
+on:
+  push:
+    branches:
+      - maintenance/rebase-core-hardening
+    paths:
+      - .github/workflows/rebase-core-hardening.yml
+
+permissions:
+  contents: write
+
+jobs:
+  rebase:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout hardening branch
+        uses: actions/checkout@v5
+        with:
+          ref: agent/core-lifecycle-hardening
+          fetch-depth: 0
+
+      - name: Rebase without changing verified tree
+        shell: bash
+        run: |
+          git config user.name "roccolate"
+          git config user.email "20898609+roccolate@users.noreply.github.com"
+          git fetch origin main
+          before_tree="$(git rev-parse HEAD^{tree})"
+          git rebase --onto origin/main 91c2755d0b8727e91774823a518ed44b7b5947bd
+          after_tree="$(git rev-parse HEAD^{tree})"
+          test "$before_tree" = "$after_tree"
+          git push --force-with-lease origin HEAD:agent/core-lifecycle-hardening
