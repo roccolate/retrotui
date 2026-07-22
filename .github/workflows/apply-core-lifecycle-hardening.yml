@@ -41,7 +41,19 @@ jobs:
           python -m pip install -e ".[test]"
 
       - name: Apply hardening patch
-        run: python tools/apply_core_lifecycle_hardening.py
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('tools/apply_core_lifecycle_hardening.py')
+          text = path.read_text(encoding='utf-8')
+          old = 'self.assertEqual(run.call_args.kwargs["input"], "secret\\n")'
+          new = 'self.assertEqual(run.call_args.kwargs["input"], "secret\\\\n")'
+          if text.count(old) != 1:
+              raise SystemExit('newline test anchor not found exactly once')
+          path.write_text(text.replace(old, new, 1), encoding='utf-8', newline='\n')
+          PY
+          python tools/apply_core_lifecycle_hardening.py
 
       - name: Run focused regressions
         id: focused
