@@ -2,43 +2,51 @@
 Dialog Component.
 """
 import curses
-from ..utils import safe_addstr, draw_box, normalize_key_code, theme_attr
+from ..utils import (
+    clip_text_columns,
+    draw_box,
+    normalize_key_code,
+    pad_text_columns,
+    safe_addstr,
+    text_display_width,
+    theme_attr,
+)
 
 
 def _wrap_dialog_message(message, inner_w):
-    """Word-wrap a dialog message into a list of lines.
-
-    Words longer than ``inner_w`` (e.g. file paths) are hard-broken
-    at ``inner_w`` so the dialog border doesn't crop them silently.
-    """
+    """Word-wrap a dialog message by physical terminal columns."""
+    columns = max(1, int(inner_w))
     lines = []
-    for paragraph in str(message).split('\n'):
+    for paragraph in str(message).split("\n"):
         words = paragraph.split()
         if not words:
-            lines.append('')
+            lines.append("")
             continue
-        line = ''
-        for word in words:
-            # Hard-break overlong words (paths, URLs) so a single
-            # very long token doesn't push the whole paragraph onto
-            # a line that gets truncated at the dialog's right border.
-            while len(word) > inner_w and line:
-                lines.append(line)
-                line = ''
-            if len(word) > inner_w:
-                # Split the word across multiple lines; the next
-                # loop iteration will handle the remainder.
-                while len(word) > inner_w:
-                    lines.append(word[:inner_w])
-                    word = word[inner_w:]
-            needs_space = 1 if line else 0
-            if len(line) + len(word) + needs_space <= inner_w:
-                line = f'{line} {word}' if line else word
+
+        line = ""
+        for original_word in words:
+            word = original_word
+            while text_display_width(word) > columns:
+                if line:
+                    lines.append(line)
+                    line = ""
+                chunk = clip_text_columns(word, columns)
+                if not chunk:
+                    chunk = word[0]
+                lines.append(chunk)
+                word = word[len(chunk):]
+
+            if not word:
+                continue
+            candidate = f"{line} {word}" if line else word
+            if text_display_width(candidate) <= columns:
+                line = candidate
             else:
-                lines.append(line)
+                if line:
+                    lines.append(line)
                 line = word
         lines.append(line)
-    return lines or ['']
+    return lines or [""]
 
 
 class Dialog:
@@ -52,7 +60,15 @@ class Dialog:
         # Floor at 20 cols so a tiny ``width`` arg (or a very short
         # title with a large gap of buttons) can't shrink the dialog
         # past the safe render minimum.
-        self.width = max(20, max(width, len(title) + 8))
+        button_columns = sum(
+            text_display_width(button) + 4 for button in self.buttons
+        ) + max(0, len(self.buttons) - 1) * 2
+        self.width = max(
+            20,
+            int(width),
+            text_display_width(title) + 8,
+            button_columns + 4,
+        )
 
         # Word wrap message
         inner_w = self.width - 6
@@ -97,12 +113,17 @@ class Dialog:
         draw_box(stdscr, y, x, self.height, self.width, attr, double=True, _bounds=frame_size)
 
         # Title
-        title_text = f' {self.title} '
+        display_title = clip_text_columns(
+            self.title,
+            max(0, self.width - 4),
+            suffix="…",
+        )
+        title_text = pad_text_columns(f' {display_title} ', self.width - 2)
         safe_addstr(
             stdscr,
             y,
             x + 1,
-            title_text.ljust(self.width - 2),
+            title_text,
             title_attr,
             _bounds=frame_size,
         )
@@ -113,11 +134,12 @@ class Dialog:
 
         # Buttons
         btn_y = y + self.height - 3
-        total_btn_width = sum(len(b) + 6 for b in self.buttons) + (len(self.buttons) - 1) * 2
+        button_widths = [text_display_width(button) + 4 for button in self.buttons]
+        total_btn_width = sum(button_widths) + max(0, len(button_widths) - 1) * 2
         btn_x = x + (self.width - total_btn_width) // 2
 
         for i, btn_text in enumerate(self.buttons):
-            btn_w = len(btn_text) + 4
+            btn_w = button_widths[i]
             if i == self.selected:
                 btn_attr = theme_attr('button_selected') | curses.A_BOLD
                 label = f'▸ {btn_text} ◂'
@@ -138,7 +160,7 @@ class Dialog:
         if my == self._btn_y:
             btn_x = self._btn_x_start
             for i, btn_text in enumerate(self.buttons):
-                btn_w = len(btn_text) + 4
+                btn_w = text_display_width(btn_text) + 4
                 if btn_x <= mx < btn_x + btn_w:
                     return i
                 btn_x += btn_w + 2
@@ -310,7 +332,7 @@ class MultiSelectDialog(Dialog):
                     stdscr,
                     list_y + i,
                     list_x,
-                    text.ljust(list_w)[:list_w],
+                    pad_text_columns(text, list_w, suffix="…"),
                     row_attr,
                     _bounds=frame_size,
                 )
@@ -363,7 +385,7 @@ class MultiSelectDialog(Dialog):
         if my == self._btn_y:
             btn_x = self._btn_x_start
             for i, btn_text in enumerate(self.buttons):
-                btn_w = len(btn_text) + 4
+                btn_w = text_display_width(btn_text) + 4
                 if btn_x <= mx < btn_x + btn_w:
                     self.in_list = False
                     self.selected = i
@@ -417,7 +439,7 @@ class ProgressDialog:
         self.title = title
         self.message = message
         self.buttons = []
-        self.width = max(width, len(title) + 8)
+        self.width = max(int(width), text_display_width(title) + 8)
         self.lines = _wrap_dialog_message(message, self.width - 6)
         self.elapsed_seconds = 0.0
         self.progress = {}
@@ -476,10 +498,21 @@ class ProgressDialog:
         for row in range(self.height):
             safe_addstr(stdscr, y + row, x, ' ' * self.width, attr, _bounds=frame_size)
         draw_box(stdscr, y, x, self.height, self.width, attr, double=True, _bounds=frame_size)
-        safe_addstr(stdscr, y, x + 1, f' {self.title} '.ljust(self.width - 2), title_attr, _bounds=frame_size)
+        progress_title = clip_text_columns(
+            self.title, max(0, self.width - 4), suffix="…"
+        )
+        safe_addstr(
+            stdscr, y, x + 1,
+            pad_text_columns(f' {progress_title} ', self.width - 2),
+            title_attr, _bounds=frame_size,
+        )
 
         for i, line in enumerate(self.lines):
-            safe_addstr(stdscr, y + 2 + i, x + 3, line[: self.width - 6], attr, _bounds=frame_size)
+            safe_addstr(
+                stdscr, y + 2 + i, x + 3,
+                clip_text_columns(line, self.width - 6),
+                attr, _bounds=frame_size,
+            )
 
         fraction = self._progress_fraction()
         bar_width = max(8, self.width - 14)
@@ -508,18 +541,19 @@ class ProgressDialog:
             status = f'{status}  {current_path}'
         safe_addstr(
             stdscr, y + self.height - 4, x + 3,
-            status[: self.width - 6].ljust(self.width - 6),
+            pad_text_columns(status, self.width - 6, suffix="…"),
             info_attr, _bounds=frame_size,
         )
 
         if callable(self.cancel_callback):
             label = '[ Cancelling... ]' if self.cancel_requested else '[ Cancel: Esc/C ]'
-            cancel_x = x + max(3, (self.width - len(label)) // 2)
+            label_width = text_display_width(label)
+            cancel_x = x + max(3, (self.width - label_width) // 2)
             cancel_y = y + self.height - 2
             safe_addstr(stdscr, cancel_y, cancel_x, label, info_attr, _bounds=frame_size)
             self._cancel_y = cancel_y
             self._cancel_x_start = cancel_x
-            self._cancel_x_end = cancel_x + len(label)
+            self._cancel_x_end = cancel_x + label_width
 
     def handle_click(self, mx, my):
         if (
