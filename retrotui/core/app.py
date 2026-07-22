@@ -3,11 +3,8 @@ Main RetroTUI Application Class.
 """
 import curses
 import logging
-import signal
-import threading
 
 from ..constants import (
-    ICONS, ICONS_ASCII,
     TERMINAL_INPUT_TIMEOUT_MS,
     TERMINAL_LIVE_INPUT_TIMEOUT_MS,
     TERMINAL_BACKGROUND_INPUT_TIMEOUT_MS,
@@ -17,7 +14,7 @@ from ..constants import (
 )
 from ..utils import check_unicode_support, init_colors
 from ..theme import get_theme
-from ..ui.dialog import Dialog, InputDialog, ProgressDialog
+from ..ui.dialog import Dialog, InputDialog
 from ..ui.window import Window
 from .config import AppConfig, CONFIG_SCHEMA_VERSION, load_config, save_config
 from .actions import ActionResult, ActionType, AppAction, SaveConfirmPayload
@@ -27,7 +24,6 @@ from .file_operations import FileOperationManager
 from .icon_manager import IconPositionManager
 from .content import build_welcome_content
 from .mouse_router import (
-    _invoke_mouse_handler,
     handle_drag_resize_mouse,
     handle_global_menu_mouse,
     handle_window_mouse,
@@ -62,19 +58,12 @@ from .bootstrap import (
 from .window_manager import WindowManager
 from .icon_styles import (
     ICON_STYLE_DEFAULT,
-    ICON_STYLE_MINI,
-    ICON_STYLE_BRAILLE,
-    ICON_STYLE_RETRO_01,
     normalize_icon_style,
-    icon_style_variants as _icon_style_variants,
-    style_symbol_for_icon as _style_symbol_for_icon,
     styled_icon_entry as _styled_icon_entry,
     icon_style_preview_symbol as _icon_style_preview_symbol,
     icon_visibility_key as _icon_visibility_key,
     get_hidden_icon_labels as _get_hidden_icon_labels,
     split_config_csv as _split_config_csv,
-    plugin_icon_art as _plugin_icon_art,
-    build_plugin_icons as _build_plugin_icons,
     build_desktop_icon_catalog as _build_desktop_icon_catalog,
     refresh_icons as _refresh_icons,
 )
@@ -88,12 +77,9 @@ from .signal_handler import (
 from .plugin_manager import (
     load_plugins_runtime,
     register_plugin_manifest,
-    build_plugin_menu_items,
-    build_plugin_window,
     open_plugin as _open_plugin,
 )
 from .menu_builder import (
-    menu_item_visibility_key as _menu_item_visibility_key,
     get_hidden_menu_keys as _get_hidden_menu_keys,
     build_global_menu_items,
     rebuild_global_menu,
@@ -132,7 +118,6 @@ class RetroTUI:
     """Main application class."""
     MIN_TERM_WIDTH = 80
     MIN_TERM_HEIGHT = 24
-    LONG_FILE_OPERATION_BYTES = 8 * 1024 * 1024
     BACKGROUND_OPERATION_JOIN_TIMEOUT = 5.0
 
     @property
@@ -158,8 +143,6 @@ class RetroTUI:
 
     def _show_save_confirm_dialog(self, win, payload=None):
         """Prompt before a destructive operation on unsaved work."""
-        from ..ui.dialog import Dialog
-
         try:
             title = getattr(win, "title", "Notepad")
         except Exception:
@@ -494,14 +477,6 @@ class RetroTUI:
         """Register one plugin manifest with defensive isolation."""
         register_plugin_manifest(self, manifest, load_plugin_fn)
 
-    def _build_plugin_menu_items(self):
-        """Build dynamic plugin entries as menu tuples ``(label, action)``."""
-        return build_plugin_menu_items(self)
-
-    def _build_plugin_window(self, info, plugin_id):
-        """Instantiate plugin window object from manifest metadata."""
-        return build_plugin_window(self, info, plugin_id)
-
     def open_plugin(self, plugin_id):
         """Instantiate and open a plugin window by id."""
         _open_plugin(self, plugin_id)
@@ -514,11 +489,6 @@ class RetroTUI:
     def _split_config_csv(raw):
         """Return lowercased non-empty comma-separated tokens from *raw* string."""
         return _split_config_csv(raw)
-
-    @staticmethod
-    def _menu_item_visibility_key(label, action):
-        """Return stable visibility key for one global menu item."""
-        return _menu_item_visibility_key(label, action)
 
     def _get_hidden_menu_keys(self):
         """Return set of lowercased hidden global menu item keys from config."""
@@ -540,16 +510,6 @@ class RetroTUI:
     # Icon system (delegates to icon_styles module)
     # ------------------------------------------------------------------
 
-    def _close_window_safely(self, win):
-        """Run window close hook without allowing cleanup-time crashes."""
-        closer = getattr(win, 'close', None)
-        if not callable(closer):
-            return
-        try:
-            closer()
-        except _RUNTIME_ISOLATION_ERRORS:  # pragma: no cover - defensive cleanup path
-            LOGGER.debug('Window cleanup failed for %r', win, exc_info=True)
-
     def _invoke_callable_action(self, action):
         """Execute callable actions with failure isolation."""
         try:
@@ -562,15 +522,6 @@ class RetroTUI:
     def _normalize_icon_style(style):
         """Return supported icon style key."""
         return normalize_icon_style(style)
-
-    @staticmethod
-    def _icon_style_variants():
-        """Return per-icon style variants keyed by action/value key."""
-        return _icon_style_variants()
-
-    def _style_symbol_for_icon(self, icon, style):
-        """Return style-specific symbol token for one icon."""
-        return _style_symbol_for_icon(icon, style)
 
     def _styled_icon_entry(self, icon):
         """Return style-adjusted icon entry for current desktop icon style."""
@@ -600,14 +551,6 @@ class RetroTUI:
     def _get_hidden_icon_labels(self):
         """Return set of lowercased hidden desktop icon keys from config."""
         return _get_hidden_icon_labels(self.config)
-
-    def _plugin_icon_art(self, plugin_name):
-        """Build compact 3x4 icon art for plugin desktop entries."""
-        return _plugin_icon_art(plugin_name, self.use_unicode)
-
-    def _build_plugin_icons(self):
-        """Return plugin entries as desktop icons."""
-        return _build_plugin_icons(getattr(self, "_plugins", None), self.use_unicode)
 
     def _build_desktop_icon_catalog(self):
         """Return full desktop icon catalog (apps, games, plugins)."""
@@ -910,10 +853,6 @@ class RetroTUI:
         """Request that a window close, or force it during shutdown."""
         return self.window_mgr.close_window(win, force=force)
 
-    def _activate_last_visible_window(self):
-        """Activate topmost visible window after z-order/window-list changes."""
-        return self.window_mgr._activate_last_visible_window()
-
     @staticmethod
     def _normalize_action(action):
         """Convert legacy string actions to AppAction when possible."""
@@ -998,8 +937,6 @@ class RetroTUI:
 
     def show_add_bookmark_dialog(self, source_win):
         """Prompt for a title and add the source window's URL to bookmarks."""
-        from ..ui.dialog import InputDialog
-        from .actions import ActionResult, ActionType
         from .bookmarks import add_bookmark
 
         url = getattr(source_win, 'url', '') or ''

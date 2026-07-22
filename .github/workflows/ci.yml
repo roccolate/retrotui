@@ -43,6 +43,9 @@ jobs:
       - name: Reject undefined Python names
         run: python -m ruff check --select F821 retrotui tests tools
 
+      - name: Reject unused RetroTUI composition code
+        run: python -m ruff check --select F401,F811,F841 retrotui/core/app.py
+
       - name: Run unittest suite
         run: python -m unittest discover -s tests -v
 
