@@ -145,7 +145,20 @@ jobs:
         run: python -m ruff check --select F821 retrotui tests tools
 
       - name: Run full unittest suite
-        run: python -m unittest discover -s tests -v
+        id: full_unittest
+        shell: bash
+        run: |
+          set +e
+          python -m unittest discover -s tests -v 2>&1 | tee classic-bottom-taskbar-unittest.log
+          status=${PIPESTATUS[0]}
+          exit "$status"
+
+      - name: Upload full unittest diagnostics
+        if: ${{ failure() && steps.full_unittest.outcome == 'failure' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: classic-bottom-taskbar-unittest-log
+          path: classic-bottom-taskbar-unittest.log
 
       - name: Run full pytest suite
         run: python -m pytest tests -q
@@ -156,7 +169,7 @@ jobs:
       - name: Publish verified patch
         shell: bash
         run: |
-          rm -f classic-bottom-taskbar-test.log
+          rm -f classic-bottom-taskbar-test.log classic-bottom-taskbar-unittest.log
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add -A
