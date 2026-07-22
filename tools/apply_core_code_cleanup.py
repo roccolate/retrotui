@@ -104,6 +104,12 @@ def patch_app() -> None:
     )
     text = replace_once(
         text,
+        "    _invoke_mouse_handler,\n",
+        "",
+        label="remove unused mouse helper import",
+    )
+    text = replace_once(
+        text,
         "from ..ui.dialog import Dialog, InputDialog, ProgressDialog\n",
         "from ..ui.dialog import Dialog, InputDialog\n",
         label="remove unused ProgressDialog import",
