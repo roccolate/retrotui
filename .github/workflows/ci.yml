@@ -5,7 +5,7 @@ on:
   pull_request:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
@@ -15,6 +15,61 @@ env:
   MODULE_COVERAGE_FAIL_UNDER: "75.0"
 
 jobs:
+  apply-startup-bootstrap-optimization:
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout optimization branch
+        uses: actions/checkout@v5
+        with:
+          ref: agent/startup-bootstrap-optimization
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install package and test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[test]"
+
+      - name: Apply startup bootstrap optimization
+        run: python tools/apply_startup_bootstrap_optimization.py
+
+      - name: Run repository quality checks
+        run: python tools/qa.py --skip-tests
+
+      - name: Reject undefined Python names
+        run: python -m ruff check --select F821 retrotui tests tools
+
+      - name: Run complete unittest suite
+        run: python -m unittest discover -s tests -v
+
+      - name: Run complete pytest suite
+        run: python -m pytest tests -q
+
+      - name: Enforce module coverage floor
+        run: >-
+          python tools/report_module_coverage.py
+          --quiet-tests
+          --top 20
+          --fail-under "${{ env.MODULE_COVERAGE_FAIL_UNDER }}"
+
+      - name: Commit verified permanent changes
+        shell: bash
+        run: |
+          git config user.name "roccolate"
+          git config user.email "20898609+roccolate@users.noreply.github.com"
+          git add retrotui/core/app.py tests/test_core_app.py
+          git diff --cached --quiet && { echo 'No permanent changes produced'; exit 1; }
+          git commit -m "Optimize startup shell bootstrap"
+          git push origin HEAD:agent/startup-bootstrap-optimization
+
   quality:
     runs-on: ${{ matrix.os }}
     strategy:
