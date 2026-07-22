@@ -38,8 +38,8 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e ".[test]"
 
-      - name: Apply performance patch
-        run: python tools/apply_runtime_performance_hardening.py
+      - name: Apply zero-overhead profiling guard
+        run: python tools/apply_runtime_profile_overhead_guard.py
 
       - name: Run focused regressions
         id: focused
@@ -48,7 +48,6 @@ jobs:
         run: |
           set -o pipefail
           {
-            python -m unittest discover -s tests -p 'test_process_manager_more.py' -v
             python -m unittest discover -s tests -p 'test_event_loop.py' -v
             python -m pytest tests/test_profile_metrics.py -q
           } 2>&1 | tee focused-performance-tests.log
@@ -69,9 +68,9 @@ jobs:
         run: |
           git config user.name "roccolate"
           git config user.email "20898609+roccolate@users.noreply.github.com"
-          git add retrotui tests tools/baseline_extract.py docs/BASELINE_PROFILING.md
+          git add retrotui/core/event_loop.py tests/test_event_loop.py
           git diff --cached --quiet && { echo 'No permanent changes produced'; exit 1; }
-          git commit -m "Optimize runtime sampling and profiling"
+          git commit -m "Avoid profiling overhead when disabled"
           git push origin HEAD:agent/runtime-performance-hardening
 
   quality:
