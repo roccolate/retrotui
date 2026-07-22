@@ -9,7 +9,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: apply-unicode-menus-dialogs-v2
+  group: apply-unicode-menus-dialogs-v3
   cancel-in-progress: false
 
 jobs:
@@ -50,7 +50,7 @@ jobs:
             run_gate python -m pip install -e ".[test]" || failed=$?
           fi
           if [ "$failed" -eq 0 ]; then
-            run_gate python tools/apply_unicode_menus_dialogs.py || failed=$?
+            run_gate python tools/apply_unicode_menus_dialogs_v2.py || failed=$?
           fi
           if [ "$failed" -eq 0 ]; then
             run_gate python -m unittest tests.test_unicode_menus_dialogs -v || failed=$?
@@ -79,9 +79,11 @@ jobs:
           fi
 
           rm tools/apply_unicode_menus_dialogs.py
+          rm tools/apply_unicode_menus_dialogs_v2.py
           rm .github/workflows/apply-unicode-menus-dialogs.yml
           rm "$LOG"
           test ! -e tools/apply_unicode_menus_dialogs.py
+          test ! -e tools/apply_unicode_menus_dialogs_v2.py
           test ! -e .github/workflows/apply-unicode-menus-dialogs.yml
           test ! -e "$LOG"
           git add -A
