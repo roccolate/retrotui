@@ -240,6 +240,8 @@ class ProcessManagerWindow(Window):
         stat_path = f"/proc/{pid}/stat"
         statm_path = f"/proc/{pid}/statm"
         if sampled_at is None:
+            sampled_at = getattr(self, "_active_sample_time", None)
+        if sampled_at is None:
             sampled_at = time.monotonic()
 
         try:
@@ -347,20 +349,20 @@ class ProcessManagerWindow(Window):
             self._error_message = str(exc)
             proc_dirs = []
 
-        for name in proc_dirs:
-            pid = int(name)
-            row = self._read_process_row(
-                pid,
-                total_delta,
-                mem_total_kb,
-                sampled_at=now,
-            )
-            if row is None:
-                continue
-            identity = self._process_identity(row.pid, row.start_time_ticks)
-            rows.append(row)
-            new_ticks[identity] = row.total_ticks
-            live_identities.add(identity)
+        self._active_sample_time = now
+        try:
+            for name in proc_dirs:
+                pid = int(name)
+                # Preserve the historical three-argument override contract.
+                row = self._read_process_row(pid, total_delta, mem_total_kb)
+                if row is None:
+                    continue
+                identity = self._process_identity(row.pid, row.start_time_ticks)
+                rows.append(row)
+                new_ticks[identity] = row.total_ticks
+                live_identities.add(identity)
+        finally:
+            self._active_sample_time = None
 
         self.rows = rows
         self._sort_rows()
@@ -520,7 +522,15 @@ class ProcessManagerWindow(Window):
 
     def tick(self):
         """Refresh process data only when its sampling interval has elapsed."""
-        return bool(self.refresh_processes(force=False))
+        changed = self.refresh_processes(force=False)
+        if changed is not None:
+            return bool(changed)
+
+        # Compatibility for legacy overrides that mutate rows but return None.
+        signature = self._render_signature()
+        changed = signature != self._last_render_signature
+        self._last_render_signature = signature
+        return changed
 
     def draw(self, stdscr):
         """Draw process table and summary bar."""

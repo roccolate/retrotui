@@ -20,18 +20,18 @@ class BaselineProfile:
     draw_ms: float | None
     dispatch_ms: float | None
     input_wait_ms: float | None
-    background_ms: float | None
-    tick_ms: float | None
-    max_tick_ms: float | None
-    max_draw_ms: float | None
-    max_dispatch_ms: float | None
     loops: int | None
     redraws: int | None
-    clock_refreshes: int | None
     events: int | None
-    notification_invalidations: int | None
-    tick_invalidations: int | None
-    input_invalidations: int | None
+    background_ms: float | None = None
+    tick_ms: float | None = None
+    max_tick_ms: float | None = None
+    max_draw_ms: float | None = None
+    max_dispatch_ms: float | None = None
+    clock_refreshes: int | None = None
+    notification_invalidations: int | None = None
+    tick_invalidations: int | None = None
+    input_invalidations: int | None = None
 
 
 def _to_int(value: float | None) -> int | None:
