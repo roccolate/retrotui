@@ -18,7 +18,7 @@
 
 La auditoría de julio de 2026 detectó problemas de ownership y contratos que debían resolverse antes de interpretar una matriz TTY como certificación. El gate pre-v0.9.6 ya está **completado**. El resultado está documentado en [docs/STABILIZATION_PRE_0.9.6.md](docs/STABILIZATION_PRE_0.9.6.md).
 
-El trabajo activo pasa ahora a **v0.9.6 — certificación cross-terminal**. No se deben agregar features nuevas durante este milestone salvo que sean estrictamente necesarias para corregir un blocker encontrado en un entorno real.
+El trabajo activo continúa en **v0.9.6 — certificación cross-terminal**. Después del gate original se completó una campaña adicional de hardening: ownership de workers, operaciones de archivos recuperables, contrato `TERM` honesto, celdas Unicode, controles DEC, geometría por columnas físicas y barra global inferior. No se deben agregar features nuevas durante este milestone salvo que sean estrictamente necesarias para corregir un blocker encontrado en un entorno real.
 
 Fuentes operativas:
 
@@ -137,6 +137,25 @@ El gate completado demuestra contratos internos y regresiones simulables. No sus
 
 ---
 
+## Hardening posterior al gate — completado
+
+- [x] Ownership explícito de workers y shutdown global ordenado.
+- [x] Transferencias cooperativas con progreso, cancelación y publicación transaccional.
+- [x] Trash transaccional con journals de recuperación.
+- [x] Contrato conservador `TERM=retrotui` / fallback `TERM=ansi` y terminfo instalable.
+- [x] Ownership de teclado para Terminal y prefijo host `F12`.
+- [x] Celdas Unicode físicas, autowrap, scroll regions y edición DEC.
+- [x] IND/NEL/RI, tab stops y device/cursor reports.
+- [x] Hardening de OSC, close hooks y scrollback live-tail.
+- [x] Geometría Unicode para chrome, taskbar, menús, diálogos, iconos y listas.
+- [x] Barra global inferior con `Inicio`, menús hacia arriba, ventanas minimizadas y reloj.
+- [x] Hitboxes precisos de checkboxes en Control Panel.
+- [x] Matriz permanente verde en cada corte y ramas absorbidas eliminadas.
+
+Estos cambios amplían lo que debe verificarse en terminales reales; no sustituyen la certificación v0.9.6.
+
+---
+
 ## v0.9.6 — Certificación cross-terminal
 
 **Objetivo:** validar RetroTUI en entornos reales y documentar el soporte sin promesas generales que contradigan la evidencia.
@@ -154,14 +173,14 @@ El gate completado demuestra contratos internos y regresiones simulables. No sus
 ### Superficies a certificar
 
 - [ ] Inicio y cierre limpio.
-- [ ] Teclado y atajos globales.
+- [ ] Teclado, ownership de Terminal y prefijo host `F12`.
 - [ ] Mouse: GPM, SGR/xterm y pass-through DEC.
-- [ ] Resize y terminales pequeñas.
-- [ ] Unicode y caracteres de ancho doble.
+- [ ] Resize, workspace desde fila cero y taskbar inferior en terminales pequeñas.
+- [ ] Unicode, combining marks, emoji y caracteres de ancho doble en chrome, menús, iconos, listas y Terminal.
 - [ ] Paletas y terminales con pocos pares de color.
 - [ ] File Manager, Notepad y Terminal.
 - [ ] Terminal minimizado y sesiones de salida continua.
-- [ ] `nano`, `vim`, `less`, `top`, `htop` y `mc` donde estén disponibles.
+- [ ] `nano`, `vim`, `less`, `top`, `htop` y `mc` usando el perfil terminfo conservador donde esté disponible.
 - [ ] Plugins bundled representativos.
 
 ### Entregables

@@ -45,8 +45,12 @@ retrotui/
 │   ├── dialog_workflow.py      # stable workflow IDs and bindings
 │   ├── dialog_dispatch.py      # dialog result resolution
 │   ├── drag_drop.py            # capability-based dropped-path routing
-│   ├── file_operations.py      # asynchronous file operations
+│   ├── file_operations.py      # asynchronous file-operation coordination
+│   ├── file_transfer.py        # cooperative copy/move and transactional publish
+│   ├── worker_scope.py         # worker ownership, cancellation and bounded join
+│   ├── shell_geometry.py       # bottom shell row and workspace bounds
 │   ├── terminal_session.py     # POSIX PTY and Windows ConPTY process layer
+│   ├── terminal_modes.py       # conservative DEC/capability state
 │   ├── ansi.py                 # ANSI parser/state machine
 │   ├── viewer.py               # file type to viewer dispatch
 │   ├── clipboard.py            # internal/system clipboard bridge
@@ -83,6 +87,11 @@ RetroTUI deliberately assigns each cross-cutting concern to one authority.
 | Dropped-path behavior | `DragDropManager` |
 | Pub/sub lifecycle events | `EventBus` |
 | PTY ownership | `TerminalSession` |
+| Terminal cell/screen invariants | `TerminalScreenBuffer` |
+| Global shell row and workspace bounds | `shell_geometry` |
+| Physical text width and fitting | shared `utils` column helpers |
+| Background worker lifetime | `WorkerScope` |
+| Cooperative filesystem transfer | `file_transfer` + `file_operations` |
 | Logical color IDs | `color_pairs` negotiation |
 
 Do not introduce a second authority for one of these concerns. Compatibility adapters should translate legacy behavior at a boundary rather than reintroduce competing state inside the core loop.
@@ -144,14 +153,35 @@ Rendering composes the frame back to front:
 1. Desktop background.
 2. Desktop icons.
 3. Windows by z-order.
-4. Global menu and dropdown.
-5. Taskbar.
-6. Status bar.
-7. Modal dialog.
-8. Context menu.
-9. Notifications.
+4. Global menu and upward dropdown.
+5. Unified bottom shell bar (`Inicio`, menu titles, minimized windows and clock).
+6. Modal dialog.
+7. Context menu.
+8. Notifications.
 
 Curses writes should go through safe helpers that clamp coordinates and tolerate resize races. Drawing must not start network requests, read PTYs, poll files or perform other blocking service work.
+
+### Shell geometry and physical text columns
+
+`core/shell_geometry.py` is the authority for the global bottom row and workspace limits. The workspace starts at row zero and ends immediately before the reserved shell row. Window maximize, drag, resize, desktop icon clipping, taskbar drawing, clock routing and global-menu mouse handling consume the same geometry.
+
+The global shell row contains, from left to right:
+
+1. `[ Inicio ]`;
+2. global menu titles;
+3. minimized-window buttons;
+4. the clock.
+
+Global dropdowns open upward from this row. Per-window menus retain downward dropdown behavior.
+
+Text geometry uses shared `wcwidth`-backed helpers:
+
+- `text_display_width()` measures physical terminal columns;
+- `clip_text_columns()` clips without splitting wide/combining sequences;
+- `pad_text_columns()` fits a row to an exact column budget;
+- `center_text_columns()` centers within an exact physical width.
+
+Rendering and hit-testing must use the same measured geometry. Python `len()`, ordinary slicing and format-field widths are not valid substitutes for user-visible terminal columns.
 
 ## Window lifecycle
 
@@ -337,11 +367,27 @@ private markers through a list-compatible `CsiParams` object so `?25`, `?1`,
 - `?25h` / `?25l` controls cursor visibility;
 - `?1h` / `?1l` selects application or normal cursor-key encoding;
 - `?2004h` / `?2004l` enables bracketed paste framing;
-- `?7h` / `?7l` records autowrap mode for the upcoming cell-engine slice;
+- `?7h` / `?7l` enables or disables autowrap in the active Unicode-aware screen buffer;
 - alternate-screen and mouse modes remain owned by the same window authority.
 
 Bracketed paste sanitizes an embedded end marker before framing the payload, so
 clipboard content cannot terminate paste mode early.
+
+### Unicode cell and DEC screen model
+
+`TerminalScreenBuffer` stores physical terminal columns while preserving the public two-item `(text, attr)` cell tuple contract. A double-width glyph owns a leading cell plus an internal empty-text continuation cell. Combining marks, variation selectors and zero-width-joiner sequences merge into the preceding leading cell without advancing the cursor.
+
+Screen editing expands operations that touch a wide continuation back to the leading cell, preventing orphan halves during insert, delete, erase and resize. Autowrap decides whether a glyph wraps before the final column or is clamped/replaced when wrapping is disabled.
+
+Per-screen state includes DEC scrolling margins, origin mode, saved cursor coordinates and tab stops. Implemented controls include:
+
+- `DECSTBM`, DECOM, CSI save/restore, ICH, DCH, ECH, IL and DL;
+- IND, NEL and RI with active-region semantics;
+- HTS, TBC, CHT and CBT;
+- ANSI/DEC-private device-status and cursor-position reports;
+- `?1049` alternate-screen save, clear, home and normal-cursor restore.
+
+Protocol replies go directly to the existing PTY child and do not enter scrollback.
 
 ### Scrollback
 
@@ -394,14 +440,21 @@ If the child is still observably alive, `close()` returns false and retains the 
 
 ## File operations and workers
 
-File operations may run outside the main thread. Their managers own operation state and publish progress/results back to the UI.
+File operations may run outside the main thread. `WorkerScope` owns thread registration, cancellation, bounded joins and publication validity. Global filesystem operations additionally belong to `FileOperationManager`, which rejects new work during shutdown and suppresses late UI dispatch.
+
+`core/file_transfer.py` implements cooperative copy/move with pre-scan progress, block-level cancellation and transactional destination publication through sibling temporary paths. Same-filesystem moves prefer atomic no-replace rename; cross-filesystem moves publish the complete destination before removing the source.
+
+Trash operations write recovery journals before irreversible transitions. Move-to-trash, restore, permanent delete and empty trash reconcile incomplete state on startup and hide internal sidecars, staging paths and tombstones from the user view.
 
 Important invariants:
 
-- metadata required for recovery must be written in a safe order;
+- metadata required for recovery is written before the transition it describes;
+- a final destination is not exposed until its payload is complete;
+- expected cancellation is not reported as an asynchronous error;
 - UI updates are consumed on the main thread;
-- previews and operations should support cancellation or generation ownership where implemented;
-- stale worker output must not overwrite newer state.
+- previews and operations use cancellation or generation ownership;
+- stale worker output cannot overwrite newer state;
+- a shutdown that cannot physically join side-effecting work reports that limitation instead of declaring success.
 
 ## Plugin model
 

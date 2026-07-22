@@ -4,6 +4,47 @@ Todas las versiones notables de RetroTUI están documentadas aquí.
 
 ---
 
+## [Unreleased] - 2026-07-22
+
+Hardening and visible-shell work completed after the original pre-v0.9.6 stabilization gate. The published package remains `0.9.5`; these changes are present on `main` and still require real-terminal certification before a v0.9.6 release.
+
+### Core, workers and file operations
+
+- Externalized circuit-breaker ownership from application windows while preserving legacy compatibility mirrors.
+- Added typed payloads for destructive confirmations, transfers, process signals and configuration updates.
+- Added configuration `schema_version = 1`, legacy migration and protection against overwriting unknown future schemas.
+- Added `WorkerScope` ownership, cooperative cancellation, bounded shutdown and stale-result rejection for window and global workers.
+- Added cooperative copy/move transfers with deterministic progress, block-level cancellation, transactional destination publication and no-clobber semantics.
+- Added crash-recoverable Trash move, restore, permanent-delete and empty-trash journals with startup reconciliation.
+- Hardened idle redraw behavior and Wi-Fi worker executable capture.
+
+### Embedded terminal
+
+- Gave focused terminal windows ownership of terminal-oriented keys and introduced `F12` as the explicit host-command prefix.
+- Added DEC cursor visibility, application cursor keys, bracketed paste and effective autowrap state.
+- Added a conservative child `TERM` contract, bundled `retrotui` terminfo source and installer command.
+- Added Unicode-aware physical cells for CJK, emoji and combining sequences while preserving the legacy two-item cell tuple contract.
+- Added DEC scrolling margins, origin mode, screen editing operations, alternate-screen cursor restoration and Unicode-safe wide-cell edits.
+- Added IND, NEL, RI, tab stops, TBC/CHT/CBT, device-status reports and cursor-position reports.
+- Hardened OSC termination, window close-hook isolation and the live-tail scrollback hot path.
+
+### Shell and Unicode UI
+
+- Added physical-column clipping and hitboxes for window titles and taskbar labels.
+- Extended physical-column geometry to global/window menus, dialogs, progress dialogs and multiselect controls.
+- Fixed Control Panel checkbox click ranges and immediate preference persistence.
+- Moved the global shell to a classic bottom taskbar with `[ Inicio ]`, upward global dropdowns, minimized-window buttons and clock.
+- Made desktop icons share one Unicode-aware geometry between rendering and mouse hit testing.
+- Extended physical-column fitting to File Manager, Process Manager and App Manager rows, tabs and buttons.
+
+### Validation and maintenance
+
+- Every implementation cut passed the permanent Ubuntu/Windows matrix on Python 3.10, 3.12 and 3.14, including QA, Ruff F821, `unittest`, pytest and the module coverage floor.
+- Implementation PRs were squash-merged after exact-head validation.
+- Fully absorbed remote branches and temporary maintenance refs were removed; `main` is the only long-lived remote branch.
+
+---
+
 ## [pre-v0.9.6] - 2026-07-21 (stabilization complete)
 
 Gate técnico completado antes de comenzar la certificación cross-terminal de v0.9.6.
