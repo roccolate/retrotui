@@ -9,8 +9,6 @@
 
 ```text
 ╔══════════════════════════════════════════════════════════════╗
-║ ≡ File   Edit   Help                            12:30:45     ║
-╠══════════════════════════════════════════════════════════════╣
 ║░░┌──┐░░░░╔═══ File Manager ═══════════[─][□][×]╗░░░░░░░░░║
 ║░░│FL│░░░░║ 📂 /home/user                       ║░░░░░░░░░║
 ║░░└──┘░░░░║ ──────────────────────────           ║░░░░░░░░░║
@@ -22,6 +20,8 @@
 ║░░┌──┐░░░░ RetroTUI v0.9.x │ Mouse │ PTY │ Plugins         ║
 ║░░│>_│░░░░ Ctrl+Q: Exit                                     ║
 ║░░└──┘░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░║
+╠══════════════════════════════════════════════════════════════╣
+║ [ Inicio ] File Edit Help [ File Manager ]       12:30:45  ║
 ╚══════════════════════════════════════════════════════════════╝
 ```
 
@@ -36,7 +36,7 @@
 | v0.9.6 release | Not published yet |
 | v1.0 status | Planned after v0.9.7–v0.9.9 |
 
-The pre-v0.9.6 core stabilization is complete: lifecycle ownership, redraw scheduling, terminal PTY service, dialog routing, drag-and-drop precedence, color-pair negotiation, scrollback ownership and the complete CI gate now have explicit contracts and regression coverage.
+The pre-v0.9.6 core stabilization is complete. Subsequent hardening added cooperative worker ownership, crash-recoverable file operations, a conservative embedded-terminal capability contract, Unicode-aware terminal cells and physical-column geometry across window chrome, menus, dialogs, desktop icons and list applications. The global shell now uses a classic bottom taskbar with an `Inicio` control, minimized-window buttons and the clock on one shared row.
 
 The current milestone is **real-environment certification**. A green automated suite validates internal behavior, but does not by itself certify a physical TTY, terminal emulator, SSH client, multiplexer or Windows terminal host.
 
@@ -61,10 +61,13 @@ Additional built-in applications and bundled plugins can be enabled through conf
 
 ## Highlights
 
-- Window manager with focus, z-order, move, resize, maximize, minimize and taskbar behavior.
+- Window manager with focus, z-order, move, resize, maximize and minimize behavior.
+- Classic bottom shell bar with `Inicio`, global menus, minimized-window buttons and clock.
+- Unicode-aware physical-column clipping, centering and mouse hitboxes across shared UI surfaces.
 - Keyboard and mouse routing for terminal emulators and Linux console/GPM environments.
 - POSIX PTY and Windows ConPTY terminal backends.
-- Terminal normal screen, alternate screen, cursor state, per-cell attributes and scrollback.
+- Terminal normal/alternate screens, Unicode-aware physical cells, DEC scrolling regions, tab stops, reports, cursor state, per-cell attributes and scrollback.
+- Honest child capability negotiation through the bundled conservative `retrotui` terminfo profile.
 - Bounded PTY reads and writes so terminal traffic cannot monopolize the UI loop.
 - Transactional close protocol for windows with unsaved state.
 - Typed dialog workflows bound to the window that opened them.
@@ -190,6 +193,9 @@ The current architecture is built around a small set of authorities:
 - `DialogDispatcher` resolves typed workflows using the captured source window.
 - `DragDropManager` invokes `accept_dropped_path()` before generic `open_path()` fallback.
 - `TerminalSession` owns PTY process state, bounded reads, queued writes and verified shutdown.
+- `shell_geometry` owns the global bottom row and workspace bounds.
+- Shared `wcwidth`-backed helpers own physical-column clipping, padding and centering.
+- `WorkerScope` owns background worker cancellation, publication validity and bounded shutdown.
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for the complete model.
 
