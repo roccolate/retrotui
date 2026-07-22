@@ -58,7 +58,7 @@ Use clear, descriptive commit messages.
 
 1.  Push your branch to your fork.
 2.  Open a Pull Request against `roccolate/RetroTUI:main`.
-3.  Ensure the CI (GitHub Actions) passes.
+3.  Ensure the CI (GitHub Actions) passes. Documentation-only PRs still run the permanent gate because documentation contains version, architecture and release contracts.
 4.  Keep the branch synchronized with `main` and address review feedback.
 5.  Prefer squash merge for branches containing operational/fixup commits.
 6.  After merge, compare the branch against `main` and delete it when no exclusive commits remain.
