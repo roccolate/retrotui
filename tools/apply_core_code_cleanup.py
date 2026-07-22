@@ -13,26 +13,17 @@ APP_PATH = Path("retrotui/core/app.py")
 TEST_PATH = Path("tests/test_core_app.py")
 CI_PATH = Path(".github/workflows/ci.yml")
 
+# Only wrappers with no runtime caller and no compatibility test belong here.
 DEAD_APP_METHODS = {
     "_build_plugin_menu_items",
     "_build_plugin_window",
-    "_split_config_csv",
     "_menu_item_visibility_key",
-    "_get_hidden_menu_keys",
-    "_build_menu_editor_catalog",
     "_close_window_safely",
-    "_normalize_icon_style",
     "_icon_style_variants",
     "_style_symbol_for_icon",
-    "_styled_icon_entry",
-    "_icon_visibility_key",
-    "_get_hidden_icon_labels",
     "_plugin_icon_art",
     "_build_plugin_icons",
-    "_build_desktop_icon_catalog",
-    "_save_icon_positions",
     "_activate_last_visible_window",
-    "_consume_pending_sigint",
 }
 
 
@@ -149,7 +140,12 @@ def patch_app() -> None:
     new_icon_imports = '''from .icon_styles import (
     ICON_STYLE_DEFAULT,
     normalize_icon_style,
+    styled_icon_entry as _styled_icon_entry,
     icon_style_preview_symbol as _icon_style_preview_symbol,
+    icon_visibility_key as _icon_visibility_key,
+    get_hidden_icon_labels as _get_hidden_icon_labels,
+    split_config_csv as _split_config_csv,
+    build_desktop_icon_catalog as _build_desktop_icon_catalog,
     refresh_icons as _refresh_icons,
 )
 '''
@@ -158,28 +154,6 @@ def patch_app() -> None:
         old_icon_imports,
         new_icon_imports,
         label="simplify icon-style imports",
-    )
-
-    old_signal_imports = '''from .signal_handler import (
-    install_runtime_signal_handlers,
-    restore_runtime_signal_handlers,
-    queue_pending_signal_key,
-    consume_pending_signal_key,
-    consume_pending_sigint,
-)
-'''
-    new_signal_imports = '''from .signal_handler import (
-    install_runtime_signal_handlers,
-    restore_runtime_signal_handlers,
-    queue_pending_signal_key,
-    consume_pending_signal_key,
-)
-'''
-    text = replace_once(
-        text,
-        old_signal_imports,
-        new_signal_imports,
-        label="simplify signal-handler imports",
     )
 
     old_plugin_imports = '''from .plugin_manager import (
@@ -211,10 +185,17 @@ def patch_app() -> None:
     build_menu_editor_catalog,
 )
 '''
+    new_menu_imports = '''from .menu_builder import (
+    get_hidden_menu_keys as _get_hidden_menu_keys,
+    build_global_menu_items,
+    rebuild_global_menu,
+    build_menu_editor_catalog,
+)
+'''
     text = replace_once(
         text,
         old_menu_imports,
-        "from .menu_builder import build_global_menu_items, rebuild_global_menu\n",
+        new_menu_imports,
         label="simplify menu-builder imports",
     )
     text = replace_once(
