@@ -97,6 +97,10 @@ class CoreAppTests(unittest.TestCase):
             sys.modules.pop(mod_name, None)
 
         cls.actions_mod = importlib.import_module("retrotui.core.actions")
+        cls.constants_mod = importlib.import_module("retrotui.constants")
+        cls.dialog_mod = importlib.import_module("retrotui.ui.dialog")
+        cls.file_ops_mod = importlib.import_module("retrotui.core.file_operations")
+        cls.signal_mod = importlib.import_module("retrotui.core.signal_handler")
         cls.app_mod = importlib.import_module("retrotui.core.app")
         cls.viewer_mod = importlib.import_module("retrotui.core.viewer")
         cls.plugin_mod = importlib.import_module("retrotui.core.plugin_manager")
@@ -217,8 +221,8 @@ class CoreAppTests(unittest.TestCase):
         self.assertEqual(app.menu, fake_menu)
         self.assertEqual(app.windows, [fake_window])
         self.assertTrue(fake_window.active)
-        self.assertGreaterEqual(len(app.icons), len(self.app_mod.ICONS))
-        expected = {(icon.get("label"), icon.get("action")) for icon in self.app_mod.ICONS}
+        self.assertGreaterEqual(len(app.icons), len(self.constants_mod.ICONS))
+        expected = {(icon.get("label"), icon.get("action")) for icon in self.constants_mod.ICONS}
         current = {(icon.get("label"), icon.get("action")) for icon in app.icons}
         self.assertTrue(expected.issubset(current))
 
@@ -247,8 +251,8 @@ class CoreAppTests(unittest.TestCase):
         ):
             app = self.app_mod.RetroTUI(stdscr)
 
-        self.assertGreaterEqual(len(app.icons), len(self.app_mod.ICONS_ASCII))
-        expected = {(icon.get("label"), icon.get("action")) for icon in self.app_mod.ICONS_ASCII}
+        self.assertGreaterEqual(len(app.icons), len(self.constants_mod.ICONS_ASCII))
+        expected = {(icon.get("label"), icon.get("action")) for icon in self.constants_mod.ICONS_ASCII}
         current = {(icon.get("label"), icon.get("action")) for icon in app.icons}
         self.assertTrue(expected.issubset(current))
 
@@ -1016,7 +1020,7 @@ class CoreAppTests(unittest.TestCase):
         )
         callback = mock.Mock(return_value=callback_result)
         dialog = self.app_mod.bind_dialog(
-            self.app_mod.InputDialog("Save As", "Enter filename:"),
+            self.dialog_mod.InputDialog("Save As", "Enter filename:"),
             workflow_id=self.app_mod.DialogWorkflowId.CALLBACK,
             source_window=source,
             on_accept=callback,
@@ -1043,7 +1047,7 @@ class CoreAppTests(unittest.TestCase):
         )
         callback = mock.Mock(return_value=callback_result)
         app.dialog = self.app_mod.bind_dialog(
-            self.app_mod.Dialog("Confirm", "Delete?", ["Delete", "Cancel"]),
+            self.dialog_mod.Dialog("Confirm", "Delete?", ["Delete", "Cancel"]),
             workflow_id=self.app_mod.DialogWorkflowId.CALLBACK,
             source_window=source,
             on_accept=callback,
@@ -1581,7 +1585,7 @@ class CoreAppTests(unittest.TestCase):
 
         app.show_save_as_dialog(target)
 
-        self.assertIsInstance(app.dialog, self.app_mod.InputDialog)
+        self.assertIsInstance(app.dialog, self.dialog_mod.InputDialog)
         result = app.dialog.callback("demo.txt")
         target.save_as.assert_called_once_with("demo.txt")
         self.assertTrue(result)
@@ -1592,7 +1596,7 @@ class CoreAppTests(unittest.TestCase):
 
         app.show_open_dialog(target)
 
-        self.assertIsInstance(app.dialog, self.app_mod.InputDialog)
+        self.assertIsInstance(app.dialog, self.dialog_mod.InputDialog)
         result = app.dialog.callback("demo.txt")
         target.open_path.assert_called_once_with("demo.txt")
         self.assertIsNone(result)
@@ -1607,7 +1611,7 @@ class CoreAppTests(unittest.TestCase):
 
         app.show_rename_dialog(target)
 
-        self.assertIsInstance(app.dialog, self.app_mod.InputDialog)
+        self.assertIsInstance(app.dialog, self.dialog_mod.InputDialog)
         result = app.dialog.callback("b.txt")
         target.rename_selected.assert_called_once_with("b.txt")
         self.assertIsNone(result)
@@ -1638,13 +1642,13 @@ class CoreAppTests(unittest.TestCase):
         )
 
         app.show_copy_dialog(target)
-        self.assertIsInstance(app.dialog, self.app_mod.InputDialog)
+        self.assertIsInstance(app.dialog, self.dialog_mod.InputDialog)
         result_copy = app.dialog.callback("/tmp/dst")
         target.copy_selected.assert_called_once_with("/tmp/dst")
         self.assertIsNone(result_copy)
 
         app.show_move_dialog(target)
-        self.assertIsInstance(app.dialog, self.app_mod.InputDialog)
+        self.assertIsInstance(app.dialog, self.dialog_mod.InputDialog)
         result_move = app.dialog.callback("/tmp/dst2")
         target.move_selected.assert_called_once_with("/tmp/dst2")
         self.assertIsNone(result_move)
@@ -1742,7 +1746,7 @@ class CoreAppTests(unittest.TestCase):
 
         self.assertIsNone(result)
         self.assertTrue(app.has_background_operation())
-        self.assertIsInstance(app.dialog, self.app_mod.ProgressDialog)
+        self.assertIsInstance(app.dialog, self.dialog_mod.ProgressDialog)
         self.assertTrue(app._background_operation["thread"].daemon)
 
         for _ in range(50):
@@ -1864,34 +1868,34 @@ class CoreAppTests(unittest.TestCase):
         app._prev_signal_handlers = {}
         app._sigint_handler_installed = False
 
-        expected_signals = [self.app_mod.signal.SIGINT]
-        sigbreak = getattr(self.app_mod.signal, "SIGBREAK", None)
+        expected_signals = [self.signal_mod.signal.SIGINT]
+        sigbreak = getattr(self.signal_mod.signal, "SIGBREAK", None)
         if sigbreak is not None:
             expected_signals.append(sigbreak)
-        sigtstp = getattr(self.app_mod.signal, "SIGTSTP", None)
+        sigtstp = getattr(self.signal_mod.signal, "SIGTSTP", None)
         if sigtstp is not None:
             expected_signals.append(sigtstp)
-        sigterm = getattr(self.app_mod.signal, "SIGTERM", None)
+        sigterm = getattr(self.signal_mod.signal, "SIGTERM", None)
         if sigterm is not None:
             expected_signals.append(sigterm)
-        sighup = getattr(self.app_mod.signal, "SIGHUP", None)
+        sighup = getattr(self.signal_mod.signal, "SIGHUP", None)
         if sighup is not None:
             expected_signals.append(sighup)
 
-        with mock.patch.object(self.app_mod.threading, "current_thread", return_value=self.app_mod.threading.main_thread()):
+        with mock.patch.object(self.file_ops_mod.threading, "current_thread", return_value=self.file_ops_mod.threading.main_thread()):
             with mock.patch.object(
-                self.app_mod.signal,
+                self.signal_mod.signal,
                 "getsignal",
                 side_effect=lambda sig: f"old-{sig}",
             ) as getsig:
-                with mock.patch.object(self.app_mod.signal, "signal") as setsig:
+                with mock.patch.object(self.signal_mod.signal, "signal") as setsig:
                     app._install_runtime_signal_handlers()
                     self.assertTrue(app._sigint_handler_installed)
                     self.assertEqual(getsig.call_count, len(expected_signals))
                     self.assertEqual(setsig.call_count, len(expected_signals))
 
                     installed = {call.args[0]: call.args[1] for call in setsig.call_args_list}
-                    sigint_handler = installed[self.app_mod.signal.SIGINT]
+                    sigint_handler = installed[self.signal_mod.signal.SIGINT]
                     self.assertIs(getattr(sigint_handler, "__self__", None), app)
                     self.assertEqual(getattr(sigint_handler, "__name__", ""), "_handle_sigint")
                     if sigbreak is not None:
@@ -1922,12 +1926,12 @@ class CoreAppTests(unittest.TestCase):
     def test_runtime_signal_handler_install_is_idempotent_when_already_installed(self):
         app = self._make_app()
         app._sigint_handler_installed = True
-        app._prev_signal_handlers = {self.app_mod.signal.SIGINT: "old"}
+        app._prev_signal_handlers = {self.signal_mod.signal.SIGINT: "old"}
         app._prev_sigint_handler = "old"
 
         with (
-            mock.patch.object(self.app_mod.signal, "getsignal") as getsig,
-            mock.patch.object(self.app_mod.signal, "signal") as setsig,
+            mock.patch.object(self.signal_mod.signal, "getsignal") as getsig,
+            mock.patch.object(self.signal_mod.signal, "signal") as setsig,
         ):
             app._install_runtime_signal_handlers()
 
@@ -1942,7 +1946,7 @@ class CoreAppTests(unittest.TestCase):
         app._prev_signal_handlers = {}
         app._sigint_handler_installed = False
 
-        failing_sig = getattr(self.app_mod.signal, "SIGTERM", None)
+        failing_sig = getattr(self.signal_mod.signal, "SIGTERM", None)
         if failing_sig is None:
             self.skipTest("SIGTERM not available on this platform")
 
@@ -1951,18 +1955,18 @@ class CoreAppTests(unittest.TestCase):
                 raise OSError("boom")
             return None
 
-        with mock.patch.object(self.app_mod.threading, "current_thread", return_value=self.app_mod.threading.main_thread()):
+        with mock.patch.object(self.file_ops_mod.threading, "current_thread", return_value=self.file_ops_mod.threading.main_thread()):
             with mock.patch.object(
-                self.app_mod.signal,
+                self.signal_mod.signal,
                 "getsignal",
                 side_effect=lambda sig: f"old-{sig}",
             ):
-                with mock.patch.object(self.app_mod.signal, "signal", side_effect=_setsig) as setsig:
+                with mock.patch.object(self.signal_mod.signal, "signal", side_effect=_setsig) as setsig:
                     app._install_runtime_signal_handlers()
 
         self.assertGreaterEqual(setsig.call_count, 1)
         self.assertTrue(app._sigint_handler_installed)
-        self.assertIn(self.app_mod.signal.SIGINT, app._prev_signal_handlers)
+        self.assertIn(self.signal_mod.signal.SIGINT, app._prev_signal_handlers)
         self.assertNotIn(failing_sig, app._prev_signal_handlers)
 
     def test_handle_sigint_queue_and_consume_once(self):
@@ -1996,11 +2000,11 @@ class CoreAppTests(unittest.TestCase):
     def test_restore_runtime_signal_handlers_clears_state_on_signal_error(self):
         app = self._make_app()
         app._sigint_handler_installed = True
-        app._prev_signal_handlers = {self.app_mod.signal.SIGINT: "old"}
+        app._prev_signal_handlers = {self.signal_mod.signal.SIGINT: "old"}
         app._prev_sigint_handler = "old"
         app._shutdown_signal = 15
 
-        with mock.patch.object(self.app_mod.signal, "signal", side_effect=OSError("denied")) as setsig:
+        with mock.patch.object(self.signal_mod.signal, "signal", side_effect=OSError("denied")) as setsig:
             app._restore_runtime_signal_handlers()
 
         setsig.assert_called()
@@ -2027,13 +2031,13 @@ class CoreAppTests(unittest.TestCase):
         )
 
         app.show_new_dir_dialog(target)
-        self.assertIsInstance(app.dialog, self.app_mod.InputDialog)
+        self.assertIsInstance(app.dialog, self.dialog_mod.InputDialog)
         result_dir = app.dialog.callback("folder")
         target.create_directory.assert_called_once_with("folder")
         self.assertIsNone(result_dir)
 
         app.show_new_file_dialog(target)
-        self.assertIsInstance(app.dialog, self.app_mod.InputDialog)
+        self.assertIsInstance(app.dialog, self.dialog_mod.InputDialog)
         result_file = app.dialog.callback("file.txt")
         target.create_file.assert_called_once_with("file.txt")
         self.assertIsNone(result_file)
