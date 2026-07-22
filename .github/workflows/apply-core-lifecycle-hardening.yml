@@ -7,6 +7,13 @@ on:
     paths:
       - tools/apply_core_lifecycle_hardening.py
       - .github/workflows/apply-core-lifecycle-hardening.yml
+  pull_request:
+    branches:
+      - main
+      - agent/secure-atomic-write
+    paths:
+      - tools/apply_core_lifecycle_hardening.py
+      - .github/workflows/apply-core-lifecycle-hardening.yml
 
 permissions:
   contents: write
