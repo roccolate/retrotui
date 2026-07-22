@@ -9,6 +9,7 @@ from dataclasses import dataclass
 
 from ..constants import (
     BOTTOM_BARS_HEIGHT,
+    MENU_BAR_HEIGHT,
     TERMINAL_INPUT_TIMEOUT_MS,
     TERMINAL_LIVE_INPUT_TIMEOUT_MS,
     TERMINAL_BACKGROUND_INPUT_TIMEOUT_MS,
@@ -247,7 +248,10 @@ def clamp_windows_to_terminal(app):
     new_h, new_w = app.stdscr.getmaxyx()
     for win in app.windows:
         win.x = max(0, min(win.x, new_w - min(win.w, new_w)))
-        win.y = max(1, min(win.y, new_h - min(win.h, new_h) - BOTTOM_BARS_HEIGHT))
+        win.y = max(
+            MENU_BAR_HEIGHT,
+            min(win.y, new_h - min(win.h, new_h) - BOTTOM_BARS_HEIGHT),
+        )
 
 
 def draw_frame(app):

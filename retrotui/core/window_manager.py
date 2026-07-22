@@ -1,8 +1,9 @@
 """Window lifecycle management for RetroTUI."""
 import logging
 
-from ..constants import TASKBAR_TITLE_MAX_LEN, BOTTOM_BARS_HEIGHT
+from ..constants import TASKBAR_TITLE_MAX_LEN
 from ..utils import clip_text_columns, text_display_width
+from .shell_geometry import global_bar_row
 
 LOGGER = logging.getLogger(__name__)
 _WINDOW_CLOSE_HOOK_ERRORS = (
@@ -277,18 +278,15 @@ class WindowManager:
         return stats
 
     def _taskbar_row(self, height):
-        return height - BOTTOM_BARS_HEIGHT if BOTTOM_BARS_HEIGHT else 0
+        return global_bar_row(height)
 
     def _taskbar_bounds(self, width):
-        if BOTTOM_BARS_HEIGHT:
-            return 1, width
-
         menu = getattr(self._app, "menu", None)
         start_x = 1
         menu_right = getattr(menu, "menu_items_right_x", None)
         if callable(menu_right):
             try:
-                start_x = max(start_x, int(menu_right()) + 2)
+                start_x = max(start_x, int(menu_right()) + 1)
             except (TypeError, ValueError):
                 start_x = 1
 
