@@ -35,7 +35,13 @@ jobs:
         run: python tools/apply_windows_conpty_fix.py
 
       - name: Validate focused terminal tests
-        run: python -m unittest discover -s tests -p "test_terminal_session.py" -v
+        shell: bash
+        run: |
+          set -o pipefail
+          python -m unittest discover -s tests -p "test_terminal_session.py" -v > focused-tests.log 2>&1 || {
+            tail -120 focused-tests.log
+            exit 1
+          }
 
       - name: Validate repository quality
         run: |
