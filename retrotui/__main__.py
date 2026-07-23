@@ -74,18 +74,15 @@ def main(stdscr):
             len(getattr(app, 'icons', [])),
         )
     app.run()
-    # Capture the most recent external shutdown signal so ``run()`` can
-    # mirror it in the process exit code. ``KeyboardInterrupt`` returns 130
-    # explicitly; this path covers SIGTERM/SIGHUP/SIGBREAK caught by the
-    # runtime handlers in ``signal_handler``. Tolerate non-int values
-    # (e.g. test stubs that return ``Mock`` objects) without crashing.
     shutdown_signal = getattr(app, '_shutdown_signal', None)
     if isinstance(shutdown_signal, int) and not isinstance(shutdown_signal, bool):
         _LAST_SHUTDOWN_SIGNAL = shutdown_signal
 
+
 def _default_crash_log_dir() -> Path:
     """Return the default persistent crash log directory."""
     return Path.home() / ".config" / "retrotui" / "logs"
+
 
 def _write_crash_report(exc: Exception, traceback_text: str) -> Path | None:
     """Persist a crash report and return its path (best effort)."""
@@ -107,6 +104,7 @@ def _write_crash_report(exc: Exception, traceback_text: str) -> Path | None:
         return None
     return log_path
 
+
 def run():
     """Run RetroTUI and return process exit code."""
     global _LAST_SHUTDOWN_SIGNAL
@@ -115,13 +113,11 @@ def run():
         curses.wrapper(main)
         print('\033c', end='')
         if _LAST_SHUTDOWN_SIGNAL is not None:
-            # Convention: ``128 + signum`` for terminations by signal.
             return 128 + _LAST_SHUTDOWN_SIGNAL
         return 0
     except KeyboardInterrupt:
         return 130
     except _TOP_LEVEL_RUNTIME_ERRORS as e:
-        # Top-level crash guard is intentionally broad to restore terminal state.
         try:
             curses.endwin()
         except curses.error:
@@ -137,20 +133,41 @@ def run():
 
 
 def _terminfo_parser() -> argparse.ArgumentParser:
-    """Build the small maintenance parser without affecting normal startup."""
+    """Build maintenance parser without affecting normal startup."""
     parser = argparse.ArgumentParser(
         prog="retrotui",
         description="RetroTUI terminal desktop and maintenance commands.",
     )
-    parser.add_argument(
+    actions = parser.add_mutually_exclusive_group()
+    actions.add_argument(
         "--install-terminfo",
         action="store_true",
         help="compile the bundled conservative terminfo profile",
+    )
+    actions.add_argument(
+        "--compat-lab",
+        action="store_true",
+        help="run the guided real-terminal compatibility lab",
     )
     parser.add_argument(
         "--terminfo-dir",
         metavar="PATH",
         help="destination terminfo database (default: ~/.terminfo)",
+    )
+    parser.add_argument(
+        "--compat-output",
+        metavar="PATH",
+        help="report directory or .json/.md path",
+    )
+    parser.add_argument(
+        "--compat-label",
+        metavar="NAME",
+        help="human-readable terminal label stored in the report",
+    )
+    parser.add_argument(
+        "--compat-auto",
+        action="store_true",
+        help="collect automated probes without the interactive curses wizard",
     )
     return parser
 
@@ -172,18 +189,29 @@ def _install_terminfo_cli(argv) -> int:
     return 0
 
 
-def main_cli(argv=None):
-    """Console script entrypoint.
+def _compat_lab_cli(argv) -> int:
+    """Run the compatibility lab without importing the desktop runtime."""
+    args = _terminfo_parser().parse_args(argv)
+    if not args.compat_lab:
+        return run()
+    from .compat_lab import run_compatibility_lab
 
-    Normal invocations retain the historical no-argument path. The maintenance
-    parser is activated only when ``--install-terminfo`` is present, which keeps
-    programmatic callers and existing test runners insulated from their own
-    command-line arguments.
-    """
+    return run_compatibility_lab(
+        output_path=args.compat_output,
+        label=args.compat_label,
+        interactive=not args.compat_auto,
+    )
+
+
+def main_cli(argv=None):
+    """Console script entrypoint."""
     raw_args = list(sys.argv[1:] if argv is None else argv)
+    if any(arg == "--compat-lab" or arg.startswith("--compat-") for arg in raw_args):
+        return _compat_lab_cli(raw_args)
     if "--install-terminfo" in raw_args:
         return _install_terminfo_cli(raw_args)
     return run()
+
 
 if __name__ == '__main__':
     raise SystemExit(main_cli())
