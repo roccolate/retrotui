@@ -131,6 +131,25 @@ class EventLoopTests(unittest.TestCase):
 
         app.dialog.draw.assert_called_once_with(app.stdscr, frame_size=(25, 80))
 
+    def test_draw_frame_renders_context_menu_below_dialog(self):
+        app = self._make_app()
+        draw_order = []
+        app.context_menu = types.SimpleNamespace(
+            is_open=mock.Mock(return_value=True),
+            draw=mock.Mock(
+                side_effect=lambda *_args, **_kwargs: draw_order.append("context")
+            ),
+        )
+        app.dialog = types.SimpleNamespace(
+            draw=mock.Mock(
+                side_effect=lambda *_args, **_kwargs: draw_order.append("dialog")
+            ),
+        )
+
+        self.event_loop.draw_frame(app)
+
+        self.assertEqual(draw_order, ["context", "dialog"])
+
     def test_draw_frame_skips_window_render_when_background_operation_active(self):
         app = self._make_app()
         app.has_background_operation.return_value = True
@@ -195,6 +214,22 @@ class EventLoopTests(unittest.TestCase):
         self.event_loop.dispatch_input(app, "x")
 
         app.handle_key.assert_called_once_with("x")
+
+    def test_dispatch_input_defers_context_menu_to_active_dialog(self):
+        app = self._make_app()
+        app.dialog = object()
+        app.context_menu = types.SimpleNamespace(
+            is_open=mock.Mock(return_value=True),
+            handle_input=mock.Mock(),
+            handle_click=mock.Mock(),
+        )
+
+        handled = self.event_loop.dispatch_input(app, "x")
+
+        self.assertTrue(handled)
+        app.handle_key.assert_called_once_with("x")
+        app.context_menu.handle_input.assert_not_called()
+        app.context_menu.handle_click.assert_not_called()
 
     def test_select_input_timeout_uses_live_terminal_profile_for_visible_pty(self):
         app = self._make_app()

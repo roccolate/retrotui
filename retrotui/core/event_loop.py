@@ -276,13 +276,13 @@ def draw_frame(app):
     app.draw_taskbar(frame_size=frame_size)
     app.draw_statusbar(frame_size=frame_size)
 
-    if app.dialog:
-        _draw_component(app.dialog, app.stdscr, frame_size)
-
     # Context menu drawn on top of menus but under modal dialogs.
     ctx = app.context_menu
     if ctx and ctx.is_open():
         _draw_component(ctx, app.stdscr, frame_size)
+
+    if app.dialog:
+        _draw_component(app.dialog, app.stdscr, frame_size)
 
     # Toast notifications overlay (top-right corner).
     _notifications = getattr(app, '_notifications', None)
@@ -314,7 +314,7 @@ def dispatch_input(app, key):
 
     # Handle context menu input first (modal behavior).
     ctx = app.context_menu
-    if ctx and ctx.is_open():
+    if not getattr(app, "dialog", None) and ctx and ctx.is_open():
         if isinstance(key, int) and key == curses.KEY_MOUSE:
             try:
                 event = curses.getmouse()
