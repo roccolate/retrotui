@@ -1,3 +1,4 @@
+import importlib
 import json
 import unittest
 from pathlib import Path
@@ -151,6 +152,42 @@ class CompatibilityLabTests(unittest.TestCase):
             report = build_report()
 
         self.assertEqual(report.label, "Linux-kitty")
+
+
+class CompatibilityLabEntryTests(unittest.TestCase):
+    def test_main_cli_routes_compatibility_arguments(self):
+        entry = importlib.import_module("retrotui.__main__")
+        argv = ["--compat-lab", "--compat-auto"]
+
+        with mock.patch.object(entry, "_compat_lab_cli", return_value=7) as runner:
+            rc = entry.main_cli(argv)
+
+        self.assertEqual(rc, 7)
+        runner.assert_called_once_with(argv)
+
+    def test_compatibility_cli_forwards_options_without_loading_desktop(self):
+        entry = importlib.import_module("retrotui.__main__")
+        argv = [
+            "--compat-lab",
+            "--compat-auto",
+            "--compat-output",
+            "reports",
+            "--compat-label",
+            "Windows Terminal",
+        ]
+
+        with mock.patch(
+            "retrotui.compat_lab.run_compatibility_lab",
+            return_value=3,
+        ) as runner:
+            rc = entry._compat_lab_cli(argv)
+
+        self.assertEqual(rc, 3)
+        runner.assert_called_once_with(
+            output_path="reports",
+            label="Windows Terminal",
+            interactive=False,
+        )
 
 
 if __name__ == "__main__":
