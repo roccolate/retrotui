@@ -258,6 +258,16 @@ class WindowManager:
             return self._activate_last_visible_window()
         return None
 
+    def is_window_registered(self, win, *, expected_id=None):
+        """Return whether *win* is still the same registered window instance."""
+        if win is None:
+            return False
+        for candidate in self.windows:
+            if candidate is not win:
+                continue
+            return expected_id is None or getattr(candidate, "id", None) == expected_id
+        return False
+
     # ------------------------------------------------------------------
     # Window spawning
     # ------------------------------------------------------------------

@@ -853,6 +853,10 @@ class RetroTUI:
         """Request that a window close, or force it during shutdown."""
         return self.window_mgr.close_window(win, force=force)
 
+    def is_window_registered(self, win, *, expected_id=None):
+        """Return whether a captured window reference is still live."""
+        return self.window_mgr.is_window_registered(win, expected_id=expected_id)
+
     @staticmethod
     def _normalize_action(action):
         """Convert legacy string actions to AppAction when possible."""
