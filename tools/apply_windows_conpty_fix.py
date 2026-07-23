@@ -159,49 +159,16 @@ replace_once(
 
 workflow = Path(".github/workflows/ci.yml")
 text = workflow.read_text(encoding="utf-8")
-text = text.replace("permissions:\n  contents: write\n", "permissions:\n  contents: read\n", 1)
-job_block = '''  apply-windows-terminal-fix:
-    if: github.event_name == 'pull_request' && github.head_ref == 'agent/windows-terminal-e2e'
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout migration branch
-        uses: actions/checkout@v5
-        with:
-          ref: agent/windows-terminal-e2e
-          fetch-depth: 0
-
-      - name: Setup Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: "3.12"
-
-      - name: Apply exact ConPTY fix
-        run: python tools/apply_windows_conpty_fix.py
-
-      - name: Validate focused terminal tests
-        run: python -m unittest discover -s tests -p "test_terminal_session.py" -v
-
-      - name: Validate repository quality
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install -e ".[test]"
-          python tools/qa.py --skip-tests
-          python -m ruff check --select F821 retrotui tests tools
-
-      - name: Publish clean fix commit
-        shell: bash
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git rm tools/apply_windows_conpty_fix.py
-          git add retrotui/core/terminal_session.py tests/test_terminal_session.py .github/workflows/ci.yml
-          git commit -m "Fix real Windows ConPTY reads"
-          git push origin HEAD:agent/windows-terminal-e2e
-
-'''
-if text.count(job_block) != 1:
-    raise RuntimeError(f"workflow: expected migration job once, found {text.count(job_block)}")
-workflow.write_text(text.replace(job_block, "", 1), encoding="utf-8")
+write_permissions = "permissions:\n  contents: write\n"
+if text.count(write_permissions) != 1:
+    raise RuntimeError("workflow: expected write permissions exactly once")
+text = text.replace(write_permissions, "permissions:\n  contents: read\n", 1)
+start_marker = "  apply-windows-terminal-fix:\n"
+end_marker = "  quality:\n"
+start = text.find(start_marker)
+end = text.find(end_marker, start)
+if start < 0 or end < 0:
+    raise RuntimeError("workflow: migration job boundaries not found")
+workflow.write_text(text[:start] + text[end:], encoding="utf-8")
 
 print("Windows ConPTY compatibility fix applied")
