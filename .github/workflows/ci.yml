@@ -37,6 +37,16 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e ".[test]"
 
+      - name: Run real Windows ConPTY smoke test
+        if: runner.os == 'Windows'
+        env:
+          RETROTUI_WINDOWS_E2E: "1"
+        run: >-
+          python -m unittest discover
+          -s tests
+          -p "test_windows_terminal_e2e.py"
+          -v
+
       - name: Run repository quality checks
         run: python tools/qa.py --skip-tests
 
