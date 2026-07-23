@@ -11,6 +11,7 @@ from .actions import ActionResult, ActionType, FileTransferPayload, ProcessSigna
 from .file_transfer import TransferCancelled
 from .trash_transaction import list_trash_items
 from .dialog_workflow import DialogWorkflowId, bind_dialog
+from .runtime_updates import RenderUpdate
 from .worker_scope import WorkerScope
 
 LOGGER = logging.getLogger(__name__)
@@ -362,6 +363,40 @@ class FileOperationManager:
             return {}
         return dict(progress)
 
+    @staticmethod
+    def _elapsed_render_key(elapsed):
+        """Return the visible elapsed/spinner state used by ProgressDialog."""
+        seconds = max(0.0, float(elapsed))
+        frame_count = max(1, len(ProgressDialog.SPINNER_FRAMES))
+        return f"{seconds:5.1f}", int(seconds * 8) % frame_count
+
+    def _source_window_is_live(self, state):
+        """Return whether the operation's captured source is still registered."""
+        source = state.get('source_win')
+        if source is None:
+            return True
+        expected_id = state.get('source_window_id')
+        checker = getattr(self._app, 'is_window_registered', None)
+        if callable(checker):
+            try:
+                return bool(checker(source, expected_id=expected_id))
+            except TypeError:
+                return bool(checker(source))
+
+        try:
+            windows = getattr(self._app, 'windows')
+        except (AttributeError, TypeError):
+            return True
+        if windows is None:
+            return True
+        try:
+            for window in windows:
+                if window is source:
+                    return expected_id is None or getattr(window, 'id', None) == expected_id
+        except TypeError:
+            return True
+        return False
+
     def cancel_background_operation(self):
         """Request cancellation for the active cooperative file operation."""
         state = getattr(self._app, '_background_operation', None)
@@ -407,12 +442,16 @@ class FileOperationManager:
         op_state = {
             'dialog': progress_dialog,
             'source_win': source_win,
+            'source_window_id': getattr(source_win, 'id', None),
             'worker_result': None,
             'done': False,
             'cancelled': False,
             'cancel_requested': False,
             'cancellable': cancellable,
             'progress': {},
+            'presented_elapsed_key': None,
+            'presented_progress': None,
+            'presented_cancel_requested': False,
             'operation_cancel_event': operation_cancel_event,
             'started_at': time.monotonic(),
             'thread': None,
@@ -452,6 +491,7 @@ class FileOperationManager:
         op_state['cancel_event'] = operation_cancel_event
         self._app._background_operation = op_state
         self._app.dialog = progress_dialog
+        self._app._dirty = True
         thread = self._worker_scope.start(_runner, name='retrotui-file-op')
         if thread is None:
             self._app._background_operation = None
@@ -493,40 +533,56 @@ class FileOperationManager:
         return stopped
 
     def poll_background_operation(self):
-        """Advance progress state and dispatch completion when worker finishes."""
+        """Advance progress and report the smallest required render update."""
         state = getattr(self._app, '_background_operation', None)
         if not state or self._shutting_down:
-            return
+            return RenderUpdate.NONE
 
-        self._app._dirty = True
         elapsed = max(0.0, time.monotonic() - state['started_at'])
         dialog = state.get('dialog')
-        if dialog and hasattr(dialog, 'set_elapsed'):
-            dialog.set_elapsed(elapsed)
-
         lock = state.get('lock')
         if lock is not None:
             with lock:
-                done = state.get('done')
+                done = bool(state.get('done'))
                 result = state.get('worker_result')
                 cancelled = bool(state.get('cancelled'))
                 progress = dict(state.get('progress') or {})
                 cancel_requested = bool(state.get('cancel_requested'))
         else:
-            done = state.get('done')
+            done = bool(state.get('done'))
             result = state.get('worker_result')
             cancelled = bool(state.get('cancelled'))
             progress = dict(state.get('progress') or {})
             cancel_requested = bool(state.get('cancel_requested'))
 
-        if dialog and progress and hasattr(dialog, 'set_progress'):
-            dialog.set_progress(progress)
-        if dialog and cancel_requested and hasattr(dialog, 'set_cancel_requested'):
-            dialog.set_cancel_requested()
-        if not done:
-            return
+        dialog_is_visible = (
+            dialog is not None and getattr(self._app, 'dialog', None) is dialog
+        )
+        visible_changed = False
+        if dialog is not None:
+            elapsed_key = self._elapsed_render_key(elapsed)
+            if elapsed_key != state.get('presented_elapsed_key'):
+                if hasattr(dialog, 'set_elapsed'):
+                    dialog.set_elapsed(elapsed)
+                state['presented_elapsed_key'] = elapsed_key
+                visible_changed = dialog_is_visible or visible_changed
 
-        if self._app.dialog is dialog:
+            if progress != state.get('presented_progress'):
+                if hasattr(dialog, 'set_progress'):
+                    dialog.set_progress(progress)
+                state['presented_progress'] = progress
+                visible_changed = dialog_is_visible or visible_changed
+
+            if cancel_requested and not state.get('presented_cancel_requested'):
+                if hasattr(dialog, 'set_cancel_requested'):
+                    dialog.set_cancel_requested()
+                state['presented_cancel_requested'] = True
+                visible_changed = dialog_is_visible or visible_changed
+
+        if not done:
+            return RenderUpdate.OVERLAY if visible_changed else RenderUpdate.NONE
+
+        if getattr(self._app, 'dialog', None) is dialog:
             self._app.dialog = None
         self._app._background_operation = None
 
@@ -534,7 +590,7 @@ class FileOperationManager:
         if cancelled:
             if bus is not None:
                 bus.publish("file_op.cancelled", data={"title": state.get('dialog_title', '')})
-            return
+            return RenderUpdate.FULL
 
         if bus is not None:
             is_error = result is not None and getattr(result, 'type', None) == ActionType.ERROR
@@ -542,7 +598,23 @@ class FileOperationManager:
             bus.publish(topic, data={"title": state.get('dialog_title', '')})
 
         if result is not None:
-            self._app._dispatch_window_result(result, state.get('source_win'))
+            source = state.get('source_win')
+            if self._source_window_is_live(state):
+                self._app._dispatch_window_result(result, source)
+            elif getattr(result, 'type', None) == ActionType.ERROR:
+                # Errors remain actionable, but are detached from the dead window.
+                self._app._dispatch_window_result(result, None)
+            else:
+                LOGGER.info(
+                    "Discarding background result for closed source window %r",
+                    source,
+                )
+                if bus is not None:
+                    bus.publish(
+                        "file_op.result_discarded",
+                        data={"title": state.get('dialog_title', '')},
+                    )
+        return RenderUpdate.FULL
 
     def _run_file_operation_with_progress(self, win, *, operation, destination=None, source_path=None):
         """Run filesystem operations directly or in the owned worker scope."""

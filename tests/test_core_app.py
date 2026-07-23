@@ -84,6 +84,7 @@ class CoreAppTests(unittest.TestCase):
             "retrotui.apps.process_manager",
             "retrotui.apps.clock",
             "retrotui.core.actions",
+            "retrotui.core.file_operations",
             "retrotui.core.action_runner",
             "retrotui.core.key_router",
             "retrotui.core.mouse_router",
@@ -120,6 +121,7 @@ class CoreAppTests(unittest.TestCase):
             "retrotui.apps.process_manager",
             "retrotui.apps.clock",
             "retrotui.core.actions",
+            "retrotui.core.file_operations",
             "retrotui.core.action_runner",
             "retrotui.core.key_router",
             "retrotui.core.mouse_router",
@@ -1812,6 +1814,7 @@ class CoreAppTests(unittest.TestCase):
         finished = self.actions_mod.ActionResult(self.actions_mod.ActionType.ERROR, "boom")
         progress_dialog = types.SimpleNamespace(set_elapsed=mock.Mock())
         source = object()
+        app.windows = [source]
         app._dispatch_window_result = mock.Mock()
         app.dialog = progress_dialog
         app._background_operation = {

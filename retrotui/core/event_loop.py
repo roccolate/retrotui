@@ -16,6 +16,7 @@ from ..constants import (
     TERMINAL_ANIMATED_INPUT_TIMEOUT_MS,
     _CURSES_ERROR,
 )
+from .runtime_updates import RenderUpdate
 
 LOGGER = logging.getLogger(__name__)
 
@@ -291,6 +292,35 @@ def draw_frame(app):
 
     app.stdscr.noutrefresh()
     curses.doupdate()
+
+
+def _refresh_dialog_overlay(app):
+    """Redraw only the active dialog and overlays without erasing the desktop."""
+    if getattr(app, "_dirty", False):
+        return False
+    dialog = getattr(app, "dialog", None)
+    if dialog is None:
+        return False
+
+    frame_size = getattr(app, "_frame_size", None)
+    try:
+        current_size = app.stdscr.getmaxyx()
+    except _INPUT_TIMEOUT_APPLY_ERRORS:
+        return False
+    if frame_size != current_size:
+        return False
+
+    try:
+        _draw_component(dialog, app.stdscr, frame_size)
+        frame_h, frame_w = frame_size
+        notifications = getattr(app, '_notifications', None)
+        if notifications is not None and notifications.has_visible:
+            notifications.draw(app.stdscr, frame_w, frame_h)
+        app.stdscr.noutrefresh()
+        curses.doupdate()
+    except _INPUT_TIMEOUT_APPLY_ERRORS:
+        return False
+    return True
 
 
 def read_input_key(stdscr):
@@ -697,7 +727,9 @@ def run_app_loop(app):
             try:
                 metrics["loops"] += 1
                 phase = "background"
-                app.poll_background_operation()
+                background_update = app.poll_background_operation()
+                if background_update is True or background_update == RenderUpdate.FULL:
+                    app._dirty = True
 
                 if _tick_notifications(app):
                     app._dirty = True
@@ -714,6 +746,16 @@ def run_app_loop(app):
                     metrics["draw_time_s"] += time.perf_counter() - draw_start
                     metrics["redraws"] += 1
                     app._dirty = False
+                elif background_update == RenderUpdate.OVERLAY:
+                    draw_start = time.perf_counter()
+                    if _refresh_dialog_overlay(app):
+                        metrics["draw_time_s"] += time.perf_counter() - draw_start
+                        metrics["redraws"] += 1
+                    else:
+                        draw_frame(app)
+                        metrics["draw_time_s"] += time.perf_counter() - draw_start
+                        metrics["redraws"] += 1
+                        app._dirty = False
 
                 phase = "input"
                 _apply_input_timeout(
