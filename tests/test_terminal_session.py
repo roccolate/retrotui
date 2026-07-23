@@ -551,7 +551,33 @@ class TerminalSessionTests(unittest.TestCase):
 
         count = session.write("hello")
         self.assertEqual(count, 5)
-        session._win_pty.write.assert_called_once_with(b"hello")
+        session._win_pty.write.assert_called_once_with("hello")
+
+    def test_write_windows_unicode_uses_text_and_byte_count(self):
+        session = self.mod.TerminalSession()
+        session._win_pty = mock.MagicMock()
+        session._win_pty.write.return_value = 1
+        session.running = True
+
+        count = session.write("é")
+
+        self.assertEqual(count, len("é".encode("utf-8")))
+        session._win_pty.write.assert_called_once_with("é")
+        self.assertEqual(session.pending_write_bytes, 0)
+
+    def test_write_windows_waits_for_complete_utf8_character(self):
+        session = self.mod.TerminalSession()
+        session._win_pty = mock.MagicMock()
+        session.running = True
+        session._pending_write.extend("é".encode("utf-8"))
+
+        self.assertEqual(session.flush_pending_writes(max_total_bytes=1), 0)
+        session._win_pty.write.assert_not_called()
+        self.assertEqual(session.pending_write_bytes, 2)
+
+        self.assertEqual(session.flush_pending_writes(max_total_bytes=2), 2)
+        session._win_pty.write.assert_called_once_with("é")
+        self.assertEqual(session.pending_write_bytes, 0)
 
     def test_write_windows_oserror_marks_not_running(self):
         session = self.mod.TerminalSession()
@@ -615,7 +641,7 @@ class TerminalSessionTests(unittest.TestCase):
         session.running = True
 
         self.assertTrue(session.interrupt())
-        session._win_pty.write.assert_called_once_with(b'\x03')
+        session._win_pty.write.assert_called_once_with('\x03')
 
     def test_send_signal_windows_interrupt_oserror(self):
         session = self.mod.TerminalSession()

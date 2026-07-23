@@ -849,17 +849,36 @@ class TerminalSession:
         return total
 
     def _write_windows(self, data):
-        """Write one queued chunk to Windows ConPTY."""
+        """Write a UTF-8-safe text chunk through the pywinpty string API."""
         payload = data.encode("utf-8", errors="replace") if isinstance(data, str) else bytes(data)
+        if not payload:
+            return 0
+
+        consumed = len(payload)
         try:
-            result = self._win_pty.write(payload)
+            text = payload.decode("utf-8")
+        except UnicodeDecodeError as exc:
+            if exc.reason == "unexpected end of data" and exc.end == len(payload):
+                consumed = exc.start
+                if consumed <= 0:
+                    return 0
+                text = payload[:consumed].decode("utf-8", errors="replace")
+            else:
+                text = payload.decode("utf-8", errors="replace")
+
+        try:
+            result = self._win_pty.write(text)
         except OSError:
             self._pending_write.clear()
             self.running = False
             return 0
-        if isinstance(result, int):
-            return max(0, min(result, len(payload)))
-        return len(payload)
+        if not isinstance(result, int):
+            return consumed
+
+        written = max(0, int(result))
+        if written >= len(text):
+            return consumed
+        return len(text[:written].encode("utf-8"))
 
     def send_signal(self, sig):
         """Send signal to foreground process group (or child pid fallback)."""
@@ -894,7 +913,7 @@ class TerminalSession:
         """Send signal via Windows ConPTY (write Ctrl+C byte as fallback)."""
         if sig == signal.SIGINT:
             try:
-                self._win_pty.write(b'\x03')
+                self._win_pty.write('\x03')
                 return True
             except OSError:
                 return False
