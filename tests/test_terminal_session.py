@@ -504,6 +504,29 @@ class TerminalSessionTests(unittest.TestCase):
 
         result = session.read()
         self.assertEqual(result, "hello")
+        session._win_pty.read.assert_called_once_with(blocking=False)
+
+    def test_read_windows_retains_overflow_for_next_tick(self):
+        session = self.mod.TerminalSession()
+        session._win_pty = mock.MagicMock()
+        session._win_pty.read.return_value = "abcdef"
+        session.running = True
+
+        self.assertEqual(session.read(max_bytes=3, max_total_bytes=3), "abc")
+        self.assertEqual(session.read(max_bytes=3, max_total_bytes=3), "def")
+        session._win_pty.read.assert_called_once_with(blocking=False)
+
+    def test_read_windows_supports_positional_legacy_flag(self):
+        session = self.mod.TerminalSession()
+        session._win_pty = mock.MagicMock()
+        session._win_pty.read.side_effect = [TypeError("keyword"), b"ok"]
+        session.running = True
+
+        self.assertEqual(session.read(), "ok")
+        self.assertEqual(
+            session._win_pty.read.call_args_list,
+            [mock.call(blocking=False), mock.call(False)],
+        )
 
     def test_read_windows_empty(self):
         session = self.mod.TerminalSession()
@@ -576,12 +599,14 @@ class TerminalSessionTests(unittest.TestCase):
         backend = mock.MagicMock()
         backend.isalive.return_value = False
         session._win_pty = backend
+        session._pending_windows_output.extend(b"pending")
         session.running = True
 
         self.assertTrue(session.close())
         backend.close.assert_called_once_with(force=True)
         backend.isalive.assert_called_once_with()
         self.assertIsNone(session._win_pty)
+        self.assertEqual(session._pending_windows_output, bytearray())
         self.assertFalse(session.running)
 
     def test_send_signal_windows_interrupt(self):
