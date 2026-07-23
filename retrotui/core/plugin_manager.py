@@ -4,6 +4,8 @@ Plugin discovery, registration, and window instantiation.
 
 import logging
 
+from .window_manager import WindowSpawnSpec, resolve_window_spawn
+
 LOGGER = logging.getLogger(__name__)
 
 _PLUGIN_DISCOVERY_IMPORT_ERRORS = (
@@ -133,8 +135,11 @@ def build_plugin_window(app, info, plugin_id):
     h = int(win_config.get('default_height', 15))
     try:
         cls = info.get('class')
-        x, y = app._next_window_offset(8, 3)
-        return cls(manifest.get('name', plugin_id), x, y, w, h)
+        x, y, width, height = resolve_window_spawn(
+            app,
+            WindowSpawnSpec(w, h, 8, 3),
+        )
+        return cls(manifest.get('name', plugin_id), x, y, width, height)
     except Exception:  # Plugin boundary: isolate application-defined exceptions.
         LOGGER.debug('failed to open plugin %s', plugin_id, exc_info=True)
         return None

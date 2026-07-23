@@ -1,6 +1,5 @@
 """Action execution helpers for RetroTUI app-level actions."""
 
-import curses
 import functools
 import inspect
 
@@ -22,15 +21,8 @@ from .actions import AppAction
 from .dialog_workflow import DialogWorkflowId, bind_dialog
 from .content import build_about_message, build_help_message
 from .terminal_environment import build_child_environment
-from ..constants import _CURSES_ERROR, WIN_MIN_HEIGHT, WIN_MIN_WIDTH
-_TERMINAL_SIZE_ERRORS = (
-    AttributeError,
-    OSError,
-    RuntimeError,
-    TypeError,
-    ValueError,
-    _CURSES_ERROR,
-)
+from .window_manager import WindowSpawnSpec, resolve_window_spawn
+from ..constants import _CURSES_ERROR
 _PLUGIN_ACTION_ROUTE_ERRORS = (
     AttributeError,
     LookupError,
@@ -95,8 +87,7 @@ def _spawn_registered_app(app, action, registry) -> bool:
     """Look up *action* in *registry* and spawn the window.
 
     Returns True when the action was handled, False when not found.
-    Terminal size is retrieved via curses when available; dimensions are
-    clamped so windows fit on-screen.
+    Geometry is resolved by the authoritative WindowManager policy.
     """
     entry = registry.get(action)
     if entry is None:
@@ -108,15 +99,10 @@ def _spawn_registered_app(app, action, registry) -> bool:
     # mock.patch.object() substitutions are picked up at call time.
     cls = _MODULE_GLOBALS[class_name]
 
-    # Clamp to terminal size when curses is available.
-    try:
-        term_h, term_w = curses.LINES, curses.COLS
-        w = min(default_w, max(WIN_MIN_WIDTH, term_w - 4))
-        h = min(default_h, max(WIN_MIN_HEIGHT, term_h - 4))
-    except _TERMINAL_SIZE_ERRORS:
-        w, h = default_w, default_h
-
-    offset_x, offset_y = app._next_window_offset(base_x, base_y)
+    offset_x, offset_y, w, h = resolve_window_spawn(
+        app,
+        WindowSpawnSpec(default_w, default_h, base_x, base_y),
+    )
 
     kwargs = {}
     for kwarg_name, attr_name in kwarg_map.items():

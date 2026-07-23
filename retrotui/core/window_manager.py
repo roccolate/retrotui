@@ -1,9 +1,10 @@
 """Window lifecycle management for RetroTUI."""
+from dataclasses import dataclass, replace
 import logging
 
-from ..constants import TASKBAR_TITLE_MAX_LEN
+from ..constants import TASKBAR_TITLE_MAX_LEN, WIN_MIN_HEIGHT, WIN_MIN_WIDTH
 from ..utils import clip_text_columns, text_display_width
-from .shell_geometry import global_bar_row
+from .shell_geometry import global_bar_row, workspace_bottom_exclusive, workspace_top_row
 
 LOGGER = logging.getLogger(__name__)
 _WINDOW_CLOSE_HOOK_ERRORS = (
@@ -18,6 +19,52 @@ _WINDOW_CLOSE_HOOK_ERRORS = (
     TypeError,
     ValueError,
 )
+
+
+@dataclass(frozen=True)
+class WindowSpawnSpec:
+    """Preferred window geometry resolved against the live workspace."""
+
+    width: int
+    height: int
+    preferred_x: int = 8
+    preferred_y: int = 3
+    cascade_x: int = 2
+    cascade_y: int = 1
+    centered: bool = False
+    cascade: bool = True
+    margin_x: int = 2
+    margin_y: int = 1
+
+
+def resolve_window_spawn(app, spec):
+    """Resolve *spec* through WindowManager with partial-app compatibility."""
+    resolver = getattr(app, "_resolve_window_spawn", None)
+    if callable(resolver):
+        return resolver(spec)
+
+    fallback_spec = spec
+    offsetter = getattr(app, "_next_window_offset", None)
+    if spec.cascade and not spec.centered and callable(offsetter):
+        if spec.cascade_x == 2 and spec.cascade_y == 1:
+            x, y = offsetter(spec.preferred_x, spec.preferred_y)
+        else:
+            x, y = offsetter(
+                spec.preferred_x,
+                spec.preferred_y,
+                spec.cascade_x,
+                spec.cascade_y,
+            )
+        fallback_spec = replace(
+            spec,
+            preferred_x=x,
+            preferred_y=y,
+            cascade=False,
+        )
+
+    manager = WindowManager(app)
+    manager.windows = list(getattr(app, "windows", ()) or ())
+    return manager.resolve_spawn_geometry(fallback_spec)
 
 
 class WindowManager:
@@ -215,10 +262,136 @@ class WindowManager:
     # Window spawning
     # ------------------------------------------------------------------
 
+    @staticmethod
+    def _fit_dimension(requested, minimum, available):
+        available = max(1, int(available))
+        try:
+            requested = int(requested)
+        except (TypeError, ValueError):
+            requested = minimum
+        if available < minimum:
+            return minimum
+        return min(max(minimum, requested), available)
+
+    @staticmethod
+    def _fit_margin(requested, extent):
+        try:
+            requested = max(0, int(requested))
+        except (TypeError, ValueError):
+            requested = 0
+        return min(requested, max(0, (max(1, int(extent)) - 1) // 2))
+
+    @staticmethod
+    def _coerce_coordinate(value, default):
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return int(default)
+
+    def _screen_size(self):
+        screen = getattr(self._app, "stdscr", None)
+        getter = getattr(screen, "getmaxyx", None)
+        if not callable(getter):
+            return None
+        try:
+            height, width = getter()
+            height = int(height)
+            width = int(width)
+        except (AttributeError, OSError, TypeError, ValueError):
+            return None
+        if height <= 0 or width <= 0:
+            return None
+        return height, width
+
+    @staticmethod
+    def _cascade_coordinate(base, step, count, upper):
+        if upper <= base:
+            return base
+        try:
+            step = int(step)
+        except (TypeError, ValueError):
+            step = 0
+        span = upper - base + 1
+        return base + ((max(0, int(count)) * step) % span)
+
+    def resolve_spawn_geometry(self, spec):
+        """Return ``(x, y, width, height)`` fitted to the live workspace."""
+        if not isinstance(spec, WindowSpawnSpec):
+            raise TypeError("spec must be a WindowSpawnSpec")
+
+        screen_size = self._screen_size()
+        if screen_size is None:
+            if spec.cascade and not spec.centered:
+                x, y = self._next_window_offset(
+                    spec.preferred_x,
+                    spec.preferred_y,
+                    spec.cascade_x,
+                    spec.cascade_y,
+                )
+            else:
+                x, y = spec.preferred_x, spec.preferred_y
+            return int(x), int(y), int(spec.width), int(spec.height)
+
+        screen_h, screen_w = screen_size
+        margin_x = self._fit_margin(spec.margin_x, screen_w)
+        workspace_top = workspace_top_row()
+        workspace_bottom = workspace_bottom_exclusive(screen_h)
+        workspace_extent = max(1, workspace_bottom - workspace_top)
+        margin_y = self._fit_margin(spec.margin_y, workspace_extent)
+
+        left = margin_x
+        right = max(left + 1, screen_w - margin_x)
+        top = workspace_top + margin_y
+        bottom = max(top + 1, workspace_bottom - margin_y)
+        available_w = max(1, right - left)
+        available_h = max(1, bottom - top)
+        width = self._fit_dimension(spec.width, WIN_MIN_WIDTH, available_w)
+        height = self._fit_dimension(spec.height, WIN_MIN_HEIGHT, available_h)
+        max_x = max(left, right - width)
+        max_y = max(top, bottom - height)
+
+        if spec.centered:
+            x = left + max(0, (available_w - width) // 2)
+            y = top + max(0, (available_h - height) // 2)
+        else:
+            preferred_x = self._coerce_coordinate(spec.preferred_x, left)
+            preferred_y = self._coerce_coordinate(spec.preferred_y, top)
+            x = max(left, min(preferred_x, max_x))
+            y = max(top, min(preferred_y, max_y))
+            if spec.cascade:
+                count = len(self.windows)
+                x = self._cascade_coordinate(x, spec.cascade_x, count, max_x)
+                y = self._cascade_coordinate(y, spec.cascade_y, count, max_y)
+        return x, y, width, height
+
+    def prepare_window_geometry(self, win):
+        """Normalize a constructed window before lifecycle registration."""
+        geometry_names = ("x", "y", "w", "h")
+        if not all(hasattr(win, name) for name in geometry_names):
+            return True
+        try:
+            geometry = self.resolve_spawn_geometry(
+                WindowSpawnSpec(
+                    getattr(win, "w"),
+                    getattr(win, "h"),
+                    getattr(win, "x"),
+                    getattr(win, "y"),
+                    cascade=False,
+                )
+            )
+            win.x, win.y, win.w, win.h = geometry
+        except Exception:  # Window/plugin boundary: reject invalid geometry safely.
+            LOGGER.debug("Window geometry normalization failed for %r", win, exc_info=True)
+            return False
+        return True
+
     def _spawn_window(self, win):
         """Register a window exactly once and make it active."""
         if win in self.windows:
             LOGGER.warning("Ignoring duplicate spawn for window %r", win)
+            return False
+        if not self.prepare_window_geometry(win):
+            LOGGER.warning("Rejecting window with invalid geometry: %r", win)
             return False
         self.windows.append(win)
         self._layers_dirty = True
