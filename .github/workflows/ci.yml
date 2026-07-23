@@ -66,20 +66,7 @@ jobs:
         run: python -m ruff check --select F401,F811,F841 retrotui/core/app.py
 
       - name: Run unittest suite
-        shell: bash
-        run: |
-          python -m unittest discover -s tests -v > unittest-full.log 2>&1 || {
-            tail -160 unittest-full.log
-            exit 1
-          }
-
-      - name: Upload unittest diagnostics
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: unittest-${{ runner.os }}-${{ matrix.python-version }}
-          path: unittest-full.log
-          retention-days: 1
+        run: python -m unittest discover -s tests -v
 
       - name: Run pytest suite
         if: ${{ !cancelled() }}
