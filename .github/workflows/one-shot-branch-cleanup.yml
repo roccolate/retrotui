@@ -1,3 +1,4 @@
+# Trigger the one-shot cleanup through a same-repository pull request.
 name: One-shot branch cleanup
 
 on:
