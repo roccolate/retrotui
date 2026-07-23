@@ -869,6 +869,10 @@ class RetroTUI:
         """Open *win* through the authoritative lifecycle manager."""
         return self.window_mgr._spawn_window(win)
 
+    def _resolve_window_spawn(self, spec):
+        """Resolve preferred geometry through the authoritative manager."""
+        return self.window_mgr.resolve_spawn_geometry(spec)
+
     def _next_window_offset(self, base_x, base_y, step_x=2, step_y=1):
         """Return staggered window coordinates based on open window count."""
         return self.window_mgr._next_window_offset(base_x, base_y, step_x, step_y)

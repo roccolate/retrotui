@@ -1,6 +1,11 @@
 import unittest
 from types import SimpleNamespace
-from retrotui.core.window_manager import WindowManager
+from retrotui.core.shell_geometry import workspace_bottom_exclusive, workspace_top_row
+from retrotui.core.window_manager import (
+    WindowManager,
+    WindowSpawnSpec,
+    resolve_window_spawn,
+)
 
 
 def make_win(name, visible=True, always_on_top=False):
@@ -52,6 +57,88 @@ class WindowManagerTests(unittest.TestCase):
         x, y = wm._next_window_offset(1, 2)
         self.assertIsInstance(x, int)
         self.assertIsInstance(y, int)
+
+    def test_spawn_geometry_clamps_to_desktop_workspace(self):
+        app = SimpleNamespace(stdscr=SimpleNamespace(getmaxyx=lambda: (24, 80)))
+        wm = WindowManager(app)
+
+        x, y, width, height = wm.resolve_spawn_geometry(
+            WindowSpawnSpec(200, 100, 0, 0)
+        )
+
+        expected_top = workspace_top_row() + 1
+        expected_bottom = workspace_bottom_exclusive(24) - 1
+        self.assertEqual((x, y), (2, expected_top))
+        self.assertEqual(width, 76)
+        self.assertEqual(height, expected_bottom - expected_top)
+        self.assertLessEqual(x + width, 78)
+        self.assertLessEqual(y + height, expected_bottom)
+
+    def test_spawn_geometry_cascade_wraps_inside_bounds(self):
+        app = SimpleNamespace(stdscr=SimpleNamespace(getmaxyx=lambda: (24, 50)))
+        wm = WindowManager(app)
+        wm.windows = [object() for _ in range(37)]
+
+        x, y, width, height = wm.resolve_spawn_geometry(
+            WindowSpawnSpec(30, 10, 45, 30)
+        )
+
+        top = workspace_top_row() + 1
+        bottom = workspace_bottom_exclusive(24) - 1
+        self.assertGreaterEqual(x, 2)
+        self.assertGreaterEqual(y, top)
+        self.assertLessEqual(x + width, 48)
+        self.assertLessEqual(y + height, bottom)
+
+    def test_spawn_geometry_can_center_without_cascade(self):
+        app = SimpleNamespace(stdscr=SimpleNamespace(getmaxyx=lambda: (24, 80)))
+        wm = WindowManager(app)
+        wm.windows = [object() for _ in range(5)]
+
+        x, y, width, height = wm.resolve_spawn_geometry(
+            WindowSpawnSpec(20, 10, centered=True, cascade=False)
+        )
+
+        top = workspace_top_row() + 1
+        bottom = workspace_bottom_exclusive(24) - 1
+        self.assertEqual(width, 20)
+        self.assertEqual(height, 10)
+        self.assertEqual(x, 2 + (76 - width) // 2)
+        self.assertEqual(y, top + ((bottom - top) - height) // 2)
+
+    def test_spawn_normalizes_special_and_plugin_window_geometry(self):
+        app = SimpleNamespace(stdscr=SimpleNamespace(getmaxyx=lambda: (24, 80)))
+        wm = WindowManager(app)
+        win = SimpleNamespace(
+            x=-50,
+            y=99,
+            w=500,
+            h=500,
+            active=False,
+            visible=True,
+            always_on_top=False,
+        )
+
+        self.assertTrue(wm._spawn_window(win))
+
+        top = workspace_top_row() + 1
+        bottom = workspace_bottom_exclusive(24) - 1
+        self.assertGreaterEqual(win.x, 2)
+        self.assertGreaterEqual(win.y, top)
+        self.assertLessEqual(win.x + win.w, 78)
+        self.assertLessEqual(win.y + win.h, bottom)
+
+    def test_resolve_window_spawn_preserves_partial_app_compatibility(self):
+        calls = []
+        app = SimpleNamespace(
+            _next_window_offset=lambda *args: calls.append(args) or (12, 7),
+            windows=[],
+        )
+
+        geometry = resolve_window_spawn(app, WindowSpawnSpec(70, 24, 8, 3))
+
+        self.assertEqual(geometry, (12, 7, 70, 24))
+        self.assertEqual(calls, [(8, 3)])
 
     def test_duplicate_spawn_is_rejected_without_repeating_lifecycle(self):
         events = []

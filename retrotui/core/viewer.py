@@ -5,7 +5,7 @@ File viewer type detection, opening, and video/URL dialog flows.
 import os
 import logging
 
-from ..constants import BINARY_DETECT_CHUNK_SIZE, WIN_MIN_HEIGHT, WIN_MIN_WIDTH
+from ..constants import BINARY_DETECT_CHUNK_SIZE
 from ..utils import is_video_file, play_ascii_video as _play_ascii_video_backend
 from ..apps.notepad import NotepadWindow
 from ..apps.logviewer import LogViewerWindow
@@ -15,11 +15,9 @@ from ..apps.markdown_viewer import MarkdownViewerWindow
 from ..ui.dialog import Dialog, InputDialog
 from .actions import ActionResult, ActionType
 from .dialog_workflow import DialogWorkflowId, bind_dialog
+from .window_manager import WindowSpawnSpec, resolve_window_spawn
 
 LOGGER = logging.getLogger(__name__)
-
-# Margin subtracted from screen dimensions when sizing viewer windows.
-_WINDOW_MARGIN = 4
 _LOG_EXTENSIONS = {'.log', '.out', '.err'}
 
 
@@ -78,12 +76,13 @@ def open_file_viewer(app, filepath):
         filepath,
         default_word_wrap=getattr(app, 'default_word_wrap', False),
     )
-    h, w = app.stdscr.getmaxyx()
-    ox, oy = app._next_window_offset(base_x, base_y)
+    ox, oy, width, height = resolve_window_spawn(
+        app,
+        WindowSpawnSpec(max_w, max_h, base_x, base_y),
+    )
     win = cls(
         ox, oy,
-        min(max_w, max(WIN_MIN_WIDTH, w - _WINDOW_MARGIN)),
-        min(max_h, max(WIN_MIN_HEIGHT, h - _WINDOW_MARGIN)),
+        width, height,
         filepath=filepath,
         **extra_kwargs,
     )

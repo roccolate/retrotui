@@ -375,31 +375,17 @@ class ActionRunnerTests(unittest.TestCase):
         self.assertEqual(spawned.kind, "fm")
         self.assertEqual((spawned.x, spawned.y, spawned.w, spawned.h), (12, 7, 70, 24))
 
-    def test_execute_file_manager_uses_default_size_when_terminal_probe_fails(self):
+    def test_execute_file_manager_uses_default_size_for_partial_app_context(self):
         app = self._make_app()
         logger = mock.Mock()
-        # Simulate incomplete curses runtime (no initialized LINES/COLS).
-        original_lines = getattr(self.action_runner.curses, "LINES", None)
-        original_cols = getattr(self.action_runner.curses, "COLS", None)
-        had_lines = hasattr(self.action_runner.curses, "LINES")
-        had_cols = hasattr(self.action_runner.curses, "COLS")
-        if had_lines:
-            delattr(self.action_runner.curses, "LINES")
-        if had_cols:
-            delattr(self.action_runner.curses, "COLS")
-        try:
-            with mock.patch.object(self.action_runner, "FileManagerWindow", _DummyFMWindow):
-                self.action_runner.execute_app_action(
-                    app,
-                    self.actions_mod.AppAction.FILE_MANAGER,
-                    logger,
-                    version="0.3.4",
-                )
-        finally:
-            if had_lines:
-                setattr(self.action_runner.curses, "LINES", original_lines)
-            if had_cols:
-                setattr(self.action_runner.curses, "COLS", original_cols)
+
+        with mock.patch.object(self.action_runner, "FileManagerWindow", _DummyFMWindow):
+            self.action_runner.execute_app_action(
+                app,
+                self.actions_mod.AppAction.FILE_MANAGER,
+                logger,
+                version="0.3.4",
+            )
 
         spawned = app._spawn_window.call_args.args[0]
         self.assertEqual((spawned.w, spawned.h), (70, 24))
