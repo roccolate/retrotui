@@ -362,15 +362,18 @@ class Window:
         """Draw window body: content lines, scrollbar."""
         bx, by, bw, bh = self.body_rect()
 
+        has_scrollbar = len(self.content) > bh
+        text_width = max(0, bw - (1 if has_scrollbar else 0))
+
         # Draw content
         for i in range(bh):
             idx = self.scroll_offset + i
             if idx < len(self.content):
-                line = self.content[idx][:bw]
+                line = clip_text_columns(self.content[idx], text_width)
                 safe_addstr(stdscr, by + i, bx, line, body_attr, _bounds=frame_size)
 
         # Scrollbar
-        if len(self.content) > bh:
+        if has_scrollbar:
             sb_x = bx + bw - 1
             # Thumb position
             thumb_pos = int(self.scroll_offset / max(1, len(self.content) - bh) * (bh - 1))

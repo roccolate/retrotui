@@ -55,6 +55,38 @@ class UnicodeChromeTests(unittest.TestCase):
             max_title_columns,
         )
 
+    def test_window_body_clips_text_by_physical_columns_and_reserves_scrollbar(self):
+        win = Window(
+            "Unicode body",
+            0,
+            0,
+            6,
+            4,
+            content=["你你你", "second", "third"],
+        )
+        safe_addstr = mock.Mock()
+        draw_globals = Window.draw_body.__globals__
+
+        with mock.patch.dict(
+            draw_globals,
+            {
+                "safe_addstr": safe_addstr,
+                "theme_attr": mock.Mock(return_value=0),
+            },
+        ):
+            win.draw_body(SimpleNamespace(), 0, frame_size=(24, 80))
+
+        bx, by, bw, _bh = win.body_rect()
+        content_call = next(
+            call
+            for call in safe_addstr.call_args_list
+            if call.args[1] == by and call.args[2] == bx
+        )
+        self.assertLessEqual(text_display_width(content_call.args[3]), bw - 1)
+        self.assertTrue(
+            any(call.args[2] == bx + bw - 1 for call in safe_addstr.call_args_list)
+        )
+
     def test_taskbar_button_ranges_follow_physical_columns(self):
         app = SimpleNamespace(stdscr=SimpleNamespace(getmaxyx=lambda: (20, 80)))
         manager = WindowManager(app)

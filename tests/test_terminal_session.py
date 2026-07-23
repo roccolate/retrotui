@@ -411,6 +411,32 @@ class TerminalSessionTests(unittest.TestCase):
         self.assertIsNone(session.child_pid)
         self.assertFalse(session.running)
 
+    def test_close_returns_false_when_posix_child_cannot_be_reaped(self):
+        session = self.mod.TerminalSession()
+        session.master_fd = 99
+        session.running = True
+        session.child_pid = 9006
+
+        with (
+            mock.patch.object(self.mod.os, "close"),
+            mock.patch.object(
+                session,
+                "_wait_for_posix_exit",
+                side_effect=[False, False],
+            ) as wait_for_exit,
+            mock.patch.object(session, "terminate", return_value=True) as terminate,
+            mock.patch.object(session, "kill", return_value=True) as kill_process,
+        ):
+            result = session.close()
+
+        self.assertFalse(result)
+        terminate.assert_called_once_with()
+        kill_process.assert_called_once_with()
+        self.assertEqual(wait_for_exit.call_count, 2)
+        self.assertEqual(session.child_pid, 9006)
+        self.assertIsNone(session.master_fd)
+        self.assertTrue(session.running)
+
 
     # -- Windows backend tests --------------------------------------------------
 

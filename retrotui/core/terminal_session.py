@@ -1046,13 +1046,15 @@ class TerminalSession:
             self.running = False
             return True
 
+        verified = True
         if self.running:
             self.terminate()
-            if not self._wait_for_posix_exit(_CLOSE_WAIT_SECONDS):
+            verified = self._wait_for_posix_exit(_CLOSE_WAIT_SECONDS)
+            if not verified:
                 self.kill()
-                self._wait_for_posix_exit(_CLOSE_WAIT_SECONDS)
+                verified = self._wait_for_posix_exit(_CLOSE_WAIT_SECONDS)
         elif self.child_pid is not None:
-            self._wait_for_posix_exit(0.0)
+            verified = self._wait_for_posix_exit(0.0)
 
         if self.master_fd is not None:
             try:
@@ -1061,5 +1063,8 @@ class TerminalSession:
                 pass
             self.master_fd = None
         self._pending_write.clear()
-        self.running = False
-        return True
+        # Keep the logical liveness state honest when the child could not be
+        # observed exiting. WindowManager must not unregister a terminal whose
+        # cleanup was not verified.
+        self.running = not verified
+        return verified
