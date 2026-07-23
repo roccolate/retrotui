@@ -37,6 +37,25 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e ".[test]"
 
+      - name: Run real Windows ConPTY smoke test
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          RETROTUI_WINDOWS_E2E: "1"
+        run: |
+          python -m unittest discover -s tests -p "test_windows_terminal_e2e.py" -v *> windows-conpty-e2e.log
+          $code = $LASTEXITCODE
+          Get-Content windows-conpty-e2e.log
+          exit $code
+
+      - name: Upload Windows ConPTY diagnostics
+        if: failure() && runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-conpty-e2e-${{ matrix.python-version }}
+          path: windows-conpty-e2e.log
+          retention-days: 1
+
       - name: Run repository quality checks
         run: python tools/qa.py --skip-tests
 

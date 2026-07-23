@@ -621,6 +621,7 @@ class TerminalSession:
         self.running = False
         self._win_pty = None
         self._decoder = codecs.getincrementaldecoder("utf-8")("replace")
+        self._pending_windows_output = bytearray()
         self._pending_write = bytearray()
 
     @staticmethod
@@ -762,16 +763,31 @@ class TerminalSession:
         return self.read(max_bytes=max_bytes, max_total_bytes=max_total_bytes)
 
     def _read_windows(self, max_bytes=4096):
-        """Read available output from Windows ConPTY."""
-        try:
-            data = self._win_pty.read(max_bytes, blocking=False)
-        except Exception:
-            data = None
-        if not data:
+        """Read Windows ConPTY output without dropping data over the tick budget."""
+        max_bytes = max(1, int(max_bytes))
+        if not self._pending_windows_output:
+            try:
+                try:
+                    data = self._win_pty.read(blocking=False)
+                except TypeError:
+                    data = self._win_pty.read(False)
+            except Exception:
+                data = None
+
+            if data:
+                if isinstance(data, bytes):
+                    self._pending_windows_output.extend(data)
+                else:
+                    self._pending_windows_output.extend(
+                        str(data).encode("utf-8", errors="replace")
+                    )
+
+        if not self._pending_windows_output:
             return ""
-        if isinstance(data, bytes):
-            return self._decoder.decode(data)
-        return data
+
+        chunk = bytes(self._pending_windows_output[:max_bytes])
+        del self._pending_windows_output[:max_bytes]
+        return self._decoder.decode(chunk)
 
     @property
     def pending_write_bytes(self):
@@ -833,17 +849,36 @@ class TerminalSession:
         return total
 
     def _write_windows(self, data):
-        """Write one queued chunk to Windows ConPTY."""
+        """Write a UTF-8-safe text chunk through the pywinpty string API."""
         payload = data.encode("utf-8", errors="replace") if isinstance(data, str) else bytes(data)
+        if not payload:
+            return 0
+
+        consumed = len(payload)
         try:
-            result = self._win_pty.write(payload)
+            text = payload.decode("utf-8")
+        except UnicodeDecodeError as exc:
+            if exc.reason == "unexpected end of data" and exc.end == len(payload):
+                consumed = exc.start
+                if consumed <= 0:
+                    return 0
+                text = payload[:consumed].decode("utf-8", errors="replace")
+            else:
+                text = payload.decode("utf-8", errors="replace")
+
+        try:
+            result = self._win_pty.write(text)
         except OSError:
             self._pending_write.clear()
             self.running = False
             return 0
-        if isinstance(result, int):
-            return max(0, min(result, len(payload)))
-        return len(payload)
+        if not isinstance(result, int):
+            return consumed
+
+        written = max(0, int(result))
+        if written >= len(text):
+            return consumed
+        return len(text[:written].encode("utf-8"))
 
     def send_signal(self, sig):
         """Send signal to foreground process group (or child pid fallback)."""
@@ -878,7 +913,7 @@ class TerminalSession:
         """Send signal via Windows ConPTY (write Ctrl+C byte as fallback)."""
         if sig == signal.SIGINT:
             try:
-                self._win_pty.write(b'\x03')
+                self._win_pty.write('\x03')
                 return True
             except OSError:
                 return False
@@ -1042,6 +1077,7 @@ class TerminalSession:
             if not self._close_windows_backend():
                 return False
             self._win_pty = None
+            self._pending_windows_output.clear()
             self._pending_write.clear()
             self.running = False
             return True
@@ -1062,6 +1098,7 @@ class TerminalSession:
             except OSError:
                 pass
             self.master_fd = None
+        self._pending_windows_output.clear()
         self._pending_write.clear()
         # Keep the logical liveness state honest when the child could not be
         # observed exiting. WindowManager must not unregister a terminal whose
