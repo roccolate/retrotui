@@ -75,10 +75,10 @@ class TerminalPartialWriteTests(unittest.TestCase):
 
         self.assertEqual(session.write(b"abcd"), 4)
         self.assertEqual(session.pending_write_bytes, 2)
-        self.assertEqual(backend.write.call_args_list[0].args[0], b"abcd")
-        self.assertEqual(backend.write.call_args_list[1].args[0], b"cd")
+        self.assertEqual(backend.write.call_args_list[0].args[0], "abcd")
+        self.assertEqual(backend.write.call_args_list[1].args[0], "cd")
         self.assertEqual(session.flush_pending_writes(), 2)
-        self.assertEqual(backend.write.call_args_list[2].args[0], b"cd")
+        self.assertEqual(backend.write.call_args_list[2].args[0], "cd")
         self.assertEqual(session.pending_write_bytes, 0)
 
     def test_windows_hard_error_keeps_legacy_zero_result(self):
